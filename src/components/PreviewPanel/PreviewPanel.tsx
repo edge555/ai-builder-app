@@ -8,7 +8,9 @@ import {
 } from '@codesandbox/sandpack-react';
 import { RefreshCw, Code, EyeOff } from 'lucide-react';
 import type { SerializedProjectState } from '@/shared';
+import type { LoadingPhase } from '../ChatInterface';
 import { PreviewToolbar, type DeviceMode } from './PreviewToolbar';
+import { PreviewSkeleton } from './PreviewSkeleton';
 import './PreviewPanel.css';
 
 /**
@@ -17,6 +19,10 @@ import './PreviewPanel.css';
 export interface PreviewPanelProps {
   /** The current project state containing files to preview */
   projectState: SerializedProjectState | null;
+  /** Whether content is currently being generated/modified */
+  isLoading?: boolean;
+  /** Current loading phase for skeleton display */
+  loadingPhase?: LoadingPhase;
   /** Callback when a preview error occurs */
   onError?: (error: Error) => void;
 }
@@ -129,7 +135,7 @@ class PreviewErrorBoundary extends React.Component<
  * 
  * Requirements: 9.1, 9.2, 9.3
  */
-export const PreviewPanel = forwardRef<HTMLDivElement, PreviewPanelProps>(function PreviewPanel({ projectState, onError }, ref) {
+export const PreviewPanel = forwardRef<HTMLDivElement, PreviewPanelProps>(function PreviewPanel({ projectState, isLoading = false, loadingPhase = 'idle', onError }, ref) {
   const [showCode, setShowCode] = useState(false);
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
   const [isRotated, setIsRotated] = useState(false);
@@ -233,69 +239,74 @@ export const PreviewPanel = forwardRef<HTMLDivElement, PreviewPanelProps>(functi
         </div>
       )}
 
-      <PreviewErrorBoundary onError={handleError}>
-        <div className="preview-content">
-          <SandpackProvider
-            key={refreshKey}
-            files={Object.fromEntries(
-              Object.entries(sandpackFiles).map(([path, code]) => [path, { code }])
-            )}
-            theme="dark"
-            options={{
-              activeFile: entryFile,
-              recompileMode: 'delayed',
-              recompileDelay: 500,
-              visibleFiles: Object.keys(sandpackFiles),
-            }}
-            customSetup={{
-              entry: entryFile,
-              dependencies: {
-                'react': '^18.2.0',
-                'react-dom': '^18.2.0',
-                'lucide-react': '^0.294.0',
-                'clsx': '^2.0.0',
-                'tailwind-merge': '^2.0.0',
-              },
-            }}
-          >
-            <SandpackLayout>
-              {showCode && (
-                <>
-                  <SandpackFileExplorer
-                    autoHiddenFiles
-                  />
-                  <SandpackCodeEditor
-                    showTabs={false}
-                    showLineNumbers
-                    showInlineErrors
-                    wrapContent
-                    style={{ height: '100%' }}
-                  />
-                </>
+      {/* Show skeleton during loading */}
+      {isLoading && loadingPhase !== 'idle' ? (
+        <PreviewSkeleton phase={loadingPhase} />
+      ) : (
+        <PreviewErrorBoundary onError={handleError}>
+          <div className="preview-content">
+            <SandpackProvider
+              key={refreshKey}
+              files={Object.fromEntries(
+                Object.entries(sandpackFiles).map(([path, code]) => [path, { code }])
               )}
-              {deviceMode === 'desktop' ? (
-                <SandpackPreview
-                  showOpenInCodeSandbox={false}
-                  showRefreshButton
-                  style={{ height: '100%' }}
-                />
-              ) : (
-                <div className="device-simulation-container">
-                  <div className={`device-frame ${deviceMode} ${isRotated ? 'rotated' : ''}`}>
-                    <SandpackPreview
-                      showOpenInCodeSandbox={false}
-                      showRefreshButton
+              theme="dark"
+              options={{
+                activeFile: entryFile,
+                recompileMode: 'delayed',
+                recompileDelay: 500,
+                visibleFiles: Object.keys(sandpackFiles),
+              }}
+              customSetup={{
+                entry: entryFile,
+                dependencies: {
+                  'react': '^18.2.0',
+                  'react-dom': '^18.2.0',
+                  'lucide-react': '^0.294.0',
+                  'clsx': '^2.0.0',
+                  'tailwind-merge': '^2.0.0',
+                },
+              }}
+            >
+              <SandpackLayout>
+                {showCode && (
+                  <>
+                    <SandpackFileExplorer
+                      autoHiddenFiles
+                    />
+                    <SandpackCodeEditor
+                      showTabs={false}
+                      showLineNumbers
+                      showInlineErrors
+                      wrapContent
                       style={{ height: '100%' }}
                     />
+                  </>
+                )}
+                {deviceMode === 'desktop' ? (
+                  <SandpackPreview
+                    showOpenInCodeSandbox={false}
+                    showRefreshButton
+                    style={{ height: '100%' }}
+                  />
+                ) : (
+                  <div className="device-simulation-container">
+                    <div className={`device-frame ${deviceMode} ${isRotated ? 'rotated' : ''}`}>
+                      <SandpackPreview
+                        showOpenInCodeSandbox={false}
+                        showRefreshButton
+                        style={{ height: '100%' }}
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
-            </SandpackLayout>
-          </SandpackProvider>
-        </div>
-      </PreviewErrorBoundary>
+                )}
+              </SandpackLayout>
+            </SandpackProvider>
+          </div>
+        </PreviewErrorBoundary>
+      )}
 
-      {!projectState && (
+      {!projectState && !isLoading && (
         <div className="preview-placeholder">
           <p>Start by describing your application in the chat.</p>
         </div>

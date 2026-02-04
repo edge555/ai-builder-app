@@ -49,7 +49,7 @@ function ChatPanel() {
  * Requirements: 9.2, 9.3
  */
 function PreviewSection() {
-    const { projectState } = useChat();
+    const { projectState, isLoading, loadingPhase } = useChat();
 
     const handlePreviewError = (error: Error) => {
         console.error('Preview error:', error);
@@ -62,6 +62,8 @@ function PreviewSection() {
         >
             <PreviewPanel
                 projectState={projectState}
+                isLoading={isLoading}
+                loadingPhase={loadingPhase}
                 onError={handlePreviewError}
             />
         </ErrorBoundary>
