@@ -103,7 +103,11 @@ export function ChatInterface({
       <div className="chat-messages" role="log" aria-live="polite">
         {messages.length === 0 && (
           <div className="chat-empty-state">
-            <p>Describe the application you want to build, and I'll generate it for you.</p>
+            <div className="chat-empty-icon" aria-hidden="true">✨</div>
+            <div className="chat-empty-content">
+              <p className="chat-empty-title">What would you like to build?</p>
+              <p className="chat-empty-description">Describe your app idea and I'll generate it for you in seconds.</p>
+            </div>
           </div>
         )}
         {messages.map((message) => (
@@ -143,7 +147,14 @@ export function ChatInterface({
           disabled={isLoading || !inputValue.trim()}
           aria-label="Send message"
         >
-          {isLoading ? 'Processing...' : 'Send'}
+          {isLoading ? (
+            <span className="export-button-spinner"></span>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          )}
         </button>
       </form>
     </div>
