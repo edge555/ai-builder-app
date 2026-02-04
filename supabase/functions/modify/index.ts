@@ -809,17 +809,96 @@ function normalizeContent(content: string): string {
   return content.split('\n').map(l => l.trimEnd()).join('\n').trimEnd();
 }
 
+/**
+ * Line representation with both raw and normalized content.
+ * - raw: original line for display
+ * - norm: normalized line for comparison (trailing whitespace trimmed)
+ */
+type Line = { raw: string; norm: string };
+
 type LineOp = { type: 'context' | 'add' | 'delete'; line: string };
 
-// Minimal Myers diff for line arrays.
-// Now normalizes lines for comparison but preserves original content in output.
-function myersDiff(a: string[], b: string[]): LineOp[] {
-  // Normalize lines for comparison to ignore trailing whitespace differences
-  const aNorm = a.map(normalizeLine);
-  const bNorm = b.map(normalizeLine);
+/**
+ * Segment type for anchor-based segmentation.
+ * - anchor: lines that match at the same index (guaranteed context)
+ * - diff: lines that need Myers diff
+ */
+type Segment = 
+  | { type: 'anchor'; oldLines: Line[]; newLines: Line[] }
+  | { type: 'diff'; oldLines: Line[]; newLines: Line[] };
+
+/**
+ * Build Line objects from raw string array.
+ */
+function buildLines(raw: string[]): Line[] {
+  return raw.map(r => ({ raw: r, norm: normalizeLine(r) }));
+}
+
+/**
+ * Anchor segmentation: identify lines at the same index with identical normalized content.
+ * Returns segments alternating between anchor runs and diff segments.
+ * This prevents false moves where unchanged lines appear as both + and -.
+ */
+function segmentByAnchors(oldLines: Line[], newLines: Line[]): Segment[] {
+  const segments: Segment[] = [];
+  const minLen = Math.min(oldLines.length, newLines.length);
   
-  const n = aNorm.length;
-  const m = bNorm.length;
+  let i = 0;
+  while (i < minLen || i < oldLines.length || i < newLines.length) {
+    // Collect anchor run (lines that match at same position)
+    const anchorStart = i;
+    while (i < minLen && oldLines[i].norm === newLines[i].norm) {
+      i++;
+    }
+    
+    if (i > anchorStart) {
+      segments.push({
+        type: 'anchor',
+        oldLines: oldLines.slice(anchorStart, i),
+        newLines: newLines.slice(anchorStart, i),
+      });
+    }
+    
+    if (i >= minLen && i >= oldLines.length && i >= newLines.length) break;
+    
+    // Collect diff segment (lines that don't match at same position)
+    const diffStart = i;
+    while (i < minLen && oldLines[i].norm !== newLines[i].norm) {
+      i++;
+    }
+    
+    // Include any trailing lines beyond minLen in the diff segment
+    const oldEnd = i < minLen ? i : oldLines.length;
+    const newEnd = i < minLen ? i : newLines.length;
+    
+    if (diffStart < oldEnd || diffStart < newEnd) {
+      segments.push({
+        type: 'diff',
+        oldLines: oldLines.slice(diffStart, oldEnd),
+        newLines: newLines.slice(diffStart, newEnd),
+      });
+    }
+    
+    // Move past minLen if we're there
+    if (i >= minLen) {
+      i = Math.max(oldLines.length, newLines.length);
+    }
+  }
+  
+  return segments;
+}
+
+/**
+ * Run Myers diff on a single segment, using normalized comparison but raw output.
+ */
+function myersDiffSegment(oldLines: Line[], newLines: Line[]): LineOp[] {
+  const n = oldLines.length;
+  const m = newLines.length;
+  
+  if (n === 0 && m === 0) return [];
+  if (n === 0) return newLines.map(l => ({ type: 'add' as const, line: l.raw }));
+  if (m === 0) return oldLines.map(l => ({ type: 'delete' as const, line: l.raw }));
+  
   const max = n + m;
   const v = new Map<number, number>();
   v.set(1, 0);
@@ -838,7 +917,7 @@ function myersDiff(a: string[], b: string[]): LineOp[] {
       }
       let y = x - k;
       // Compare normalized lines
-      while (x < n && y < m && aNorm[x] === bNorm[y]) {
+      while (x < n && y < m && oldLines[x].norm === newLines[y].norm) {
         x++;
         y++;
       }
@@ -846,8 +925,7 @@ function myersDiff(a: string[], b: string[]): LineOp[] {
       v.set(k, x);
       if (x >= n && y >= m) {
         trace.push(vSnapshot);
-        // Pass normalized lines for backtracking, use normalized content in output
-        return backtrackMyers(aNorm, bNorm, trace);
+        return backtrackMyersWithRaw(oldLines, newLines, trace);
       }
     }
     trace.push(vSnapshot);
@@ -855,9 +933,13 @@ function myersDiff(a: string[], b: string[]): LineOp[] {
   return [];
 }
 
-function backtrackMyers(a: string[], b: string[], trace: Array<Map<number, number>>): LineOp[] {
-  let x = a.length;
-  let y = b.length;
+/**
+ * Backtrack Myers with raw line preservation.
+ * Context and add use newLines[].raw, delete uses oldLines[].raw.
+ */
+function backtrackMyersWithRaw(oldLines: Line[], newLines: Line[], trace: Array<Map<number, number>>): LineOp[] {
+  let x = oldLines.length;
+  let y = newLines.length;
   const ops: LineOp[] = [];
 
   for (let d = trace.length - 1; d >= 0; d--) {
@@ -875,8 +957,9 @@ function backtrackMyers(a: string[], b: string[], trace: Array<Map<number, numbe
     const prevX = v.get(prevK) ?? 0;
     const prevY = prevX - prevK;
 
+    // Context lines - use new side's raw content
     while (x > prevX && y > prevY) {
-      ops.push({ type: 'context', line: a[x - 1] });
+      ops.push({ type: 'context', line: newLines[y - 1].raw });
       x--;
       y--;
     }
@@ -884,12 +967,12 @@ function backtrackMyers(a: string[], b: string[], trace: Array<Map<number, numbe
     if (d === 0) break;
 
     if (x === prevX) {
-      // add from b
-      ops.push({ type: 'add', line: b[y - 1] });
+      // Add from new
+      ops.push({ type: 'add', line: newLines[y - 1].raw });
       y--;
     } else {
-      // delete from a
-      ops.push({ type: 'delete', line: a[x - 1] });
+      // Delete from old
+      ops.push({ type: 'delete', line: oldLines[x - 1].raw });
       x--;
     }
   }
@@ -898,11 +981,38 @@ function backtrackMyers(a: string[], b: string[], trace: Array<Map<number, numbe
 }
 
 /**
+ * Main diff function using anchor segmentation.
+ * Prevents false moves by forcing context for lines at same position with same content.
+ */
+function stableDiff(oldRaw: string[], newRaw: string[]): LineOp[] {
+  const oldLines = buildLines(oldRaw);
+  const newLines = buildLines(newRaw);
+  
+  const segments = segmentByAnchors(oldLines, newLines);
+  const allOps: LineOp[] = [];
+  
+  for (const seg of segments) {
+    if (seg.type === 'anchor') {
+      // Anchor lines are guaranteed context - use new side's raw content
+      for (const line of seg.newLines) {
+        allOps.push({ type: 'context', line: line.raw });
+      }
+    } else {
+      // Run Myers on this diff segment
+      const segOps = myersDiffSegment(seg.oldLines, seg.newLines);
+      allOps.push(...segOps);
+    }
+  }
+  
+  return allOps;
+}
+
+/**
  * Collapse adjacent add/delete pairs that have identical normalized content.
  * This handles edge cases where the LCS algorithm produces spurious changes
  * when lines differ only in trailing whitespace.
  */
-function collapseIdenticalChanges(ops: LineOp[]): LineOp[] {
+function collapseAdjacentPairs(ops: LineOp[]): LineOp[] {
   const result: LineOp[] = [];
   let i = 0;
 
@@ -915,7 +1025,7 @@ function collapseIdenticalChanges(ops: LineOp[]): LineOp[] {
       
       // Check for add followed by delete with same trimmed content
       if (current.type === 'add' && next.type === 'delete' && 
-          current.line.trim() === next.line.trim()) {
+          normalizeLine(current.line) === normalizeLine(next.line)) {
         // Convert to context using the new line's content
         result.push({ type: 'context', line: current.line });
         i += 2;
@@ -924,7 +1034,7 @@ function collapseIdenticalChanges(ops: LineOp[]): LineOp[] {
       
       // Check for delete followed by add with same trimmed content
       if (current.type === 'delete' && next.type === 'add' && 
-          current.line.trim() === next.line.trim()) {
+          normalizeLine(current.line) === normalizeLine(next.line)) {
         // Convert to context using the new line's content
         result.push({ type: 'context', line: next.line });
         i += 2;
@@ -936,6 +1046,90 @@ function collapseIdenticalChanges(ops: LineOp[]): LineOp[] {
     i++;
   }
 
+  return result;
+}
+
+/**
+ * Enhanced collapse for non-adjacent matching delete/add pairs.
+ * Looks within a window to find matching pairs that Myers misaligned.
+ * Only collapses when there's a unique 1:1 match within the window.
+ */
+function collapseNonAdjacentPairs(ops: LineOp[], windowSize: number = 12): LineOp[] {
+  const result = [...ops];
+  
+  // Build index of adds and deletes with their normalized content
+  const addsByNorm = new Map<string, number[]>();
+  const deletesByNorm = new Map<string, number[]>();
+  
+  for (let i = 0; i < result.length; i++) {
+    const op = result[i];
+    if (op.type === 'add') {
+      const norm = normalizeLine(op.line);
+      if (!addsByNorm.has(norm)) addsByNorm.set(norm, []);
+      addsByNorm.get(norm)!.push(i);
+    } else if (op.type === 'delete') {
+      const norm = normalizeLine(op.line);
+      if (!deletesByNorm.has(norm)) deletesByNorm.set(norm, []);
+      deletesByNorm.get(norm)!.push(i);
+    }
+  }
+  
+  // For each normalized content that appears in both adds and deletes,
+  // try to pair them if they're within the window and unique
+  const paired = new Set<number>();
+  
+  for (const [norm, deleteIndices] of deletesByNorm) {
+    const addIndices = addsByNorm.get(norm);
+    if (!addIndices) continue;
+    
+    // Only pair if there's exactly one of each (unique pairing)
+    // This avoids collapsing legitimate repeated lines
+    if (deleteIndices.length === 1 && addIndices.length === 1) {
+      const delIdx = deleteIndices[0];
+      const addIdx = addIndices[0];
+      
+      // Check if within window
+      if (Math.abs(delIdx - addIdx) <= windowSize) {
+        paired.add(delIdx);
+        paired.add(addIdx);
+        
+        // Convert both to context, keeping the add's content (new version)
+        // Mark delete as context with add's line
+        result[delIdx] = { type: 'context', line: result[addIdx].line };
+        result[addIdx] = { type: 'context', line: result[addIdx].line };
+      }
+    }
+  }
+  
+  // Remove duplicate context lines created by pairing
+  // (delete became context, add became context - we only need one)
+  const finalResult: LineOp[] = [];
+  for (let i = 0; i < result.length; i++) {
+    if (paired.has(i)) {
+      // Only keep the first of a paired set
+      const op = result[i];
+      const norm = normalizeLine(op.line);
+      // Check if next paired item is the same
+      if (i + 1 < result.length && paired.has(i + 1) && 
+          normalizeLine(result[i + 1].line) === norm) {
+        // Skip both, add one context
+        finalResult.push({ type: 'context', line: op.line });
+        i++; // Skip next
+        continue;
+      }
+    }
+    finalResult.push(result[i]);
+  }
+  
+  return finalResult;
+}
+
+/**
+ * Full collapse pipeline: adjacent pairs first, then non-adjacent.
+ */
+function collapseIdenticalChanges(ops: LineOp[]): LineOp[] {
+  let result = collapseAdjacentPairs(ops);
+  result = collapseNonAdjacentPairs(result);
   return result;
 }
 
@@ -1095,11 +1289,24 @@ function computeDiffs(params: {
     const normalizedNew = normalizeContent(newText);
     if (normalizedOld === normalizedNew) continue;
     
-    // Compute diff with normalized comparison
-    const ops = myersDiff(splitLines(oldText), splitLines(newText));
+    // Compute diff using anchor-based stable diff algorithm
+    // This prevents false moves by anchoring lines at the same position with same content
+    const ops = stableDiff(splitLines(oldText), splitLines(newText));
     
     // Collapse any spurious add/delete pairs that slipped through
     const collapsedOps = collapseIdenticalChanges(ops);
+    
+    // Debug: log if we still have identical add/delete pairs
+    const addNorms = new Set<string>();
+    const deleteNorms = new Set<string>();
+    for (const op of collapsedOps) {
+      if (op.type === 'add') addNorms.add(normalizeLine(op.line));
+      if (op.type === 'delete') deleteNorms.add(normalizeLine(op.line));
+    }
+    const overlap = [...addNorms].filter(n => deleteNorms.has(n));
+    if (overlap.length > 0) {
+      console.warn(`[DIFF DEBUG] ${path}: Found ${overlap.length} identical add/delete lines after collapse:`, overlap.slice(0, 3));
+    }
     
     // Only include if there are actual changes (not just context)
     const hasRealChanges = collapsedOps.some(op => op.type !== 'context');
