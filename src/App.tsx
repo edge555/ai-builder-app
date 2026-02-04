@@ -1,27 +1,31 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
+import { ChatProvider, VersionProvider } from './context';
+import { ErrorBoundary, AppLayout } from './components';
+import './App.css';
 
-const queryClient = new QueryClient();
+/**
+ * Main application component.
+ * Provides the chat and version contexts and renders the main layout.
+ * Wrapped with ErrorBoundary for comprehensive error handling.
+ * 
+ * Requirements: 8.5, 11.1, 11.2, 11.3
+ */
+function App() {
+  const handleGlobalError = (error: Error) => {
+    console.error('Global error caught:', error);
+  };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+  return (
+    <ErrorBoundary
+      onError={handleGlobalError}
+      errorMessage="The application encountered an unexpected error. Please refresh the page to continue."
+    >
+      <ChatProvider>
+        <VersionProvider>
+          <AppLayout />
+        </VersionProvider>
+      </ChatProvider>
+    </ErrorBoundary>
+  );
+}
 
 export default App;

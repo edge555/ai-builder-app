@@ -1,42 +1,294 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+/* Main App Container */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background: hsl(var(--background));
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* Header */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border));
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: none;
+  flex-shrink: 0;
+  z-index: 100;
+  height: 60px;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
+.app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.app-header h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Export Button */
+.export-button {
+  /* ExportButton now also uses .ui-button; keep only specifics here */
+  height: 36px;
+}
+
+.export-button-icon {
+  font-size: 1rem;
+}
+
+.export-button.exporting {
+  opacity: 0.8;
+}
+
+.export-button.has-error {
+  background: hsl(var(--destructive));
+}
+
+.export-button.has-error:hover:not(:disabled) {
+  background: hsl(var(--destructive) / 0.9);
+}
+
+.export-button-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid hsl(var(--primary-foreground) / 0.35);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+/* Main Content Area */
+.app-main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  padding: 0;
+  gap: 0;
+  min-height: 0;
+}
+
+/* Two-Panel Layout */
+.chat-panel {
+  flex: 0 0 auto;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: hsl(var(--card));
+  border-right: 1px solid hsl(var(--border));
+}
+
+.resizer {
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.2s;
+  z-index: 10;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  right: -8px;
+}
+
+.resizer:hover,
+.resizer:active {
+  background: hsl(var(--primary) / 0.6);
+}
+
+.resizer::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 40px;
+  background: hsl(var(--border));
+  border-radius: 2px;
+  transition: opacity 0.2s;
+}
+
+.resizer:hover::after,
+.resizer:active::after {
+  opacity: 0;
+}
+
+.preview-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: hsl(225 9% 12%);
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Panel Toggle Buttons (for mobile) */
+.panel-toggle-buttons {
+  display: none;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.panel-toggle-btn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.panel-toggle-buttons {
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary));
+  padding: 4px;
+  box-shadow: var(--shadow-sm);
+}
+
+.panel-toggle-btn.active {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+  box-shadow: var(--shadow-sm);
+}
+
+.panel-toggle-btn:hover:not(.active) {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+
+/* Responsive Design */
+
+/* Large screens (1400px+) */
+@media (min-width: 1400px) {
+  /* Dynamic width handled by JS style */
+}
+
+/* Medium screens (1024px - 1399px) */
+@media (max-width: 1399px) {
+  .chat-panel {
+    min-width: 260px;
   }
 }
 
-.card {
-  padding: 2em;
+/* Tablet screens (768px - 1023px) */
+@media (max-width: 1023px) {
+  .app-main {
+    flex-direction: column;
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
+
+  .resizer {
+    display: none;
+  }
+
+  .chat-panel,
+  .preview-section {
+    flex: none;
+    min-width: 100%;
+    max-width: 100%;
+    width: 100% !important;
+  }
+
+  .chat-panel {
+    height: 40%;
+    min-height: 250px;
+  }
+
+  .preview-section {
+    height: 60%;
+    min-height: 350px;
+  }
 }
 
-.read-the-docs {
-  color: #888;
+/* Mobile screens (< 768px) */
+@media (max-width: 767px) {
+  .app-header {
+    padding: 0.5rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .app-header h1 {
+    font-size: 1rem;
+  }
+
+  .export-button {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+  }
+
+  .export-button span:not(.export-button-icon) {
+    display: none;
+  }
+
+  .panel-toggle-buttons {
+    display: flex;
+  }
+
+  .app-main {
+    padding: 0.5rem;
+    gap: 0;
+  }
+
+  .chat-panel,
+  .preview-section {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 100%;
+    display: none;
+  }
+
+  .chat-panel.active,
+  .preview-section.active {
+    display: flex;
+  }
+
+  .app-main {
+    position: relative;
+    flex: 1;
+  }
 }

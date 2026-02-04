@@ -1,0 +1,112 @@
+/*
+  Lightweight UI primitives built on global HSL tokens.
+  Imported once in src/main.tsx.
+*/
+
+.ui-surface {
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.ui-surface-muted {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+}
+
+.ui-button {
+  --ui-btn-bg: hsl(var(--secondary));
+  --ui-btn-fg: hsl(var(--secondary-foreground));
+  --ui-btn-border: hsl(var(--border));
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 36px;
+  padding: 0 0.875rem;
+  border-radius: 999px;
+  border: 1px solid var(--ui-btn-border);
+  background: var(--ui-btn-bg);
+  color: var(--ui-btn-fg);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.12s ease, background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.ui-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ui-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.ui-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+.ui-button[data-variant='primary'] {
+  --ui-btn-bg: hsl(var(--primary));
+  --ui-btn-fg: hsl(var(--primary-foreground));
+  --ui-btn-border: hsl(var(--primary));
+}
+
+.ui-button[data-variant='success'] {
+  --ui-btn-bg: hsl(var(--success));
+  --ui-btn-fg: hsl(var(--success-foreground));
+  --ui-btn-border: hsl(var(--success));
+}
+
+.ui-button[data-variant='danger'] {
+  --ui-btn-bg: hsl(var(--destructive));
+  --ui-btn-fg: hsl(var(--destructive-foreground));
+  --ui-btn-border: hsl(var(--destructive));
+}
+
+.ui-button[data-variant='ghost'] {
+  --ui-btn-bg: transparent;
+  --ui-btn-fg: hsl(var(--foreground));
+  --ui-btn-border: hsl(var(--border));
+  box-shadow: none;
+}
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+}
+
+.ui-input,
+.ui-textarea {
+  width: 100%;
+  border: 1px solid hsl(var(--input));
+  border-radius: var(--radius-sm);
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.75rem;
+}
+
+.ui-textarea {
+  resize: none;
+  line-height: 1.4;
+}

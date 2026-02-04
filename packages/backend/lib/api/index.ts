@@ -1,0 +1,8 @@
+/**
+ * API Utilities Barrel Export
+ * 
+ * Re-exports all API utilities for convenient importing.
+ * Implements Requirement 1.4
+ */
+
+export * from './utils';

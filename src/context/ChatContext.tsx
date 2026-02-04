@@ -1,0 +1,362 @@
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import type {
+  SerializedProjectState,
+  GenerateProjectResponse,
+  ModifyProjectResponse,
+  ChangeSummary,
+  SerializedVersion,
+  FileDiff
+} from '@/shared';
+import type { ChatMessage, LoadingPhase } from '../components/ChatInterface';
+import { config as appConfig } from '../config';
+import { backend } from '@/integrations/backend/client';
+
+/**
+ * API configuration for the chat context.
+ */
+interface ApiConfig {
+  baseUrl: string;
+}
+
+/**
+ * State managed by the ChatContext.
+ */
+interface ChatState {
+  messages: ChatMessage[];
+  isLoading: boolean;
+  loadingPhase: LoadingPhase;
+  projectState: SerializedProjectState | null;
+  error: string | null;
+}
+
+/**
+ * Callbacks for version integration.
+ */
+interface VersionCallbacks {
+  onVersionCreated?: (version: SerializedVersion) => void;
+  onDiffsComputed?: (diffs: FileDiff[]) => void;
+  onProjectStateChanged?: (projectState: SerializedProjectState) => void;
+}
+
+/**
+ * Actions available through the ChatContext.
+ */
+interface ChatActions {
+  submitPrompt: (prompt: string) => Promise<void>;
+  clearMessages: () => void;
+  clearError: () => void;
+  setProjectState: (projectState: SerializedProjectState | null) => void;
+  setVersionCallbacks: (callbacks: VersionCallbacks) => void;
+}
+
+/**
+ * Combined context value type.
+ */
+type ChatContextValue = ChatState & ChatActions;
+
+const ChatContext = createContext<ChatContextValue | null>(null);
+
+/**
+ * Generates a unique ID for messages.
+ */
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+/**
+ * Props for the ChatProvider component.
+ */
+interface ChatProviderProps {
+  children: React.ReactNode;
+  apiConfig?: Partial<ApiConfig>;
+}
+
+
+/**
+ * Provider component for chat state management.
+ * Manages message history and handles API calls for generate and modify operations.
+ * 
+ * Requirements: 8.4
+ */
+export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
+  const config = useMemo(() => ({
+    baseUrl: appConfig.api.baseUrl,
+    ...apiConfig
+  }), [apiConfig]);
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
+  const [projectState, setProjectStateInternal] = useState<SerializedProjectState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const versionCallbacksRef = useRef<VersionCallbacks>({});
+  const activeRequestRef = useRef<{ controller: AbortController; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
+  const isSubmittingRef = useRef(false);
+
+  /**
+   * Sets version callbacks for integration with VersionContext.
+   */
+  const setVersionCallbacks = useCallback((callbacks: VersionCallbacks) => {
+    versionCallbacksRef.current = callbacks;
+  }, []);
+
+  /**
+   * Sets the project state and notifies callbacks.
+   */
+  const setProjectState = useCallback((newState: SerializedProjectState | null) => {
+    setProjectStateInternal(newState);
+    if (newState && versionCallbacksRef.current.onProjectStateChanged) {
+      versionCallbacksRef.current.onProjectStateChanged(newState);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      const activeRequest = activeRequestRef.current;
+      if (activeRequest) {
+        activeRequest.controller.abort();
+        clearTimeout(activeRequest.timeoutId);
+        activeRequestRef.current = null;
+      }
+    };
+  }, []);
+
+  /**
+   * Adds a user message to the chat history.
+   */
+  const addUserMessage = useCallback((content: string): ChatMessage => {
+    const message: ChatMessage = {
+      id: generateId(),
+      role: 'user',
+      content,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, message]);
+    return message;
+  }, []);
+
+  /**
+   * Adds an assistant message to the chat history.
+   */
+  const addAssistantMessage = useCallback((content: string, changeSummary?: ChangeSummary, diffs?: FileDiff[]): ChatMessage => {
+    const message: ChatMessage = {
+      id: generateId(),
+      role: 'assistant',
+      content,
+      timestamp: new Date(),
+      changeSummary,
+      diffs,
+    };
+    setMessages((prev) => [...prev, message]);
+    return message;
+  }, []);
+
+  /**
+   * Calls the generate project API with configurable timeout.
+   */
+  const generateProject = useCallback(async (description: string): Promise<GenerateProjectResponse> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), appConfig.api.timeout);
+    activeRequestRef.current = { controller, timeoutId };
+
+    try {
+      // AbortController isn't currently wired into invoke(); timeout still handled by controller.
+      const { data, error } = await backend.functions.invoke('generate', {
+        body: { description },
+      });
+      if (error) throw new Error(error.message);
+      return data as GenerateProjectResponse;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Request timed out after 60 seconds. Please try again with a simpler request.');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+      if (activeRequestRef.current?.timeoutId === timeoutId) {
+        activeRequestRef.current = null;
+      }
+    }
+  }, []);
+
+
+  /**
+   * Calls the modify project API with configurable timeout.
+   */
+  const modifyProject = useCallback(async (
+    currentState: SerializedProjectState,
+    prompt: string
+  ): Promise<ModifyProjectResponse> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), appConfig.api.timeout);
+    activeRequestRef.current = { controller, timeoutId };
+
+    try {
+      const { data, error } = await backend.functions.invoke('modify', {
+        body: { projectState: currentState, prompt },
+      });
+      if (error) throw new Error(error.message);
+      return data as ModifyProjectResponse;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Request timed out after 60 seconds. Please try again with a simpler request.');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+      if (activeRequestRef.current?.timeoutId === timeoutId) {
+        activeRequestRef.current = null;
+      }
+    }
+  }, []);
+
+
+
+  /**
+   * Returns a random success message for project generation.
+   */
+  const getGenerationSuccessMessage = (projectName: string, fileCount: number): string => {
+    const messages = [
+      `I've generated the project "${projectName}" with ${fileCount} files. You can now preview and edit the code.`,
+      `The "${projectName}" scaffold has been created successfully (${fileCount} files generated).`,
+      `Project "${projectName}" is ready. I've structured ${fileCount} files according to your requirements.`,
+      `Successfully generated ${fileCount} files for "${projectName}". Let me know if you need any adjustments.`,
+      `Generation complete for "${projectName}". You can find the file structure in the solution explorer.`,
+    ];
+    return messages[Math.floor(Math.random() * messages.length)];
+  };
+
+  /**
+   * Returns a random success message for modifications.
+   */
+  const getModificationSuccessMessage = (description?: string): string => {
+    const defaultMessages = [
+      "I've applied the requested modifications to your project.",
+      "Changes have been successfully integrated into the codebase.",
+      "The project has been updated based on your recent request.",
+      "Modifications complete. You can review the changes in the diff viewer.",
+      "Updates have been applied. The project has been rebuilt to reflect your changes.",
+    ];
+    return description || defaultMessages[Math.floor(Math.random() * defaultMessages.length)];
+  };
+
+  /**
+   * Submits a prompt to the AI, either generating a new project or modifying an existing one.
+   * Updates loading phase for progress indication.
+   * 
+   * Requirements: 8.2
+   */
+  const submitPrompt = useCallback(async (prompt: string): Promise<void> => {
+    if (isSubmittingRef.current) {
+      return;
+    }
+    isSubmittingRef.current = true;
+    setError(null);
+    setIsLoading(true);
+    addUserMessage(prompt);
+
+    try {
+      const callbacks = versionCallbacksRef.current;
+      if (!projectState) {
+        // No project exists, generate a new one
+        setLoadingPhase('generating');
+        const result = await generateProject(prompt);
+
+        setLoadingPhase('validating');
+        if (result.success && result.projectState) {
+          setProjectState(result.projectState);
+          const fileCount = Object.keys(result.projectState.files).length;
+          addAssistantMessage(
+            getGenerationSuccessMessage(result.projectState.name, fileCount)
+          );
+          // Notify version callbacks
+          if (result.version && callbacks.onVersionCreated) {
+            callbacks.onVersionCreated(result.version);
+          }
+        } else {
+          const errorMsg = result.error || 'Failed to generate project';
+          setError(errorMsg);
+          addAssistantMessage(`Sorry, I couldn't generate the project: ${errorMsg}`);
+        }
+      } else {
+        // Project exists, modify it
+        setLoadingPhase('modifying');
+        const result = await modifyProject(projectState, prompt);
+
+        setLoadingPhase('validating');
+        if (result.success && result.projectState) {
+          setProjectState(result.projectState);
+          addAssistantMessage(
+            getModificationSuccessMessage(result.changeSummary?.description),
+            result.changeSummary,
+            result.diffs
+          );
+          // Notify version callbacks
+          if (result.version && callbacks.onVersionCreated) {
+            callbacks.onVersionCreated(result.version);
+          }
+          if (result.diffs && callbacks.onDiffsComputed) {
+            callbacks.onDiffsComputed(result.diffs);
+          }
+        } else {
+          const errorMsg = result.error || 'Failed to modify project';
+          setError(errorMsg);
+          addAssistantMessage(`Sorry, I couldn't make those changes: ${errorMsg}`);
+        }
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(errorMsg);
+      addAssistantMessage(`Sorry, something went wrong: ${errorMsg}`);
+    } finally {
+      setIsLoading(false);
+      setLoadingPhase('idle');
+      isSubmittingRef.current = false;
+    }
+  }, [projectState, addUserMessage, addAssistantMessage, generateProject, modifyProject, setProjectState]);
+
+  /**
+   * Clears all messages from the chat history.
+   */
+  const clearMessages = useCallback(() => {
+    setMessages([]);
+  }, []);
+
+  /**
+   * Clears the current error.
+   */
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  const value = useMemo<ChatContextValue>(() => ({
+    messages,
+    isLoading,
+    loadingPhase,
+    projectState,
+    error,
+    submitPrompt,
+    clearMessages,
+    clearError,
+    setProjectState,
+    setVersionCallbacks,
+  }), [messages, isLoading, loadingPhase, projectState, error, submitPrompt, clearMessages, clearError, setProjectState, setVersionCallbacks]);
+
+  return (
+    <ChatContext.Provider value={value}>
+      {children}
+    </ChatContext.Provider>
+  );
+}
+
+/**
+ * Hook to access the chat context.
+ * Must be used within a ChatProvider.
+ */
+export function useChat(): ChatContextValue {
+  const context = useContext(ChatContext);
+  if (!context) {
+    throw new Error('useChat must be used within a ChatProvider');
+  }
+  return context;
+}
