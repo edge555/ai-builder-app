@@ -793,12 +793,33 @@ function splitLines(s: string): string[] {
   return s.split(/\r?\n/);
 }
 
+/**
+ * Normalize a line for comparison by trimming trailing whitespace.
+ * This prevents formatting-only changes from appearing in diffs.
+ */
+function normalizeLine(line: string): string {
+  return line.trimEnd();
+}
+
+/**
+ * Normalize full content for comparison.
+ * Used to detect if files differ only in whitespace.
+ */
+function normalizeContent(content: string): string {
+  return content.split('\n').map(l => l.trimEnd()).join('\n').trimEnd();
+}
+
 type LineOp = { type: 'context' | 'add' | 'delete'; line: string };
 
 // Minimal Myers diff for line arrays.
+// Now normalizes lines for comparison but preserves original content in output.
 function myersDiff(a: string[], b: string[]): LineOp[] {
-  const n = a.length;
-  const m = b.length;
+  // Normalize lines for comparison to ignore trailing whitespace differences
+  const aNorm = a.map(normalizeLine);
+  const bNorm = b.map(normalizeLine);
+  
+  const n = aNorm.length;
+  const m = bNorm.length;
   const max = n + m;
   const v = new Map<number, number>();
   v.set(1, 0);
@@ -816,7 +837,8 @@ function myersDiff(a: string[], b: string[]): LineOp[] {
         x = (vKMinus ?? 0) + 1;
       }
       let y = x - k;
-      while (x < n && y < m && a[x] === b[y]) {
+      // Compare normalized lines
+      while (x < n && y < m && aNorm[x] === bNorm[y]) {
         x++;
         y++;
       }
@@ -824,7 +846,8 @@ function myersDiff(a: string[], b: string[]): LineOp[] {
       v.set(k, x);
       if (x >= n && y >= m) {
         trace.push(vSnapshot);
-        return backtrackMyers(a, b, trace);
+        // Pass normalized lines for backtracking, use normalized content in output
+        return backtrackMyers(aNorm, bNorm, trace);
       }
     }
     trace.push(vSnapshot);
@@ -872,6 +895,48 @@ function backtrackMyers(a: string[], b: string[], trace: Array<Map<number, numbe
   }
 
   return ops.reverse();
+}
+
+/**
+ * Collapse adjacent add/delete pairs that have identical normalized content.
+ * This handles edge cases where the LCS algorithm produces spurious changes
+ * when lines differ only in trailing whitespace.
+ */
+function collapseIdenticalChanges(ops: LineOp[]): LineOp[] {
+  const result: LineOp[] = [];
+  let i = 0;
+
+  while (i < ops.length) {
+    const current = ops[i];
+    
+    // Look for add/delete or delete/add pairs with identical trimmed content
+    if (i + 1 < ops.length) {
+      const next = ops[i + 1];
+      
+      // Check for add followed by delete with same trimmed content
+      if (current.type === 'add' && next.type === 'delete' && 
+          current.line.trim() === next.line.trim()) {
+        // Convert to context using the new line's content
+        result.push({ type: 'context', line: current.line });
+        i += 2;
+        continue;
+      }
+      
+      // Check for delete followed by add with same trimmed content
+      if (current.type === 'delete' && next.type === 'add' && 
+          current.line.trim() === next.line.trim()) {
+        // Convert to context using the new line's content
+        result.push({ type: 'context', line: next.line });
+        i += 2;
+        continue;
+      }
+    }
+    
+    result.push(current);
+    i++;
+  }
+
+  return result;
 }
 
 function buildHunksFromOps(ops: LineOp[], opts?: { contextLines?: number }): DiffHunk[] {
@@ -1021,9 +1086,26 @@ function computeDiffs(params: {
 
     const oldText = prevFiles[path] ?? '';
     const newText = nextFiles[path] ?? '';
+    
+    // Skip if content is exactly the same
     if (oldText === newText) continue;
+    
+    // Skip if normalized content is the same (whitespace-only changes)
+    const normalizedOld = normalizeContent(oldText);
+    const normalizedNew = normalizeContent(newText);
+    if (normalizedOld === normalizedNew) continue;
+    
+    // Compute diff with normalized comparison
     const ops = myersDiff(splitLines(oldText), splitLines(newText));
-    diffs.push({ filePath: path, status: 'modified', hunks: buildHunksFromOps(ops, { contextLines: 3 }) });
+    
+    // Collapse any spurious add/delete pairs that slipped through
+    const collapsedOps = collapseIdenticalChanges(ops);
+    
+    // Only include if there are actual changes (not just context)
+    const hasRealChanges = collapsedOps.some(op => op.type !== 'context');
+    if (!hasRealChanges) continue;
+    
+    diffs.push({ filePath: path, status: 'modified', hunks: buildHunksFromOps(collapsedOps, { contextLines: 3 }) });
   }
 
   return diffs;
