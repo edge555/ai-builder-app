@@ -146,27 +146,71 @@
 }
 
 .toggle-code-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   height: 36px;
-  padding: 0 12px;
+  padding: 0 14px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.01em;
   background: hsl(var(--pv-surface-2));
   color: hsl(var(--pv-text));
   border: 1px solid hsl(var(--pv-border));
-  border-radius: 999px;
+  border-radius: var(--radius);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .toggle-code-btn:hover {
   background: hsl(var(--pv-surface-2) / 0.85);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px hsl(0 0% 0% / 0.2);
+}
+
+.toggle-code-btn:active {
+  transform: translateY(0);
 }
 
 .toggle-code-btn.active {
   background: hsl(var(--pv-accent) / 0.18);
   border-color: hsl(var(--pv-accent) / 0.35);
-  color: hsl(var(--pv-text));
+  color: hsl(212 100% 70%);
+}
+
+/* Refresh button - distinct warning/action color */
+.refresh-btn {
+  background: hsl(38 92% 50% / 0.15);
+  border-color: hsl(38 92% 50% / 0.3);
+  color: hsl(38 92% 65%);
+}
+
+.refresh-btn:hover {
+  background: hsl(38 92% 50% / 0.25);
+  border-color: hsl(38 92% 50% / 0.5);
+  color: hsl(38 92% 70%);
+}
+
+.refresh-btn.refreshing {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.refresh-btn svg {
+  transition: transform 0.15s ease;
+}
+
+.refresh-btn:hover svg:not(.animate-spin-slow) {
+  transform: rotate(45deg);
+}
+
+.animate-spin-slow {
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .preview-content {

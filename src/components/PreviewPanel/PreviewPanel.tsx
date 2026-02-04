@@ -6,6 +6,7 @@ import {
   SandpackCodeEditor,
   SandpackFileExplorer,
 } from '@codesandbox/sandpack-react';
+import { RefreshCw, Code, EyeOff } from 'lucide-react';
 import type { SerializedProjectState } from '@/shared';
 import { PreviewToolbar, type DeviceMode } from './PreviewToolbar';
 import './PreviewPanel.css';
@@ -134,6 +135,13 @@ export const PreviewPanel = forwardRef<HTMLDivElement, PreviewPanelProps>(functi
   const [isRotated, setIsRotated] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    setRefreshKey(prev => prev + 1);
+    setTimeout(() => setIsRefreshing(false), 600);
+  }, []);
 
   const handleError = useCallback((error: Error) => {
     setPreviewError(error.message);
@@ -199,19 +207,21 @@ export const PreviewPanel = forwardRef<HTMLDivElement, PreviewPanelProps>(functi
 
         <div className="preview-header-right preview-controls">
           <button
-            className="toggle-code-btn preview-control-btn"
-            onClick={() => setRefreshKey(prev => prev + 1)}
+            className={`toggle-code-btn refresh-btn ${isRefreshing ? 'refreshing' : ''}`}
+            onClick={handleRefresh}
             title="Refresh Preview"
             aria-label="Refresh preview"
           >
-            Refresh
+            <RefreshCw size={14} className={isRefreshing ? 'animate-spin-slow' : ''} />
+            <span>Refresh</span>
           </button>
           <button
-            className={`toggle-code-btn preview-control-btn ${showCode ? 'active' : ''}`}
+            className={`toggle-code-btn ${showCode ? 'active' : ''}`}
             onClick={() => setShowCode(!showCode)}
             aria-label={showCode ? 'Hide code panel' : 'Show code panel'}
           >
-            {showCode ? 'Hide Code' : 'Show Code'}
+            {showCode ? <EyeOff size={14} /> : <Code size={14} />}
+            <span>{showCode ? 'Hide Code' : 'Show Code'}</span>
           </button>
         </div>
       </div>
