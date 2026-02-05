@@ -7,6 +7,21 @@ const corsHeaders: Record<string, string> = {
     'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+/**
+ * Sanitizes error messages to prevent API key exposure.
+ * Strips any potential key/token values from error text.
+ */
+function sanitizeError(message: string): string {
+  return message
+    .replace(/key=[^&\s"']+/gi, 'key=REDACTED')
+    .replace(/apikey=[^&\s"']+/gi, 'apikey=REDACTED')
+    .replace(/token=[^&\s"']+/gi, 'token=REDACTED')
+    .replace(/secret=[^&\s"']+/gi, 'secret=REDACTED')
+    .replace(/password=[^&\s"']+/gi, 'password=REDACTED')
+    .replace(/SUPABASE_SERVICE_ROLE_KEY[^&\s"']*/gi, 'SUPABASE_SERVICE_ROLE_KEY=REDACTED')
+    .replace(/GEMINI_API_KEY[^&\s"']*/gi, 'GEMINI_API_KEY=REDACTED');
+}
+
 type SerializedProjectState = {
   id: string;
   name: string;
@@ -247,7 +262,8 @@ async function geminiJson<T>(prompt: string, { model }: { model: string }): Prom
 
   if (!resp.ok) {
     const t = await resp.text().catch(() => '');
-    throw new Error(`Gemini error ${resp.status}: ${t || resp.statusText}`);
+    const sanitized = sanitizeError(t || resp.statusText);
+    throw new Error(`Gemini error ${resp.status}: ${sanitized}`);
   }
 
   const data = (await resp.json()) as GeminiGenerateContentResponse;
@@ -379,7 +395,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Unknown error';
+    const msg = e instanceof Error ? sanitizeError(e.message) : 'Unknown error';
     return new Response(JSON.stringify({ success: false, error: msg }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
