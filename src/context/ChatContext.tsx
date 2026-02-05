@@ -12,58 +12,9 @@ import type { ChatMessage, LoadingPhase } from '../components/ChatInterface';
 import { config as appConfig } from '../config';
 import { backend } from '@/integrations/backend/client';
 
-/**
- * API configuration for the chat context.
- */
-interface ApiConfig {
-  baseUrl: string;
-}
+import { ChatContext, type ChatProviderProps, type ChatContextValue, type VersionCallbacks, type ApiConfig } from './ChatContext.context';
 
-/**
- * State managed by the ChatContext.
- */
-interface ChatState {
-  messages: ChatMessage[];
-  isLoading: boolean;
-  loadingPhase: LoadingPhase;
-  projectState: SerializedProjectState | null;
-  error: string | null;
-  /** Whether auto-repair is in progress */
-  isAutoRepairing: boolean;
-  /** Current auto-repair attempt number */
-  autoRepairAttempt: number;
-}
-
-/**
- * Callbacks for version integration.
- */
-interface VersionCallbacks {
-  onVersionCreated?: (version: SerializedVersion) => void;
-  onDiffsComputed?: (diffs: FileDiff[]) => void;
-  onProjectStateChanged?: (projectState: SerializedProjectState) => void;
-}
-
-/**
- * Actions available through the ChatContext.
- */
-interface ChatActions {
-  submitPrompt: (prompt: string) => Promise<void>;
-  clearMessages: () => void;
-  clearError: () => void;
-  setProjectState: (projectState: SerializedProjectState | null) => void;
-  setVersionCallbacks: (callbacks: VersionCallbacks) => void;
-  /** Trigger auto-repair for a runtime error */
-  autoRepair: (runtimeError: RuntimeError) => Promise<boolean>;
-  /** Reset auto-repair state */
-  resetAutoRepair: () => void;
-}
-
-/**
- * Combined context value type.
- */
-type ChatContextValue = ChatState & ChatActions;
-
-const ChatContext = createContext<ChatContextValue | null>(null);
+const MAX_AUTO_REPAIR_ATTEMPTS = 2;
 
 /**
  * Generates a unique ID for messages.
@@ -72,16 +23,6 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
-/**
- * Props for the ChatProvider component.
- */
-interface ChatProviderProps {
-  children: React.ReactNode;
-  apiConfig?: Partial<ApiConfig>;
-}
-
-
-const MAX_AUTO_REPAIR_ATTEMPTS = 2;
 
 /**
  * Provider component for chat state management.
@@ -242,25 +183,21 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
     // Prevent duplicate repairs for the same error
     const errorKey = `${runtimeError.message}:${runtimeError.filePath}`;
     if (lastRepairErrorRef.current === errorKey) {
-      console.log('[AutoRepair] Skipping duplicate error:', errorKey);
       return false;
     }
 
     // Check if we've exceeded max attempts
     if (autoRepairAttempt >= MAX_AUTO_REPAIR_ATTEMPTS) {
-      console.log('[AutoRepair] Max attempts reached, skipping');
       return false;
     }
 
     // Need a project to repair
     if (!projectState) {
-      console.log('[AutoRepair] No project state to repair');
       return false;
     }
 
     // Already repairing
     if (isAutoRepairing) {
-      console.log('[AutoRepair] Already in progress');
       return false;
     }
 
@@ -270,7 +207,6 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
     setLoadingPhase('modifying');
 
     const repairPrompt = buildRepairPrompt(runtimeError);
-    console.log('[AutoRepair] Attempting repair for:', runtimeError.type, runtimeError.message);
 
     try {
       const result = await modifyProject(projectState, repairPrompt, runtimeError);
@@ -525,14 +461,3 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
   );
 }
 
-/**
- * Hook to access the chat context.
- * Must be used within a ChatProvider.
- */
-export function useChat(): ChatContextValue {
-  const context = useContext(ChatContext);
-  if (!context) {
-    throw new Error('useChat must be used within a ChatProvider');
-  }
-  return context;
-}

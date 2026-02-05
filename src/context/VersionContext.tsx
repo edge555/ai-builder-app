@@ -9,65 +9,8 @@ import type {
 import { config as appConfig } from '../config';
 import { backend } from '@/integrations/backend/client';
 
-/**
- * API configuration for the version context.
- */
-interface ApiConfig {
-  baseUrl: string;
-}
+import { VersionContext, type VersionProviderProps, type VersionContextValue } from './VersionContext.context';
 
-/**
- * State managed by the VersionContext.
- */
-interface VersionState {
-  /** List of all versions for the current project */
-  versions: SerializedVersion[];
-  /** ID of the current version */
-  currentVersionId: string | null;
-  /** Whether versions are being loaded */
-  isLoadingVersions: boolean;
-  /** Whether a revert operation is in progress */
-  isReverting: boolean;
-  /** Error message for version operations */
-  versionError: string | null;
-  /** Latest diffs from modification or revert */
-  latestDiffs: FileDiff[] | null;
-}
-
-/**
- * Actions available through the VersionContext.
- */
-interface VersionActions {
-  /** Fetch versions for a project */
-  fetchVersions: (projectId: string) => Promise<void>;
-  /** Revert to a specific version */
-  revertToVersion: (projectId: string, versionId: string) => Promise<SerializedProjectState | null>;
-  /** Add a new version to the list */
-  addVersion: (version: SerializedVersion) => void;
-  /** Set the current version ID */
-  setCurrentVersionId: (versionId: string | null) => void;
-  /** Set the latest diffs */
-  setLatestDiffs: (diffs: FileDiff[] | null) => void;
-  /** Clear version error */
-  clearVersionError: () => void;
-  /** Reset version state */
-  resetVersionState: () => void;
-}
-
-/**
- * Combined context value type.
- */
-type VersionContextValue = VersionState & VersionActions;
-
-const VersionContext = createContext<VersionContextValue | null>(null);
-
-/**
- * Props for the VersionProvider component.
- */
-interface VersionProviderProps {
-  children: React.ReactNode;
-  apiConfig?: Partial<ApiConfig>;
-}
 
 
 /**
@@ -223,14 +166,3 @@ export function VersionProvider({ children, apiConfig }: VersionProviderProps) {
   );
 }
 
-/**
- * Hook to access the version context.
- * Must be used within a VersionProvider.
- */
-export function useVersions(): VersionContextValue {
-  const context = useContext(VersionContext);
-  if (!context) {
-    throw new Error('useVersions must be used within a VersionProvider');
-  }
-  return context;
-}

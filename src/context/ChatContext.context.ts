@@ -1,0 +1,82 @@
+import { createContext, useContext, type ReactNode } from 'react';
+import type {
+    SerializedProjectState,
+    SerializedVersion,
+    FileDiff,
+    RuntimeError,
+    ChangeSummary
+} from '@/shared';
+import type { ChatMessage, LoadingPhase } from '../components/ChatInterface';
+
+/**
+ * API configuration for the chat context.
+ */
+export interface ApiConfig {
+    baseUrl: string;
+}
+
+/**
+ * State managed by the ChatContext.
+ */
+export interface ChatState {
+    messages: ChatMessage[];
+    isLoading: boolean;
+    loadingPhase: LoadingPhase;
+    projectState: SerializedProjectState | null;
+    error: string | null;
+    /** Whether auto-repair is in progress */
+    isAutoRepairing: boolean;
+    /** Current auto-repair attempt number */
+    autoRepairAttempt: number;
+}
+
+/**
+ * Callbacks for version integration.
+ */
+export interface VersionCallbacks {
+    onVersionCreated?: (version: SerializedVersion) => void;
+    onDiffsComputed?: (diffs: FileDiff[]) => void;
+    onProjectStateChanged?: (projectState: SerializedProjectState) => void;
+}
+
+/**
+ * Actions available through the ChatContext.
+ */
+export interface ChatActions {
+    submitPrompt: (prompt: string) => Promise<void>;
+    clearMessages: () => void;
+    clearError: () => void;
+    setProjectState: (projectState: SerializedProjectState | null) => void;
+    setVersionCallbacks: (callbacks: VersionCallbacks) => void;
+    /** Trigger auto-repair for a runtime error */
+    autoRepair: (runtimeError: RuntimeError) => Promise<boolean>;
+    /** Reset auto-repair state */
+    resetAutoRepair: () => void;
+}
+
+/**
+ * Combined context value type.
+ */
+export type ChatContextValue = ChatState & ChatActions;
+
+export const ChatContext = createContext<ChatContextValue | null>(null);
+
+/**
+ * Props for the ChatProvider component.
+ */
+export interface ChatProviderProps {
+    children: ReactNode;
+    apiConfig?: Partial<ApiConfig>;
+}
+
+/**
+ * Hook to access the chat context.
+ * Must be used within a ChatProvider.
+ */
+export function useChat(): ChatContextValue {
+    const context = useContext(ChatContext);
+    if (!context) {
+        throw new Error('useChat must be used within a ChatProvider');
+    }
+    return context;
+}

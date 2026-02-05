@@ -4,7 +4,7 @@ import { ChatInterface, PreviewPanel } from '../../components';
 import { PreviewErrorBoundary } from '../PreviewPanel/PreviewErrorBoundary';
 import { ExportButton } from '../ExportButton';
 import { PanelToggle, type ActivePanel } from '../PanelToggle';
-import { createRuntimeError, type RuntimeError } from '@/shared';
+import { type RuntimeError } from '@/shared';
 
 const RESIZE_MIN_WIDTH = 300;
 const RESIZE_MAX_FRACTION = 0.6;
@@ -65,11 +65,8 @@ function PreviewSection() {
     }, [reportError]);
 
     const handleAutoRepair = useCallback(async (runtimeError: RuntimeError) => {
-        console.log('[PreviewSection] Triggering auto-repair for:', runtimeError.type);
         const success = await autoRepair(runtimeError);
-        if (!success) {
-            console.log('[PreviewSection] Auto-repair failed or skipped');
-        }
+
     }, [autoRepair]);
 
     // Determine if auto-repair is available
