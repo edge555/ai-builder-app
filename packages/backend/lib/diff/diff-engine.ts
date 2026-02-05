@@ -268,9 +268,9 @@ function groupIntoHunks(diffLines: DiffLine[], contextLines: number = DIFF_CONTE
  * Normalizes lines (removes trailing whitespace) before comparison.
  */
 function computeFileDiff(oldContent: string, newContent: string): DiffHunk[] {
-  // Normalize lines by removing trailing whitespace
-  const oldLines = oldContent.split('\n').map(normalizeLine);
-  const newLines = newContent.split('\n').map(normalizeLine);
+  // Normalize lines by removing trailing whitespace and filter trailing empty lines
+  const oldLines = trimTrailingEmptyLines(oldContent.split('\n').map(normalizeLine));
+  const newLines = trimTrailingEmptyLines(newContent.split('\n').map(normalizeLine));
   
   // Compute LCS with normalized lines
   const dp = computeLCS(oldLines, newLines);
@@ -280,6 +280,18 @@ function computeFileDiff(oldContent: string, newContent: string): DiffHunk[] {
   
   // Group into hunks
   return groupIntoHunks(diffLines);
+}
+
+/**
+ * Remove trailing empty lines from an array of lines.
+ * Preserves empty lines within content, only trims from the end.
+ */
+function trimTrailingEmptyLines(lines: string[]): string[] {
+  let endIndex = lines.length;
+  while (endIndex > 0 && lines[endIndex - 1] === '') {
+    endIndex--;
+  }
+  return lines.slice(0, endIndex);
 }
 
 /**
@@ -341,7 +353,7 @@ export function computeDiffs(
     
     if (oldContent === undefined && newContent !== undefined) {
       // File was added
-      const lines = newContent.split('\n').map(normalizeLine);
+      const lines = trimTrailingEmptyLines(newContent.split('\n').map(normalizeLine));
       const changes: DiffChange[] = lines.map((lineContent: string, index: number) => ({
         type: 'add' as const,
         lineNumber: index + 1,
@@ -361,7 +373,7 @@ export function computeDiffs(
       });
     } else if (oldContent !== undefined && newContent === undefined) {
       // File was deleted
-      const lines = oldContent.split('\n').map(normalizeLine);
+      const lines = trimTrailingEmptyLines(oldContent.split('\n').map(normalizeLine));
       const changes: DiffChange[] = lines.map((lineContent: string, index: number) => ({
         type: 'delete' as const,
         lineNumber: index + 1,
@@ -439,7 +451,7 @@ export function computeDiffsFromFiles(
     
     if (oldContent === undefined && newContent !== undefined) {
       // File was added
-      const lines = newContent.split('\n').map(normalizeLine);
+      const lines = trimTrailingEmptyLines(newContent.split('\n').map(normalizeLine));
       const changes: DiffChange[] = lines.map((content, index) => ({
         type: 'add' as const,
         lineNumber: index + 1,
@@ -459,7 +471,7 @@ export function computeDiffsFromFiles(
       });
     } else if (oldContent !== undefined && newContent === undefined) {
       // File was deleted
-      const lines = oldContent.split('\n').map(normalizeLine);
+      const lines = trimTrailingEmptyLines(oldContent.split('\n').map(normalizeLine));
       const changes: DiffChange[] = lines.map((content, index) => ({
         type: 'delete' as const,
         lineNumber: index + 1,
