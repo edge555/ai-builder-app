@@ -2,6 +2,7 @@ import type { ProjectState, SerializedProjectState } from './project-state';
 import type { Version, SerializedVersion } from './version';
 import type { FileDiff } from './diff';
 import type { ChangeSummary } from './change-summary';
+import type { RuntimeError } from './runtime-error';
 
 // ============================================================================
 // Generate Project API
@@ -43,6 +44,8 @@ export interface ModifyProjectRequest {
   prompt: string;
   /** Skip FilePlanner - use provided files directly (when client has already done planning via /api/plan) */
   skipPlanning?: boolean;
+  /** Runtime error context for auto-repair (if applicable) */
+  runtimeError?: RuntimeError;
 }
 
 /**

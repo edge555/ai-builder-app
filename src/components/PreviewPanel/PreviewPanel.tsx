@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, forwardRef } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   SandpackProvider,
   SandpackLayout,
@@ -23,8 +23,6 @@ export interface PreviewPanelProps {
   isLoading?: boolean;
   /** Current loading phase for skeleton display */
   loadingPhase?: LoadingPhase;
-  /** Callback when a preview error occurs */
-  onError?: (error: Error) => void;
 }
 
 /**
@@ -86,56 +84,12 @@ createRoot(document.getElementById('root')!).render(
 
 
 /**
- * Error boundary state for catching preview errors.
- */
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
-
-/**
- * Error boundary component for catching Sandpack errors.
- */
-class PreviewErrorBoundary extends React.Component<
-  { children: React.ReactNode; onError?: (error: Error) => void },
-  ErrorBoundaryState
-> {
-  constructor(props: { children: React.ReactNode; onError?: (error: Error) => void }) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error): void {
-    this.props.onError?.(error);
-  }
-
-  render(): React.ReactNode {
-    if (this.state.hasError) {
-      return (
-        <div className="preview-error">
-          <h3>Preview Error</h3>
-          <p>{this.state.error?.message || 'An error occurred while rendering the preview.'}</p>
-          <button onClick={() => this.setState({ hasError: false, error: null })}>
-            Try Again
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-/**
  * PreviewPanel component that renders a live preview of the generated project.
  * Uses Sandpack to provide an isolated sandbox environment for React projects.
  * 
  * Requirements: 9.1, 9.2, 9.3
  */
-export const PreviewPanel = forwardRef<HTMLDivElement, PreviewPanelProps>(function PreviewPanel({ projectState, isLoading = false, loadingPhase = 'idle', onError }, ref) {
+export function PreviewPanel({ projectState, isLoading = false, loadingPhase = 'idle' }: PreviewPanelProps) {
   const [showCode, setShowCode] = useState(false);
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
   const [isRotated, setIsRotated] = useState(false);
@@ -148,11 +102,6 @@ export const PreviewPanel = forwardRef<HTMLDivElement, PreviewPanelProps>(functi
     setRefreshKey(prev => prev + 1);
     setTimeout(() => setIsRefreshing(false), 600);
   }, []);
-
-  const handleError = useCallback((error: Error) => {
-    setPreviewError(error.message);
-    onError?.(error);
-  }, [onError]);
 
   const clearError = useCallback(() => {
     setPreviewError(null);
@@ -192,7 +141,7 @@ export const PreviewPanel = forwardRef<HTMLDivElement, PreviewPanelProps>(functi
   }, [sandpackFiles]);
 
   return (
-    <div className="preview-panel" ref={ref}>
+    <div className="preview-panel">
       <div className="preview-header">
         <div className="preview-header-left">
           <h2>Preview</h2>
@@ -243,67 +192,65 @@ export const PreviewPanel = forwardRef<HTMLDivElement, PreviewPanelProps>(functi
       {isLoading && loadingPhase !== 'idle' ? (
         <PreviewSkeleton phase={loadingPhase} />
       ) : (
-        <PreviewErrorBoundary onError={handleError}>
-          <div className="preview-content">
-            <SandpackProvider
-              key={refreshKey}
-              files={Object.fromEntries(
-                Object.entries(sandpackFiles).map(([path, code]) => [path, { code }])
-              )}
-              theme="dark"
-              options={{
-                activeFile: entryFile,
-                recompileMode: 'delayed',
-                recompileDelay: 500,
-                visibleFiles: Object.keys(sandpackFiles),
-              }}
-              customSetup={{
-                entry: entryFile,
-                dependencies: {
-                  'react': '^18.2.0',
-                  'react-dom': '^18.2.0',
-                  'lucide-react': '^0.294.0',
-                  'clsx': '^2.0.0',
-                  'tailwind-merge': '^2.0.0',
-                },
-              }}
-            >
-              <SandpackLayout>
-                {showCode && (
-                  <>
-                    <SandpackFileExplorer
-                      autoHiddenFiles
-                    />
-                    <SandpackCodeEditor
-                      showTabs={false}
-                      showLineNumbers
-                      showInlineErrors
-                      wrapContent
-                      style={{ height: '100%' }}
-                    />
-                  </>
-                )}
-                {deviceMode === 'desktop' ? (
-                  <SandpackPreview
-                    showOpenInCodeSandbox={false}
-                    showRefreshButton
+        <div className="preview-content">
+          <SandpackProvider
+            key={refreshKey}
+            files={Object.fromEntries(
+              Object.entries(sandpackFiles).map(([path, code]) => [path, { code }])
+            )}
+            theme="dark"
+            options={{
+              activeFile: entryFile,
+              recompileMode: 'delayed',
+              recompileDelay: 500,
+              visibleFiles: Object.keys(sandpackFiles),
+            }}
+            customSetup={{
+              entry: entryFile,
+              dependencies: {
+                'react': '^18.2.0',
+                'react-dom': '^18.2.0',
+                'lucide-react': '^0.294.0',
+                'clsx': '^2.0.0',
+                'tailwind-merge': '^2.0.0',
+              },
+            }}
+          >
+            <SandpackLayout>
+              {showCode && (
+                <>
+                  <SandpackFileExplorer
+                    autoHiddenFiles
+                  />
+                  <SandpackCodeEditor
+                    showTabs={false}
+                    showLineNumbers
+                    showInlineErrors
+                    wrapContent
                     style={{ height: '100%' }}
                   />
-                ) : (
-                  <div className="device-simulation-container">
-                    <div className={`device-frame ${deviceMode} ${isRotated ? 'rotated' : ''}`}>
-                      <SandpackPreview
-                        showOpenInCodeSandbox={false}
-                        showRefreshButton
-                        style={{ height: '100%' }}
-                      />
-                    </div>
+                </>
+              )}
+              {deviceMode === 'desktop' ? (
+                <SandpackPreview
+                  showOpenInCodeSandbox={false}
+                  showRefreshButton
+                  style={{ height: '100%' }}
+                />
+              ) : (
+                <div className="device-simulation-container">
+                  <div className={`device-frame ${deviceMode} ${isRotated ? 'rotated' : ''}`}>
+                    <SandpackPreview
+                      showOpenInCodeSandbox={false}
+                      showRefreshButton
+                      style={{ height: '100%' }}
+                    />
                   </div>
-                )}
-              </SandpackLayout>
-            </SandpackProvider>
-          </div>
-        </PreviewErrorBoundary>
+                </div>
+              )}
+            </SandpackLayout>
+          </SandpackProvider>
+        </div>
       )}
 
       {!projectState && !isLoading && (
@@ -313,7 +260,7 @@ export const PreviewPanel = forwardRef<HTMLDivElement, PreviewPanelProps>(functi
       )}
     </div>
   );
-});
+}
 
 export default PreviewPanel;
 

@@ -118,6 +118,50 @@ type DiffChange = {
 
 type ModifyBody = { projectState?: SerializedProjectState; prompt?: string };
 
+type RuntimeErrorInfo = {
+  message: string;
+  stack?: string;
+  componentStack?: string;
+  filePath?: string;
+  line?: number;
+  type: string;
+  timestamp: string;
+};
+
+/**
+ * Formats a runtime error from the preview into context for the repair prompt.
+ */
+function formatRuntimeErrorContext(runtimeError: RuntimeErrorInfo): string {
+  const parts = [
+    `\n\n=== RUNTIME ERROR FROM PREVIEW ===`,
+    `Error Type: ${runtimeError.type}`,
+    `Message: ${runtimeError.message}`,
+  ];
+
+  if (runtimeError.filePath) {
+    parts.push(`File: ${runtimeError.filePath}`);
+  }
+  if (runtimeError.line) {
+    parts.push(`Line: ${runtimeError.line}`);
+  }
+  if (runtimeError.stack) {
+    parts.push(`\nStack Trace:\n${runtimeError.stack.slice(0, 1000)}`);
+  }
+  if (runtimeError.componentStack) {
+    parts.push(`\nComponent Stack:\n${runtimeError.componentStack.slice(0, 500)}`);
+  }
+
+  parts.push(
+    `\nRepair Instructions:`,
+    `- Fix this runtime error while preserving functionality`,
+    `- Common causes: undefined access, missing null checks, incorrect imports`,
+    `- Apply the minimal fix needed`,
+    `=================================\n`
+  );
+
+  return parts.join('\n');
+}
+
 type EditOperation = {
   search: string;
   replace: string;
@@ -1370,8 +1414,9 @@ function buildModifyPrompt(params: {
   budgets: ModifyBudgets;
   failureContext?: string;
   cacheKeyBase?: string;
+  runtimeError?: RuntimeErrorInfo;
 }): string {
-  const { projectDescription, currentFiles, userPrompt, budgets, failureContext, cacheKeyBase } = params;
+  const { projectDescription, currentFiles, userPrompt, budgets, failureContext, cacheKeyBase, runtimeError } = params;
 
   const { selectedFiles, allFilePaths } = pickContextFilesCached({
     files: currentFiles,
@@ -1403,9 +1448,14 @@ function buildModifyPrompt(params: {
     ? `\n\nPrevious attempt failed. Fix it by returning a corrected edit set. Failure details:\n${failureContext}\n`
     : '';
 
+  const runtimeErrorContext = runtimeError
+    ? formatRuntimeErrorContext(runtimeError)
+    : '';
+
   return (
     'You modify a Vite + React + TypeScript project represented as a files map.\n' +
     `${failure}` +
+    `${runtimeErrorContext}` +
     'Return ONLY JSON.\n\n' +
     `Schema:\n${schema}\n\n` +
     `Rules:\n- ${rules}\n\n` +
@@ -1422,13 +1472,14 @@ async function runModifyOnce(params: {
   model: string;
   budgets: ModifyBudgets;
   failureContext?: string;
+  runtimeError?: RuntimeErrorInfo;
 }): Promise<{
   nextState: SerializedProjectState;
   fileEdits: FileEdit[];
   summary: ChangeSummary;
   diffs: FileDiff[];
 }> {
-  const { current, promptText, model, budgets, failureContext } = params;
+  const { current, promptText, model, budgets, failureContext, runtimeError } = params;
   const llmPrompt = buildModifyPrompt({
     projectDescription: current.description,
     currentFiles: current.files,
@@ -1436,6 +1487,7 @@ async function runModifyOnce(params: {
     budgets,
     failureContext,
     cacheKeyBase: `${current.currentVersionId}:${current.updatedAt}`,
+    runtimeError,
   });
 
   const updated = await geminiJson<GeminiModifyShape>(llmPrompt, { model });
@@ -1468,9 +1520,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const body = (await req.json().catch(() => ({}))) as ModifyBody;
+    const body = (await req.json().catch(() => ({}))) as ModifyBody & { runtimeError?: RuntimeErrorInfo };
     const promptText = (body.prompt ?? '').trim();
     const current = body.projectState;
+    const runtimeError = body.runtimeError;
 
     if (!current?.id) {
       return new Response(JSON.stringify({ success: false, error: 'projectState is required' }), {
@@ -1513,7 +1566,7 @@ Deno.serve(async (req) => {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const failureContext = attempt === 1 ? undefined : formatFailureContext(lastError, current.files);
-        result = await runModifyOnce({ current, promptText, model, budgets, failureContext });
+        result = await runModifyOnce({ current, promptText, model, budgets, failureContext, runtimeError: attempt === 1 ? runtimeError : undefined });
         break;
       } catch (e) {
         lastError = e instanceof Error ? e.message : 'Unknown error';

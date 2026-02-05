@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useChat } from '../../context';
-import { ChatInterface, PreviewPanel, ErrorBoundary } from '../../components';
+import { useChat, usePreviewError } from '../../context';
+import { ChatInterface, PreviewPanel } from '../../components';
+import { PreviewErrorBoundary } from '../PreviewPanel/PreviewErrorBoundary';
 import { ExportButton } from '../ExportButton';
 import { PanelToggle, type ActivePanel } from '../PanelToggle';
+import { createRuntimeError, type RuntimeError } from '@/shared';
 
 const RESIZE_MIN_WIDTH = 300;
 const RESIZE_MAX_FRACTION = 0.6;
@@ -44,29 +46,48 @@ function ChatPanel() {
 /**
  * Preview panel component that uses the chat context for project state.
  * Updates automatically when ProjectState changes.
- * Wrapped with ErrorBoundary for graceful error handling.
+ * Wrapped with PreviewErrorBoundary for auto-repair functionality.
  * 
  * Requirements: 9.2, 9.3
  */
 function PreviewSection() {
-    const { projectState, isLoading, loadingPhase } = useChat();
+    const { projectState, isLoading, loadingPhase, autoRepair, isAutoRepairing, autoRepairAttempt, resetAutoRepair } = useChat();
+    const { reportError } = usePreviewError();
 
-    const handlePreviewError = (error: Error) => {
-        console.error('Preview error:', error);
-    };
+    // Reset auto-repair attempts when project state changes
+    useEffect(() => {
+        resetAutoRepair();
+    }, [projectState?.currentVersionId, resetAutoRepair]);
+
+    const handlePreviewError = useCallback((runtimeError: RuntimeError) => {
+        console.error('Preview error:', runtimeError);
+        reportError(runtimeError);
+    }, [reportError]);
+
+    const handleAutoRepair = useCallback(async (runtimeError: RuntimeError) => {
+        console.log('[PreviewSection] Triggering auto-repair for:', runtimeError.type);
+        const success = await autoRepair(runtimeError);
+        if (!success) {
+            console.log('[PreviewSection] Auto-repair failed or skipped');
+        }
+    }, [autoRepair]);
+
+    // Determine if auto-repair is available
+    const canAutoRepair = projectState !== null && autoRepairAttempt < 2;
 
     return (
-        <ErrorBoundary
-            errorMessage="The preview encountered an error. Try refreshing or modifying your code."
-            showRetry={true}
+        <PreviewErrorBoundary
+            onError={handlePreviewError}
+            onAutoRepair={handleAutoRepair}
+            canAutoRepair={canAutoRepair}
+            isAutoRepairing={isAutoRepairing}
         >
             <PreviewPanel
                 projectState={projectState}
                 isLoading={isLoading}
                 loadingPhase={loadingPhase}
-                onError={handlePreviewError}
             />
-        </ErrorBoundary>
+        </PreviewErrorBoundary>
     );
 }
 

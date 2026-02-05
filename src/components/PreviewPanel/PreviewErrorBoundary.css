@@ -1,0 +1,120 @@
+ .preview-error-boundary {
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   height: 100%;
+   min-height: 300px;
+   padding: 2rem;
+   background: linear-gradient(135deg, hsl(0 15% 12%), hsl(0 10% 8%));
+   border-radius: 8px;
+ }
+ 
+ .preview-error-content {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   text-align: center;
+   max-width: 400px;
+   padding: 1.5rem;
+   background: hsl(0 0% 15% / 0.8);
+   border: 1px solid hsl(0 40% 45% / 0.4);
+   border-radius: 12px;
+   box-shadow: 0 8px 32px hsl(0 0% 0% / 0.3);
+ }
+ 
+ .preview-error-icon {
+   font-size: 2.5rem;
+   margin-bottom: 0.75rem;
+   animation: pulse 2s ease-in-out infinite;
+ }
+ 
+ @keyframes pulse {
+   0%, 100% { opacity: 1; transform: scale(1); }
+   50% { opacity: 0.7; transform: scale(1.05); }
+ }
+ 
+ .preview-error-title {
+   margin: 0 0 1rem;
+   font-size: 1.25rem;
+   font-weight: 600;
+   color: hsl(0 70% 70%);
+ }
+ 
+ .preview-error-details {
+   margin-bottom: 1.25rem;
+ }
+ 
+ .preview-error-type {
+   margin: 0 0 0.5rem;
+   padding: 0.25rem 0.75rem;
+   font-size: 0.7rem;
+   font-weight: 600;
+   text-transform: uppercase;
+   letter-spacing: 0.05em;
+   color: hsl(0 50% 85%);
+   background: hsl(0 40% 30% / 0.5);
+   border-radius: 4px;
+   display: inline-block;
+ }
+ 
+ .preview-error-message {
+   margin: 0.5rem 0;
+   font-size: 0.875rem;
+   color: hsl(0 0% 75%);
+   line-height: 1.5;
+   word-break: break-word;
+ }
+ 
+ .preview-error-location {
+   margin: 0.5rem 0 0;
+   font-size: 0.75rem;
+   font-family: 'Fira Code', 'Consolas', monospace;
+   color: hsl(200 60% 70%);
+   background: hsl(200 20% 15%);
+   padding: 0.35rem 0.65rem;
+   border-radius: 4px;
+ }
+ 
+ .preview-error-actions {
+   display: flex;
+   gap: 0.75rem;
+   flex-wrap: wrap;
+   justify-content: center;
+ }
+ 
+ .preview-error-btn {
+   padding: 0.6rem 1rem;
+   font-size: 0.875rem;
+   font-weight: 500;
+   border: none;
+   border-radius: 6px;
+   cursor: pointer;
+   transition: all 0.15s ease;
+ }
+ 
+ .preview-error-btn-primary {
+   background: linear-gradient(135deg, hsl(150 60% 40%), hsl(170 60% 35%));
+   color: white;
+   box-shadow: 0 4px 12px hsl(160 60% 30% / 0.3);
+ }
+ 
+ .preview-error-btn-primary:hover {
+   transform: translateY(-1px);
+   box-shadow: 0 6px 16px hsl(160 60% 30% / 0.4);
+ }
+ 
+ .preview-error-btn-secondary {
+   background: hsl(0 0% 25%);
+   color: hsl(0 0% 85%);
+   border: 1px solid hsl(0 0% 35%);
+ }
+ 
+ .preview-error-btn-secondary:hover {
+   background: hsl(0 0% 30%);
+ }
+ 
+ .preview-error-btn-disabled {
+   background: hsl(0 0% 20%);
+   color: hsl(0 0% 50%);
+   cursor: not-allowed;
+ }

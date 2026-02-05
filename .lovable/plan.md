@@ -341,19 +341,63 @@ Track these metrics to measure improvement:
 ## Implementation Priority
 
 **Immediate (High Impact, Lower Effort):**
-1. Enhanced error messages in repair prompts
-2. Incremental repair (don't regenerate everything)
-3. Better failure context to AI
+1. ✅ Enhanced error messages in repair prompts
+2. ✅ Incremental repair (don't regenerate everything)
+3. ✅ Better failure context to AI
 
 **Short-term (High Impact, Medium Effort):**
-4. Runtime error capture from preview
-5. Auto-retry on preview failure
-6. TypeScript type checking validation
+4. ✅ Runtime error capture from preview
+5. ✅ Auto-retry on preview failure
+6. 🔄 TypeScript type checking validation (stubbed - requires TS compiler in edge functions)
 
 **Medium-term (Medium Impact, Higher Effort):**
 7. Error pattern caching
 8. Staged generation for complex requests
 9. Project-specific context awareness
+
+---
+
+## Implementation Status (Updated)
+
+### Completed Features:
+
+1. **RuntimeError Types** (`src/shared/types/runtime-error.ts`)
+   - Error type classification (RENDER, REFERENCE, TYPE, SYNTAX, NETWORK, PROMISE)
+   - Stack trace parsing to extract file paths and line numbers
+   - createRuntimeError utility for consistent error creation
+
+2. **PreviewErrorContext** (`src/context/PreviewErrorContext.tsx`)
+   - Centralized preview error state management
+   - Auto-repair attempt tracking
+   - Duplicate error prevention
+
+3. **Enhanced ChatContext** (`src/context/ChatContext.tsx`)
+   - `autoRepair()` function for triggering automatic repairs
+   - `resetAutoRepair()` for resetting attempt counters
+   - Repair prompt builder with error-type-specific hints
+   - Integration with modify API including runtime error context
+
+4. **PreviewErrorBoundary** (`src/components/PreviewPanel/PreviewErrorBoundary.tsx`)
+   - React error boundary capturing render errors
+   - Auto-repair button UI
+   - Error type and location display
+   - Integration with auto-repair flow
+
+5. **Edge Function Updates** (`supabase/functions/modify/index.ts`)
+   - RuntimeErrorInfo type for structured error passing
+   - formatRuntimeErrorContext for AI prompt enhancement
+   - Runtime error context in modify prompts
+   - First-attempt runtime error inclusion in repair loop
+
+### Architecture Flow:
+```text
+Preview Crash → PreviewErrorBoundary catches →
+  RuntimeError created → ChatContext.autoRepair() →
+    Modify API with runtimeError context →
+      AI generates fix → Apply & validate →
+        Success: Update project state
+        Failure: Retry up to 2 times
+```
 
 ---
 
