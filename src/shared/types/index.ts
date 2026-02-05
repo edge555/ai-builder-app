@@ -9,3 +9,4 @@ export * from './intent';
 export * from './validation';
 export * from './edit-operation';
 export * from './plan';
+ export * from './runtime-error';

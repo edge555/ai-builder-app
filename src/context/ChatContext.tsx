@@ -5,7 +5,8 @@ import type {
   ModifyProjectResponse,
   ChangeSummary,
   SerializedVersion,
-  FileDiff
+  FileDiff,
+  RuntimeError
 } from '@/shared';
 import type { ChatMessage, LoadingPhase } from '../components/ChatInterface';
 import { config as appConfig } from '../config';
@@ -27,6 +28,10 @@ interface ChatState {
   loadingPhase: LoadingPhase;
   projectState: SerializedProjectState | null;
   error: string | null;
+  /** Whether auto-repair is in progress */
+  isAutoRepairing: boolean;
+  /** Current auto-repair attempt number */
+  autoRepairAttempt: number;
 }
 
 /**
@@ -47,6 +52,10 @@ interface ChatActions {
   clearError: () => void;
   setProjectState: (projectState: SerializedProjectState | null) => void;
   setVersionCallbacks: (callbacks: VersionCallbacks) => void;
+  /** Trigger auto-repair for a runtime error */
+  autoRepair: (runtimeError: RuntimeError) => Promise<boolean>;
+  /** Reset auto-repair state */
+  resetAutoRepair: () => void;
 }
 
 /**
@@ -72,6 +81,8 @@ interface ChatProviderProps {
 }
 
 
+const MAX_AUTO_REPAIR_ATTEMPTS = 2;
+
 /**
  * Provider component for chat state management.
  * Manages message history and handles API calls for generate and modify operations.
@@ -89,9 +100,12 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
   const [projectState, setProjectStateInternal] = useState<SerializedProjectState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isAutoRepairing, setIsAutoRepairing] = useState(false);
+  const [autoRepairAttempt, setAutoRepairAttempt] = useState(0);
   const versionCallbacksRef = useRef<VersionCallbacks>({});
   const activeRequestRef = useRef<{ controller: AbortController; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
   const isSubmittingRef = useRef(false);
+  const lastRepairErrorRef = useRef<string | null>(null);
 
   /**
    * Sets version callbacks for integration with VersionContext.
@@ -185,7 +199,8 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
    */
   const modifyProject = useCallback(async (
     currentState: SerializedProjectState,
-    prompt: string
+    prompt: string,
+    runtimeError?: RuntimeError
   ): Promise<ModifyProjectResponse> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), appConfig.api.timeout);
@@ -193,7 +208,7 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
 
     try {
       const { data, error } = await backend.functions.invoke('modify', {
-        body: { projectState: currentState, prompt },
+        body: { projectState: currentState, prompt, runtimeError },
       });
       if (error) throw new Error(error.message);
       return data as ModifyProjectResponse;
@@ -209,6 +224,90 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
       }
     }
   }, []);
+
+  /**
+   * Resets auto-repair state.
+   */
+  const resetAutoRepair = useCallback(() => {
+    setAutoRepairAttempt(0);
+    setIsAutoRepairing(false);
+    lastRepairErrorRef.current = null;
+  }, []);
+
+  /**
+   * Triggers auto-repair for a runtime error.
+   * Returns true if repair was successful.
+   */
+  const autoRepair = useCallback(async (runtimeError: RuntimeError): Promise<boolean> => {
+    // Prevent duplicate repairs for the same error
+    const errorKey = `${runtimeError.message}:${runtimeError.filePath}`;
+    if (lastRepairErrorRef.current === errorKey) {
+      console.log('[AutoRepair] Skipping duplicate error:', errorKey);
+      return false;
+    }
+
+    // Check if we've exceeded max attempts
+    if (autoRepairAttempt >= MAX_AUTO_REPAIR_ATTEMPTS) {
+      console.log('[AutoRepair] Max attempts reached, skipping');
+      return false;
+    }
+
+    // Need a project to repair
+    if (!projectState) {
+      console.log('[AutoRepair] No project state to repair');
+      return false;
+    }
+
+    // Already repairing
+    if (isAutoRepairing) {
+      console.log('[AutoRepair] Already in progress');
+      return false;
+    }
+
+    lastRepairErrorRef.current = errorKey;
+    setIsAutoRepairing(true);
+    setAutoRepairAttempt(prev => prev + 1);
+    setLoadingPhase('modifying');
+
+    const repairPrompt = buildRepairPrompt(runtimeError);
+    console.log('[AutoRepair] Attempting repair for:', runtimeError.type, runtimeError.message);
+
+    try {
+      const result = await modifyProject(projectState, repairPrompt, runtimeError);
+
+      if (result.success && result.projectState) {
+        setProjectState(result.projectState);
+        addAssistantMessage(
+          `🔧 Auto-repair applied: Fixed ${runtimeError.type.toLowerCase().replace('_', ' ')} in ${runtimeError.filePath || 'the application'}.`,
+          result.changeSummary,
+          result.diffs
+        );
+
+        // Notify version callbacks
+        const callbacks = versionCallbacksRef.current;
+        if (result.version && callbacks.onVersionCreated) {
+          callbacks.onVersionCreated(result.version);
+        }
+        if (result.diffs && callbacks.onDiffsComputed) {
+          callbacks.onDiffsComputed(result.diffs);
+        }
+
+        setIsAutoRepairing(false);
+        setLoadingPhase('idle');
+        return true;
+      } else {
+        console.error('[AutoRepair] Repair failed:', result.error);
+        setIsAutoRepairing(false);
+        setLoadingPhase('idle');
+        return false;
+      }
+    } catch (err) {
+      console.error('[AutoRepair] Repair threw error:', err);
+      setIsAutoRepairing(false);
+      setLoadingPhase('idle');
+      return false;
+    }
+  }, [projectState, autoRepairAttempt, isAutoRepairing, modifyProject, setProjectState, addAssistantMessage]);
 
 
 
@@ -329,18 +428,95 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
     setError(null);
   }, []);
 
+  /**
+   * Builds a repair prompt for a runtime error.
+   */
+  function buildRepairPrompt(runtimeError: RuntimeError): string {
+    const parts = [
+      `Fix the following runtime error that crashed the application preview:`,
+      ``,
+      `Error Type: ${runtimeError.type}`,
+      `Error Message: ${runtimeError.message}`,
+    ];
+
+    if (runtimeError.filePath) {
+      parts.push(`File: ${runtimeError.filePath}`);
+    }
+    if (runtimeError.line) {
+      parts.push(`Line: ${runtimeError.line}`);
+    }
+    if (runtimeError.componentStack) {
+      parts.push(``, `Component Stack:`, runtimeError.componentStack.slice(0, 500));
+    }
+    if (runtimeError.stack) {
+      parts.push(``, `Stack Trace:`, runtimeError.stack.slice(0, 800));
+    }
+
+    parts.push(
+      ``,
+      `Common fixes for ${runtimeError.type}:`,
+      ...getRepairHints(runtimeError.type),
+      ``,
+      `Apply the minimal fix needed to resolve this error.`
+    );
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Returns repair hints based on error type.
+   */
+  function getRepairHints(errorType: RuntimeError['type']): string[] {
+    switch (errorType) {
+      case 'REFERENCE_ERROR':
+        return [
+          '- Check if the variable is defined before use',
+          '- Add missing imports',
+          '- Fix typos in variable names',
+        ];
+      case 'TYPE_ERROR':
+        return [
+          '- Add null/undefined checks before accessing properties',
+          '- Provide default values for optional properties',
+          '- Ensure functions are called correctly',
+        ];
+      case 'RENDER_ERROR':
+        return [
+          '- Check component props and state initialization',
+          '- Ensure hooks are called unconditionally',
+          '- Verify JSX structure is valid',
+        ];
+      case 'SYNTAX_ERROR':
+        return [
+          '- Fix bracket matching',
+          '- Close unclosed strings',
+          '- Check for missing semicolons or commas',
+        ];
+      default:
+        return [
+          '- Check for undefined values',
+          '- Verify imports are correct',
+          '- Ensure proper error handling',
+        ];
+    }
+  }
+
   const value = useMemo<ChatContextValue>(() => ({
     messages,
     isLoading,
     loadingPhase,
     projectState,
     error,
+    isAutoRepairing,
+    autoRepairAttempt,
     submitPrompt,
     clearMessages,
     clearError,
     setProjectState,
     setVersionCallbacks,
-  }), [messages, isLoading, loadingPhase, projectState, error, submitPrompt, clearMessages, clearError, setProjectState, setVersionCallbacks]);
+    autoRepair,
+    resetAutoRepair,
+  }), [messages, isLoading, loadingPhase, projectState, error, isAutoRepairing, autoRepairAttempt, submitPrompt, clearMessages, clearError, setProjectState, setVersionCallbacks, autoRepair, resetAutoRepair]);
 
   return (
     <ChatContext.Provider value={value}>

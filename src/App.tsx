@@ -1,4 +1,4 @@
-import { ChatProvider, VersionProvider } from './context';
+import { ChatProvider, VersionProvider, PreviewErrorProvider } from './context';
 import { ErrorBoundary, AppLayout } from './components';
 import './App.css';
 
@@ -19,11 +19,13 @@ function App() {
       onError={handleGlobalError}
       errorMessage="The application encountered an unexpected error. Please refresh the page to continue."
     >
-      <ChatProvider>
-        <VersionProvider>
-          <AppLayout />
-        </VersionProvider>
-      </ChatProvider>
+      <PreviewErrorProvider>
+        <ChatProvider>
+          <VersionProvider>
+            <AppLayout />
+          </VersionProvider>
+        </ChatProvider>
+      </PreviewErrorProvider>
     </ErrorBoundary>
   );
 }
