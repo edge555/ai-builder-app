@@ -11,6 +11,8 @@ import type { SerializedProjectState } from '@/shared';
 import type { LoadingPhase } from '../ChatInterface';
 import { PreviewToolbar, type DeviceMode } from './PreviewToolbar';
 import { PreviewSkeleton } from './PreviewSkeleton';
+import { SandpackErrorListener } from './SandpackErrorListener';
+import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import './PreviewPanel.css';
 
 /**
@@ -23,6 +25,12 @@ export interface PreviewPanelProps {
   isLoading?: boolean;
   /** Current loading phase for skeleton display */
   loadingPhase?: LoadingPhase;
+  /** Callback when errors are detected and ready for repair */
+  onErrorsReady?: (errors: AggregatedErrors) => void;
+  /** Whether error monitoring is enabled */
+  errorMonitoringEnabled?: boolean;
+  /** Callback when bundler becomes idle (no errors) */
+  onBundlerIdle?: () => void;
 }
 
 /**
@@ -89,7 +97,14 @@ createRoot(document.getElementById('root')!).render(
  * 
  * Requirements: 9.1, 9.2, 9.3
  */
-export function PreviewPanel({ projectState, isLoading = false, loadingPhase = 'idle' }: PreviewPanelProps) {
+export function PreviewPanel({ 
+  projectState, 
+  isLoading = false, 
+  loadingPhase = 'idle',
+  onErrorsReady,
+  errorMonitoringEnabled = true,
+  onBundlerIdle,
+}: PreviewPanelProps) {
   const [showCode, setShowCode] = useState(false);
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
   const [isRotated, setIsRotated] = useState(false);
@@ -209,6 +224,14 @@ export function PreviewPanel({ projectState, isLoading = false, loadingPhase = '
               },
             }}
           >
+            {/* Error listener for auto-repair */}
+            {errorMonitoringEnabled && (
+              <SandpackErrorListener
+                onErrorsReady={onErrorsReady}
+                enabled={!isLoading}
+                onBundlerIdle={onBundlerIdle}
+              />
+            )}
             <SandpackLayout>
               {showCode && (
                 <>

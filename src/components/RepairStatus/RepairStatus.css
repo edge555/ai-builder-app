@@ -1,0 +1,162 @@
+/* RepairStatus component styles */
+
+.repair-status {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 12px hsl(var(--foreground) / 0.1);
+  min-width: 250px;
+  max-width: 400px;
+  animation: slideIn 0.3s ease-out;
+}
+
+.repair-status.exiting {
+  animation: slideOut 0.3s ease-in forwards;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateX(0);
+  }
+}
+
+@keyframes slideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) translateX(20px);
+  }
+}
+
+.repair-status-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.repair-status-icon {
+  flex-shrink: 0;
+  color: hsl(var(--muted-foreground));
+}
+
+.repair-status-icon.spin {
+  animation: spin 1s linear infinite;
+}
+
+.repair-status-icon.pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.repair-status-icon.success {
+  color: hsl(142 76% 36%);
+}
+
+.repair-status-icon.error {
+  color: hsl(var(--destructive));
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.repair-status-message {
+  flex: 1;
+  font-size: 13px;
+  color: hsl(var(--foreground));
+  line-height: 1.4;
+}
+
+.repair-status-action {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--primary));
+  background: transparent;
+  border: 1px solid hsl(var(--primary));
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.repair-status-action:hover {
+  background: hsl(var(--primary) / 0.1);
+}
+
+.repair-status-dismiss {
+  flex-shrink: 0;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.repair-status-dismiss:hover {
+  color: hsl(var(--foreground));
+}
+
+/* Progress bar */
+.repair-status-progress {
+  margin-top: 8px;
+  height: 3px;
+  background: hsl(var(--muted));
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.repair-status-progress-bar {
+  height: 100%;
+  width: var(--progress, 33%);
+  background: hsl(var(--primary));
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* Phase-specific styles */
+.repair-status.detecting {
+  border-left: 3px solid hsl(var(--muted-foreground));
+}
+
+.repair-status.repairing {
+  border-left: 3px solid hsl(var(--primary));
+}
+
+.repair-status.success {
+  border-left: 3px solid hsl(142 76% 36%);
+}
+
+.repair-status.failed {
+  border-left: 3px solid hsl(var(--destructive));
+}
+
+/* Mobile responsiveness */
+@media (max-width: 480px) {
+  .repair-status {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    max-width: none;
+  }
+}

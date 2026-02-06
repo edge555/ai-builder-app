@@ -1,6 +1,6 @@
- import React, { Component, ErrorInfo, ReactNode } from 'react';
- import { createRuntimeError, type RuntimeError } from '@/shared';
- import './PreviewErrorBoundary.css';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { createRuntimeError, type RuntimeError, type ErrorSource } from '@/shared';
+import './PreviewErrorBoundary.css';
  
  /**
   * Props for the PreviewErrorBoundary component.
@@ -46,9 +46,9 @@
      return { hasError: true, error };
    }
  
-   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-     const runtimeError = createRuntimeError(error, errorInfo.componentStack ?? undefined);
-     
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    const runtimeError = createRuntimeError(error, 'error_boundary' as ErrorSource, errorInfo.componentStack ?? undefined);
+    
      this.setState({ 
        errorInfo,
        runtimeError,
