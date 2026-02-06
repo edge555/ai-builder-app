@@ -4,56 +4,27 @@
  * Requirements: 8.1, 8.3
  */
 
-/**
- * System prompt for code modification.
- * Instructs the AI to output diff-based JSON for surgical edits.
- * Designed to maintain senior-level code architecture.
- */
-export const DESIGN_SYSTEM_PROMPT = `=== DESIGN PRINCIPLES (CRITICAL) ===
-Apply modern, beautiful, and PREMIUM design to ALL code:
-
-1. VISUAL EXCELLENCE & COLOR:
-   - Use vibrant, harmonious, and sophisticated color palettes. NEVER use default/basic colors.
-   - Example palette: Deep navy (#0f172a) for depth, vibrant indigo (#4f46e5) for actions, soft slate (#64748b) for secondary text.
-   - Apply smooth gradients (linear-gradient(135deg, ...)) for depth and visual richness.
-   - Use CSS variables for a consistent, theme-able design system.
-   - Multi-layered shadows: box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1).
-
-2. MODERN UI PATTERNS:
-   - GLASSMORPHISM: backdrop-filter: blur(12px), semi-transparent white/black backgrounds (rgba(255, 255, 255, 0.7)).
-   - BORDER RADIUS: Large, modern rounding (12px to 24px). Avoid sharp corners unless intentional.
-   - SPACING: Generous whitespace using an 8px-based grid (8, 16, 24, 32, 48, 64).
-   - OVERLAYS: Use subtle overlays and blurs to create visual hierarchy.
-
-3. TYPOGRAPHY:
-   - Use premium font stacks (Inter, Outfit, system-ui).
-   - Clear hierarchy: Bold headings (h1: 3.5rem, h2: 2.5rem), airy line-height (1.6 - 1.8).
-   - Letter spacing: -0.02em for headings to look more "designed".
-
-4. INTERACTIVE ELEMENTS & MICRO-ANIMATIONS:
-   - Hover states: transform: translateY(-3px) scale(1.02), brightness(1.1), increased shadow.
-   - Transitions: 0.3s cubic-bezier(0.4, 0, 0.2, 1) for professional feel.
-   - Cursor: pointer and clear focus-visible states for accessibility.
-   - Subtle entrance animations (fade-in, slide-up) for new components.
-
-5. LAYOUT:
-   - Flexbox/Grid for all layouts.
-   - Use max-width (e.g., 1200px) and center alignment (margin: 0 auto) for layout containers.
-   - Use "gap" instead of margins for spacing between sibling elements.
-
-6. LAYOUT FUNDAMENTALS (PREVENT BROKEN UI):
-   - Use flex-wrap: wrap for lists that may overflow
-   - Set max-width on text/content containers
-   - Always use overflow: auto or hidden on scrollable areas
-   - Images: max-width: 100%, height: auto, object-fit: cover
-   - Include basic media queries for tablet (768px) and mobile (480px)`;
+import {
+  DESIGN_SYSTEM_CONSTANTS,
+  ACCESSIBILITY_GUIDANCE,
+  SEARCH_REPLACE_GUIDANCE,
+  SYNTAX_INTEGRITY_RULES,
+  wrapUserInput
+} from '../core/prompts/shared-prompt-fragments';
 
 /**
- * System prompt for code modification.
- * Instructs the AI to output diff-based JSON for surgical edits.
- * Designed to maintain senior-level code architecture.
+ * Design system prompt for UI-related modifications.
+ * Applied when the FilePlanner determines the modification involves UI changes.
  */
-export const CORE_MODIFICATION_PROMPT = `You are a SENIOR full-stack developer and UI/UX designer modifying an existing web application.
+export const DESIGN_SYSTEM_PROMPT = DESIGN_SYSTEM_CONSTANTS;
+
+/**
+ * Builds the core modification prompt with user input properly wrapped.
+ */
+function buildModificationPrompt(userPrompt: string, includeDesignSystem: boolean): string {
+  const designSystemSection = includeDesignSystem ? `\n${DESIGN_SYSTEM_CONSTANTS}\n\n${ACCESSIBILITY_GUIDANCE}\n` : '';
+  
+  return `You are a SENIOR full-stack developer and UI/UX designer modifying an existing web application.
 You write clean, modular code with proper component separation.
 
 === COMPONENT ARCHITECTURE PRINCIPLES ===
@@ -73,7 +44,7 @@ If you notice the existing code is poorly structured:
 - Extract reusable pieces into ui/ components
 - Move stateful logic into custom hooks
 - Split large components into smaller, focused ones
-
+${designSystemSection}
 === OUTPUT FORMAT ===
 For each file that needs changes, output a JSON object with:
 - "path": the file path
@@ -92,20 +63,17 @@ For each file that needs changes, output a JSON object with:
 7. For SMALL changes (bug fixes, style tweaks, minor additions <30 lines): modify existing files
 8. For LARGE features (>50 lines of new code): create new component files instead of bloating existing ones
 
-=== SYNTAX & INTEGRITY RULES (CRITICAL) ===
-1. SYNTAX INTEGRITY: Double-check that all brackets ({, [, (), braces, and strings are perfectly balanced and closed in your output.
-2. NO MARKDOWN: Never use markdown code blocks (\`\`\`) inside the JSON "content" or "replace" strings.
-3. CONTINUITY: Every file modification must be complete. If creating a new file, it must be fully functional.
-4. SURGICAL EDITS: When using "modify", ensure your "search" string is an EXACT match including all whitespace.
-5. NO TRUNCATION: Never truncate code or use comments like "// ... rest of code". Provide the full required change.
-6. COMPONENT LIMITS: Keep components small (<80 lines) to avoid truncation and maintain modularity.
-7. FILE PATHS: Paths must NOT contain spaces. Use \`src/components/Button.tsx\`, NOT \`src / components / Button.tsx\`.
+${SEARCH_REPLACE_GUIDANCE}
+
+${SYNTAX_INTEGRITY_RULES}
 
 You will receive:
 - The user's modification request
 - Relevant code slices from the project (marked as PRIMARY or CONTEXT)
 - PRIMARY files are the ones most likely to need modification
 - CONTEXT files are provided for reference to understand dependencies
+
+${wrapUserInput(userPrompt)}
 
 === EXAMPLE OUTPUT ===
 {
@@ -132,6 +100,22 @@ You will receive:
     }
   ]
 }`;
+}
+
+/**
+ * Core modification prompt without design system.
+ * @deprecated Use getModificationPrompt() instead for proper prompt injection defense
+ */
+export const CORE_MODIFICATION_PROMPT = buildModificationPrompt('', false);
+
+/**
+ * Builds a modification prompt with user input properly wrapped for injection defense.
+ * @param userPrompt The user's modification request
+ * @param includeDesignSystem Whether to include design system guidance (for UI-related changes)
+ */
+export function getModificationPrompt(userPrompt: string, includeDesignSystem: boolean = false): string {
+  return buildModificationPrompt(userPrompt, includeDesignSystem);
+}
 
 import { ModificationOutputSchema, toGeminiSchema } from '../../core/schemas';
 

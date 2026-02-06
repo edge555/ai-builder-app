@@ -25,7 +25,7 @@ import type { CodeSlice } from '../analysis/file-planner/types';
 import { GeminiClient, createGeminiClient } from '../ai';
 import { ValidationPipeline } from '../core/validation-pipeline';
 import { BuildValidator, createBuildValidator } from '../core/build-validator';
-import { CORE_MODIFICATION_PROMPT, DESIGN_SYSTEM_PROMPT, MODIFICATION_OUTPUT_SCHEMA } from './prompts/modification-prompt';
+import { getModificationPrompt, MODIFICATION_OUTPUT_SCHEMA } from './prompts/modification-prompt';
 import { formatCode } from '../prettier-config';
 import { createLogger } from '../logger';
 import { config } from '../config';
@@ -38,6 +38,7 @@ import {
 import { computeLineHunks } from '../core/diff-utils';
 import { ModificationOutputSchema } from '../core/schemas';
 import { applySearchReplace } from './multi-tier-matcher';
+import { isSafePath } from '../utils';
 
 const logger = createLogger('ModificationEngine');
 
@@ -130,16 +131,12 @@ export class ModificationEngine {
         });
       }
 
-      // Step 2: Determine system instruction based on category (hoisted outside retry loop)
-      let systemInstruction = CORE_MODIFICATION_PROMPT;
-      // Add design principles only for UI-related tasks
-      if (category === 'ui' || category === 'style' || category === 'mixed') {
-        systemInstruction += '\n\n' + DESIGN_SYSTEM_PROMPT;
-      }
-      logger.debug('System instruction determined', { category, includesDesignPrompt: systemInstruction.includes(DESIGN_SYSTEM_PROMPT) });
+      // Step 2: Determine if design system should be included based on category (hoisted outside retry loop)
+      const includeDesignSystem = category === 'ui' || category === 'style' || category === 'mixed';
+      logger.debug('System instruction determined', { category, includeDesignSystem });
 
-      // Step 3: Build the modification prompt
-      const modificationPrompt = this.buildModificationPrompt(prompt, slices, projectState);
+      // Step 3: Build the modification prompt with context
+      const contextPrompt = this.buildModificationPrompt(prompt, slices, projectState);
 
       // Retry configuration
       const MAX_RETRIES = 2;
@@ -153,28 +150,35 @@ export class ModificationEngine {
         logger.info('Modification attempt', { attempt, maxAttempts: MAX_RETRIES + 1 });
 
         // Build prompt with error feedback if this is a retry
-        let currentPrompt = modificationPrompt;
+        let userRequest = prompt;
         if (lastEditError) {
-          currentPrompt += `\n\n[PREVIOUS ATTEMPT FAILED]\nError: ${lastEditError}\n\nPlease fix your edit. Make sure the "search" string EXACTLY matches the existing code (including whitespace and newlines). Try using a smaller, more unique search pattern.`;
+          userRequest += `\n\n[PREVIOUS ATTEMPT FAILED]\nError: ${lastEditError}\n\nPlease fix your edit. Make sure the "search" string EXACTLY matches the existing code (including whitespace and newlines). Try using a smaller, more unique search pattern.`;
         }
+
+        // Build system instruction with proper injection defense
+        const systemInstruction = getModificationPrompt(userRequest, includeDesignSystem);
+        
+        // Append context to the prompt
+        const fullPrompt = contextPrompt;
 
         // Log what we're sending to Gemini
         logger.info('Sending modification request to Gemini', {
           attempt,
-          promptLength: currentPrompt.length,
-          systemInstructionLength: CORE_MODIFICATION_PROMPT.length, // Changed from MODIFICATION_SYSTEM_PROMPT
+          promptLength: fullPrompt.length,
+          systemInstructionLength: systemInstruction.length,
           temperature: 0.7,
           isRetry: !!lastEditError,
+          includeDesignSystem,
         });
         logger.debug('Gemini modification request details', {
-          prompt: currentPrompt,
+          prompt: fullPrompt,
           systemInstruction: systemInstruction,
           responseSchema: MODIFICATION_OUTPUT_SCHEMA,
         });
 
-        // Step 5: Call Gemini API with structured output (systemInstruction already determined above)
+        // Step 5: Call Gemini API with structured output
         const response = await this.geminiClient.generate({
-          prompt: currentPrompt,
+          prompt: fullPrompt,
           systemInstruction: systemInstruction,
           temperature: 0.7,
           maxOutputTokens: 16384,
@@ -239,6 +243,17 @@ export class ModificationEngine {
             success: false,
             error: 'AI response missing files array',
           };
+        }
+
+        // Validate all file paths for security
+        for (const fileEdit of aiFilesArray) {
+          if (fileEdit.path && !isSafePath(fileEdit.path)) {
+            logger.error('Unsafe file path detected', { path: fileEdit.path });
+            return {
+              success: false,
+              error: `Unsafe file path detected: ${fileEdit.path}`,
+            };
+          }
         }
 
 
@@ -380,11 +395,13 @@ export class ModificationEngine {
 
         // Request AI to fix the errors
         // We use the modification endpoint but focus on fixing errors
-        const fixPrompt = `The previous modification caused build errors. Please fix them:\n\n${errorContext}\n\nOriginal request: ${prompt}`;
+        const fixUserRequest = `The previous modification caused build errors. Please fix them:\n\n${errorContext}\n\nOriginal request: ${prompt}`;
+        const fixSystemInstruction = getModificationPrompt(fixUserRequest, includeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
+        const fixContextPrompt = this.buildModificationPrompt(fixUserRequest, slices, projectState);
 
         const fixResponse = await this.geminiClient.generate({
-          prompt: await this.buildModificationPrompt(fixPrompt, slices, projectState), // Reuse context
-          systemInstruction: CORE_MODIFICATION_PROMPT + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.',
+          prompt: fixContextPrompt,
+          systemInstruction: fixSystemInstruction,
           temperature: 0.5,
           maxOutputTokens: 16384,
           responseSchema: MODIFICATION_OUTPUT_SCHEMA,

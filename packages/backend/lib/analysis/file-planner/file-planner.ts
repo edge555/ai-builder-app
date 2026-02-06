@@ -37,12 +37,21 @@ export class FilePlanner {
   private fallbackSelector: FallbackSelector;
   private tokenBudgetManager: TokenBudgetManager;
   private chunkIndexBuilder: ChunkIndexBuilder;
+  
+  // Cache for chunk index to avoid rebuilding on retries
+  private chunkIndexCache: Map<string, { index: ChunkIndex; timestamp: number }>;
+  private readonly CACHE_TTL_MS = 60000; // 1 minute TTL
+
+  // Optimized symbol lookup map
+  private symbolLookupCache: Map<string, Map<string, { filePath: string; signature: string; symbolName: string }>>;
 
   constructor(geminiClient?: GeminiClient) {
     this.geminiClient = geminiClient ?? null;
     this.fallbackSelector = new FallbackSelector();
     this.tokenBudgetManager = new TokenBudgetManager();
     this.chunkIndexBuilder = new ChunkIndexBuilder();
+    this.chunkIndexCache = new Map();
+    this.symbolLookupCache = new Map();
   }
 
   /**
@@ -61,11 +70,12 @@ export class FilePlanner {
   async planWithCategory(prompt: string, projectState: ProjectState): Promise<{ slices: CodeSlice[]; category: 'ui' | 'logic' | 'style' | 'mixed' }> {
     logger.info('Starting file planning', { prompt: prompt.substring(0, 100) });
 
-    // Step 1: Build chunk index from project state
-    const chunkIndex = this.chunkIndexBuilder.build(projectState);
-    logger.debug('Built chunk index', {
+    // Step 1: Build or retrieve cached chunk index
+    const chunkIndex = this.getCachedChunkIndex(projectState);
+    logger.debug('Chunk index ready', {
       chunkCount: chunkIndex.chunks.size,
       fileCount: chunkIndex.fileMetadata.size,
+      fromCache: this.wasFromCache(projectState),
     });
 
     // Step 2: Generate file tree metadata for planning call
@@ -380,22 +390,102 @@ export class FilePlanner {
   }
 
   /**
-   * Find a chunk by symbol name.
+   * Find a chunk by symbol name using optimized lookup.
+   * Uses a Map for O(1) lookup instead of O(n) iteration.
    */
   private findChunkBySymbol(
     symbolName: string,
     chunkIndex: ChunkIndex
   ): { filePath: string; signature: string; symbolName: string } | null {
-    for (const [, chunk] of chunkIndex.chunks) {
-      if (chunk.symbolName === symbolName && chunk.isExported) {
-        return {
-          filePath: chunk.filePath,
-          signature: chunk.signature,
-          symbolName: chunk.symbolName,
-        };
+    // Get or build symbol lookup map for this chunk index
+    const cacheKey = this.getChunkIndexCacheKey(chunkIndex);
+    let symbolMap = this.symbolLookupCache.get(cacheKey);
+
+    if (!symbolMap) {
+      // Build the symbol lookup map
+      symbolMap = new Map();
+      for (const [, chunk] of chunkIndex.chunks) {
+        if (chunk.isExported) {
+          symbolMap.set(chunk.symbolName, {
+            filePath: chunk.filePath,
+            signature: chunk.signature,
+            symbolName: chunk.symbolName,
+          });
+        }
+      }
+      this.symbolLookupCache.set(cacheKey, symbolMap);
+      logger.debug('Built symbol lookup map', { symbolCount: symbolMap.size });
+    }
+
+    return symbolMap.get(symbolName) ?? null;
+  }
+
+  /**
+   * Get or build cached chunk index for a project state.
+   * Caches based on file count and total content length to detect changes.
+   */
+  private getCachedChunkIndex(projectState: ProjectState): ChunkIndex {
+    const cacheKey = this.getProjectStateCacheKey(projectState);
+    const cached = this.chunkIndexCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
+      logger.debug('Using cached chunk index', { cacheKey });
+      return cached.index;
+    }
+
+    // Build new index
+    logger.debug('Building new chunk index', { cacheKey });
+    const index = this.chunkIndexBuilder.build(projectState);
+    
+    // Cache it
+    this.chunkIndexCache.set(cacheKey, { index, timestamp: now });
+    
+    // Clean up old cache entries (keep only last 5)
+    if (this.chunkIndexCache.size > 5) {
+      const entries = Array.from(this.chunkIndexCache.entries());
+      entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+      const toKeep = entries.slice(0, 5);
+      this.chunkIndexCache.clear();
+      for (const [key, value] of toKeep) {
+        this.chunkIndexCache.set(key, value);
+      }
+      // Also clean up corresponding symbol lookup caches
+      const keysToKeep = new Set(toKeep.map(([key]) => key));
+      for (const key of this.symbolLookupCache.keys()) {
+        if (!keysToKeep.has(key)) {
+          this.symbolLookupCache.delete(key);
+        }
       }
     }
-    return null;
+
+    return index;
+  }
+
+  /**
+   * Check if the last chunk index was from cache.
+   */
+  private wasFromCache(projectState: ProjectState): boolean {
+    const cacheKey = this.getProjectStateCacheKey(projectState);
+    const cached = this.chunkIndexCache.get(cacheKey);
+    const now = Date.now();
+    return cached !== undefined && (now - cached.timestamp) < this.CACHE_TTL_MS;
+  }
+
+  /**
+   * Generate a cache key for project state based on file count and content hash.
+   */
+  private getProjectStateCacheKey(projectState: ProjectState): string {
+    const fileCount = Object.keys(projectState.files).length;
+    const totalLength = Object.values(projectState.files).reduce((sum, content) => sum + content.length, 0);
+    return `${projectState.id}_${fileCount}_${totalLength}`;
+  }
+
+  /**
+   * Generate a cache key for a chunk index.
+   */
+  private getChunkIndexCacheKey(chunkIndex: ChunkIndex): string {
+    return `chunks_${chunkIndex.chunks.size}_${chunkIndex.fileMetadata.size}`;
   }
 
   /**

@@ -7,7 +7,7 @@ import type {
     ChangeSummary
 } from '@/shared';
 import type { ChatMessage, LoadingPhase } from '../components/ChatInterface';
-import type { StreamingState } from '@/hooks/useStreamingGeneration';
+import type { StreamingState } from './GenerationContext';
 
 /**
  * API configuration for the chat context.

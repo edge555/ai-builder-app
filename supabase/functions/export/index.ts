@@ -1,11 +1,10 @@
-import JSZip from 'npm:jszip@3.10.1';
-
-const corsHeaders: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
+/**
+ * Export Edge Function (Thin Proxy)
+ * Forwards export requests to the Next.js backend API
+ * Phase 1: Consolidation - this is now a thin proxy, all business logic is in packages/backend/lib
+ */
+import { corsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts';
+import { sanitizeError } from '../_shared/error-utils.ts';
 
 type ExportBody = {
   projectState?: {
@@ -15,42 +14,66 @@ type ExportBody = {
 };
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return handleCorsPreflightRequest();
+  }
 
   try {
+    // Parse and validate request body
     const body = (await req.json().catch(() => ({}))) as ExportBody;
     const files = body.projectState?.files;
+    
     if (!files || typeof files !== 'object') {
-      return new Response(JSON.stringify({ success: false, error: 'projectState.files is required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'projectState.files is required' }), 
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
-    const zip = new JSZip();
-    for (const [path, content] of Object.entries(files)) {
-      zip.file(path, content ?? '');
+    // Get Next.js backend URL from environment
+    const backendUrl = Deno.env.get('NEXTJS_BACKEND_URL') || 'http://localhost:3000';
+    const apiUrl = `${backendUrl}/api/export`;
+
+    // Forward request to Next.js backend
+    const backendResponse = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!backendResponse.ok) {
+      const errorText = await backendResponse.text();
+      throw new Error(`Backend error ${backendResponse.status}: ${errorText}`);
     }
-    const bytes = await zip.generateAsync({ type: 'uint8array' });
-    const zipBody = bytes as unknown as BodyInit;
 
-    const rawName = body.projectState?.name?.trim() || 'project';
-    const safe = rawName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'project';
-    const filename = `${safe}.zip`;
+    // For export, we need to forward the binary response
+    const contentType = backendResponse.headers.get('Content-Type');
+    const contentDisposition = backendResponse.headers.get('Content-Disposition');
+    const zipBuffer = await backendResponse.arrayBuffer();
 
-    return new Response(zipBody, {
+    return new Response(zipBuffer, {
       status: 200,
       headers: {
         ...corsHeaders,
-        'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Type': contentType || 'application/zip',
+        'Content-Disposition': contentDisposition || 'attachment; filename="project.zip"',
       },
     });
+
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Unknown error';
-    return new Response(JSON.stringify({ success: false, error: msg }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    const msg = e instanceof Error ? sanitizeError(e.message) : 'Unknown error';
+    return new Response(
+      JSON.stringify({ success: false, error: msg }), 
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });

@@ -8,6 +8,7 @@ import { PreviewErrorContext, type PreviewErrorContextValue } from './PreviewErr
 
 const MAX_REPAIR_ATTEMPTS = 3;
 const AUTO_REPAIR_DEBOUNCE_MS = 800;
+const MAX_ERROR_QUEUE_SIZE = 50;
 
 /**
  * Provider for preview error state management.
@@ -20,7 +21,6 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
   const [repairPhase, setRepairPhase] = useState<RepairPhase>('idle');
   const [isAutoRepairing, setIsAutoRepairing] = useState(false);
   const [repairAttempts, setRepairAttempts] = useState(0);
-  const [lastSuccessfulStateHash, setLastSuccessfulStateHash] = useState<string | null>(null);
   
   const lastErrorRef = useRef<string | null>(null);
   const autoRepairTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -46,7 +46,14 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     lastErrorRef.current = errorKey;
     
     setCurrentError(error);
-    setErrorQueue(prev => [...prev, error]);
+    setErrorQueue(prev => {
+      const newQueue = [...prev, error];
+      // Cap queue size to prevent memory issues
+      if (newQueue.length > MAX_ERROR_QUEUE_SIZE) {
+        return newQueue.slice(-MAX_ERROR_QUEUE_SIZE);
+      }
+      return newQueue;
+    });
     
     // Add to aggregator for deduplication and prioritization
     errorAggregator.addError(error);
@@ -191,7 +198,6 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     isAutoRepairing,
     repairAttempts,
     maxRepairAttempts: MAX_REPAIR_ATTEMPTS,
-    lastSuccessfulStateHash,
     reportError,
     reportAggregatedErrors,
     clearError,
@@ -209,7 +215,6 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     repairPhase,
     isAutoRepairing,
     repairAttempts,
-    lastSuccessfulStateHash,
     reportError,
     reportAggregatedErrors,
     clearError,

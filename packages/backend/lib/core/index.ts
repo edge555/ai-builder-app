@@ -23,6 +23,16 @@ export type {
   GenerationResult,
 } from './project-generator';
 
+// Streaming Project Generator
+export {
+  StreamingProjectGenerator,
+  createStreamingProjectGenerator,
+} from './streaming-generator';
+export type {
+  StreamingGenerationResult,
+  StreamingCallbacks,
+} from './streaming-generator';
+
 // Export Service
 export {
   exportAsZip,

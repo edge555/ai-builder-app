@@ -5,9 +5,12 @@
 
 import { z } from 'zod';
 
+// Path validation regex - must start with src/, public/, frontend/, or app/
+const PATH_REGEX = /^(src\/|public\/|frontend\/|app\/)/;
+
 // Project generation output schema
 export const GeneratedFileSchema = z.object({
-    path: z.string().min(1).describe('The file path relative to project root'),
+    path: z.string().min(1).regex(PATH_REGEX, 'Path must start with src/, public/, frontend/, or app/').describe('The file path relative to project root'),
     content: z.string().describe('The complete content of the file'),
 });
 
@@ -28,17 +31,17 @@ export const EditOperationSchema = z.object({
 // Use discriminated union to prevent invalid operation/content combinations
 export const FileModificationSchema = z.discriminatedUnion('operation', [
     z.object({
-        path: z.string().min(1).describe('Path to the file'),
+        path: z.string().min(1).regex(PATH_REGEX, 'Path must start with src/, public/, frontend/, or app/').describe('Path to the file'),
         operation: z.literal('create'),
         content: z.string().min(1).describe('Full content for the new file'),
     }),
     z.object({
-        path: z.string().min(1).describe('Path to the file'),
+        path: z.string().min(1).regex(PATH_REGEX, 'Path must start with src/, public/, frontend/, or app/').describe('Path to the file'),
         operation: z.literal('modify'),
         edits: z.array(EditOperationSchema).min(1).describe('List of search/replace operations'),
     }),
     z.object({
-        path: z.string().min(1).describe('Path to the file'),
+        path: z.string().min(1).regex(PATH_REGEX, 'Path must start with src/, public/, frontend/, or app/').describe('Path to the file'),
         operation: z.literal('delete'),
     }),
 ]);

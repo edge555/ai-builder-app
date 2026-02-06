@@ -73,12 +73,14 @@ export class FallbackSelector {
     const keywordScores = this.scoreByKeywords(prompt, chunkIndex);
     const fileNameScores = this.scoreByFileName(prompt, files);
     const intentScores = this.scoreByIntent(prompt, chunkIndex, files);
+    const contentScores = this.scoreByContent(prompt, projectState);
 
     // Combine and rank scores
     const combinedScores = this.combineScores(
       keywordScores,
       fileNameScores,
-      intentScores
+      intentScores,
+      contentScores
     );
 
     // Select top files for primary and context
@@ -185,6 +187,64 @@ export class FallbackSelector {
             }
           }
         }
+      }
+
+      if (score > 0) {
+        scores.push({ filePath, score, matchReasons });
+      }
+    }
+
+    return scores;
+  }
+
+  /**
+   * Score files by content matching.
+   * Searches file contents for prompt keywords to find relevant files
+   * even when file paths don't match.
+   */
+  private scoreByContent(
+    prompt: string,
+    projectState: ProjectState
+  ): ScoredFile[] {
+    const scores: ScoredFile[] = [];
+    const promptWords = this.extractWords(prompt.toLowerCase());
+    
+    // Skip if no meaningful words
+    if (promptWords.length === 0) {
+      return scores;
+    }
+
+    for (const [filePath, content] of Object.entries(projectState.files)) {
+      const contentLower = content.toLowerCase();
+      const matchReasons: string[] = [];
+      let score = 0;
+
+      // Check for keyword matches in content
+      for (const word of promptWords) {
+        if (word.length > 3) {
+          // Count occurrences of the word in content
+          const regex = new RegExp(`\\b${word}\\b`, 'gi');
+          const matches = contentLower.match(regex);
+          
+          if (matches) {
+            const count = matches.length;
+            // Score based on frequency, but cap to avoid over-weighting
+            const wordScore = Math.min(count * 3, 15);
+            score += wordScore;
+            matchReasons.push(`Content contains "${word}" (${count}x)`);
+          }
+        }
+      }
+
+      // Bonus for files that contain multiple prompt words
+      const matchedWords = promptWords.filter(word => {
+        const regex = new RegExp(`\\b${word}\\b`, 'i');
+        return regex.test(contentLower);
+      });
+
+      if (matchedWords.length > 1) {
+        score += matchedWords.length * 5;
+        matchReasons.push(`Multiple keywords matched: ${matchedWords.length}`);
       }
 
       if (score > 0) {
