@@ -10,8 +10,9 @@ import type {
 } from '@/shared';
 import type { ChatMessage, LoadingPhase } from '../components/ChatInterface';
 import { config as appConfig } from '../config';
-import { backend } from '@/integrations/backend/client';
+import { backend, FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 import { useUndoRedo } from '@/hooks/useUndoRedo';
+import type { StreamingState } from '@/hooks/useStreamingGeneration';
 
 import { ChatContext, type ChatProviderProps, type ChatContextValue, type VersionCallbacks, type ApiConfig } from './ChatContext.context';
 
@@ -44,8 +45,11 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
   const [error, setError] = useState<string | null>(null);
   const [isAutoRepairing, setIsAutoRepairing] = useState(false);
   const [autoRepairAttempt, setAutoRepairAttempt] = useState(0);
+  const [streamingState, setStreamingState] = useState<StreamingState | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
   const versionCallbacksRef = useRef<VersionCallbacks>({});
   const activeRequestRef = useRef<{ controller: AbortController; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
   const isSubmittingRef = useRef(false);
   const lastRepairErrorRef = useRef<string | null>(null);
 
@@ -152,7 +156,135 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
   }, []);
 
   /**
-   * Calls the generate project API with configurable timeout.
+   * Calls the streaming generate project API.
+   */
+  const generateProjectStreaming = useCallback(async (description: string): Promise<GenerateProjectResponse> => {
+    streamAbortRef.current?.abort();
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+
+    setIsStreaming(true);
+    setStreamingState({
+      phase: 'connecting',
+      files: {},
+      currentFile: null,
+      filesReceived: 0,
+      totalFiles: 0,
+      textLength: 0,
+      error: null,
+    });
+
+    try {
+      const response = await fetch(`${FUNCTIONS_BASE_URL}/generate-stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ description }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let result: GenerateProjectResponse = { success: false };
+      const files: Record<string, string> = {};
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        
+        const lines = buffer.split('\n');
+        buffer = '';
+
+        let currentEvent = '';
+        let currentData = '';
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            currentData = line.slice(6).trim();
+          } else if (line === '' && currentEvent && currentData) {
+            try {
+              const data = JSON.parse(currentData);
+              
+              switch (currentEvent) {
+                case 'start':
+                  setStreamingState(prev => prev ? { ...prev, phase: 'generating' } : null);
+                  break;
+                  
+                case 'progress':
+                  setStreamingState(prev => prev ? { ...prev, textLength: data.length || 0 } : null);
+                  break;
+                  
+                case 'file':
+                  files[data.path] = data.content;
+                  setStreamingState(prev => prev ? {
+                    ...prev,
+                    phase: 'processing',
+                    files: { ...files },
+                    currentFile: data.path,
+                    filesReceived: data.index + 1,
+                    totalFiles: data.total,
+                  } : null);
+                  break;
+                  
+                case 'complete':
+                  result = {
+                    success: true,
+                    projectState: data.projectState,
+                    version: data.version,
+                  };
+                  setStreamingState(prev => prev ? {
+                    ...prev,
+                    phase: 'complete',
+                    files: data.projectState?.files || files,
+                    currentFile: null,
+                  } : null);
+                  break;
+                  
+                case 'error':
+                  result = { success: false, error: data.error };
+                  setStreamingState(prev => prev ? { ...prev, phase: 'error', error: data.error } : null);
+                  break;
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+            currentEvent = '';
+            currentData = '';
+          } else if (line !== '') {
+            buffer += line + '\n';
+          }
+        }
+      }
+
+      return result;
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        return { success: false, error: 'Generation cancelled' };
+      }
+      throw e;
+    } finally {
+      setIsStreaming(false);
+      streamAbortRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Calls the generate project API with configurable timeout (non-streaming fallback).
    */
   const generateProject = useCallback(async (description: string): Promise<GenerateProjectResponse> => {
     const controller = new AbortController();
@@ -338,9 +470,9 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
     try {
       const callbacks = versionCallbacksRef.current;
       if (!projectState) {
-        // No project exists, generate a new one
+        // No project exists, generate a new one using streaming
         setLoadingPhase('generating');
-        const result = await generateProject(prompt);
+        const result = await generateProjectStreaming(prompt);
 
         setLoadingPhase('validating');
         if (result.success && result.projectState) {
@@ -490,6 +622,8 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
     error,
     isAutoRepairing,
     autoRepairAttempt,
+    streamingState,
+    isStreaming,
     submitPrompt,
     clearMessages,
     clearError,
@@ -501,7 +635,7 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
     redo,
     canUndo: undoRedo.canUndo,
     canRedo: undoRedo.canRedo,
-  }), [messages, isLoading, loadingPhase, projectState, error, isAutoRepairing, autoRepairAttempt, submitPrompt, clearMessages, clearError, setProjectState, setVersionCallbacks, autoRepair, resetAutoRepair, undo, redo, undoRedo.canUndo, undoRedo.canRedo]);
+  }), [messages, isLoading, loadingPhase, projectState, error, isAutoRepairing, autoRepairAttempt, streamingState, isStreaming, submitPrompt, clearMessages, clearError, setProjectState, setVersionCallbacks, autoRepair, resetAutoRepair, undo, redo, undoRedo.canUndo, undoRedo.canRedo]);
 
   return (
     <ChatContext.Provider value={value}>

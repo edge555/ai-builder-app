@@ -3,7 +3,9 @@ import type { ChangeSummary, FileDiff } from '@/shared';
 import { ErrorMessage, classifyError } from '../ErrorMessage';
 import { DiffViewer } from '../DiffViewer';
 import { PromptSuggestions } from '../PromptSuggestions';
+import { StreamingIndicator } from '../StreamingIndicator';
 import type { PromptSuggestion } from '@/data/prompt-suggestions';
+import type { StreamingState } from '@/hooks/useStreamingGeneration';
 import './ChatInterface.css';
 
 /**
@@ -44,6 +46,10 @@ export interface ChatInterfaceProps {
   onRetry?: () => void;
   /** Smart prompt suggestions */
   suggestions?: PromptSuggestion[];
+  /** Streaming state for real-time generation updates */
+  streamingState?: StreamingState | null;
+  /** Whether streaming generation is active */
+  isStreaming?: boolean;
 }
 
 /**
@@ -61,6 +67,8 @@ export function ChatInterface({
   onClearError,
   onRetry,
   suggestions = [],
+  streamingState,
+  isStreaming = false,
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
@@ -135,7 +143,10 @@ export function ChatInterface({
         {messages.map((message) => (
           <MessageItemWithRef key={message.id} message={message} />
         ))}
-        {isLoading && <LoadingIndicator phase={loadingPhase} />}
+        {isStreaming && streamingState && (
+          <StreamingIndicator state={streamingState} />
+        )}
+        {isLoading && !isStreaming && <LoadingIndicator phase={loadingPhase} />}
         {error && !isLoading && (
           <div className="chat-error-container">
             <ErrorMessage

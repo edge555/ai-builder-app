@@ -7,6 +7,7 @@ import type {
     ChangeSummary
 } from '@/shared';
 import type { ChatMessage, LoadingPhase } from '../components/ChatInterface';
+import type { StreamingState } from '@/hooks/useStreamingGeneration';
 
 /**
  * API configuration for the chat context.
@@ -28,6 +29,10 @@ export interface ChatState {
     isAutoRepairing: boolean;
     /** Current auto-repair attempt number */
     autoRepairAttempt: number;
+    /** Streaming generation state */
+    streamingState: StreamingState | null;
+    /** Whether streaming is enabled */
+    isStreaming: boolean;
 }
 
 /**
