@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useChat, usePreviewError } from '../../context';
-import { ChatInterface, PreviewPanel } from '../../components';
+import { ChatInterface, PreviewPanel, RepairStatus } from '../../components';
 import { PreviewErrorBoundary } from '../PreviewPanel/PreviewErrorBoundary';
 import { ExportButton } from '../ExportButton';
 import { PanelToggle, type ActivePanel } from '../PanelToggle';
@@ -8,6 +8,7 @@ import { UndoRedoButtons } from '../UndoRedoButtons';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { initialSuggestions, analyzeProjectForSuggestions } from '@/data/prompt-suggestions';
 import { type RuntimeError } from '@/shared';
+import type { AggregatedErrors } from '@/services/ErrorAggregator';
 
 const RESIZE_MIN_WIDTH = 300;
 const RESIZE_MAX_FRACTION = 0.6;
@@ -66,39 +67,106 @@ function ChatPanel() {
  */
 function PreviewSection() {
     const { projectState, isLoading, loadingPhase, autoRepair, isAutoRepairing, autoRepairAttempt, resetAutoRepair } = useChat();
-    const { reportError } = usePreviewError();
+    const { 
+      reportError, 
+      reportAggregatedErrors, 
+      repairPhase, 
+      setRepairPhase,
+      startAutoRepair,
+      completeAutoRepair,
+      clearAllErrors,
+      dismissRepairStatus,
+      shouldAutoRepair,
+      aggregatedErrors,
+      maxRepairAttempts,
+      repairAttempts,
+    } = usePreviewError();
 
-    // Reset auto-repair attempts when project state changes
+    // Reset auto-repair attempts when project state changes successfully
     useEffect(() => {
-        resetAutoRepair();
-    }, [projectState?.currentVersionId, resetAutoRepair]);
+        if (repairPhase === 'idle' || repairPhase === 'success') {
+            resetAutoRepair();
+        }
+    }, [projectState?.currentVersionId, repairPhase, resetAutoRepair]);
 
     const handlePreviewError = useCallback((runtimeError: RuntimeError) => {
-        console.error('Preview error:', runtimeError);
+        console.error('[PreviewSection] Error captured:', runtimeError.type, runtimeError.message.slice(0, 100));
         reportError(runtimeError);
     }, [reportError]);
 
+    const handleErrorsReady = useCallback((errors: AggregatedErrors) => {
+        console.log('[PreviewSection] Errors ready for repair:', errors.totalCount);
+        reportAggregatedErrors(errors);
+    }, [reportAggregatedErrors]);
+
     const handleAutoRepair = useCallback(async (runtimeError: RuntimeError) => {
-        const success = await autoRepair(runtimeError);
+        if (!shouldAutoRepair()) {
+            return;
+        }
 
-    }, [autoRepair]);
+        startAutoRepair();
+        
+        try {
+            const success = await autoRepair(runtimeError);
+            completeAutoRepair(success);
+        } catch (err) {
+            console.error('[PreviewSection] Auto-repair failed:', err);
+            completeAutoRepair(false);
+        }
+    }, [autoRepair, shouldAutoRepair, startAutoRepair, completeAutoRepair]);
 
-    // Determine if auto-repair is available
-    const canAutoRepair = projectState !== null && autoRepairAttempt < 2;
+    const handleBundlerIdle = useCallback(() => {
+        // Bundler recovered, clear errors
+        if (repairPhase !== 'repairing') {
+            clearAllErrors();
+            setRepairPhase('idle');
+        }
+    }, [clearAllErrors, setRepairPhase, repairPhase]);
+
+    // Auto-trigger repair when errors are ready and repair phase is 'repairing'
+    useEffect(() => {
+        if (repairPhase === 'repairing' && aggregatedErrors && aggregatedErrors.totalCount > 0 && !isAutoRepairing) {
+            const firstError = aggregatedErrors.errors[0];
+            if (firstError) {
+                handleAutoRepair(firstError);
+            }
+        }
+    }, [repairPhase, aggregatedErrors, isAutoRepairing, handleAutoRepair]);
+
+    // Determine if auto-repair button should be available
+    const canAutoRepair = projectState !== null && autoRepairAttempt < maxRepairAttempts;
+
+    // Get current file being repaired for display
+    const currentFile = aggregatedErrors?.affectedFiles[0];
 
     return (
-        <PreviewErrorBoundary
-            onError={handlePreviewError}
-            onAutoRepair={handleAutoRepair}
-            canAutoRepair={canAutoRepair}
-            isAutoRepairing={isAutoRepairing}
-        >
-            <PreviewPanel
-                projectState={projectState}
-                isLoading={isLoading}
-                loadingPhase={loadingPhase}
+        <>
+            <PreviewErrorBoundary
+                onError={handlePreviewError}
+                onAutoRepair={handleAutoRepair}
+                canAutoRepair={canAutoRepair}
+                isAutoRepairing={isAutoRepairing}
+            >
+                <PreviewPanel
+                    projectState={projectState}
+                    isLoading={isLoading}
+                    loadingPhase={loadingPhase}
+                    onErrorsReady={handleErrorsReady}
+                    errorMonitoringEnabled={!isLoading && projectState !== null}
+                    onBundlerIdle={handleBundlerIdle}
+                />
+            </PreviewErrorBoundary>
+            
+            {/* Repair status toast */}
+            <RepairStatus
+                phase={repairPhase}
+                attempt={repairAttempts}
+                maxAttempts={maxRepairAttempts}
+                errorCount={aggregatedErrors?.totalCount || 1}
+                currentFile={currentFile}
+                onDismiss={dismissRepairStatus}
             />
-        </PreviewErrorBoundary>
+        </>
     );
 }
 

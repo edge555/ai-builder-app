@@ -10,3 +10,4 @@ export { PanelToggle, type ActivePanel } from './PanelToggle';
 export { PromptSuggestions, type PromptSuggestionsProps } from './PromptSuggestions';
 export { UndoRedoButtons, type UndoRedoButtonsProps } from './UndoRedoButtons';
 export { StreamingIndicator, type StreamingIndicatorProps } from './StreamingIndicator';
+export { RepairStatus, type RepairStatusProps, type RepairPhase } from './RepairStatus';

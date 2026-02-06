@@ -13,10 +13,11 @@ import { config as appConfig } from '../config';
 import { backend, FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 import { useUndoRedo } from '@/hooks/useUndoRedo';
 import type { StreamingState } from '@/hooks/useStreamingGeneration';
+import { errorAggregator, type AggregatedErrors } from '@/services/ErrorAggregator';
 
 import { ChatContext, type ChatProviderProps, type ChatContextValue, type VersionCallbacks, type ApiConfig } from './ChatContext.context';
 
-const MAX_AUTO_REPAIR_ATTEMPTS = 2;
+const MAX_AUTO_REPAIR_ATTEMPTS = 3;
 
 /**
  * Generates a unique ID for messages.
@@ -383,7 +384,9 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
     setAutoRepairAttempt(prev => prev + 1);
     setLoadingPhase('modifying');
 
-    const repairPrompt = buildRepairPrompt(runtimeError);
+    // Get file context for better repair prompts
+    const fileContext = projectState.files;
+    const repairPrompt = buildRepairPrompt(runtimeError, fileContext);
 
     try {
       const result = await modifyProject(projectState, repairPrompt, runtimeError);
@@ -542,9 +545,17 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
   }, []);
 
   /**
-   * Builds a repair prompt for a runtime error.
+   * Builds a repair prompt for a runtime error or aggregated errors.
    */
-  function buildRepairPrompt(runtimeError: RuntimeError): string {
+  function buildRepairPrompt(runtimeError: RuntimeError, projectFiles?: Record<string, string>): string {
+    // Check if we have aggregated errors
+    const aggregatedReport = errorAggregator.buildErrorReport(projectFiles);
+    
+    if (aggregatedReport) {
+      return aggregatedReport;
+    }
+
+    // Fallback to single error prompt
     const parts = [
       `Fix the following runtime error that crashed the application preview:`,
       ``,
@@ -565,12 +576,24 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
       parts.push(``, `Stack Trace:`, runtimeError.stack.slice(0, 800));
     }
 
+    // Add suggested fixes from the error
+    if (runtimeError.suggestedFixes && runtimeError.suggestedFixes.length > 0) {
+      parts.push(``, `Suggested fixes:`);
+      runtimeError.suggestedFixes.forEach(fix => {
+        parts.push(`- ${fix}`);
+      });
+    } else {
+      parts.push(
+        ``,
+        `Common fixes for ${runtimeError.type}:`,
+        ...getRepairHints(runtimeError.type)
+      );
+    }
+
     parts.push(
       ``,
-      `Common fixes for ${runtimeError.type}:`,
-      ...getRepairHints(runtimeError.type),
-      ``,
-      `Apply the minimal fix needed to resolve this error.`
+      `IMPORTANT: Apply the minimal fix needed to resolve this error.`,
+      `Ensure the project compiles and runs after the fix.`
     );
 
     return parts.join('\n');
@@ -581,6 +604,24 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
    */
   function getRepairHints(errorType: RuntimeError['type']): string[] {
     switch (errorType) {
+      case 'BUILD_ERROR':
+        return [
+          '- Check for syntax errors in the affected file',
+          '- Verify all imports are correct',
+          '- Ensure TypeScript/JSX syntax is valid',
+        ];
+      case 'IMPORT_ERROR':
+        return [
+          '- Check if the module path is correct',
+          '- Use an already installed alternative (lucide-react instead of react-icons)',
+          '- Remove the import if not essential',
+        ];
+      case 'UNDEFINED_EXPORT':
+        return [
+          '- Verify the export name matches what the module provides',
+          '- Check for typos in the import name',
+          '- Use default import if named export does not exist',
+        ];
       case 'REFERENCE_ERROR':
         return [
           '- Check if the variable is defined before use',
@@ -604,6 +645,12 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
           '- Fix bracket matching',
           '- Close unclosed strings',
           '- Check for missing semicolons or commas',
+        ];
+      case 'CSS_ERROR':
+        return [
+          '- Fix CSS syntax (semicolons, brackets)',
+          '- Verify property names are valid',
+          '- Check for unclosed rules',
         ];
       default:
         return [
