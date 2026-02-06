@@ -93,18 +93,16 @@ export function PreviewPanel({ projectState, isLoading = false, loadingPhase = '
   const [showCode, setShowCode] = useState(false);
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
   const [isRotated, setIsRotated] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Refresh animation duration in milliseconds
+  const REFRESH_ANIMATION_MS = 600;
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     setRefreshKey(prev => prev + 1);
-    setTimeout(() => setIsRefreshing(false), 600);
-  }, []);
-
-  const clearError = useCallback(() => {
-    setPreviewError(null);
+    setTimeout(() => setIsRefreshing(false), REFRESH_ANIMATION_MS);
   }, []);
 
   // Transform project files for Sandpack
@@ -181,12 +179,7 @@ export function PreviewPanel({ projectState, isLoading = false, loadingPhase = '
         </div>
       </div>
 
-      {previewError && (
-        <div className="preview-error-banner">
-          <span>{previewError}</span>
-          <button onClick={clearError}>Dismiss</button>
-        </div>
-      )}
+
 
       {/* Show skeleton during loading */}
       {isLoading && loadingPhase !== 'idle' ? (

@@ -85,9 +85,9 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
     const previousState = undoRedo.undo();
     if (previousState) {
       setProjectStateInternal(previousState);
-      // Add message inline to avoid dependency on addAssistantMessage
+      // Add system message about the state change
       const message: ChatMessage = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+        id: generateId(),
         role: 'assistant',
         content: '↩️ Reverted to previous state',
         timestamp: new Date(),
@@ -103,9 +103,9 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
     const nextState = undoRedo.redo();
     if (nextState) {
       setProjectStateInternal(nextState);
-      // Add message inline to avoid dependency on addAssistantMessage
+      // Add system message about the state change
       const message: ChatMessage = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+        id: generateId(),
         role: 'assistant',
         content: '↪️ Restored undone changes',
         timestamp: new Date(),
@@ -204,7 +204,7 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        
+
         const lines = buffer.split('\n');
         buffer = '';
 
@@ -219,16 +219,16 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
           } else if (line === '' && currentEvent && currentData) {
             try {
               const data = JSON.parse(currentData);
-              
+
               switch (currentEvent) {
                 case 'start':
                   setStreamingState(prev => prev ? { ...prev, phase: 'generating' } : null);
                   break;
-                  
+
                 case 'progress':
                   setStreamingState(prev => prev ? { ...prev, textLength: data.length || 0 } : null);
                   break;
-                  
+
                 case 'file':
                   files[data.path] = data.content;
                   setStreamingState(prev => prev ? {
@@ -240,7 +240,7 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
                     totalFiles: data.total,
                   } : null);
                   break;
-                  
+
                 case 'complete':
                   result = {
                     success: true,
@@ -254,7 +254,7 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
                     currentFile: null,
                   } : null);
                   break;
-                  
+
                 case 'error':
                   result = { success: false, error: data.error };
                   setStreamingState(prev => prev ? { ...prev, phase: 'error', error: data.error } : null);
@@ -525,7 +525,7 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
       setLoadingPhase('idle');
       isSubmittingRef.current = false;
     }
-  }, [projectState, addUserMessage, addAssistantMessage, generateProject, modifyProject, setProjectState]);
+  }, [projectState, addUserMessage, addAssistantMessage, generateProjectStreaming, modifyProject, setProjectState]);
 
   /**
    * Clears all messages from the chat history.

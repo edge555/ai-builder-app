@@ -1,16 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/integrations/supabase/types';
 
-// NOTE: In some preview environments, Vite env injection can be flaky.
-// We keep a safe fallback to avoid a hard crash (blank screen).
-// These values are publishable (anon) and are safe to ship in the frontend.
-const FALLBACK_URL = 'https://hzppirupmuvctfnqubvq.supabase.co';
-const FALLBACK_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6cHBpcnVwbXV2Y3RmbnF1YnZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxOTcwNzcsImV4cCI6MjA4NTc3MzA3N30.YvqZIYqyHyLh2e_FrX-jOZEjQ2ki-k0uUVorVNMm8P8';
+// Environment variables are required - fail with a clear message if missing
+const SUPABASE_URL_ENV = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY_ENV = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || FALLBACK_URL;
-export const SUPABASE_ANON_KEY =
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || FALLBACK_ANON_KEY;
+if (!SUPABASE_URL_ENV || !SUPABASE_ANON_KEY_ENV) {
+  const missing = [];
+  if (!SUPABASE_URL_ENV) missing.push('VITE_SUPABASE_URL');
+  if (!SUPABASE_ANON_KEY_ENV) missing.push('VITE_SUPABASE_PUBLISHABLE_KEY');
+  console.error(
+    `[Supabase] Missing required environment variables: ${missing.join(', ')}. ` +
+    'Please check your .env file.'
+  );
+}
+
+export const SUPABASE_URL = SUPABASE_URL_ENV || '';
+export const SUPABASE_ANON_KEY = SUPABASE_ANON_KEY_ENV || '';
 
 export const FUNCTIONS_BASE_URL = `${SUPABASE_URL}/functions/v1`;
 
