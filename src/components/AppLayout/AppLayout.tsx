@@ -5,10 +5,13 @@ import { PreviewErrorBoundary } from '../PreviewPanel/PreviewErrorBoundary';
 import { ExportButton } from '../ExportButton';
 import { PanelToggle, type ActivePanel } from '../PanelToggle';
 import { UndoRedoButtons } from '../UndoRedoButtons';
+import { StatusIndicator } from '../StatusIndicator';
+import { KeyboardHint } from '../KeyboardHint';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { initialSuggestions, analyzeProjectForSuggestions } from '@/data/prompt-suggestions';
 import { type RuntimeError } from '@/shared';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
+import { Sparkles } from 'lucide-react';
 
 const RESIZE_MIN_WIDTH = 300;
 const RESIZE_MAX_FRACTION = 0.6;
@@ -178,7 +181,7 @@ function PreviewSection() {
  * Requirements: 8.1, 9.1
  */
 export function AppLayout() {
-    const { undo, redo, canUndo, canRedo, isLoading } = useChat();
+    const { undo, redo, canUndo, canRedo, isLoading, loadingPhase } = useChat();
     const [activePanel, setActivePanel] = useState<ActivePanel>('chat');
     const [sidePanelWidth, setSidePanelWidth] = useState(() => {
         const raw = localStorage.getItem(SIDE_PANEL_WIDTH_STORAGE_KEY);
@@ -252,23 +255,28 @@ export function AppLayout() {
             <header className="app-header">
                 <div className="app-header-left">
                     <div className="app-logo" aria-hidden="true">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-                            <polyline points="2 17 12 22 22 17"></polyline>
-                            <polyline points="2 12 12 17 22 12"></polyline>
-                        </svg>
+                        <Sparkles size={18} />
                     </div>
                     <h1>AI App Builder</h1>
+                    <div className="app-header-divider" />
+                    <StatusIndicator phase={loadingPhase} isLoading={isLoading} />
                 </div>
                 <div className="app-header-right">
-                    <UndoRedoButtons
-                        canUndo={canUndo}
-                        canRedo={canRedo}
-                        onUndo={undo}
-                        onRedo={redo}
-                        disabled={isLoading}
-                    />
-                    <ExportButton />
+                    <div className="app-header-actions">
+                        <div className="app-header-action-group">
+                            <UndoRedoButtons
+                                canUndo={canUndo}
+                                canRedo={canRedo}
+                                onUndo={undo}
+                                onRedo={redo}
+                                disabled={isLoading}
+                            />
+                            <div className="app-header-shortcuts">
+                                <KeyboardHint keys={['⌘', 'Z']} />
+                            </div>
+                        </div>
+                        <ExportButton />
+                    </div>
                 </div>
             </header>
 
