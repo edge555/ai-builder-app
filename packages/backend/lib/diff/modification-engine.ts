@@ -32,14 +32,12 @@ import { config } from '../config';
 import {
   FilePlanner,
   createFilePlanner,
-  IntentClassifier,
-  createIntentClassifier,
   SliceSelector,
   createSliceSelector
 } from '../analysis';
 import { computeLineHunks } from '../core/diff-utils';
 import { ModificationOutputSchema } from '../core/schemas';
-import { parseAIOutput } from '../core/validators';
+import { applySearchReplace } from './multi-tier-matcher';
 
 const logger = createLogger('ModificationEngine');
 
@@ -69,7 +67,6 @@ export class ModificationEngine {
   private readonly geminiClient: GeminiClient;
   private readonly validationPipeline: ValidationPipeline;
   private readonly filePlanner: FilePlanner;
-  private readonly intentClassifier: IntentClassifier;
   private readonly sliceSelector: SliceSelector;
   private readonly buildValidator: BuildValidator;
   private readonly maxBuildRetries = 2;
@@ -78,12 +75,6 @@ export class ModificationEngine {
     // Modification requires the most capable model (Pro or specialized Flash) for complex instruction following and code generation
     this.geminiClient = geminiClient ?? createGeminiClient(config.ai.hardModel);
     this.validationPipeline = new ValidationPipeline();
-    // This passes the Pro client, but IntentClassifier might want Flash?
-    // Actually IntentClassifier creates its own if not passed. 
-    // If we pass 'gemini-1.5-pro' client here, IntentClassifier uses it. 
-    // We should probably NOT pass it if we want IntentClassifier to use its default (which we changed to Flash).
-    // Let's create a separate client for intent classifier or let it create its own.
-    this.intentClassifier = createIntentClassifier();
     this.sliceSelector = createSliceSelector();
     this.filePlanner = createFilePlanner(this.geminiClient);
     this.buildValidator = createBuildValidator();
@@ -116,8 +107,9 @@ export class ModificationEngine {
     }
 
     try {
-      // Step 1: Get code slices - either from FilePlanner or directly from provided files
+      // Step 1: Get code slices and category - either from FilePlanner or directly from provided files
       let slices: CodeSlice[];
+      let category: 'ui' | 'logic' | 'style' | 'mixed' = 'mixed';
 
       if (options?.skipPlanning) {
         // When skipPlanning is true, treat all provided files as primary files
@@ -127,12 +119,26 @@ export class ModificationEngine {
           fileCount: slices.length
         });
       } else {
-        // Use FilePlanner to select relevant code slices
+        // Use FilePlanner to select relevant code slices and determine category
         // FilePlanner replaces IntentClassifier + SliceSelector with AI-powered file selection
-        slices = await this.filePlanner.plan(prompt, projectState);
+        const planResult = await this.filePlanner.planWithCategory(prompt, projectState);
+        slices = planResult.slices;
+        category = planResult.category ?? 'mixed';
+        logger.info('FilePlanner result', {
+          sliceCount: slices.length,
+          category,
+        });
       }
 
-      // Step 2: Build the modification prompt
+      // Step 2: Determine system instruction based on category (hoisted outside retry loop)
+      let systemInstruction = CORE_MODIFICATION_PROMPT;
+      // Add design principles only for UI-related tasks
+      if (category === 'ui' || category === 'style' || category === 'mixed') {
+        systemInstruction += '\n\n' + DESIGN_SYSTEM_PROMPT;
+      }
+      logger.debug('System instruction determined', { category, includesDesignPrompt: systemInstruction.includes(DESIGN_SYSTEM_PROMPT) });
+
+      // Step 3: Build the modification prompt
       const modificationPrompt = this.buildModificationPrompt(prompt, slices, projectState);
 
       // Retry configuration
@@ -162,21 +168,11 @@ export class ModificationEngine {
         });
         logger.debug('Gemini modification request details', {
           prompt: currentPrompt,
-          systemInstruction: CORE_MODIFICATION_PROMPT, // Changed from MODIFICATION_SYSTEM_PROMPT
+          systemInstruction: systemInstruction,
           responseSchema: MODIFICATION_OUTPUT_SCHEMA,
         });
 
-        // Construct dynamic system prompt based on intent
-        // First, classify the intent to determine if design principles are needed
-        const intent = await this.intentClassifier.classify(prompt, projectState);
-        let systemInstruction = CORE_MODIFICATION_PROMPT;
-
-        // Add design principles only for UI-related tasks
-        if (['add_component', 'modify_component', 'modify_style', 'generate'].includes(intent.type)) {
-          systemInstruction += '\n\n' + DESIGN_SYSTEM_PROMPT;
-        }
-
-        // Step 5: Call Gemini API with structured output
+        // Step 5: Call Gemini API with structured output (systemInstruction already determined above)
         const response = await this.geminiClient.generate({
           prompt: currentPrompt,
           systemInstruction: systemInstruction,
@@ -207,16 +203,21 @@ export class ModificationEngine {
 
 
         // Step 6: Parse and validate the structured output
-        const parseResult = parseAIOutput(response.content);
-        if (!parseResult.success || !parseResult.data) {
-          logger.error('Failed to parse AI output', { error: parseResult.error });
+        // With responseSchema, Gemini returns guaranteed valid JSON
+        let parsedData: unknown;
+        try {
+          parsedData = JSON.parse(response.content);
+        } catch (e) {
+          logger.error('Failed to parse AI output as JSON', {
+            error: e instanceof Error ? e.message : String(e),
+          });
           return {
             success: false,
-            error: parseResult.error || 'Failed to parse AI response as valid JSON',
+            error: `Failed to parse AI response: ${e instanceof Error ? e.message : 'Invalid JSON'}`,
           };
         }
 
-        const zodResult = ModificationOutputSchema.safeParse(parseResult.data);
+        const zodResult = ModificationOutputSchema.safeParse(parsedData);
         if (!zodResult.success) {
           logger.error('Zod validation failed on modification response', {
             errors: zodResult.error.issues,
@@ -400,9 +401,10 @@ export class ModificationEngine {
             throw new Error('Fix response content is missing');
           }
 
-          let fixOutput: { files?: unknown };
+          // With responseSchema, Gemini returns guaranteed valid JSON
+          let parsedFixData: unknown;
           try {
-            fixOutput = JSON.parse(fixResponse.content);
+            parsedFixData = JSON.parse(fixResponse.content);
           } catch (parseError) {
             logger.error('Failed to parse fix response JSON', {
               error: parseError instanceof Error ? parseError.message : String(parseError),
@@ -410,6 +412,16 @@ export class ModificationEngine {
             continue;
           }
 
+          // Validate with Zod schema
+          const fixZodResult = ModificationOutputSchema.safeParse(parsedFixData);
+          if (!fixZodResult.success) {
+            logger.error('Fix response failed Zod validation', {
+              errors: fixZodResult.error.issues,
+            });
+            continue;
+          }
+
+          const fixOutput = fixZodResult.data;
           if (!fixOutput.files || !Array.isArray(fixOutput.files)) {
             continue;
           }
@@ -579,11 +591,13 @@ export class ModificationEngine {
     edits: EditOperation[]
   ): EditApplicationResult {
     let content = originalContent;
+    const warnings: string[] = [];
 
     for (let i = 0; i < edits.length; i++) {
       const edit = edits[i];
 
       // Normalize escape sequences in search and replace strings
+      // Note: With structured output, this should be less necessary, but keep for safety
       let search = edit.search;
       let replace = edit.replace;
 
@@ -593,121 +607,40 @@ export class ModificationEngine {
       if (replace.includes('\\n')) replace = replace.replace(/\\n/g, '\n');
       if (replace.includes('\\t')) replace = replace.replace(/\\t/g, '\t');
 
-      // Count occurrences
-      let occurrences = content.split(search).length - 1;
+      // Use multi-tier matcher for robust search/replace
+      const occurrence = edit.occurrence ?? 1;
+      const result = applySearchReplace(content, search, replace, occurrence);
 
-      // If exact match not found, try whitespace-normalized matching
-      let normalizedSearch = search;
-      let useNormalizedMatching = false;
-      if (occurrences === 0) {
-        const normalizedResult = this.findWithNormalizedWhitespace(content, search);
-        if (normalizedResult) {
-          normalizedSearch = normalizedResult;
-          occurrences = 1;
-          useNormalizedMatching = true;
-          logger.info('Using whitespace-normalized matching for edit', { editIndex: i });
-        }
-      }
-
-      if (occurrences === 0) {
-        // Try to find a fuzzy match to provide better error message
-        const searchPreview = search.length > 80
-          ? search.slice(0, 80) + '...'
-          : search;
+      if (!result.success) {
+        logger.error('Edit application failed', {
+          editIndex: i,
+          error: result.error,
+          searchPreview: search.substring(0, 100),
+        });
         return {
           success: false,
-          error: `Search pattern not found: "${searchPreview}"`,
+          error: result.error ?? 'Unknown error applying edit',
           failedEditIndex: i,
         };
       }
 
-      const actualSearch = useNormalizedMatching ? normalizedSearch : search;
+      content = result.content!;
 
-      if (occurrences > 1 && edit.occurrence !== undefined) {
-        // Replace specific occurrence (1-indexed)
-        let count = 0;
-        let result = '';
-        let lastIndex = 0;
-        let index = content.indexOf(actualSearch);
-
-        while (index !== -1) {
-          count++;
-          if (count === edit.occurrence) {
-            result += content.slice(lastIndex, index) + replace;
-            lastIndex = index + actualSearch.length;
-            break;
-          } else {
-            result += content.slice(lastIndex, index + actualSearch.length);
-            lastIndex = index + actualSearch.length;
-          }
-          index = content.indexOf(actualSearch, lastIndex);
-        }
-        result += content.slice(lastIndex);
-        content = result;
-      } else if (occurrences > 1) {
-        // Multiple occurrences but no specific occurrence specified
-        // Replace first occurrence only and log warning
-        logger.warn('Multiple occurrences found, replacing first', { occurrences, editIndex: i });
-        content = content.replace(actualSearch, replace);
-      } else {
-        // Single occurrence, safe to replace
-        content = content.replace(actualSearch, replace);
+      // Log warnings from fuzzy matching
+      if (result.warning) {
+        logger.warn('Edit applied with warning', {
+          editIndex: i,
+          warning: result.warning,
+        });
+        warnings.push(`Edit ${i + 1}: ${result.warning}`);
       }
     }
 
-    return { success: true, content };
-  }
-
-  /**
-   * Find a search string in content using whitespace-normalized matching.
-   * Returns the actual substring from content that matches, or null if not found.
-   */
-  private findWithNormalizedWhitespace(content: string, search: string): string | null {
-    // Normalize the search pattern: collapse whitespace to single spaces
-    const normalizeWs = (s: string) => s.replace(/\s+/g, ' ').trim();
-    const normalizedSearch = normalizeWs(search);
-    
-    if (!normalizedSearch) return null;
-
-    // Split content into lines and try to find matching consecutive lines
-    const contentLines = content.split('\n');
-    const searchLines = search.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    
-    if (searchLines.length === 0) return null;
-
-    // Try to find the first line of the search pattern
-    for (let startIdx = 0; startIdx < contentLines.length; startIdx++) {
-      if (normalizeWs(contentLines[startIdx]) === normalizeWs(searchLines[0])) {
-        // Check if subsequent lines match
-        let allMatch = true;
-        let searchLineIdx = 1;
-        let contentLineIdx = startIdx + 1;
-        
-        while (searchLineIdx < searchLines.length && contentLineIdx < contentLines.length) {
-          // Skip empty lines in content
-          if (contentLines[contentLineIdx].trim() === '') {
-            contentLineIdx++;
-            continue;
-          }
-          
-          if (normalizeWs(contentLines[contentLineIdx]) !== normalizeWs(searchLines[searchLineIdx])) {
-            allMatch = false;
-            break;
-          }
-          searchLineIdx++;
-          contentLineIdx++;
-        }
-        
-        // Check if we matched all search lines
-        if (allMatch && searchLineIdx === searchLines.length) {
-          // Return the actual content substring
-          const matchedLines = contentLines.slice(startIdx, contentLineIdx);
-          return matchedLines.join('\n');
-        }
-      }
-    }
-    
-    return null;
+    return {
+      success: true,
+      content,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    };
   }
 
   /**

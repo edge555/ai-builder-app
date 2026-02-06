@@ -54,15 +54,6 @@ function createServiceClient() {
   return createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 }
 
-function extractJsonObject(text: string): unknown {
-  const first = text.indexOf('{');
-  const last = text.lastIndexOf('}');
-  if (first === -1 || last === -1 || last <= first) {
-    throw new Error('Model response did not contain JSON');
-  }
-  return JSON.parse(text.slice(first, last + 1));
-}
-
 /**
  * Validates that generated files follow modular architecture.
  * Returns { valid: true } or { valid: false, issues: string[] }
@@ -220,6 +211,21 @@ Generate a complete, modular project following ALL the rules above.`;
 /**
  * Stream response from Gemini API using SSE format.
  */
+// JSON schema for structured output
+const PROJECT_OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', description: 'Project name' },
+    description: { type: 'string', description: 'Project description' },
+    files: {
+      type: 'object',
+      description: 'Map of file paths to file contents',
+      additionalProperties: { type: 'string' }
+    }
+  },
+  required: ['name', 'description', 'files']
+};
+
 async function* geminiStream(prompt: string, model: string): AsyncGenerator<string> {
   const apiKey = Deno.env.get('GEMINI_API_KEY');
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
@@ -233,7 +239,11 @@ async function* geminiStream(prompt: string, model: string): AsyncGenerator<stri
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.4 },
+      generationConfig: {
+        temperature: 0.4,
+        responseMimeType: 'application/json',
+        responseSchema: PROJECT_OUTPUT_SCHEMA,
+      },
     }),
   });
 
@@ -330,13 +340,14 @@ Deno.serve(async (req) => {
       }
 
       try {
-        const parsed = extractJsonObject(fullText) as GeminiGenerateShape;
+        // With responseSchema, Gemini returns guaranteed valid JSON
+        const parsed = JSON.parse(fullText) as GeminiGenerateShape;
         if (!parsed?.files || typeof parsed.files !== 'object') {
           throw new Error('Invalid structure');
         }
         return parsed;
-      } catch {
-        throw new Error('Failed to parse');
+      } catch (e) {
+        throw new Error(`Failed to parse: ${e instanceof Error ? e.message : 'Invalid JSON'}`);
       }
     }
 

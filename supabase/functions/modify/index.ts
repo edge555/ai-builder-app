@@ -273,14 +273,40 @@ function createServiceClient() {
   return createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 }
 
-function extractJsonObject(text: string): unknown {
-  const first = text.indexOf('{');
-  const last = text.lastIndexOf('}');
-  if (first === -1 || last === -1 || last <= first) {
-    throw new Error('Model response did not contain JSON');
-  }
-  return JSON.parse(text.slice(first, last + 1));
-}
+// JSON schema for structured output
+const MODIFICATION_OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    description: { type: 'string', description: 'Optional description of changes' },
+    files: {
+      type: 'array',
+      description: 'Array of file modifications',
+      items: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'File path' },
+          operation: { type: 'string', enum: ['modify', 'create', 'delete'], description: 'Type of operation' },
+          content: { type: 'string', description: 'Full content for create operations' },
+          edits: {
+            type: 'array',
+            description: 'Array of search/replace operations for modify',
+            items: {
+              type: 'object',
+              properties: {
+                search: { type: 'string', description: 'Text to search for' },
+                replace: { type: 'string', description: 'Replacement text' },
+                occurrence: { type: 'number', description: 'Optional occurrence index' }
+              },
+              required: ['search', 'replace']
+            }
+          }
+        },
+        required: ['path', 'operation']
+      }
+    }
+  },
+  required: ['files']
+};
 
 async function geminiJson<T>(prompt: string, { model }: { model: string }): Promise<T> {
   const apiKey = Deno.env.get('GEMINI_API_KEY');
@@ -294,7 +320,11 @@ async function geminiJson<T>(prompt: string, { model }: { model: string }): Prom
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.35 },
+      generationConfig: {
+        temperature: 0.35,
+        responseMimeType: 'application/json',
+        responseSchema: MODIFICATION_OUTPUT_SCHEMA,
+      },
     }),
   });
 
@@ -306,7 +336,8 @@ async function geminiJson<T>(prompt: string, { model }: { model: string }): Prom
 
   const data = (await resp.json()) as GeminiGenerateContentResponse;
   const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
-  return extractJsonObject(text) as T;
+  // With responseSchema, Gemini returns guaranteed valid JSON
+  return JSON.parse(text) as T;
 }
 
 function isSafePath(path: string): boolean {

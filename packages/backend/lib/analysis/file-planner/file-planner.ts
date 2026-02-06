@@ -21,6 +21,7 @@ import { TokenBudgetManager } from './token-budget';
 import {
   PLANNING_SYSTEM_PROMPT,
   PLANNING_TEMPERATURE,
+  PLANNING_OUTPUT_SCHEMA,
   buildPlanningPrompt,
   parsePlanningResponse,
 } from './planning-prompt';
@@ -49,6 +50,15 @@ export class FilePlanner {
    * Returns CodeSlices compatible with SliceSelector output.
    */
   async plan(prompt: string, projectState: ProjectState): Promise<CodeSlice[]> {
+    const result = await this.planWithCategory(prompt, projectState);
+    return result.slices;
+  }
+
+  /**
+   * Plan which files/chunks to include for a modification, including category.
+   * Returns CodeSlices and the modification category.
+   */
+  async planWithCategory(prompt: string, projectState: ProjectState): Promise<{ slices: CodeSlice[]; category: 'ui' | 'logic' | 'style' | 'mixed' }> {
     logger.info('Starting file planning', { prompt: prompt.substring(0, 100) });
 
     // Step 1: Build chunk index from project state
@@ -75,6 +85,7 @@ export class FilePlanner {
     logger.info('Planning result', {
       primaryFiles: plannerResult.primaryFiles.length,
       contextFiles: plannerResult.contextFiles.length,
+      category: plannerResult.category,
       usedFallback: plannerResult.usedFallback,
     });
 
@@ -84,9 +95,12 @@ export class FilePlanner {
     // Step 5: Apply token budget trimming
     slices = this.tokenBudgetManager.trimToFit(slices, chunkIndex);
 
-    logger.info('File planning complete', { sliceCount: slices.length });
+    logger.info('File planning complete', { sliceCount: slices.length, category: plannerResult.category });
 
-    return slices;
+    return {
+      slices,
+      category: plannerResult.category ?? 'mixed',
+    };
   }
 
 
@@ -111,6 +125,7 @@ export class FilePlanner {
         prompt: planningPrompt,
         systemInstruction: PLANNING_SYSTEM_PROMPT,
         temperature: PLANNING_TEMPERATURE,
+        responseSchema: PLANNING_OUTPUT_SCHEMA,
       });
 
       if (!response.success || !response.content) {
@@ -135,6 +150,7 @@ export class FilePlanner {
 
       return {
         ...validatedResult,
+        category: parsed.category,
         usedFallback: false,
       };
     } catch (error) {

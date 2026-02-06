@@ -15,7 +15,6 @@ import { createLogger } from '../logger';
 import { config } from '../config';
 import { processFiles } from './file-processor';
 import { ProjectOutputSchema } from './schemas';
-import { parseAIOutput } from './validators';
 
 const logger = createLogger('ProjectGenerator');
 
@@ -113,19 +112,22 @@ export class ProjectGenerator {
     }
 
     // Step 6: Parse and validate the structured output
-    const parseResult = parseAIOutput(response.content);
-    if (!parseResult.success || !parseResult.data) {
-      logger.error('Failed to parse AI output', {
-        error: parseResult.error,
+    // With responseSchema, Gemini returns guaranteed valid JSON
+    let parsedData: unknown;
+    try {
+      parsedData = JSON.parse(response.content);
+    } catch (e) {
+      logger.error('Failed to parse AI output as JSON', {
+        error: e instanceof Error ? e.message : String(e),
         content: response.content.substring(0, 500),
       });
       return {
         success: false,
-        error: `Failed to parse AI response: ${parseResult.error}`,
+        error: `Failed to parse AI response: ${e instanceof Error ? e.message : 'Invalid JSON'}`,
       };
     }
 
-    const zodResult = ProjectOutputSchema.safeParse(parseResult.data);
+    const zodResult = ProjectOutputSchema.safeParse(parsedData);
 
     if (!zodResult.success) {
       logger.error('Zod validation failed', {
@@ -215,16 +217,9 @@ export class ProjectGenerator {
 
       // Parse and process the fixed output
       try {
-        const parseResult = parseAIOutput(fixResponse.content);
-
-        if (!parseResult.success || !parseResult.data) {
-          logger.error('Failed to parse fixed AI output', {
-            error: parseResult.error,
-          });
-          break;
-        }
-
-        const zodResult = ProjectOutputSchema.safeParse(parseResult.data);
+        // With responseSchema, Gemini returns guaranteed valid JSON
+        const parsedData = JSON.parse(fixResponse.content);
+        const zodResult = ProjectOutputSchema.safeParse(parsedData);
 
         if (!zodResult.success) {
           logger.error('Zod validation failed on fix response', {

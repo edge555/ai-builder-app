@@ -68,15 +68,6 @@ function createServiceClient() {
   return createClient(url, serviceRoleKey, { auth: { persistSession: false } });
 }
 
-function extractJsonObject(text: string): unknown {
-  const first = text.indexOf('{');
-  const last = text.lastIndexOf('}');
-  if (first === -1 || last === -1 || last <= first) {
-    throw new Error('Model response did not contain JSON');
-  }
-  return JSON.parse(text.slice(first, last + 1));
-}
-
 function isNonTrivialCss(css: string | undefined): boolean {
   if (!css) return false;
   const trimmed = css.trim();
@@ -243,6 +234,21 @@ function buildRepairPrompt(params: {
   );
 }
 
+// JSON schema for structured output
+const PROJECT_OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', description: 'Project name' },
+    description: { type: 'string', description: 'Project description' },
+    files: {
+      type: 'object',
+      description: 'Map of file paths to file contents',
+      additionalProperties: { type: 'string' }
+    }
+  },
+  required: ['name', 'description', 'files']
+};
+
 async function geminiJson<T>(prompt: string, { model }: { model: string }): Promise<T> {
   const apiKey = Deno.env.get('GEMINI_API_KEY');
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
@@ -256,7 +262,11 @@ async function geminiJson<T>(prompt: string, { model }: { model: string }): Prom
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.4 },
+      generationConfig: {
+        temperature: 0.4,
+        responseMimeType: 'application/json',
+        responseSchema: PROJECT_OUTPUT_SCHEMA,
+      },
     }),
   });
 
@@ -268,7 +278,8 @@ async function geminiJson<T>(prompt: string, { model }: { model: string }): Prom
 
   const data = (await resp.json()) as GeminiGenerateContentResponse;
   const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
-  return extractJsonObject(text) as T;
+  // With responseSchema, Gemini returns guaranteed valid JSON
+  return JSON.parse(text) as T;
 }
 
 function fallbackProject(description: string): GeminiGenerateShape {

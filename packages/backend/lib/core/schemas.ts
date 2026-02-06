@@ -20,20 +20,31 @@ export type GeneratedFile = z.infer<typeof GeneratedFileSchema>;
 
 // Modification output schema
 export const EditOperationSchema = z.object({
-    search: z.string().describe('The precise code block to find'),
+    search: z.string().min(1).describe('The precise code block to find'),
     replace: z.string().describe('The replacement code'),
-    occurrence: z.number().optional().describe('Optional occurrence index'),
+    occurrence: z.number().optional().describe('Optional occurrence index (1-indexed)'),
 });
 
-export const FileModificationSchema = z.object({
-    path: z.string().min(1).describe('Path to the file being modified'),
-    operation: z.enum(['modify', 'create', 'delete']).describe('Type of modification'),
-    content: z.string().optional().describe('Full content for new files'),
-    edits: z.array(EditOperationSchema).optional().describe('List of search/replace operations'),
-});
+// Use discriminated union to prevent invalid operation/content combinations
+export const FileModificationSchema = z.discriminatedUnion('operation', [
+    z.object({
+        path: z.string().min(1).describe('Path to the file'),
+        operation: z.literal('create'),
+        content: z.string().min(1).describe('Full content for the new file'),
+    }),
+    z.object({
+        path: z.string().min(1).describe('Path to the file'),
+        operation: z.literal('modify'),
+        edits: z.array(EditOperationSchema).min(1).describe('List of search/replace operations'),
+    }),
+    z.object({
+        path: z.string().min(1).describe('Path to the file'),
+        operation: z.literal('delete'),
+    }),
+]);
 
 export const ModificationOutputSchema = z.object({
-    files: z.array(FileModificationSchema),
+    files: z.array(FileModificationSchema).min(1).describe('Array of file modifications'),
 });
 
 export type ModificationOutput = z.infer<typeof ModificationOutputSchema>;
@@ -43,6 +54,7 @@ export type FileModification = z.infer<typeof FileModificationSchema>;
 export const PlanningResponseSchema = z.object({
     primaryFiles: z.array(z.string()).describe('Files that need to be modified'),
     contextFiles: z.array(z.string()).describe('Files needed for reference/types'),
+    category: z.enum(['ui', 'logic', 'style', 'mixed']).default('mixed').describe('Category of modification: ui (components/UI), logic (business logic), style (CSS/styling), or mixed'),
     reasoning: z.string().optional().default('').describe('Brief explanation of the selection'),
 });
 

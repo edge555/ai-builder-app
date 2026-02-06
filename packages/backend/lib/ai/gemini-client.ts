@@ -158,6 +158,7 @@ export class GeminiClient {
       generationConfig: {
         temperature: request.temperature ?? config.ai.temperature,
         maxOutputTokens: request.maxOutputTokens ?? config.ai.maxOutputTokens,
+        // When responseSchema is provided, Gemini returns guaranteed valid JSON
         ...(request.responseSchema && {
           responseMimeType: 'application/json',
           responseSchema: request.responseSchema,
