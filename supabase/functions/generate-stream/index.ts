@@ -63,28 +63,158 @@ function extractJsonObject(text: string): unknown {
   return JSON.parse(text.slice(first, last + 1));
 }
 
-function buildPreviewCompatiblePrompt(userDescription: string): string {
-  return (
-    'You generate a complete Vite + React + TypeScript project as a JSON object.\n' +
-    'Return ONLY valid JSON (no markdown).\n\n' +
-    'Schema:\n{ "name": string, "description": string, "files": { "path": "file contents" } }\n\n' +
-    'CRITICAL preview constraints:\n' +
-    '- Styling MUST be plain CSS only (no Tailwind, no PostCSS, no CSS-in-JS libraries).\n' +
-    '- MUST include src/index.css with real base styles (tokens + layout + typography + buttons + inputs + card).\n' +
-    '- MUST import "./index.css" from src/main.tsx.\n' +
-    '- Avoid external dependencies beyond react and react-dom (do not add libraries).\n\n' +
-    'Required minimum files:\n' +
-    '- index.html\n' +
-    '- src/main.tsx\n' +
-    '- src/index.css\n' +
-    '- src/App.tsx\n\n' +
-    'UI baseline (keep it clean and consistent):\n' +
-    '- Full-height app (min-height: 100vh)\n' +
-    '- Centered container with responsive padding\n' +
-    '- Visible primary button + input styles\n' +
-    '- At least one card/surface section\n\n' +
-    `User request:\n${userDescription}`
-  );
+/**
+ * Validates that generated files follow modular architecture.
+ * Returns { valid: true } or { valid: false, issues: string[] }
+ */
+function validateModularArchitecture(files: Record<string, string>): { valid: boolean; issues: string[] } {
+  const issues: string[] = [];
+  const filePaths = Object.keys(files);
+
+  // Check minimum file count
+  if (filePaths.length < 8) {
+    issues.push(`Only ${filePaths.length} files generated (minimum 8 required)`);
+  }
+
+  // Check for components folder
+  const hasComponents = filePaths.some(p => p.includes('/components/'));
+  if (!hasComponents) {
+    issues.push('No /components/ folder found');
+  }
+
+  // Check for hooks folder
+  const hasHooks = filePaths.some(p => p.includes('/hooks/'));
+  if (!hasHooks) {
+    issues.push('No /hooks/ folder found');
+  }
+
+  // Check for types folder
+  const hasTypes = filePaths.some(p => p.includes('/types/'));
+  if (!hasTypes) {
+    issues.push('No /types/ folder found');
+  }
+
+  // Check App.tsx size (max 60 lines)
+  const appFile = Object.entries(files).find(([path]) => path.endsWith('App.tsx'));
+  if (appFile) {
+    const lineCount = appFile[1].split('\n').length;
+    if (lineCount > 60) {
+      issues.push(`App.tsx has ${lineCount} lines (max 60 allowed)`);
+    }
+  }
+
+  return { valid: issues.length === 0, issues };
+}
+
+function buildPreviewCompatiblePrompt(userDescription: string, isRetry = false): string {
+  const retryEmphasis = isRetry 
+    ? `
+CRITICAL - PREVIOUS ATTEMPT FAILED VALIDATION:
+You MUST create separate component files. Do NOT put everything in App.tsx.
+App.tsx should ONLY import and compose components (max 40 lines).
+Extract ALL state logic to custom hooks in src/hooks/.
+Create reusable UI components in src/components/ui/.
+` 
+    : '';
+
+  return `You generate a complete Vite + React + TypeScript project as a JSON object.
+Return ONLY valid JSON (no markdown).
+
+Schema:
+{ "name": string, "description": string, "files": { "path": "file contents" } }
+${retryEmphasis}
+=== MANDATORY MODULAR ARCHITECTURE ===
+
+You MUST generate a professional, modular codebase like a senior developer would.
+This is NOT optional. Projects with everything in App.tsx will be REJECTED.
+
+REQUIRED FOLDER STRUCTURE:
+├── index.html
+├── src/
+│   ├── main.tsx (entry point only - imports App and renders)
+│   ├── App.tsx (ONLY imports and composition - MAX 40 LINES)
+│   ├── index.css (CSS variables + base styles + utility classes)
+│   ├── types/
+│   │   └── index.ts (ALL TypeScript interfaces/types)
+│   ├── hooks/
+│   │   └── [useCustomHook].ts (reusable state/effect logic)
+│   ├── components/
+│   │   ├── ui/
+│   │   │   ├── Button.tsx + Button.css
+│   │   │   ├── Input.tsx + Input.css
+│   │   │   └── Card.tsx + Card.css
+│   │   ├── layout/
+│   │   │   ├── Header.tsx + Header.css
+│   │   │   └── Container.tsx
+│   │   └── features/
+│   │       ├── [Feature]Item.tsx + [Feature]Item.css
+│   │       ├── [Feature]List.tsx + [Feature]List.css
+│   │       └── [Feature]Form.tsx + [Feature]Form.css
+
+MINIMUM FILE REQUIREMENTS:
+- At least 10-15 files total
+- At least 3 UI components (Button, Input, Card or similar)
+- At least 2 layout components (Header, Container, Footer, etc.)
+- At least 2 feature components (specific to the app's domain)
+- At least 1 custom hook
+- Types file with all interfaces
+
+COMPONENT RULES:
+1. Each component gets its own .tsx file
+2. Each component with styles gets a co-located .css file
+3. Components should be focused and single-purpose
+4. Props should be typed using interfaces from types/index.ts
+
+CSS RULES:
+- Plain CSS only (no Tailwind, no CSS-in-JS)
+- src/index.css contains CSS variables (--primary, --bg, --fg, etc.)
+- Component CSS files import nothing, use CSS variables
+- BEM-like naming: .componentName, .componentName-element
+
+HOOK RULES:
+- Extract reusable logic (localStorage, API calls, form state)
+- Name as useXxx.ts
+- Return typed values
+
+=== EXAMPLE FOR A TODO APP ===
+
+Files to generate:
+1. index.html
+2. src/main.tsx
+3. src/App.tsx (~30 lines, just imports and layout)
+4. src/index.css (CSS variables + base styles)
+5. src/types/index.ts (Todo interface)
+6. src/hooks/useLocalStorage.ts
+7. src/hooks/useTodos.ts
+8. src/components/ui/Button.tsx
+9. src/components/ui/Button.css
+10. src/components/ui/Input.tsx
+11. src/components/ui/Input.css
+12. src/components/ui/Card.tsx
+13. src/components/ui/Card.css
+14. src/components/layout/Header.tsx
+15. src/components/layout/Header.css
+16. src/components/layout/Container.tsx
+17. src/components/features/TodoItem.tsx
+18. src/components/features/TodoItem.css
+19. src/components/features/TodoList.tsx
+20. src/components/features/TodoList.css
+21. src/components/features/AddTodoForm.tsx
+22. src/components/features/AddTodoForm.css
+
+=== STYLING BASELINE ===
+
+src/index.css must include:
+- CSS custom properties for colors, spacing, radius
+- Base reset (box-sizing, margin, body styles)
+- Typography scale
+- Utility classes (.container, .flex, .grid)
+
+=== USER REQUEST ===
+
+${userDescription}
+
+Generate a complete, modular project following ALL the rules above.`;
 }
 
 /**
@@ -189,40 +319,66 @@ Deno.serve(async (req) => {
     }
 
     const model = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
-    const prompt = buildPreviewCompatiblePrompt(description);
+    
+    // Helper to attempt generation with optional retry
+    async function attemptGeneration(isRetry: boolean): Promise<GeminiGenerateShape> {
+      const prompt = buildPreviewCompatiblePrompt(description, isRetry);
+      let fullText = '';
+
+      for await (const chunk of geminiStream(prompt, model)) {
+        fullText += chunk;
+      }
+
+      try {
+        const parsed = extractJsonObject(fullText) as GeminiGenerateShape;
+        if (!parsed?.files || typeof parsed.files !== 'object') {
+          throw new Error('Invalid structure');
+        }
+        return parsed;
+      } catch {
+        throw new Error('Failed to parse');
+      }
+    }
 
     // Create a streaming response
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
-        let fullText = '';
-        let lastSentLength = 0;
         
         try {
           // Send initial event
           controller.enqueue(encoder.encode(sseEvent('start', { phase: 'generating' })));
 
-          // Stream from Gemini
-          for await (const chunk of geminiStream(prompt, model)) {
-            fullText += chunk;
-            
-            // Send progress updates with accumulated text
-            // Only send if we have new content (throttle updates)
-            if (fullText.length - lastSentLength > 50) {
-              controller.enqueue(encoder.encode(sseEvent('progress', { 
-                text: fullText,
-                length: fullText.length 
-              })));
-              lastSentLength = fullText.length;
-            }
-          }
-
-          // Parse the final JSON
+          // First attempt
           let generated: GeminiGenerateShape;
+          let retryAttempted = false;
+
           try {
-            generated = extractJsonObject(fullText) as GeminiGenerateShape;
-            if (!generated?.files || typeof generated.files !== 'object') {
-              generated = fallbackProject(description);
+            controller.enqueue(encoder.encode(sseEvent('progress', { 
+              text: 'Generating modular project structure...',
+              phase: 'initial'
+            })));
+            
+            generated = await attemptGeneration(false);
+            
+            // Validate architecture
+            const validation = validateModularArchitecture(generated.files);
+            
+            if (!validation.valid) {
+              controller.enqueue(encoder.encode(sseEvent('progress', { 
+                text: 'Structure validation failed, retrying with stricter requirements...',
+                phase: 'retry',
+                issues: validation.issues
+              })));
+              
+              retryAttempted = true;
+              generated = await attemptGeneration(true);
+              
+              // Log if retry also fails validation (but continue anyway)
+              const retryValidation = validateModularArchitecture(generated.files);
+              if (!retryValidation.valid) {
+                console.warn('Retry still failed validation:', retryValidation.issues);
+              }
             }
           } catch {
             generated = fallbackProject(description);
