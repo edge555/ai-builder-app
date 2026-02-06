@@ -1,62 +1,70 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-
-const corsHeaders: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
+/**
+ * Versions Edge Function (Thin Proxy)
+ * Forwards version list requests to the Next.js backend API
+ * Phase 1: Consolidation - this is now a thin proxy, all business logic is in packages/backend/lib
+ */
+import { corsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts';
+import { sanitizeError } from '../_shared/error-utils.ts';
 
 type VersionsBody = { projectId?: string };
 
-function createServiceClient() {
-  const url = Deno.env.get('SUPABASE_URL');
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!url) throw new Error('SUPABASE_URL is not configured');
-  if (!serviceRoleKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
-  return createClient(url, serviceRoleKey, { auth: { persistSession: false } });
-}
-
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return handleCorsPreflightRequest();
+  }
 
   try {
+    // Parse request body
     const body = (await req.json().catch(() => ({}))) as VersionsBody;
     const projectId = (body.projectId ?? '').trim();
+    
     if (!projectId) {
-      return new Response(JSON.stringify({ success: false, error: 'projectId is required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'projectId is required' }), 
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
-    const supabase = createServiceClient();
-    const { data, error } = await supabase
-      .from('versions')
-      .select('id, project_id, created_at, message, project_state, diffs')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: true });
-    if (error) throw error;
+    // Get Next.js backend URL from environment
+    const backendUrl = Deno.env.get('NEXTJS_BACKEND_URL') || 'http://localhost:3000';
+    const apiUrl = `${backendUrl}/api/versions?projectId=${encodeURIComponent(projectId)}`;
 
-    const versions = (data ?? []).map((row: any) => ({
-      id: row.id,
-      projectId: row.project_id,
-      prompt: row.message,
-      timestamp: new Date(row.created_at).toISOString(),
-      files: row.project_state?.files ?? {},
-      diffs: row.diffs ?? [],
-      parentVersionId: null,
-    }));
-
-    return new Response(JSON.stringify({ versions }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Forward request to Next.js backend (GET request)
+    const backendResponse = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
+
+    if (!backendResponse.ok) {
+      const errorText = await backendResponse.text();
+      throw new Error(`Backend error ${backendResponse.status}: ${errorText}`);
+    }
+
+    // Get the response from backend and forward it
+    const result = await backendResponse.json();
+
+    return new Response(
+      JSON.stringify(result),
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Unknown error';
-    return new Response(JSON.stringify({ success: false, error: msg }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    const msg = e instanceof Error ? sanitizeError(e.message) : 'Unknown error';
+    return new Response(
+      JSON.stringify({ success: false, error: msg }), 
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });

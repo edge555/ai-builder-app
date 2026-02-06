@@ -1,29 +1,38 @@
 /**
- * Project Generator Service
- * Generates complete project structures from natural language descriptions.
- * Implements Requirements 1.1, 1.2, 1.3
+ * Streaming Project Generator
+ * Generates projects with incremental file streaming via SSE.
  */
 
 import { v4 as uuidv4 } from 'uuid';
 import type { ProjectState, Version, FileDiff } from '@ai-app-builder/shared';
 import { GeminiClient, createGeminiClient } from '../ai';
 import { ValidationPipeline } from './validation-pipeline';
-import { BuildValidator, createBuildValidator, type BuildError } from './build-validator';
+import { BuildValidator, createBuildValidator } from './build-validator';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
-import { formatCode } from '../prettier-config';
-import { createLogger } from '../logger';
-import { config } from '../config';
 import { processFiles } from './file-processor';
 import { ProjectOutputSchema } from './schemas';
-import { isSafePath } from '../utils';
+import { createLogger } from '../logger';
+import { config } from '../config';
+import { parseIncrementalFiles, estimateTotalFiles } from '../utils/incremental-json-parser';
 
-const logger = createLogger('ProjectGenerator');
-
+const logger = createLogger('StreamingGenerator');
 
 /**
- * Result of project generation.
+ * Callback for streaming events.
  */
-export interface GenerationResult {
+export interface StreamingCallbacks {
+  onStart?: () => void;
+  onProgress?: (length: number) => void;
+  onFile?: (data: { path: string; content: string; index: number; total: number }) => void;
+  onComplete?: (result: { projectState: ProjectState; version: Version }) => void;
+  onError?: (error: string) => void;
+  onHeartbeat?: () => void;
+}
+
+/**
+ * Result of streaming generation.
+ */
+export interface StreamingGenerationResult {
   success: boolean;
   projectState?: ProjectState;
   version?: Version;
@@ -37,10 +46,9 @@ export interface GenerationResult {
 }
 
 /**
- * Project Generator service for creating new projects from descriptions.
- * Includes build validation with auto-retry for fixing build errors.
+ * Streaming Project Generator that emits files as they're generated.
  */
-export class ProjectGenerator {
+export class StreamingProjectGenerator {
   private readonly geminiClient: GeminiClient;
   private readonly validationPipeline: ValidationPipeline;
   private readonly buildValidator: BuildValidator;
@@ -53,9 +61,12 @@ export class ProjectGenerator {
   }
 
   /**
-   * Generates a complete project from a natural language description.
+   * Generates a project with streaming file emission.
    */
-  async generateProject(description: string): Promise<GenerationResult> {
+  async generateProjectStreaming(
+    description: string,
+    callbacks: StreamingCallbacks
+  ): Promise<StreamingGenerationResult> {
     if (!description || description.trim() === '') {
       return {
         success: false,
@@ -63,96 +74,96 @@ export class ProjectGenerator {
       };
     }
 
-    logger.debug('Starting project generation', {
+    logger.debug('Starting streaming project generation', {
       descriptionLength: description.length,
-      descriptionPreview: description.substring(0, 100),
     });
+
+    callbacks.onStart?.();
 
     // Build prompt with proper injection defense
     const systemInstruction = getGenerationPrompt(description);
 
-    // Log what we're sending to Gemini
-    logger.info('Sending request to Gemini', {
+    logger.info('Sending streaming request to Gemini', {
       systemInstructionLength: systemInstruction.length,
       temperature: 0.7,
-      maxOutputTokens: 16384,
-    });
-    logger.debug('Gemini request details', {
-      systemInstruction: systemInstruction,
-      responseSchema: PROJECT_OUTPUT_SCHEMA,
+      maxOutputTokens: config.ai.maxOutputTokens,
     });
 
-    // Call Gemini API with structured output
-    const response = await this.geminiClient.generate({
+    // Track parsed files to emit them incrementally
+    let lastParsedIndex = 0;
+    let accumulatedText = '';
+    const emittedFiles = new Set<string>();
+
+    // Call Gemini API with structured output and streaming
+    const response = await this.geminiClient.generateStreaming({
       prompt: 'Generate the project based on the user request in the system instruction.',
       systemInstruction: systemInstruction,
       temperature: 0.7,
       maxOutputTokens: config.ai.maxOutputTokens,
       responseSchema: PROJECT_OUTPUT_SCHEMA,
-    });
-
-    // Log what we received from Gemini
-    logger.info('Received response from Gemini', {
-      success: response.success,
-      contentLength: response.content?.length ?? 0,
-      hasError: !!response.error,
-      retryCount: response.retryCount,
-    });
-    logger.debug('Gemini response content', {
-      content: response.content,
-      error: response.error,
+      onChunk: (chunk: string, accumulatedLength: number) => {
+        accumulatedText += chunk;
+        callbacks.onProgress?.(accumulatedLength);
+        
+        // Try to parse incrementally for complete file objects
+        const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
+        
+        if (parseResult.files.length > 0) {
+          const totalEstimate = estimateTotalFiles(accumulatedText);
+          
+          // Emit newly parsed files
+          for (const file of parseResult.files) {
+            if (!emittedFiles.has(file.path)) {
+              emittedFiles.add(file.path);
+              callbacks.onFile?.({
+                path: file.path,
+                content: file.content,
+                index: emittedFiles.size - 1,
+                total: totalEstimate,
+              });
+            }
+          }
+          
+          lastParsedIndex = parseResult.lastParsedIndex;
+        }
+      },
     });
 
     if (!response.success || !response.content) {
-      logger.error('Gemini API error', { error: response.error });
+      const error = response.error ?? 'Failed to generate project from AI';
+      callbacks.onError?.(error);
       return {
         success: false,
-        error: response.error ?? 'Failed to generate project from AI',
+        error,
       };
     }
 
-    // Step 6: Parse and validate the structured output
-    // With responseSchema, Gemini returns guaranteed valid JSON
+    // Parse and validate the complete structured output
     let parsedData: unknown;
     try {
       parsedData = JSON.parse(response.content);
     } catch (e) {
-      logger.error('Failed to parse AI output as JSON', {
-        error: e instanceof Error ? e.message : String(e),
-        content: response.content.substring(0, 500),
-      });
+      const error = `Failed to parse AI response: ${e instanceof Error ? e.message : 'Invalid JSON'}`;
+      callbacks.onError?.(error);
       return {
         success: false,
-        error: `Failed to parse AI response: ${e instanceof Error ? e.message : 'Invalid JSON'}`,
+        error,
       };
     }
 
     const zodResult = ProjectOutputSchema.safeParse(parsedData);
 
     if (!zodResult.success) {
-      logger.error('Zod validation failed', {
-        errors: zodResult.error.issues,
-        content: response.content.substring(0, 500),
-      });
+      const error = `Invalid AI response structure: ${zodResult.error.message}`;
+      callbacks.onError?.(error);
       return {
         success: false,
-        error: `Invalid AI response structure: ${zodResult.error.message}`,
+        error,
       };
     }
 
     const parsedOutput = zodResult.data;
     const files = parsedOutput.files;
-
-    // Validate all file paths for security
-    for (const file of files) {
-      if (!isSafePath(file.path)) {
-        logger.error('Unsafe file path detected', { path: file.path });
-        return {
-          success: false,
-          error: `Unsafe file path detected: ${file.path}`,
-        };
-      }
-    }
 
     // Process files: sanitize paths, normalize newlines, format with Prettier
     const prefixedFiles = await processFiles(files, { addFrontendPrefix: true });
@@ -160,12 +171,14 @@ export class ProjectGenerator {
     // Validate the output (syntax validation)
     logger.debug('Validating files', { files: Object.keys(prefixedFiles) });
     const validationResult = this.validationPipeline.validate(prefixedFiles);
-    logger.debug('Validation result', { valid: validationResult.valid });
+    
     if (!validationResult.valid) {
       logger.error('Validation errors', { errors: validationResult.errors });
+      const error = 'AI output failed validation';
+      callbacks.onError?.(error);
       return {
         success: false,
-        error: 'AI output failed validation',
+        error,
         validationErrors: validationResult.errors,
       };
     }
@@ -180,26 +193,12 @@ export class ProjectGenerator {
       logger.info('Build validation retry', {
         attempt: buildRetryCount,
         maxRetries: this.maxBuildRetries,
-        errors: buildResult.errors.map(e => e.message),
       });
 
-      // Format errors for AI
       const errorContext = this.buildValidator.formatErrorsForAI(buildResult.errors);
-
       const fixPromptContent = `Fix the following build errors in the project:\n\n${errorContext}\n\nOriginal description: ${description}\n\nReturn the COMPLETE fixed project with all files.`;
-      const fixSystemInstruction = getGenerationPrompt(fixPromptContent) + '\n\nIMPORTANT: You must fix ALL the build errors listed above. Make sure to either add missing dependencies to package.json OR use native alternatives.';
+      const fixSystemInstruction = getGenerationPrompt(fixPromptContent) + '\n\nIMPORTANT: You must fix ALL the build errors listed above.';
 
-      // Log what we're sending to Gemini for fix
-      logger.info('Sending build fix request to Gemini', {
-        attempt: buildRetryCount,
-        systemInstructionLength: fixSystemInstruction.length,
-        errorCount: buildResult.errors.length,
-      });
-      logger.debug('Gemini fix request details', {
-        systemInstruction: fixSystemInstruction,
-      });
-
-      // Request AI to fix the errors
       const fixResponse = await this.geminiClient.generate({
         prompt: 'Generate the fixed project based on the error context in the system instruction.',
         systemInstruction: fixSystemInstruction,
@@ -208,47 +207,29 @@ export class ProjectGenerator {
         responseSchema: PROJECT_OUTPUT_SCHEMA,
       });
 
-      // Log what we received from Gemini
-      logger.info('Received fix response from Gemini', {
-        success: fixResponse.success,
-        contentLength: fixResponse.content?.length ?? 0,
-        hasError: !!fixResponse.error,
-      });
-      logger.debug('Gemini fix response content', {
-        content: fixResponse.content,
-        error: fixResponse.error,
-      });
-
       if (!fixResponse.success || !fixResponse.content) {
         logger.error('Failed to get fix response from AI');
         break;
       }
 
-      // Parse and process the fixed output
       try {
-        // With responseSchema, Gemini returns guaranteed valid JSON
         const parsedData = JSON.parse(fixResponse.content);
         const zodResult = ProjectOutputSchema.safeParse(parsedData);
 
         if (!zodResult.success) {
-          logger.error('Zod validation failed on fix response', {
-            errors: zodResult.error.issues,
-          });
+          logger.error('Zod validation failed on fix response');
           break;
         }
 
         const fixedOutput = zodResult.data;
-        // Process fixed files
         const fixedFiles = await processFiles(fixedOutput.files || [], { addFrontendPrefix: true });
 
-        // Re-validate syntax
         const revalidation = this.validationPipeline.validate(fixedFiles);
         if (!revalidation.valid) {
           logger.error('Fixed code failed syntax validation');
           break;
         }
 
-        // Re-run build validation
         finalFiles = revalidation.sanitizedOutput!;
         buildResult = this.buildValidator.validate(finalFiles);
 
@@ -256,12 +237,11 @@ export class ProjectGenerator {
           logger.info('Build errors fixed successfully');
         }
       } catch (e) {
-        logger.error('Failed to parse fix response', { error: e instanceof Error ? e.message : 'Unknown error' });
+        logger.error('Failed to parse fix response');
         break;
       }
     }
 
-    // Log if there are still build errors after retries
     if (!buildResult.valid) {
       logger.warn('Build warnings after retries', {
         errors: buildResult.errors.map(e => ({ message: e.message, file: e.file })),
@@ -283,7 +263,6 @@ export class ProjectGenerator {
       currentVersionId: versionId,
     };
 
-    // Create initial version
     const version: Version = {
       id: versionId,
       projectId: projectId,
@@ -293,6 +272,20 @@ export class ProjectGenerator {
       diffs: this.computeInitialDiffs(finalFiles),
       parentVersionId: null,
     };
+
+    // Emit files one by one
+    const fileEntries = Object.entries(finalFiles);
+    for (let i = 0; i < fileEntries.length; i++) {
+      const [path, content] = fileEntries[i];
+      callbacks.onFile?.({
+        path,
+        content,
+        index: i,
+        total: fileEntries.length,
+      });
+    }
+
+    callbacks.onComplete?.({ projectState, version });
 
     return {
       success: true,
@@ -305,7 +298,6 @@ export class ProjectGenerator {
    * Extracts a project name from the description.
    */
   private extractProjectName(description: string): string {
-    // Take first few words, clean up, and use as name
     const words = description
       .replace(/[^a-zA-Z0-9\s]/g, '')
       .split(/\s+/)
@@ -342,12 +334,11 @@ export class ProjectGenerator {
       };
     });
   }
-
 }
 
 /**
- * Creates a ProjectGenerator instance with default configuration.
+ * Creates a StreamingProjectGenerator instance.
  */
-export function createProjectGenerator(): ProjectGenerator {
-  return new ProjectGenerator();
+export function createStreamingProjectGenerator(): StreamingProjectGenerator {
+  return new StreamingProjectGenerator();
 }

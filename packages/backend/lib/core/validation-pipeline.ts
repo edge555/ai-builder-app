@@ -11,7 +11,7 @@ import {
   validateFilePaths,
   detectForbiddenPatterns,
   validateSyntax,
-  validateModularArchitecture,
+  validateProjectQuality,
   parseAIOutput
 } from './validators';
 
@@ -50,19 +50,19 @@ export function validate(aiOutput: unknown): ValidationResult {
     };
   }
 
-  // Step 5: Check modular architecture (non-blocking warnings)
-  const architectureWarnings = validateModularArchitecture(files);
-  if (architectureWarnings.length > 0) {
-    logger.info('=== ARCHITECTURE WARNINGS ===');
-    for (const warning of architectureWarnings) {
+  // Step 5: Check project quality (architecture + styling, non-blocking warnings)
+  const qualityWarnings = validateProjectQuality(files);
+  if (qualityWarnings.length > 0) {
+    logger.info('=== PROJECT QUALITY WARNINGS ===');
+    for (const warning of qualityWarnings) {
       logger.warn(`${warning.message}${warning.filePath ? ` (${warning.filePath})` : ''}`);
     }
-    logger.info('These are suggestions for better code structure.');
+    logger.info('These are suggestions for better code structure and styling.');
   }
 
   return {
     valid: true,
-    errors: architectureWarnings, // Include as informational warnings
+    errors: qualityWarnings, // Include as informational warnings
     sanitizedOutput: files,
   };
 }

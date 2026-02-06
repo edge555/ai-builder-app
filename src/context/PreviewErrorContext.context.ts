@@ -21,8 +21,6 @@ export interface PreviewErrorState {
     repairAttempts: number;
     /** Maximum repair attempts allowed */
     maxRepairAttempts: number;
-    /** Last successful project state hash for rollback */
-    lastSuccessfulStateHash: string | null;
 }
 
 /**

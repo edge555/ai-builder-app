@@ -10,7 +10,6 @@
 
 import type { PlanningResponse } from './types';
 import { PlanningResponseSchema, toGeminiSchema } from '../../core/schemas';
-import { parseAIOutput } from '../../core/validators';
 
 /**
  * System prompt for the AI planning call.
@@ -25,6 +24,7 @@ You will receive:
 Your job is to identify:
 - **Primary files**: Files that will likely need to be modified to fulfill the request
 - **Context files**: Files needed for reference (type definitions, parent components, utilities used by primary files)
+- **Category**: Classify the modification as 'ui' (components/UI changes), 'logic' (business logic/functionality), 'style' (CSS/styling only), or 'mixed' (combination)
 
 Guidelines:
 - Be selective: Only include files that are directly relevant to the request
@@ -66,29 +66,35 @@ Respond with JSON in this exact format:
 {
   "primaryFiles": ["path/to/file1.ts", "path/to/file2.tsx"],
   "contextFiles": ["path/to/types.ts", "path/to/utils.ts"],
+  "category": "ui",
   "reasoning": "Brief explanation of why these files were selected"
 }
 
 Remember:
 - primaryFiles: Files that will be modified
 - contextFiles: Type definitions, parent components, utilities for reference
+- category: "ui" for component/UI changes, "logic" for business logic, "style" for CSS only, "mixed" for combination
 - Only include files shown in the FILE TREE above
 - Use exact file paths as shown in the tree`;
 }
 
 /**
  * Parse and validate the AI planning response.
+ * With responseSchema, Gemini returns guaranteed valid JSON.
  *
  * @param response - Raw response string from the AI
  * @returns Parsed PlanningResponse or null if invalid
  */
 export function parsePlanningResponse(response: string): PlanningResponse | null {
-  const parseResult = parseAIOutput(response);
-  if (!parseResult.success || !parseResult.data) {
+  // With responseSchema, Gemini returns guaranteed valid JSON
+  let parsedData: unknown;
+  try {
+    parsedData = JSON.parse(response);
+  } catch {
     return null;
   }
 
-  const zodResult = PlanningResponseSchema.safeParse(parseResult.data);
+  const zodResult = PlanningResponseSchema.safeParse(parsedData);
   if (!zodResult.success) {
     return null;
   }

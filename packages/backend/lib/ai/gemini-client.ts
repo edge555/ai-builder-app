@@ -37,6 +37,11 @@ export interface GeminiRequest {
   responseSchema?: object;
 }
 
+export interface GeminiStreamingRequest extends GeminiRequest {
+  /** Callback for each chunk of streamed content */
+  onChunk?: (chunk: string, accumulatedLength: number) => void;
+}
+
 export interface GeminiResponse {
   /** Whether the request was successful */
   success: boolean;
@@ -144,6 +149,164 @@ export class GeminiClient {
   }
 
   /**
+   * Sends a streaming request to the Gemini API.
+   * Calls onChunk callback as content is received.
+   */
+  async generateStreaming(request: GeminiStreamingRequest): Promise<GeminiResponse> {
+    let lastError: Error | null = null;
+    let retryCount = 0;
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        const response = await this.makeStreamingRequest(request);
+        return {
+          success: true,
+          content: response,
+          retryCount,
+        };
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        retryCount = attempt;
+
+        // Don't retry on non-retryable errors
+        if (!this.isRetryableError(lastError)) {
+          break;
+        }
+
+        // Don't wait after the last attempt
+        if (attempt < this.maxRetries) {
+          await this.delay(this.calculateBackoff(attempt));
+        }
+      }
+    }
+
+    return {
+      success: false,
+      error: lastError?.message ?? 'Unknown error occurred',
+      retryCount,
+    };
+  }
+
+  /**
+   * Makes a streaming request to the Gemini API.
+   */
+  private async makeStreamingRequest(request: GeminiStreamingRequest): Promise<string> {
+    const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent?key=${this.apiKey}`;
+
+    const body = {
+      contents: [
+        {
+          parts: [{ text: request.prompt }],
+        },
+      ],
+      generationConfig: {
+        temperature: request.temperature ?? config.ai.temperature,
+        maxOutputTokens: request.maxOutputTokens ?? config.ai.maxOutputTokens,
+        ...(request.responseSchema && {
+          responseMimeType: 'application/json',
+          responseSchema: request.responseSchema,
+        }),
+      },
+      ...(request.systemInstruction && {
+        systemInstruction: {
+          parts: [{ text: request.systemInstruction }],
+        },
+      }),
+    };
+
+    logger.debug('Gemini API streaming request', {
+      url: sanitizeUrl(url),
+      model: this.model,
+      promptLength: request.prompt.length,
+    });
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        clearTimeout(timeoutId);
+        const errorText = await response.text();
+        logger.error('Gemini API error response', {
+          status: response.status,
+          errorText: truncatePayload(errorText),
+        });
+        throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        clearTimeout(timeoutId);
+        throw new Error('No response body for streaming');
+      }
+
+      const decoder = new TextDecoder();
+      let accumulated = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Process complete JSON objects (separated by newlines in streaming response)
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.trim() || line.trim() === ',') continue;
+          
+          try {
+            const data = JSON.parse(line) as GeminiAPIResponse;
+            const chunk = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            
+            if (chunk) {
+              accumulated += chunk;
+              request.onChunk?.(chunk, accumulated.length);
+            }
+          } catch (e) {
+            // Skip invalid JSON lines
+            logger.debug('Skipping invalid JSON line in stream', { line: truncatePayload(line) });
+          }
+        }
+      }
+
+      clearTimeout(timeoutId);
+
+      if (!accumulated) {
+        throw new Error('No content in streaming response');
+      }
+
+      logger.info('Gemini streaming request completed', {
+        contentLength: accumulated.length,
+      });
+
+      return accumulated;
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${this.timeout}ms`);
+      }
+
+      logger.error('Gemini streaming API exception', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Makes a single request to the Gemini API.
    */
   private async makeRequest(request: GeminiRequest): Promise<string> {
@@ -158,6 +321,7 @@ export class GeminiClient {
       generationConfig: {
         temperature: request.temperature ?? config.ai.temperature,
         maxOutputTokens: request.maxOutputTokens ?? config.ai.maxOutputTokens,
+        // When responseSchema is provided, Gemini returns guaranteed valid JSON
         ...(request.responseSchema && {
           responseMimeType: 'application/json',
           responseSchema: request.responseSchema,

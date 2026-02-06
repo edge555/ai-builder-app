@@ -5,7 +5,7 @@ import { DiffViewer } from '../DiffViewer';
 import { PromptSuggestions } from '../PromptSuggestions';
 import { StreamingIndicator } from '../StreamingIndicator';
 import type { PromptSuggestion } from '@/data/prompt-suggestions';
-import type { StreamingState } from '@/hooks/useStreamingGeneration';
+import type { StreamingState } from '@/context/GenerationContext';
 import './ChatInterface.css';
 
 /**

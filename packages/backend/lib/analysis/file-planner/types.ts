@@ -91,6 +91,8 @@ export interface FilePlannerResult {
   primaryFiles: string[];
   /** Files/chunks to include as context (outline only) */
   contextFiles: string[];
+  /** Category of modification: ui, logic, style, or mixed */
+  category?: 'ui' | 'logic' | 'style' | 'mixed';
   /** Whether AI planning was used or fallback */
   usedFallback: boolean;
   /** AI's reasoning (if available) */
@@ -105,6 +107,8 @@ export interface PlanningResponse {
   primaryFiles: string[];
   /** Files needed for reference/types */
   contextFiles: string[];
+  /** Category of modification */
+  category: 'ui' | 'logic' | 'style' | 'mixed';
   /** Brief explanation of selection */
   reasoning: string;
 }

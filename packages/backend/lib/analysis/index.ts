@@ -20,9 +20,6 @@ export {
   type SliceSelectorConfig,
 } from './slice-selector';
 
-// Intent Classifier
-export { IntentClassifier, createIntentClassifier } from './intent-classifier';
-
 // File Planner
 export {
   FilePlanner,
