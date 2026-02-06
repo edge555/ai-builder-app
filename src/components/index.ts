@@ -11,3 +11,5 @@ export { PromptSuggestions, type PromptSuggestionsProps } from './PromptSuggesti
 export { UndoRedoButtons, type UndoRedoButtonsProps } from './UndoRedoButtons';
 export { StreamingIndicator, type StreamingIndicatorProps } from './StreamingIndicator';
 export { RepairStatus, type RepairStatusProps, type RepairPhase } from './RepairStatus';
+export { StatusIndicator } from './StatusIndicator';
+export { KeyboardHint } from './KeyboardHint';

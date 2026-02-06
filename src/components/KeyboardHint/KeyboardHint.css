@@ -1,0 +1,28 @@
+.keyboard-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.keyboard-hint-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  box-shadow: 0 1px 0 hsl(var(--border));
+}
+
+.keyboard-hint-separator {
+  font-size: 9px;
+  color: hsl(var(--muted-foreground) / 0.6);
+  margin: 0 1px;
+}

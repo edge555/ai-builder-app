@@ -1,11 +1,11 @@
 .preview-panel {
   /* Local (dark) theme for preview shell */
-  --pv-bg: 225 9% 12%;
-  --pv-surface: 225 9% 16%;
-  --pv-surface-2: 225 10% 18%;
-  --pv-border: 225 10% 24%;
-  --pv-text: 210 10% 82%;
-  --pv-text-muted: 215 10% 60%;
+  --pv-bg: 225 12% 10%;
+  --pv-surface: 225 12% 14%;
+  --pv-surface-2: 225 12% 18%;
+  --pv-border: 225 12% 22%;
+  --pv-text: 210 15% 88%;
+  --pv-text-muted: 215 10% 55%;
   --pv-accent: 212 100% 50%;
 
   display: flex;
@@ -20,14 +20,13 @@
 .preview-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  background: hsl(var(--pv-surface) / 0.8);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  gap: 6px;
+  padding: 6px 10px;
+  background: hsl(var(--pv-surface));
   border: 1px solid hsl(var(--pv-border));
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   height: auto;
+  box-shadow: 0 2px 8px hsl(0 0% 0% / 0.2);
 }
 
 .preview-toolbar-group {
@@ -38,22 +37,22 @@
 
 .preview-toolbar-separator {
   width: 1px;
-  height: 24px;
+  height: 20px;
   background: hsl(var(--pv-border));
-  margin: 0 6px;
+  margin: 0 4px;
 }
 
 .preview-toolbar-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 5px;
+  padding: 6px 10px;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: 6px;
   color: hsl(var(--pv-text-muted));
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -229,18 +228,21 @@
   justify-content: center;
   background-color: hsl(var(--pv-bg));
   background-image:
-    radial-gradient(1200px 600px at 50% 20%, hsl(var(--pv-surface) / 0.35), transparent 60%),
-    radial-gradient(900px 450px at 20% 80%, hsl(var(--pv-surface-2) / 0.25), transparent 60%);
+    radial-gradient(circle at 50% 0%, hsl(var(--pv-surface) / 0.5), transparent 50%),
+    radial-gradient(hsl(var(--pv-text-muted) / 0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 16px 16px;
   overflow: auto;
-  padding: 40px;
+  padding: 32px;
 }
 
 .device-frame {
   position: relative;
   background: hsl(0 0% 100%);
-  border: 1px solid hsl(var(--pv-border));
-  border-radius: 16px;
-  box-shadow: 0 24px 60px hsl(0 0% 0% / 0.55);
+  border-radius: 12px;
+  box-shadow: 
+    0 0 0 1px hsl(var(--pv-border)),
+    0 8px 32px hsl(0 0% 0% / 0.4),
+    0 32px 64px hsl(0 0% 0% / 0.3);
   transition: width 0.3s ease, height 0.3s ease;
   overflow: auto;
   display: flex;
