@@ -66,6 +66,31 @@
   line-height: 1.5;
 }
 
+/* Empty state suggestions */
+.chat-empty-suggestions {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 400px;
+}
+
+.chat-suggestions-label {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+/* Contextual suggestions above input */
+.chat-contextual-suggestions {
+  padding: 0.5rem 1.25rem;
+  border-top: 1px solid hsl(var(--border) / 0.5);
+  background: hsl(var(--muted) / 0.3);
+}
+
 /* Message styles */
 .chat-message {
   max-width: 80%;

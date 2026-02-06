@@ -52,6 +52,14 @@ export interface ChatActions {
     autoRepair: (runtimeError: RuntimeError) => Promise<boolean>;
     /** Reset auto-repair state */
     resetAutoRepair: () => void;
+    /** Undo to previous project state */
+    undo: () => void;
+    /** Redo to next project state */
+    redo: () => void;
+    /** Whether undo is available */
+    canUndo: boolean;
+    /** Whether redo is available */
+    canRedo: boolean;
 }
 
 /**

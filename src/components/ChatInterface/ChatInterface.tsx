@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, forwardRef } from 'react';
 import type { ChangeSummary, FileDiff } from '@/shared';
 import { ErrorMessage, classifyError } from '../ErrorMessage';
 import { DiffViewer } from '../DiffViewer';
+import { PromptSuggestions } from '../PromptSuggestions';
+import type { PromptSuggestion } from '@/data/prompt-suggestions';
 import './ChatInterface.css';
 
 /**
@@ -40,6 +42,8 @@ export interface ChatInterfaceProps {
   onClearError?: () => void;
   /** Callback to retry last action */
   onRetry?: () => void;
+  /** Smart prompt suggestions */
+  suggestions?: PromptSuggestion[];
 }
 
 /**
@@ -56,6 +60,7 @@ export function ChatInterface({
   error,
   onClearError,
   onRetry,
+  suggestions = [],
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
@@ -98,6 +103,12 @@ export function ChatInterface({
     }
   };
 
+  const handleSuggestionSelect = (prompt: string) => {
+    setInputValue(prompt);
+    // Focus the input so user can modify if needed
+    inputRef.current?.focus();
+  };
+
   return (
     <div className="chat-interface" role="region" aria-label="Chat interface">
       <div className="chat-messages" role="log" aria-live="polite">
@@ -107,6 +118,17 @@ export function ChatInterface({
             <div className="chat-empty-content">
               <p className="chat-empty-title">What would you like to build?</p>
               <p className="chat-empty-description">Describe your app idea and I'll generate it for you in seconds.</p>
+              {suggestions.length > 0 && (
+                <div className="chat-empty-suggestions">
+                  <p className="chat-suggestions-label">Try one of these:</p>
+                  <PromptSuggestions
+                    suggestions={suggestions}
+                    onSelect={handleSuggestionSelect}
+                    variant="cards"
+                    disabled={isLoading}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -127,6 +149,18 @@ export function ChatInterface({
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Show contextual suggestions above input when project exists */}
+      {messages.length > 0 && suggestions.length > 0 && !isLoading && (
+        <div className="chat-contextual-suggestions">
+          <PromptSuggestions
+            suggestions={suggestions.slice(0, 4)}
+            onSelect={handleSuggestionSelect}
+            variant="chips"
+            disabled={isLoading}
+          />
+        </div>
+      )}
 
       <form className="chat-input-form" onSubmit={handleSubmit}>
         <textarea

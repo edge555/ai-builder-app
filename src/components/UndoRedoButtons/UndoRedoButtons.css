@@ -1,0 +1,42 @@
+.undo-redo-buttons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.15);
+}
+
+.undo-redo-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: hsl(var(--foreground) / 0.8);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.undo-redo-button:hover:not(:disabled) {
+  background: hsl(var(--muted) / 0.3);
+  color: hsl(var(--foreground));
+}
+
+.undo-redo-button:active:not(:disabled) {
+  background: hsl(var(--muted) / 0.4);
+  transform: scale(0.95);
+}
+
+.undo-redo-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.undo-redo-button svg {
+  width: 16px;
+  height: 16px;
+}
