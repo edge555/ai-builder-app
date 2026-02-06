@@ -33,7 +33,7 @@ function generateId(): string {
  * 
  * Requirements: 8.4
  */
-export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
+export function ChatProvider({ children, apiConfig, initialPrompt }: ChatProviderProps) {
   const config = useMemo(() => ({
     baseUrl: appConfig.api.baseUrl,
     ...apiConfig
@@ -125,6 +125,21 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
       }
     };
   }, []);
+
+  // Track if initial prompt has been submitted
+  const initialPromptSubmittedRef = useRef(false);
+
+  // Submit initial prompt on mount if provided
+  useEffect(() => {
+    if (initialPrompt && !initialPromptSubmittedRef.current && !isSubmittingRef.current) {
+      initialPromptSubmittedRef.current = true;
+      // Small delay to ensure everything is initialized
+      const timer = setTimeout(() => {
+        submitPrompt(initialPrompt);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [initialPrompt]);
 
   /**
    * Adds a user message to the chat history.

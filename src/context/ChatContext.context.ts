@@ -80,6 +80,8 @@ export const ChatContext = createContext<ChatContextValue | null>(null);
 export interface ChatProviderProps {
     children: ReactNode;
     apiConfig?: Partial<ApiConfig>;
+    /** Optional initial prompt to submit on mount */
+    initialPrompt?: string;
 }
 
 /**
