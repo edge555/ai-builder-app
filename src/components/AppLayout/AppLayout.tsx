@@ -18,7 +18,7 @@ const SIDE_PANEL_WIDTH_STORAGE_KEY = 'ai_app_builder:sidePanelWidth';
  * Main chat panel component that uses the chat context.
  */
 function ChatPanel() {
-    const { messages, isLoading, loadingPhase, submitPrompt, error, clearError, projectState } = useChat();
+    const { messages, isLoading, loadingPhase, submitPrompt, error, clearError, projectState, streamingState, isStreaming } = useChat();
     const [lastPrompt, setLastPrompt] = useState<string | null>(null);
 
     // Generate context-aware suggestions
@@ -51,6 +51,8 @@ function ChatPanel() {
             onClearError={clearError}
             onRetry={handleRetry}
             suggestions={suggestions}
+            streamingState={streamingState}
+            isStreaming={isStreaming}
         />
     );
 }

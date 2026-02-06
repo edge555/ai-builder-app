@@ -1,1 +1,4 @@
 project_id = "hzppirupmuvctfnqubvq"
+
+[functions.generate-stream]
+verify_jwt = false
