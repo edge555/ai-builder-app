@@ -11,6 +11,7 @@ import type {
 import type { ChatMessage, LoadingPhase } from '../components/ChatInterface';
 import { config as appConfig } from '../config';
 import { backend } from '@/integrations/backend/client';
+import { useUndoRedo } from '@/hooks/useUndoRedo';
 
 import { ChatContext, type ChatProviderProps, type ChatContextValue, type VersionCallbacks, type ApiConfig } from './ChatContext.context';
 
@@ -48,6 +49,9 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
   const isSubmittingRef = useRef(false);
   const lastRepairErrorRef = useRef<string | null>(null);
 
+  // Undo/Redo hook
+  const undoRedo = useUndoRedo(projectState);
+
   /**
    * Sets version callbacks for integration with VersionContext.
    */
@@ -57,13 +61,54 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
 
   /**
    * Sets the project state and notifies callbacks.
+   * Optionally saves to undo stack.
    */
-  const setProjectState = useCallback((newState: SerializedProjectState | null) => {
+  const setProjectState = useCallback((newState: SerializedProjectState | null, saveToUndo = false) => {
+    // Save current state to undo stack before changing
+    if (saveToUndo && projectState) {
+      undoRedo.pushState(projectState);
+    }
     setProjectStateInternal(newState);
     if (newState && versionCallbacksRef.current.onProjectStateChanged) {
       versionCallbacksRef.current.onProjectStateChanged(newState);
     }
-  }, []);
+  }, [projectState, undoRedo]);
+
+  /**
+   * Undo to previous project state.
+   */
+  const undo = useCallback(() => {
+    const previousState = undoRedo.undo();
+    if (previousState) {
+      setProjectStateInternal(previousState);
+      // Add message inline to avoid dependency on addAssistantMessage
+      const message: ChatMessage = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+        role: 'assistant',
+        content: '↩️ Reverted to previous state',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, message]);
+    }
+  }, [undoRedo]);
+
+  /**
+   * Redo to next project state.
+   */
+  const redo = useCallback(() => {
+    const nextState = undoRedo.redo();
+    if (nextState) {
+      setProjectStateInternal(nextState);
+      // Add message inline to avoid dependency on addAssistantMessage
+      const message: ChatMessage = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+        role: 'assistant',
+        content: '↪️ Restored undone changes',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, message]);
+    }
+  }, [undoRedo]);
 
   useEffect(() => {
     return () => {
@@ -299,7 +344,7 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
 
         setLoadingPhase('validating');
         if (result.success && result.projectState) {
-          setProjectState(result.projectState);
+          setProjectState(result.projectState, false);
           const fileCount = Object.keys(result.projectState.files).length;
           addAssistantMessage(
             getGenerationSuccessMessage(result.projectState.name, fileCount)
@@ -314,13 +359,13 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
           addAssistantMessage(`Sorry, I couldn't generate the project: ${errorMsg}`);
         }
       } else {
-        // Project exists, modify it
+        // Project exists, modify it - save to undo stack first
         setLoadingPhase('modifying');
         const result = await modifyProject(projectState, prompt);
 
         setLoadingPhase('validating');
         if (result.success && result.projectState) {
-          setProjectState(result.projectState);
+          setProjectState(result.projectState, true); // Save to undo stack
           addAssistantMessage(
             getModificationSuccessMessage(result.changeSummary?.description),
             result.changeSummary,
@@ -452,7 +497,11 @@ export function ChatProvider({ children, apiConfig }: ChatProviderProps) {
     setVersionCallbacks,
     autoRepair,
     resetAutoRepair,
-  }), [messages, isLoading, loadingPhase, projectState, error, isAutoRepairing, autoRepairAttempt, submitPrompt, clearMessages, clearError, setProjectState, setVersionCallbacks, autoRepair, resetAutoRepair]);
+    undo,
+    redo,
+    canUndo: undoRedo.canUndo,
+    canRedo: undoRedo.canRedo,
+  }), [messages, isLoading, loadingPhase, projectState, error, isAutoRepairing, autoRepairAttempt, submitPrompt, clearMessages, clearError, setProjectState, setVersionCallbacks, autoRepair, resetAutoRepair, undo, redo, undoRedo.canUndo, undoRedo.canRedo]);
 
   return (
     <ChatContext.Provider value={value}>

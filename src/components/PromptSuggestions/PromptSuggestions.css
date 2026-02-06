@@ -1,0 +1,116 @@
+.prompt-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prompt-suggestions--cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.prompt-suggestion {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 20px;
+  background: hsl(var(--card) / 0.8);
+  color: hsl(var(--foreground));
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms ease;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+}
+
+.prompt-suggestion:hover:not(:disabled) {
+  background: hsl(var(--accent));
+  border-color: hsl(var(--accent-foreground) / 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px hsl(var(--foreground) / 0.08);
+}
+
+.prompt-suggestion:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.prompt-suggestion:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.prompt-suggestion-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.prompt-suggestion-label {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Category-specific styling */
+.prompt-suggestion--ui {
+  border-color: hsl(var(--primary) / 0.3);
+}
+
+.prompt-suggestion--ui:hover:not(:disabled) {
+  border-color: hsl(var(--primary) / 0.5);
+}
+
+.prompt-suggestion--feature {
+  border-color: hsl(210 80% 50% / 0.3);
+}
+
+.prompt-suggestion--feature:hover:not(:disabled) {
+  border-color: hsl(210 80% 50% / 0.5);
+}
+
+.prompt-suggestion--styling {
+  border-color: hsl(280 80% 50% / 0.3);
+}
+
+.prompt-suggestion--styling:hover:not(:disabled) {
+  border-color: hsl(280 80% 50% / 0.5);
+}
+
+.prompt-suggestion--data {
+  border-color: hsl(150 60% 40% / 0.3);
+}
+
+.prompt-suggestion--data:hover:not(:disabled) {
+  border-color: hsl(150 60% 40% / 0.5);
+}
+
+.prompt-suggestion--improvement {
+  border-color: hsl(40 90% 50% / 0.3);
+}
+
+.prompt-suggestion--improvement:hover:not(:disabled) {
+  border-color: hsl(40 90% 50% / 0.5);
+}
+
+/* Cards variant */
+.prompt-suggestions--cards .prompt-suggestion {
+  flex-direction: column;
+  padding: 14px;
+  border-radius: 12px;
+  text-align: center;
+  white-space: normal;
+}
+
+.prompt-suggestions--cards .prompt-suggestion-icon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.prompt-suggestions--cards .prompt-suggestion-label {
+  max-width: none;
+  font-size: 12px;
+  line-height: 1.3;
+}

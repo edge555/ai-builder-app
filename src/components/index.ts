@@ -7,3 +7,5 @@ export { ErrorMessage, classifyError, type ErrorMessageProps, type ErrorType } f
 export { AppLayout } from './AppLayout';
 export { ExportButton } from './ExportButton';
 export { PanelToggle, type ActivePanel } from './PanelToggle';
+export { PromptSuggestions, type PromptSuggestionsProps } from './PromptSuggestions';
+export { UndoRedoButtons, type UndoRedoButtonsProps } from './UndoRedoButtons';

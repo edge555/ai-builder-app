@@ -1,9 +1,12 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useChat, usePreviewError } from '../../context';
 import { ChatInterface, PreviewPanel } from '../../components';
 import { PreviewErrorBoundary } from '../PreviewPanel/PreviewErrorBoundary';
 import { ExportButton } from '../ExportButton';
 import { PanelToggle, type ActivePanel } from '../PanelToggle';
+import { UndoRedoButtons } from '../UndoRedoButtons';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { initialSuggestions, analyzeProjectForSuggestions } from '@/data/prompt-suggestions';
 import { type RuntimeError } from '@/shared';
 
 const RESIZE_MIN_WIDTH = 300;
@@ -15,8 +18,16 @@ const SIDE_PANEL_WIDTH_STORAGE_KEY = 'ai_app_builder:sidePanelWidth';
  * Main chat panel component that uses the chat context.
  */
 function ChatPanel() {
-    const { messages, isLoading, loadingPhase, submitPrompt, error, clearError } = useChat();
+    const { messages, isLoading, loadingPhase, submitPrompt, error, clearError, projectState } = useChat();
     const [lastPrompt, setLastPrompt] = useState<string | null>(null);
+
+    // Generate context-aware suggestions
+    const suggestions = useMemo(() => {
+        if (!projectState) {
+            return initialSuggestions;
+        }
+        return analyzeProjectForSuggestions(projectState.files);
+    }, [projectState]);
 
     const handleSubmit = async (prompt: string) => {
         setLastPrompt(prompt);
@@ -39,6 +50,7 @@ function ChatPanel() {
             error={error}
             onClearError={clearError}
             onRetry={handleRetry}
+            suggestions={suggestions}
         />
     );
 }
@@ -96,6 +108,7 @@ function PreviewSection() {
  * Requirements: 8.1, 9.1
  */
 export function AppLayout() {
+    const { undo, redo, canUndo, canRedo, isLoading } = useChat();
     const [activePanel, setActivePanel] = useState<ActivePanel>('chat');
     const [sidePanelWidth, setSidePanelWidth] = useState(() => {
         const raw = localStorage.getItem(SIDE_PANEL_WIDTH_STORAGE_KEY);
@@ -125,6 +138,12 @@ export function AppLayout() {
     useEffect(() => {
         setSidePanelWidth((w) => Math.max(RESIZE_MIN_WIDTH, Math.min(w, maxSidePanelWidth)));
     }, [maxSidePanelWidth]);
+
+    // Register keyboard shortcuts for undo/redo
+    useKeyboardShortcuts({
+        onUndo: undo,
+        onRedo: redo,
+    });
 
     const startResizing = useCallback(() => {
         isResizing.current = true;
@@ -172,6 +191,13 @@ export function AppLayout() {
                     <h1>AI App Builder</h1>
                 </div>
                 <div className="app-header-right">
+                    <UndoRedoButtons
+                        canUndo={canUndo}
+                        canRedo={canRedo}
+                        onUndo={undo}
+                        onRedo={redo}
+                        disabled={isLoading}
+                    />
                     <ExportButton />
                 </div>
             </header>
