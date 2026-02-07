@@ -56,7 +56,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
   const [autoRepairAttempt, setAutoRepairAttempt] = useState(0);
   const [streamingState, setStreamingState] = useState<StreamingState | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
-  
+
   const activeRequestRef = useRef<{ controller: AbortController; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const lastRepairErrorRef = useRef<string | null>(null);
@@ -373,6 +373,10 @@ async function parseSSEStream(
   let result: GenerateProjectResponse = { success: false };
   const files: Record<string, string> = {};
 
+  // Persist across chunks so split events are properly handled
+  let currentEvent = '';
+  let currentData = '';
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -380,10 +384,8 @@ async function parseSSEStream(
     buffer += decoder.decode(value, { stream: true });
 
     const lines = buffer.split('\n');
-    buffer = '';
-
-    let currentEvent = '';
-    let currentData = '';
+    // Keep the last line in buffer if it doesn't end with newline (incomplete)
+    buffer = lines.pop() || '';
 
     for (const line of lines) {
       // Handle heartbeat comments
@@ -433,9 +435,8 @@ async function parseSSEStream(
         }
         currentEvent = '';
         currentData = '';
-      } else if (line !== '') {
-        buffer += line + '\n';
       }
+      // Unrecognized lines are ignored (they're typically partial lines kept in buffer)
     }
   }
 
@@ -448,7 +449,7 @@ async function parseSSEStream(
 function buildRepairPrompt(runtimeError: RuntimeError, projectFiles?: Record<string, string>): string {
   // Check if we have aggregated errors
   const aggregatedReport = errorAggregator.buildErrorReport(projectFiles);
-  
+
   if (aggregatedReport) {
     return aggregatedReport;
   }
