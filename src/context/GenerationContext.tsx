@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useMemo, useRe
 import type { LoadingPhase } from '../components/ChatInterface';
 import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState } from '@/shared';
 import { config as appConfig } from '../config';
-import { backend, FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
+import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 import { errorAggregator } from '@/services/ErrorAggregator';
 
 const MAX_AUTO_REPAIR_ATTEMPTS = 3;
@@ -199,11 +199,23 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     activeRequestRef.current = { controller, timeoutId };
 
     try {
-      const { data, error } = await backend.functions.invoke('generate', {
-        body: { description },
+      const response = await fetch(`${FUNCTIONS_BASE_URL}/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ description }),
+        signal: controller.signal,
       });
-      if (error) throw new Error(error.message);
-      return data as GenerateProjectResponse;
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      return await response.json() as GenerateProjectResponse;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error('Request timed out after 60 seconds. Please try again with a simpler request.');
@@ -230,11 +242,23 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     activeRequestRef.current = { controller, timeoutId };
 
     try {
-      const { data, error } = await backend.functions.invoke('modify', {
-        body: { projectState: currentState, prompt, runtimeError },
+      const response = await fetch(`${FUNCTIONS_BASE_URL}/modify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ projectState: currentState, prompt, runtimeError }),
+        signal: controller.signal,
       });
-      if (error) throw new Error(error.message);
-      return data as ModifyProjectResponse;
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      return await response.json() as ModifyProjectResponse;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error('Request timed out after 60 seconds. Please try again with a simpler request.');

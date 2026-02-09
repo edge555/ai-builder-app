@@ -10,7 +10,7 @@ import { NextRequest } from 'next/server';
 import type { GenerateProjectRequest } from '@ai-app-builder/shared';
 import { serializeProjectState, serializeVersion } from '@ai-app-builder/shared';
 import { createStreamingProjectGenerator } from '../../../lib/core/streaming-generator';
-import { handleOptions } from '../../../lib/api';
+import { handleOptions, getCorsHeaders } from '../../../lib/api';
 import { createLogger } from '../../../lib/logger';
 
 const logger = createLogger('api/generate-stream');
@@ -106,20 +106,20 @@ export async function POST(request: NextRequest) {
 
           // Generate project with streaming callbacks
           const generator = createStreamingProjectGenerator();
-          
+
           const result = await generator.generateProjectStreaming(body.description, {
             onStart: () => {
               controller.enqueue(encoder.encode('start', { timestamp: Date.now() }));
             },
-            
+
             onProgress: (length: number) => {
               controller.enqueue(encoder.encode('progress', { length }));
             },
-            
+
             onFile: (data) => {
               controller.enqueue(encoder.encode('file', data));
             },
-            
+
             onComplete: (data) => {
               const response = {
                 success: true,
@@ -128,11 +128,11 @@ export async function POST(request: NextRequest) {
               };
               controller.enqueue(encoder.encode('complete', response));
             },
-            
+
             onError: (error) => {
               controller.enqueue(encoder.encode('error', { error }));
             },
-            
+
             onHeartbeat: () => {
               // Additional heartbeat callback if needed
             },
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
 
           // If generation failed without calling onError
           if (!result.success && result.error) {
-            controller.enqueue(encoder.encode('error', { 
+            controller.enqueue(encoder.encode('error', {
               error: result.error,
               validationErrors: result.validationErrors,
             }));
@@ -155,10 +155,10 @@ export async function POST(request: NextRequest) {
 
         } catch (error) {
           cleanup();
-          
+
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           logger.error('Streaming generation error', { error: errorMessage });
-          
+
           controller.enqueue(encoder.encode('error', { error: errorMessage }));
           controller.close();
         }
@@ -168,12 +168,10 @@ export async function POST(request: NextRequest) {
     // Return SSE response
     return new Response(stream, {
       headers: {
+        ...getCorsHeaders(),
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },
     });
 
@@ -181,10 +179,10 @@ export async function POST(request: NextRequest) {
     logger.error('Error in generate-stream endpoint', {
       error: error instanceof Error ? error.message : String(error),
     });
-    
+
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { 
+      {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       }

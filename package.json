@@ -3,8 +3,13 @@
   "version": "1.0.0",
   "type": "module",
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "vite",
+    "dev:all": "npm run dev & npm run dev:backend",
+    "dev:backend": "npm run dev --workspace=@ai-app-builder/backend -- -p 4000",
     "build": "tsc && vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",

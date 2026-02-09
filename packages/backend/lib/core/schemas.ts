@@ -5,12 +5,13 @@
 
 import { z } from 'zod';
 
-// Path validation regex - must start with src/, public/, frontend/, or app/
-const PATH_REGEX = /^(src\/|public\/|frontend\/|app\/)/;
+// Path validation regex - allows any valid file path
+// AI may generate root-level files like package.json as well as nested paths
+const PATH_REGEX = /^[a-zA-Z0-9_\-./]+$/;
 
 // Project generation output schema
 export const GeneratedFileSchema = z.object({
-    path: z.string().min(1).regex(PATH_REGEX, 'Path must start with src/, public/, frontend/, or app/').describe('The file path relative to project root'),
+    path: z.string().min(1).regex(PATH_REGEX, 'Path contains invalid characters').describe('The file path relative to project root'),
     content: z.string().describe('The complete content of the file'),
 });
 

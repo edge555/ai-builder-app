@@ -33,7 +33,7 @@ export interface BackendConfig {
 
 export const config: BackendConfig = {
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: process.env.CORS_ORIGIN || 'http://localhost:8080',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     headers: [
       'Content-Type',
@@ -46,6 +46,7 @@ export const config: BackendConfig = {
       'Content-MD5',
       'Date',
       'X-Api-Version',
+      'apikey',
     ],
   },
   api: {

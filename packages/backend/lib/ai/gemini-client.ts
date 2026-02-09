@@ -252,32 +252,78 @@ export class GeminiClient {
       const decoder = new TextDecoder();
       let accumulated = '';
       let buffer = '';
+      let braceCount = 0;
+      let inString = false;
+      let escapeNext = false;
+      let objectStart = -1;
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        
-        // Process complete JSON objects (separated by newlines in streaming response)
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+        const chunkText = decoder.decode(value, { stream: true });
+        buffer += chunkText;
 
-        for (const line of lines) {
-          if (!line.trim() || line.trim() === ',') continue;
-          
-          try {
-            const data = JSON.parse(line) as GeminiAPIResponse;
-            const chunk = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            
-            if (chunk) {
-              accumulated += chunk;
-              request.onChunk?.(chunk, accumulated.length);
-            }
-          } catch (e) {
-            // Skip invalid JSON lines
-            logger.debug('Skipping invalid JSON line in stream', { line: truncatePayload(line) });
+        for (let i = buffer.length - chunkText.length; i < buffer.length; i++) {
+          const char = buffer[i];
+
+          if (escapeNext) {
+            escapeNext = false;
+            continue;
           }
+
+          if (char === '\\') {
+            escapeNext = true;
+            continue;
+          }
+
+          if (char === '"') {
+            inString = !inString;
+            continue;
+          }
+
+          if (!inString) {
+            if (char === '{') {
+              if (braceCount === 0) {
+                objectStart = i;
+              }
+              braceCount++;
+            } else if (char === '}') {
+              braceCount--;
+              if (braceCount === 0 && objectStart !== -1) {
+                // We found a complete JSON object
+                const objectText = buffer.substring(objectStart, i + 1);
+
+                try {
+                  const data = JSON.parse(objectText) as GeminiAPIResponse;
+                  const chunk = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                  if (chunk) {
+                    accumulated += chunk;
+                    request.onChunk?.(chunk, accumulated.length);
+                  }
+                } catch (e) {
+                  // This captures partial or malformed objects which can happen at the very start/end
+                  logger.debug('Skipping non-candidate JSON object in stream', {
+                    error: e instanceof Error ? e.message : String(e),
+                    text: truncatePayload(objectText)
+                  });
+                }
+
+                objectStart = -1;
+              }
+            }
+          }
+        }
+
+        // Periodically trim the buffer to keep it manageable
+        // Only trim when we are between objects to avoid cutting an object in half
+        if (objectStart === -1 && buffer.length > 5000 && braceCount === 0) {
+          buffer = '';
+        } else if (objectStart > 2000) {
+          // If we've started an object but have a lot of garbage before it
+          buffer = buffer.substring(objectStart);
+          objectStart = 0;
         }
       }
 

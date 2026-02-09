@@ -22,14 +22,20 @@ if (!hasValidConfig) {
 export const SUPABASE_URL = SUPABASE_URL_ENV || PLACEHOLDER_URL;
 export const SUPABASE_ANON_KEY = SUPABASE_ANON_KEY_ENV || PLACEHOLDER_KEY;
 
-export const FUNCTIONS_BASE_URL = `${SUPABASE_URL}/functions/v1`;
+// For local development, use VITE_API_BASE_URL; for production, use Supabase Edge Functions
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+// If a local API URL is configured, use /api routes; otherwise fall back to Supabase Edge Functions
+export const FUNCTIONS_BASE_URL = API_BASE_URL
+  ? `${API_BASE_URL}/api`
+  : `${SUPABASE_URL}/functions/v1`;
 
 // Flag to check if backend is properly configured
 export const isBackendConfigured = hasValidConfig;
 
 export const backend: SupabaseClient<Database> = createClient<Database>(
-  SUPABASE_URL, 
-  SUPABASE_ANON_KEY, 
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
   {
     auth: {
       storage: typeof localStorage !== 'undefined' ? localStorage : undefined,
