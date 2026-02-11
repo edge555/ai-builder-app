@@ -10,7 +10,7 @@ import {
   SEARCH_REPLACE_GUIDANCE,
   SYNTAX_INTEGRITY_RULES,
   wrapUserInput
-} from '../core/prompts/shared-prompt-fragments';
+} from '../../core/prompts/shared-prompt-fragments';
 
 /**
  * Design system prompt for UI-related modifications.

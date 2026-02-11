@@ -1,4 +1,5 @@
 {
+  "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "types": [
       "vitest/globals"
@@ -12,14 +13,12 @@
     ],
     "module": "ESNext",
     "skipLibCheck": true,
-    /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
-    /* Linting */
     "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
@@ -30,11 +29,17 @@
       "@/*": [
         "./src/*"
       ],
+      "@/shared": [
+        "../shared/src"
+      ],
       "@/shared/*": [
-        "./packages/shared/src/*"
+        "../shared/src/*"
+      ],
+      "@ai-app-builder/shared": [
+        "../shared/src"
       ],
       "@ai-app-builder/shared/*": [
-        "./packages/shared/src/*"
+        "../shared/src/*"
       ]
     }
   },
