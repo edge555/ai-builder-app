@@ -39,10 +39,16 @@ function computeDiffStats(diffs: FileDiff[]) {
         break;
     }
 
-    for (const hunk of diff.hunks) {
-      for (const change of hunk.changes) {
-        if (change.type === 'add') linesAdded++;
-        if (change.type === 'delete') linesDeleted++;
+    // Defensive check: ensure hunks is an array
+    if (Array.isArray(diff.hunks)) {
+      for (const hunk of diff.hunks) {
+        // Defensive check: ensure changes is an array
+        if (Array.isArray(hunk.changes)) {
+          for (const change of hunk.changes) {
+            if (change.type === 'add') linesAdded++;
+            if (change.type === 'delete') linesDeleted++;
+          }
+        }
       }
     }
   }
@@ -203,9 +209,13 @@ const DiffFileItem = React.memo(function DiffFileItem({ diff, isExpanded, onTogg
       </div>
       {isExpanded && (
         <div className="diff-content">
-          {diff.hunks.map((hunk, index) => (
-            <DiffHunkItem key={index} hunk={hunk} />
-          ))}
+          {Array.isArray(diff.hunks) && diff.hunks.length > 0 ? (
+            diff.hunks.map((hunk, index) => (
+              <DiffHunkItem key={index} hunk={hunk} />
+            ))
+          ) : (
+            <div className="diff-empty-state">No changes to display</div>
+          )}
         </div>
       )}
     </div>
@@ -228,7 +238,7 @@ const DiffHunkItem = React.memo(function DiffHunkItem({ hunk }: DiffHunkItemProp
       <div className="diff-hunk-header">
         @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
       </div>
-      {hunk.changes.map((change, index) => (
+      {Array.isArray(hunk.changes) && hunk.changes.map((change, index) => (
         <DiffLineItem key={index} change={change} />
       ))}
     </div>

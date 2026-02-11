@@ -228,3 +228,167 @@ export const PROJECT_OUTPUT_SCHEMA = {
    },
    required: ['files'],
 };
+
+/**
+ * Search/replace guidance for modification prompts.
+ */
+const SEARCH_REPLACE_GUIDANCE = `=== SEARCH/REPLACE RULES (CRITICAL) ===
+1. ANCHOR YOUR SEARCHES:
+   - Include a unique identifier (function, class, or variable name) at the start of each search block.
+   - This keeps searches robust when nearby code shifts.
+
+2. EXACT MATCHING:
+   - The "search" string must EXACTLY match existing code, including whitespace and newlines.
+   - Include several lines of surrounding context (3–5) to ensure the block is unique.
+
+3. EDIT ORDERING:
+   - Edits run from top to bottom; later edits see the results of earlier ones.
+   - Do not let one replacement break the search text of a later edit.
+
+4. IMPORT MANAGEMENT:
+   - When adding components or utilities, add imports at the top of the file.
+   - Remove now-unused imports and group remaining ones logically (framework, third-party, local).
+
+5. FALLBACKS:
+   - If a target file does not exist, create it instead.
+   - If a search block cannot be matched reliably, create a new file with the full, correct implementation.`;
+
+/**
+ * Builds the modification prompt for code edits.
+ * Simplified version for edge functions - skips design system guidance to save tokens.
+ */
+export function getModificationPrompt(userPrompt: string): string {
+   return `You are a SENIOR full-stack developer modifying an existing web application.
+You write clean, modular code with proper component separation.
+
+=== COMPONENT ARCHITECTURE PRINCIPLES ===
+When making modifications:
+1. NEVER add more than 30 lines to App.tsx - create new components instead
+2. If adding a new feature, create a NEW component in the appropriate folder:
+   - src/components/ui/ for reusable UI (Button, Modal, Card)
+   - src/components/layout/ for layout (Header, Footer, Sidebar)
+   - src/components/features/ for feature-specific components
+3. Extract repeated logic into custom hooks in src/hooks/
+4. Keep each component under 80 lines - split if larger
+5. Co-locate CSS with components (ComponentName.tsx + ComponentName.css)
+
+=== REFACTORING GUIDANCE ===
+If you notice the existing code is poorly structured:
+- Suggest creating new component files instead of bloating existing ones
+- Extract reusable pieces into ui/ components
+- Move stateful logic into custom hooks
+- Split large components into smaller, focused ones
+
+=== OUTPUT FORMAT ===
+For each file that needs changes, output a JSON object with:
+- "path": the file path
+- "operation": one of "modify", "create", or "delete"
+- For "create": include "content" with full file content
+- For "delete": just path and operation
+- For "modify": include "edits" array with search/replace pairs
+
+=== RULES FOR EDITS ===
+1. For "modify" operations, use precise search/replace pairs
+2. The "search" must be an EXACT match of existing code (including whitespace and newlines)
+3. The "replace" is what replaces the search string
+4. Include enough context in search to ensure uniqueness (usually 3-5 lines)
+5. Multiple edits to same file: list them in order they appear in file
+6. Do NOT include line numbers in search - just the exact text
+7. For SMALL changes (bug fixes, style tweaks, minor additions <30 lines): modify existing files
+8. For LARGE features (>50 lines of new code): create new component files instead of bloating existing ones
+
+${SEARCH_REPLACE_GUIDANCE}
+
+${SYNTAX_INTEGRITY_RULES}
+
+You will receive:
+- The user's modification request
+- Relevant code slices from the project (marked as PRIMARY or CONTEXT)
+- PRIMARY files are the ones most likely to need modification
+- CONTEXT files are provided for reference to understand dependencies
+
+${wrapUserInput(userPrompt)}
+
+=== EXAMPLE OUTPUT ===
+{
+  "files": [
+    {
+      "path": "src/components/features/NewFeature.tsx",
+      "operation": "create",
+      "content": "import React from 'react';\\nimport './NewFeature.css';\\n\\nexport function NewFeature() {...}"
+    },
+    {
+      "path": "src/components/features/NewFeature.css",
+      "operation": "create",
+      "content": ".new-feature { ... }"
+    },
+    {
+      "path": "src/App.tsx",
+      "operation": "modify",
+      "edits": [
+        {
+          "search": "import { Header } from './components/layout/Header';",
+          "replace": "import { Header } from './components/layout/Header';\\nimport { NewFeature } from './components/features/NewFeature';"
+        }
+      ]
+    }
+  ]
+}`;
+}
+
+/**
+ * JSON Schema for modification output.
+ * Forces Gemini to return properly structured JSON with edit operations.
+ */
+export const MODIFICATION_OUTPUT_SCHEMA = {
+   type: 'object',
+   description: 'Modification output containing file operations',
+   properties: {
+      files: {
+         type: 'array',
+         description: 'Array of file modifications',
+         items: {
+            type: 'object',
+            properties: {
+               path: {
+                  type: 'string',
+                  description: 'Path to the file',
+               },
+               operation: {
+                  type: 'string',
+                  description: 'Operation type: create, modify, or delete',
+                  enum: ['create', 'modify', 'delete'],
+               },
+               content: {
+                  type: 'string',
+                  description: 'Full content for create operations',
+               },
+               edits: {
+                  type: 'array',
+                  description: 'List of search/replace operations for modify',
+                  items: {
+                     type: 'object',
+                     properties: {
+                        search: {
+                           type: 'string',
+                           description: 'The precise code block to find',
+                        },
+                        replace: {
+                           type: 'string',
+                           description: 'The replacement code',
+                        },
+                        occurrence: {
+                           type: 'number',
+                           description: 'Optional occurrence index (1-indexed)',
+                        },
+                     },
+                     required: ['search', 'replace'],
+                  },
+               },
+            },
+            required: ['path', 'operation'],
+         },
+      },
+   },
+   required: ['files'],
+};
