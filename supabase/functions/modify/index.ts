@@ -8,6 +8,8 @@ import { createServiceClient } from '../_shared/supabase-client.ts';
 import { sanitizeError } from '../_shared/error-utils.ts';
 import { createGeminiClient, getModificationPrompt, MODIFICATION_OUTPUT_SCHEMA } from '../_shared/ai/index.ts';
 import { applySearchReplace } from '../_shared/search-replace.ts';
+import { computeFileDiff, type FileDiff } from '../_shared/diff-utils.ts';
+
 
 type SerializedProjectState = {
   id: string;
@@ -29,8 +31,8 @@ type RuntimeErrorInfo = {
   timestamp: string;
 };
 
-type ModifyBody = { 
-  projectState?: SerializedProjectState; 
+type ModifyBody = {
+  projectState?: SerializedProjectState;
   prompt?: string;
   runtimeError?: RuntimeErrorInfo;
 };
@@ -52,12 +54,6 @@ interface ModificationOutput {
   files: FileOperation[];
 }
 
-interface FileDiff {
-  path: string;
-  operation: 'create' | 'modify' | 'delete';
-  before?: string;
-  after?: string;
-}
 
 /**
  * Heuristic file selector: scores files by keyword matches and selects top candidates.
@@ -148,7 +144,7 @@ function buildPromptWithFiles(
   runtimeError?: RuntimeErrorInfo
 ): string {
   let fileContext = '=== PRIMARY FILES (relevant for modification) ===\n\n';
-  
+
   for (const [path, content] of Object.entries(primaryFiles)) {
     fileContext += `--- ${path} ---\n${content}\n\n`;
   }
@@ -179,6 +175,7 @@ function buildPromptWithFiles(
 
 /**
  * Applies file operations to the project state.
+ * Now computes proper line-level diffs using the diff engine.
  */
 function applyFileOperations(
   files: Record<string, string>,
@@ -196,19 +193,17 @@ function applyFileOperations(
           continue;
         }
         newFiles[op.path] = op.content;
-        diffs.push({
-          path: op.path,
-          operation: 'create',
-          after: op.content,
-        });
+
+        // Compute line-level diff for created file
+        const diff = computeFileDiff(op.path, undefined, op.content);
+        diffs.push(diff);
       } else if (op.operation === 'delete') {
         const before = newFiles[op.path];
         delete newFiles[op.path];
-        diffs.push({
-          path: op.path,
-          operation: 'delete',
-          before,
-        });
+
+        // Compute line-level diff for deleted file
+        const diff = computeFileDiff(op.path, before, undefined);
+        diffs.push(diff);
       } else if (op.operation === 'modify') {
         if (!op.edits || op.edits.length === 0) {
           errors.push(`Modify operation for ${op.path} has no edits`);
@@ -249,12 +244,10 @@ function applyFileOperations(
         }
 
         newFiles[op.path] = modifiedContent;
-        diffs.push({
-          path: op.path,
-          operation: 'modify',
-          before: originalContent,
-          after: modifiedContent,
-        });
+
+        // Compute line-level diff for modified file
+        const diff = computeFileDiff(op.path, originalContent, modifiedContent);
+        diffs.push(diff);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -264,6 +257,7 @@ function applyFileOperations(
 
   return { files: newFiles, diffs, errors };
 }
+
 
 /**
  * Calls Gemini API to generate modification operations.
@@ -291,9 +285,9 @@ async function callGeminiForModifications(
     try {
       parsed = JSON.parse(response.content) as ModificationOutput;
     } catch (e) {
-      return { 
-        success: false, 
-        error: `Failed to parse AI response: ${e instanceof Error ? e.message : 'Invalid JSON'}` 
+      return {
+        success: false,
+        error: `Failed to parse AI response: ${e instanceof Error ? e.message : 'Invalid JSON'}`
       };
     }
 
@@ -324,17 +318,17 @@ Deno.serve(async (req) => {
 
     if (!current?.id) {
       return new Response(
-        JSON.stringify({ success: false, error: 'projectState is required' }), 
+        JSON.stringify({ success: false, error: 'projectState is required' }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
-    
+
     if (!promptText) {
       return new Response(
-        JSON.stringify({ success: false, error: 'prompt is required' }), 
+        JSON.stringify({ success: false, error: 'prompt is required' }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -371,7 +365,7 @@ Deno.serve(async (req) => {
 
         if (fallbackResult.success && fallbackResult.operations) {
           const fallbackApply = applyFileOperations(current.files, fallbackResult.operations);
-          
+
           // Use fallback result if it has fewer errors
           if (fallbackApply.errors.length < applyResult.errors.length) {
             console.log('[modify] Fallback succeeded with fewer errors');
@@ -382,9 +376,9 @@ Deno.serve(async (req) => {
     } else {
       // If AI call failed, return error
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: aiResult.error || 'Failed to generate modifications' 
+        JSON.stringify({
+          success: false,
+          error: aiResult.error || 'Failed to generate modifications'
         }),
         {
           status: 422,
@@ -396,9 +390,9 @@ Deno.serve(async (req) => {
     // Check if we still have errors after fallback
     if (applyResult.errors.length > 0) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: `Failed to apply modifications: ${applyResult.errors.join('; ')}` 
+        JSON.stringify({
+          success: false,
+          error: `Failed to apply modifications: ${applyResult.errors.join('; ')}`
         }),
         {
           status: 422,
@@ -435,9 +429,9 @@ Deno.serve(async (req) => {
       // Update project metadata
       await supabase
         .from('projects')
-        .update({ 
-          name: updatedProjectState.name, 
-          description: updatedProjectState.description 
+        .update({
+          name: updatedProjectState.name,
+          description: updatedProjectState.description
         })
         .eq('id', current.id);
 
@@ -450,7 +444,7 @@ Deno.serve(async (req) => {
         diffs: applyResult.diffs,
         change_summary: null,
       });
-      
+
       if (verErr) {
         console.error('[modify] Database error:', verErr);
         throw verErr;
@@ -480,7 +474,7 @@ Deno.serve(async (req) => {
     const msg = e instanceof Error ? sanitizeError(e.message) : 'Unknown error';
     console.error('[modify] Fatal error:', msg);
     return new Response(
-      JSON.stringify({ success: false, error: msg }), 
+      JSON.stringify({ success: false, error: msg }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
