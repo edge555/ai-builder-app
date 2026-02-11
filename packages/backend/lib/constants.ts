@@ -20,3 +20,8 @@ export const VALID_STYLE_EXTENSIONS = ['.css', '.scss'];
 // Token budget for AI context
 export const TOKEN_BUDGET = 4000;
 export const CHARS_PER_TOKEN = 4;
+
+// Max output tokens per operation type (Gemini)
+export const MAX_OUTPUT_TOKENS_GENERATION = 16384;
+export const MAX_OUTPUT_TOKENS_MODIFICATION = 8192;
+export const MAX_OUTPUT_TOKENS_PLANNING = 1024;

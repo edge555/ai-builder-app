@@ -17,6 +17,43 @@ import {
  * Instructs the AI to output structured JSON with complete file contents.
  * Written to generate code like a SENIOR React developer.
  */
+function shouldIncludeDesignSystem(userPrompt: string): boolean {
+  if (!userPrompt) return false;
+
+  const prompt = userPrompt.toLowerCase();
+
+  const designKeywords = [
+    'beautiful ui',
+    'beautiful design',
+    'premium design',
+    'modern ui',
+    'modern design',
+    'design system',
+    'tailwind',
+    'chakra ui',
+    'material ui',
+    'mantine',
+    'landing page',
+    'marketing site',
+    'marketing page',
+    'dashboard',
+    'admin panel',
+    'animated',
+    'animation',
+    'glassmorphism',
+    'gradient',
+    'theme',
+    'theming',
+    'responsive layout',
+    'pixel-perfect',
+    'pixel perfect',
+    'dribbble',
+    'behance'
+  ];
+
+  return designKeywords.some((keyword) => prompt.includes(keyword));
+}
+
 function buildGenerationPrompt(userPrompt: string): string {
   return `You are a SENIOR React architect generating production-quality, well-structured React applications.
 
@@ -77,7 +114,8 @@ src/App.tsx → Imports and composes components (max 50 lines)
 === DATA PERSISTENCE PATTERN ===
 For localStorage needs, create a reusable hook in hooks/useLocalStorage.ts using standard React patterns.
 
-${DESIGN_SYSTEM_CONSTANTS}
+${shouldIncludeDesignSystem(userPrompt) ? `${DESIGN_SYSTEM_CONSTANTS}
+` : ''}
 
 ${ACCESSIBILITY_GUIDANCE}
 

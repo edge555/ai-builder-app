@@ -12,6 +12,8 @@
 import type { ProjectState } from '@ai-app-builder/shared';
 import type { GeminiClient } from '../../ai/gemini-client';
 import { createGeminiClient } from '../../ai/gemini-client';
+import { config } from '../../config';
+import { MAX_OUTPUT_TOKENS_PLANNING } from '../../constants';
 import { createLogger } from '../../logger';
 import type { ChunkIndex, CodeSlice, FilePlannerResult, PlanningResponse } from './types';
 import { ChunkIndexBuilder } from './chunk-index';
@@ -135,6 +137,7 @@ export class FilePlanner {
         prompt: planningPrompt,
         systemInstruction: PLANNING_SYSTEM_PROMPT,
         temperature: PLANNING_TEMPERATURE,
+        maxOutputTokens: MAX_OUTPUT_TOKENS_PLANNING,
         responseSchema: PLANNING_OUTPUT_SCHEMA,
       });
 
@@ -513,7 +516,7 @@ export function createFilePlanner(geminiClient?: GeminiClient): FilePlanner {
 
   // Try to create a Gemini client from environment
   try {
-    const client = createGeminiClient();
+    const client = createGeminiClient(config.ai.easyModel);
     return new FilePlanner(client);
   } catch (error) {
     logger.warn('Could not create Gemini client, using fallback-only mode', {

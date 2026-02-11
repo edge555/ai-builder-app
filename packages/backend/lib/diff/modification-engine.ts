@@ -29,6 +29,7 @@ import { getModificationPrompt, MODIFICATION_OUTPUT_SCHEMA } from './prompts/mod
 import { formatCode } from '../prettier-config';
 import { createLogger } from '../logger';
 import { config } from '../config';
+import { MAX_OUTPUT_TOKENS_MODIFICATION } from '../constants';
 import {
   FilePlanner,
   createFilePlanner,
@@ -39,6 +40,7 @@ import { computeLineHunks } from '../core/diff-utils';
 import { ModificationOutputSchema } from '../core/schemas';
 import { applySearchReplace } from './multi-tier-matcher';
 import { isSafePath } from '../utils';
+import { buildFixPrompt } from '../core/prompts/build-fix-prompt';
 
 const logger = createLogger('ModificationEngine');
 
@@ -181,7 +183,7 @@ export class ModificationEngine {
           prompt: fullPrompt,
           systemInstruction: systemInstruction,
           temperature: 0.7,
-          maxOutputTokens: 16384,
+          maxOutputTokens: MAX_OUTPUT_TOKENS_MODIFICATION,
           responseSchema: MODIFICATION_OUTPUT_SCHEMA,
         });
 
@@ -395,7 +397,11 @@ export class ModificationEngine {
 
         // Request AI to fix the errors
         // We use the modification endpoint but focus on fixing errors
-        const fixUserRequest = `The previous modification caused build errors. Please fix them:\n\n${errorContext}\n\nOriginal request: ${prompt}`;
+      const fixUserRequest = buildFixPrompt({
+        mode: 'modification',
+        errorContext,
+        originalPrompt: prompt,
+      });
         const fixSystemInstruction = getModificationPrompt(fixUserRequest, includeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
         const fixContextPrompt = this.buildModificationPrompt(fixUserRequest, slices, projectState);
 
@@ -403,7 +409,7 @@ export class ModificationEngine {
           prompt: fixContextPrompt,
           systemInstruction: fixSystemInstruction,
           temperature: 0.5,
-          maxOutputTokens: 16384,
+          maxOutputTokens: MAX_OUTPUT_TOKENS_MODIFICATION,
           responseSchema: MODIFICATION_OUTPUT_SCHEMA,
         });
 
@@ -539,14 +545,12 @@ export class ModificationEngine {
   private buildModificationPrompt(
     userPrompt: string,
     slices: CodeSlice[],
-    projectState: ProjectState
+    _projectState: ProjectState
   ): string {
     const primarySlices = slices.filter(s => s.relevance === 'primary');
     const contextSlices = slices.filter(s => s.relevance === 'context');
 
-    let prompt = `Project: ${projectState.name}\n`;
-    prompt += `Description: ${projectState.description}\n\n`;
-    prompt += `User Request: ${userPrompt}\n\n`;
+    let prompt = `User Request: ${userPrompt}\n\n`;
 
     if (primarySlices.length > 0) {
       prompt += `=== PRIMARY FILES (likely need modification) ===\n\n`;
@@ -562,17 +566,6 @@ export class ModificationEngine {
         prompt += `--- ${slice.filePath} ---\n`;
         prompt += `${slice.content}\n\n`;
       }
-    }
-
-    // List all files in the project for context
-    const allFiles = Object.keys(projectState.files);
-    const includedFiles = new Set(slices.map(s => s.filePath));
-    const otherFiles = allFiles.filter(f => !includedFiles.has(f));
-
-    if (otherFiles.length > 0) {
-      prompt += `=== OTHER PROJECT FILES (not included) ===\n`;
-      prompt += otherFiles.join('\n');
-      prompt += '\n\n';
     }
 
     prompt += `Based on the user request, output ONLY the JSON with modified/new files.`;

@@ -10,9 +10,10 @@ import { GeminiClient, createGeminiClient } from '../ai';
 import { ValidationPipeline } from './validation-pipeline';
 import { BuildValidator, createBuildValidator, type BuildError } from './build-validator';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
+import { buildFixPrompt } from './prompts/build-fix-prompt';
 import { formatCode } from '../prettier-config';
 import { createLogger } from '../logger';
-import { config } from '../config';
+import { MAX_OUTPUT_TOKENS_GENERATION, MAX_OUTPUT_TOKENS_MODIFICATION } from '../constants';
 import { processFiles } from './file-processor';
 import { ProjectOutputSchema } from './schemas';
 import { isSafePath } from '../utils';
@@ -75,7 +76,7 @@ export class ProjectGenerator {
     logger.info('Sending request to Gemini', {
       systemInstructionLength: systemInstruction.length,
       temperature: 0.7,
-      maxOutputTokens: 16384,
+      maxOutputTokens: MAX_OUTPUT_TOKENS_GENERATION,
     });
     logger.debug('Gemini request details', {
       systemInstruction: systemInstruction,
@@ -87,7 +88,7 @@ export class ProjectGenerator {
       prompt: 'Generate the project based on the user request in the system instruction.',
       systemInstruction: systemInstruction,
       temperature: 0.7,
-      maxOutputTokens: config.ai.maxOutputTokens,
+      maxOutputTokens: MAX_OUTPUT_TOKENS_GENERATION,
       responseSchema: PROJECT_OUTPUT_SCHEMA,
     });
 
@@ -186,7 +187,11 @@ export class ProjectGenerator {
       // Format errors for AI
       const errorContext = this.buildValidator.formatErrorsForAI(buildResult.errors);
 
-      const fixPromptContent = `Fix the following build errors in the project:\n\n${errorContext}\n\nOriginal description: ${description}\n\nReturn the COMPLETE fixed project with all files.`;
+      const fixPromptContent = buildFixPrompt({
+        mode: 'generation',
+        errorContext,
+        originalPrompt: description,
+      });
       const fixSystemInstruction = getGenerationPrompt(fixPromptContent) + '\n\nIMPORTANT: You must fix ALL the build errors listed above. Make sure to either add missing dependencies to package.json OR use native alternatives.';
 
       // Log what we're sending to Gemini for fix
@@ -204,7 +209,7 @@ export class ProjectGenerator {
         prompt: 'Generate the fixed project based on the error context in the system instruction.',
         systemInstruction: fixSystemInstruction,
         temperature: 0.5,
-        maxOutputTokens: 16384,
+        maxOutputTokens: MAX_OUTPUT_TOKENS_MODIFICATION,
         responseSchema: PROJECT_OUTPUT_SCHEMA,
       });
 
