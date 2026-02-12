@@ -25,7 +25,7 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const corsHeaders = getCorsHeaders();
-  
+
   try {
     // Parse request body
     let body: ExportProjectRequest;
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Deserialize project state
-    const projectState = deserializeProjectState(parsedRequest.data.projectState);
+    const projectState = deserializeProjectState(parsedRequest.data.projectState as any);
 
     // Generate ZIP file
     const zipBuffer = await exportAsZipBuffer(projectState);
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     logger.error('Error in export endpoint', {
       error: error instanceof Error ? error.message : String(error),
     });
-    
+
     return NextResponse.json(
       createErrorResponse({
         type: 'unknown',

@@ -7,7 +7,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useSandpack } from '@codesandbox/sandpack-react';
 import { useErrorMonitor } from '@/hooks/useErrorMonitor';
-import { shouldIgnoreError } from '@/shared/types/runtime-error';
+import { shouldIgnoreError } from '@ai-app-builder/shared';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 
 export interface SandpackErrorListenerProps {
@@ -23,22 +23,22 @@ export interface SandpackErrorListenerProps {
  * Component that listens for Sandpack errors and reports them.
  * Must be rendered inside SandpackProvider.
  */
-export function SandpackErrorListener({ 
-  onErrorsReady, 
+export function SandpackErrorListener({
+  onErrorsReady,
   enabled = true,
-  onBundlerIdle 
+  onBundlerIdle
 }: SandpackErrorListenerProps) {
   const { sandpack, listen } = useSandpack();
   const lastBundlerStatus = useRef<string>('');
   const hasReportedError = useRef(false);
-  
-  const { 
-    captureBundlerError, 
-    captureConsoleError, 
-    clearErrors 
-  } = useErrorMonitor({ 
-    onErrorsReady, 
-    enabled 
+
+  const {
+    captureBundlerError,
+    captureConsoleError,
+    clearErrors
+  } = useErrorMonitor({
+    onErrorsReady,
+    enabled
   });
 
   // Handle bundler status changes
@@ -61,10 +61,10 @@ export function SandpackErrorListener({
   // Handle console messages
   const handleConsoleMessage = useCallback((type: string, message: string, stack?: string) => {
     if (!enabled) return;
-    
+
     // Only capture errors
     if (type !== 'error') return;
-    
+
     // Skip ignored patterns
     if (shouldIgnoreError(message)) return;
 
@@ -104,7 +104,7 @@ export function SandpackErrorListener({
                   }
                 })
                 .join(' ');
-              
+
               handleConsoleMessage('error', message);
             }
           }
@@ -120,7 +120,7 @@ export function SandpackErrorListener({
   // Also check current bundler status
   useEffect(() => {
     if (!enabled) return;
-    
+
     // Check if there's an active error in the current state
     const error = sandpack.error;
     if (error?.message) {

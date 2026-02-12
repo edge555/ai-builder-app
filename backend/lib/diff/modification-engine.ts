@@ -329,7 +329,7 @@ export class ModificationEngine {
               break;
 
             default:
-              logger.warn('Unknown operation type', { path: fileEdit.path });
+              logger.warn('Unknown operation type', { path: (fileEdit as any).path });
           }
 
           if (editFailed) break; // Exit the for loop to trigger retry

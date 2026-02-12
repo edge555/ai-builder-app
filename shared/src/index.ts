@@ -1,3 +1,4 @@
 // Re-export all types
-export * from './types/index.ts';
-export * from './utils/diff.ts';
+export * from './types';
+export * from './utils/error-utils';
+export * from './utils/diff';

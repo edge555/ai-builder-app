@@ -1,12 +1,16 @@
 import type { RuntimeError } from '@/shared';
-import { errorAggregator } from '@/services/ErrorAggregator';
+import type { ErrorAggregator } from '@/services/ErrorAggregator';
 
 /**
  * Builds a repair prompt for a runtime error or aggregated errors.
  */
-export function buildRepairPrompt(runtimeError: RuntimeError, projectFiles?: Record<string, string>): string {
+export function buildRepairPrompt(
+    runtimeError: RuntimeError,
+    projectFiles?: Record<string, string>,
+    errorAggregator?: ErrorAggregator
+): string {
     // Check if we have aggregated errors
-    const aggregatedReport = errorAggregator.buildErrorReport(projectFiles);
+    const aggregatedReport = errorAggregator?.buildErrorReport(projectFiles);
 
     if (aggregatedReport) {
         return aggregatedReport;

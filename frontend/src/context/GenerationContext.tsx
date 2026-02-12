@@ -6,6 +6,7 @@ import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/cl
 import { parseSSEStream } from '@/utils/sse-parser';
 import { buildRepairPrompt } from '@/utils/repair-prompt';
 import { GenerationContext, type GenerationContextValue, type StreamingState } from './GenerationContext.context';
+import { useErrorAggregator } from './ErrorAggregatorContext';
 
 const MAX_AUTO_REPAIR_ATTEMPTS = 3;
 const STREAMING_TIMEOUT_MS = 120000; // 120 seconds
@@ -15,6 +16,7 @@ const STREAMING_TIMEOUT_MS = 120000; // 120 seconds
  * Manages loading states, streaming, and auto-repair.
  */
 export function GenerationProvider({ children }: { children: React.ReactNode }) {
+  const errorAggregator = useErrorAggregator();
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -271,7 +273,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
 
     // Get file context for better repair prompts
     const fileContext = projectState.files;
-    const repairPrompt = buildRepairPrompt(runtimeError, fileContext);
+    const repairPrompt = buildRepairPrompt(runtimeError, fileContext, errorAggregator);
 
     try {
       const result = await modifyProject(projectState, repairPrompt, runtimeError);
@@ -291,7 +293,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
       setLoadingPhase('idle');
       return false;
     }
-  }, [isAutoRepairing, modifyProject]);
+  }, [isAutoRepairing, modifyProject, errorAggregator]);
 
   const value = useMemo<GenerationContextValue>(() => ({
     isLoading,
@@ -331,9 +333,3 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     </GenerationContext.Provider>
   );
 }
-
-
-
-
-
-

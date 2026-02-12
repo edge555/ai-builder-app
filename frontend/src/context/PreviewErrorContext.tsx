@@ -1,10 +1,9 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import type { RuntimeError } from '@/shared';
 import type { RepairPhase } from '@/components/RepairStatus';
-import type { AggregatedErrors } from '@/services/ErrorAggregator';
-import { errorAggregator } from '@/services/ErrorAggregator';
-
 import { PreviewErrorContext, type PreviewErrorContextValue } from './PreviewErrorContext.context';
+import { useErrorAggregator } from './ErrorAggregatorContext';
+import type { AggregatedErrors } from '@/services/ErrorAggregator';
 
 const MAX_REPAIR_ATTEMPTS = 3;
 const AUTO_REPAIR_DEBOUNCE_MS = 800;
@@ -15,13 +14,14 @@ const MAX_ERROR_QUEUE_SIZE = 50;
  * Tracks runtime errors and manages auto-repair flow.
  */
 export function PreviewErrorProvider({ children }: { children: React.ReactNode }) {
+  const errorAggregator = useErrorAggregator();
   const [currentError, setCurrentError] = useState<RuntimeError | null>(null);
   const [errorQueue, setErrorQueue] = useState<RuntimeError[]>([]);
   const [aggregatedErrors, setAggregatedErrors] = useState<AggregatedErrors | null>(null);
   const [repairPhase, setRepairPhase] = useState<RepairPhase>('idle');
   const [isAutoRepairing, setIsAutoRepairing] = useState(false);
   const [repairAttempts, setRepairAttempts] = useState(0);
-  
+
   const lastErrorRef = useRef<string | null>(null);
   const autoRepairTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -44,7 +44,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
       return;
     }
     lastErrorRef.current = errorKey;
-    
+
     setCurrentError(error);
     setErrorQueue(prev => {
       const newQueue = [...prev, error];
@@ -54,15 +54,15 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
       }
       return newQueue;
     });
-    
+
     // Add to aggregator for deduplication and prioritization
     errorAggregator.addError(error);
-    
+
     // Set detecting phase
     if (repairPhase === 'idle') {
       setRepairPhase('detecting');
     }
-    
+
     console.error('[PreviewError] Runtime error captured:', {
       type: error.type,
       priority: error.priority,
@@ -76,18 +76,18 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
    */
   const reportAggregatedErrors = useCallback((errors: AggregatedErrors) => {
     setAggregatedErrors(errors);
-    
+
     if (errors.totalCount > 0) {
       setRepairPhase('detecting');
-      
+
       // Schedule auto-repair transition
       if (autoRepairTimeoutRef.current) {
         clearTimeout(autoRepairTimeoutRef.current);
       }
-      
+
       // Use shorter delay for critical errors
       const delay = errors.hasCriticalErrors ? 0 : AUTO_REPAIR_DEBOUNCE_MS;
-      
+
       autoRepairTimeoutRef.current = setTimeout(() => {
         if (repairAttempts < MAX_REPAIR_ATTEMPTS && !isAutoRepairing) {
           setRepairPhase('repairing');
@@ -113,7 +113,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     setAggregatedErrors(null);
     lastErrorRef.current = null;
     errorAggregator.clear();
-    
+
     if (autoRepairTimeoutRef.current) {
       clearTimeout(autoRepairTimeoutRef.current);
       autoRepairTimeoutRef.current = null;
@@ -134,7 +134,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
    */
   const completeAutoRepair = useCallback((success: boolean) => {
     setIsAutoRepairing(false);
-    
+
     if (success) {
       setCurrentError(null);
       setErrorQueue([]);
@@ -142,7 +142,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
       lastErrorRef.current = null;
       errorAggregator.clear();
       setRepairPhase('success');
-      
+
       // Auto-dismiss after success
       setTimeout(() => {
         setRepairPhase('idle');
@@ -165,7 +165,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     setRepairAttempts(0);
     lastErrorRef.current = null;
     setRepairPhase('idle');
-    
+
     if (autoRepairTimeoutRef.current) {
       clearTimeout(autoRepairTimeoutRef.current);
       autoRepairTimeoutRef.current = null;

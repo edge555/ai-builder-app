@@ -35,7 +35,7 @@ export async function POST(
   request: NextRequest
 ): Promise<NextResponse<ModifyProjectResponse | ErrorResponse>> {
   const corsHeaders = getCorsHeaders();
-  
+
   try {
     // Parse request body
     let body: ModifyProjectRequest;
@@ -67,7 +67,7 @@ export async function POST(
     const validatedRequest = parsedRequest.data;
 
     // Deserialize project state
-    const projectState = deserializeProjectState(validatedRequest.projectState);
+    const projectState = deserializeProjectState(validatedRequest.projectState as any);
 
     // Extract skipPlanning option from request
     const { skipPlanning } = validatedRequest;

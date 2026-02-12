@@ -1,4 +1,4 @@
-import type { FileDiff, DiffHunk, DiffChange, ChangeSummary, ProjectState } from '../types/index.ts';
+import type { FileDiff, DiffHunk, DiffChange, ChangeSummary, ProjectState } from '../types';
 
 /**
  * Constants for diff computation

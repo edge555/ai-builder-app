@@ -5,7 +5,8 @@ import {
   GenerationProvider,
   AutoRepairProvider,
   VersionProvider,
-  PreviewErrorProvider
+  PreviewErrorProvider,
+  ErrorAggregatorProvider
 } from './context';
 import { ErrorBoundary, AppLayout } from './components';
 import { WelcomePage } from './pages';
@@ -40,17 +41,19 @@ function App() {
       onError={handleGlobalError}
       errorMessage="The application encountered an unexpected error. Please refresh the page to continue."
     >
-      <ProjectProvider>
-        <ChatMessagesProvider>
-          <GenerationProvider>
-            <PreviewErrorProvider>
-              <AutoRepairProvider>
-                <AppLayout initialPrompt={initialPrompt} />
-              </AutoRepairProvider>
-            </PreviewErrorProvider>
-          </GenerationProvider>
-        </ChatMessagesProvider>
-      </ProjectProvider>
+      <ErrorAggregatorProvider>
+        <ProjectProvider>
+          <ChatMessagesProvider>
+            <GenerationProvider>
+              <PreviewErrorProvider>
+                <AutoRepairProvider>
+                  <AppLayout initialPrompt={initialPrompt} />
+                </AutoRepairProvider>
+              </PreviewErrorProvider>
+            </GenerationProvider>
+          </ChatMessagesProvider>
+        </ProjectProvider>
+      </ErrorAggregatorProvider>
     </ErrorBoundary>
   );
 }

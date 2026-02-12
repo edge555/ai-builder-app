@@ -21,3 +21,5 @@ export * from './VersionContext.context';
 export { PreviewErrorProvider } from './PreviewErrorContext';
 export { usePreviewError } from './PreviewErrorContext.context';
 export * from './PreviewErrorContext.context';
+
+export { ErrorAggregatorProvider, useErrorAggregator } from './ErrorAggregatorContext';
