@@ -15,86 +15,59 @@ import {
 import { logger } from '../logger';
 
 /**
- * Computes diffs between two project states.
- * Requirements: 5.1, 5.3
- * 
- * @param oldState - The previous project state (or null for initial version)
- * @param newState - The new project state
- * @returns Array of file diffs
- */
-export function computeDiffs(
-  oldState: ProjectState | null,
-  newState: ProjectState
-): FileDiff[] {
-  logger.debug('Computing diffs between project states', {
-    oldStateExists: oldState !== null,
-    oldFileCount: oldState ? Object.keys(oldState.files).length : 0,
-    newFileCount: Object.keys(newState.files).length,
-  });
-
-  const sortedDiffs = sharedComputeDiffs(oldState, newState);
-
-  logger.debug('Computed diffs', {
-    totalDiffs: sortedDiffs.length,
-    added: sortedDiffs.filter(d => d.status === 'added').length,
-    modified: sortedDiffs.filter(d => d.status === 'modified').length,
-    deleted: sortedDiffs.filter(d => d.status === 'deleted').length,
-  });
-
-  return sortedDiffs;
-}
-
-/**
- * Computes diffs between two file maps (for version comparison).
- * 
- * @param oldFiles - The old file map
- * @param newFiles - The new file map
- * @returns Array of file diffs
- */
-export function computeDiffsFromFiles(
-  oldFiles: Record<string, string>,
-  newFiles: Record<string, string>
-): FileDiff[] {
-  return sharedComputeDiffsFromFiles(oldFiles, newFiles);
-}
-
-/**
- * Generates a human-readable change summary from diffs.
- * Requirements: 5.3
- * 
- * @param diffs - Array of file diffs
- * @returns Change summary object
- */
-export function generateChangeSummary(diffs: FileDiff[]): ChangeSummary {
-  return sharedGenerateChangeSummary(diffs);
-}
-
-/**
  * DiffEngine class for computing diffs between project states.
  */
 export class DiffEngine {
   /**
    * Computes diffs between two project states.
+   * Requirements: 5.1, 5.3
+   * 
+   * @param oldState - The previous project state (or null for initial version)
+   * @param newState - The new project state
+   * @returns Array of file diffs
    */
   computeDiffs(oldState: ProjectState | null, newState: ProjectState): FileDiff[] {
-    return computeDiffs(oldState, newState);
+    logger.debug('Computing diffs between project states', {
+      oldStateExists: oldState !== null,
+      oldFileCount: oldState ? Object.keys(oldState.files).length : 0,
+      newFileCount: Object.keys(newState.files).length,
+    });
+
+    const sortedDiffs = sharedComputeDiffs(oldState, newState);
+
+    logger.debug('Computed diffs', {
+      totalDiffs: sortedDiffs.length,
+      added: sortedDiffs.filter(d => d.status === 'added').length,
+      modified: sortedDiffs.filter(d => d.status === 'modified').length,
+      deleted: sortedDiffs.filter(d => d.status === 'deleted').length,
+    });
+
+    return sortedDiffs;
   }
 
   /**
-   * Computes diffs between two file maps.
+   * Computes diffs between two file maps (for version comparison).
+   * 
+   * @param oldFiles - The old file map
+   * @param newFiles - The new file map
+   * @returns Array of file diffs
    */
   computeDiffsFromFiles(
     oldFiles: Record<string, string>,
     newFiles: Record<string, string>
   ): FileDiff[] {
-    return computeDiffsFromFiles(oldFiles, newFiles);
+    return sharedComputeDiffsFromFiles(oldFiles, newFiles);
   }
 
   /**
-   * Generates a change summary from diffs.
+   * Generates a human-readable change summary from diffs.
+   * Requirements: 5.3
+   * 
+   * @param diffs - Array of file diffs
+   * @returns Change summary object
    */
   generateChangeSummary(diffs: FileDiff[]): ChangeSummary {
-    return generateChangeSummary(diffs);
+    return sharedGenerateChangeSummary(diffs);
   }
 }
 

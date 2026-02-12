@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { ComputeDiffRequest, ComputeDiffResponse, ErrorResponse } from '@ai-app-builder/shared';
 import { getVersionManager } from '../../../lib/core';
-import { computeDiffsFromFiles } from '../../../lib/diff';
+import { getDiffEngine } from '../../../lib/diff';
 import { getCorsHeaders, handleOptions, createErrorResponse } from '../../../lib/api';
 import { createLogger } from '../../../lib/logger';
 
@@ -24,7 +24,7 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest): Promise<NextResponse<ComputeDiffResponse | ErrorResponse>> {
   const corsHeaders = getCorsHeaders();
-  
+
   try {
     // Parse request body
     let body: ComputeDiffRequest;
@@ -80,11 +80,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<ComputeDi
     // Search through all projects to find the versions
     // This is a limitation of the current in-memory storage design
     // In a real implementation, we'd have a more efficient lookup
-    
+
     // For now, we need to get the projectId from the request or search
     // Let's check if projectId is provided in the request
     const projectIdParam = (body as ComputeDiffRequest & { projectId?: string }).projectId;
-    
+
     if (projectIdParam) {
       fromVersion = versionManager.getVersion(projectIdParam, fromVersionId);
       toVersion = versionManager.getVersion(projectIdParam, toVersionId);
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ComputeDi
     }
 
     // Compute diffs between the two versions
-    const diffs = computeDiffsFromFiles(fromVersion.files, toVersion.files);
+    const diffs = getDiffEngine().computeDiffsFromFiles(fromVersion.files, toVersion.files);
 
     // Return successful response
     const response: ComputeDiffResponse = {
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ComputeDi
     logger.error('Error in diff endpoint', {
       error: error instanceof Error ? error.message : String(error),
     });
-    
+
     return NextResponse.json(
       createErrorResponse({
         type: 'unknown',

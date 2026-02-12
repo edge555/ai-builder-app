@@ -1,49 +1,14 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import type { LoadingPhase } from '../components/ChatInterface';
 import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState } from '@/shared';
 import { config as appConfig } from '../config';
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 import { parseSSEStream } from '@/utils/sse-parser';
 import { buildRepairPrompt } from '@/utils/repair-prompt';
+import { GenerationContext, type GenerationContextValue, type StreamingState } from './GenerationContext.context';
 
 const MAX_AUTO_REPAIR_ATTEMPTS = 3;
 const STREAMING_TIMEOUT_MS = 120000; // 120 seconds
-
-export type StreamingPhase = 'idle' | 'connecting' | 'generating' | 'processing' | 'complete' | 'error';
-
-export interface StreamingState {
-  phase: StreamingPhase;
-  files: Record<string, string>;
-  currentFile: string | null;
-  filesReceived: number;
-  totalFiles: number;
-  textLength: number;
-  error: string | null;
-  lastHeartbeat: number | null;
-}
-
-/**
- * Generation context value.
- */
-export interface GenerationContextValue {
-  isLoading: boolean;
-  loadingPhase: LoadingPhase;
-  error: string | null;
-  isAutoRepairing: boolean;
-  autoRepairAttempt: number;
-  streamingState: StreamingState | null;
-  isStreaming: boolean;
-  generateProject: (description: string) => Promise<GenerateProjectResponse>;
-  generateProjectStreaming: (description: string) => Promise<GenerateProjectResponse>;
-  modifyProject: (currentState: SerializedProjectState, prompt: string, runtimeError?: RuntimeError) => Promise<ModifyProjectResponse>;
-  autoRepair: (runtimeError: RuntimeError, projectState: SerializedProjectState | null) => Promise<boolean>;
-  resetAutoRepair: () => void;
-  setIsLoading: (loading: boolean) => void;
-  setLoadingPhase: (phase: LoadingPhase) => void;
-  clearError: () => void;
-}
-
-const GenerationContext = createContext<GenerationContextValue | null>(null);
 
 /**
  * Provider for generation and modification operations.
@@ -367,17 +332,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
   );
 }
 
-/**
- * Hook to access the generation context.
- * Must be used within a GenerationProvider.
- */
-export function useGeneration(): GenerationContextValue {
-  const context = useContext(GenerationContext);
-  if (!context) {
-    throw new Error('useGeneration must be used within a GenerationProvider');
-  }
-  return context;
-}
+
 
 
 

@@ -1,23 +1,9 @@
-import React, { createContext, useContext, useCallback, useMemo, useEffect } from 'react';
-import type { RuntimeError } from '@/shared';
+import React, { useCallback, useMemo, useEffect } from 'react';
 import { usePreviewError } from './PreviewErrorContext.context';
-import { useGeneration } from './GenerationContext';
-import { useProject } from './ProjectContext';
-import { useChatMessages } from './ChatMessagesContext';
-
-/**
- * Auto-repair context value.
- * Coordinates between PreviewErrorContext and GenerationContext for unified auto-repair.
- */
-export interface AutoRepairContextValue {
-  /**
-   * Trigger auto-repair for the current errors.
-   * Returns true if repair was initiated successfully.
-   */
-  triggerAutoRepair: () => Promise<boolean>;
-}
-
-const AutoRepairContext = createContext<AutoRepairContextValue | null>(null);
+import { useGeneration } from './GenerationContext.context';
+import { useProject } from './ProjectContext.context';
+import { useChatMessages } from './ChatMessagesContext.context';
+import { AutoRepairContext, type AutoRepairContextValue } from './AutoRepairContext.context';
 
 /**
  * Provider for unified auto-repair coordination.
@@ -41,9 +27,9 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
     ) {
       // Start the repair
       previewError.startAutoRepair();
-      
+
       // Get the error to repair (prefer aggregated, fallback to current)
-      const errorToRepair = previewError.aggregatedErrors?.totalCount 
+      const errorToRepair = previewError.aggregatedErrors?.totalCount
         ? previewError.currentError // Use current as representative
         : previewError.currentError;
 
@@ -53,7 +39,7 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
             // Repair succeeded
             previewError.completeAutoRepair(true);
             generation.resetAutoRepair();
-            
+
             // Add assistant message
             chatMessages.addAssistantMessage(
               `🔧 Auto-repair applied: Fixed ${errorToRepair.type.toLowerCase().replace('_', ' ')} in ${errorToRepair.filePath || 'the application'}.`
@@ -88,7 +74,7 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
 
     previewError.startAutoRepair();
     const success = await generation.autoRepair(errorToRepair, project.projectState);
-    
+
     if (success) {
       previewError.completeAutoRepair(true);
       generation.resetAutoRepair();
@@ -118,14 +104,4 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
   );
 }
 
-/**
- * Hook to access the auto-repair context.
- * Must be used within an AutoRepairProvider.
- */
-export function useAutoRepair(): AutoRepairContextValue {
-  const context = useContext(AutoRepairContext);
-  if (!context) {
-    throw new Error('useAutoRepair must be used within an AutoRepairProvider');
-  }
-  return context;
-}
+

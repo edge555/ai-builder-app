@@ -5,9 +5,6 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  computeDiffs,
-  computeDiffsFromFiles,
-  generateChangeSummary,
   createDiffEngine,
   DiffEngine,
 } from '../../diff';
@@ -39,7 +36,7 @@ describe('DiffEngine', () => {
         },
       };
 
-      const diffs = computeDiffs(oldState, newState);
+      const diffs = diffEngine.computeDiffs(oldState, newState);
 
       expect(diffs).toHaveLength(1);
       expect(diffs[0].filePath).toBe('src/App.tsx');
@@ -66,7 +63,7 @@ describe('DiffEngine', () => {
         files: {},
       };
 
-      const diffs = computeDiffs(oldState, newState);
+      const diffs = diffEngine.computeDiffs(oldState, newState);
 
       expect(diffs).toHaveLength(1);
       expect(diffs[0].filePath).toBe('src/App.tsx');
@@ -95,7 +92,7 @@ describe('DiffEngine', () => {
         },
       };
 
-      const diffs = computeDiffs(oldState, newState);
+      const diffs = diffEngine.computeDiffs(oldState, newState);
 
       expect(diffs).toHaveLength(1);
       expect(diffs[0].filePath).toBe('src/App.tsx');
@@ -116,7 +113,7 @@ describe('DiffEngine', () => {
         currentVersionId: 'v1',
       };
 
-      const diffs = computeDiffs(null, newState);
+      const diffs = diffEngine.computeDiffs(null, newState);
 
       expect(diffs).toHaveLength(2);
       expect(diffs.every(d => d.status === 'added')).toBe(true);
@@ -135,7 +132,7 @@ describe('DiffEngine', () => {
         currentVersionId: 'v1',
       };
 
-      const diffs = computeDiffs(state, state);
+      const diffs = diffEngine.computeDiffs(state, state);
 
       expect(diffs).toHaveLength(0);
     });
@@ -160,7 +157,7 @@ describe('DiffEngine', () => {
         },
       };
 
-      const diffs = computeDiffs(oldState, newState);
+      const diffs = diffEngine.computeDiffs(oldState, newState);
 
       expect(diffs).toHaveLength(3);
       expect(diffs[0].filePath).toBe('package.json');
@@ -180,7 +177,7 @@ describe('DiffEngine', () => {
         'file2.ts': 'content2',
       };
 
-      const diffs = computeDiffsFromFiles(oldFiles, newFiles);
+      const diffs = diffEngine.computeDiffsFromFiles(oldFiles, newFiles);
 
       expect(diffs).toHaveLength(2);
       expect(diffs.find(d => d.filePath === 'file1.ts')?.status).toBe('modified');
@@ -208,7 +205,7 @@ describe('DiffEngine', () => {
         },
       ];
 
-      const summary = generateChangeSummary(diffs);
+      const summary = diffEngine.generateChangeSummary(diffs);
 
       expect(summary.filesAdded).toBe(1);
       expect(summary.filesModified).toBe(0);
@@ -265,7 +262,7 @@ describe('DiffEngine', () => {
         },
       ];
 
-      const summary = generateChangeSummary(diffs);
+      const summary = diffEngine.generateChangeSummary(diffs);
 
       expect(summary.filesAdded).toBe(1);
       expect(summary.filesModified).toBe(1);
@@ -276,7 +273,7 @@ describe('DiffEngine', () => {
     });
 
     it('should handle empty diffs', () => {
-      const summary = generateChangeSummary([]);
+      const summary = diffEngine.generateChangeSummary([]);
 
       expect(summary.filesAdded).toBe(0);
       expect(summary.filesModified).toBe(0);
@@ -338,14 +335,14 @@ describe('DiffEngine', () => {
       const oldContent = 'line1\nline2\nline3';
       const newContent = 'line1\nline2\nnew line\nline3';
 
-      const diffs = computeDiffsFromFiles(
+      const diffs = diffEngine.computeDiffsFromFiles(
         { 'file.ts': oldContent },
         { 'file.ts': newContent }
       );
 
       expect(diffs).toHaveLength(1);
       expect(diffs[0].status).toBe('modified');
-      
+
       // Should have an add change for 'new line'
       const addChanges = diffs[0].hunks.flatMap(h => h.changes).filter(c => c.type === 'add');
       expect(addChanges.some(c => c.content === 'new line')).toBe(true);
@@ -355,14 +352,14 @@ describe('DiffEngine', () => {
       const oldContent = 'line1\nline2\nline3';
       const newContent = 'line1\nline3';
 
-      const diffs = computeDiffsFromFiles(
+      const diffs = diffEngine.computeDiffsFromFiles(
         { 'file.ts': oldContent },
         { 'file.ts': newContent }
       );
 
       expect(diffs).toHaveLength(1);
       expect(diffs[0].status).toBe('modified');
-      
+
       // Should have a delete change for 'line2'
       const deleteChanges = diffs[0].hunks.flatMap(h => h.changes).filter(c => c.type === 'delete');
       expect(deleteChanges.some(c => c.content === 'line2')).toBe(true);
@@ -372,18 +369,18 @@ describe('DiffEngine', () => {
       const oldContent = 'line1\nold line\nline3';
       const newContent = 'line1\nnew line\nline3';
 
-      const diffs = computeDiffsFromFiles(
+      const diffs = diffEngine.computeDiffsFromFiles(
         { 'file.ts': oldContent },
         { 'file.ts': newContent }
       );
 
       expect(diffs).toHaveLength(1);
       expect(diffs[0].status).toBe('modified');
-      
+
       const changes = diffs[0].hunks.flatMap(h => h.changes);
       const deleteChanges = changes.filter(c => c.type === 'delete');
       const addChanges = changes.filter(c => c.type === 'add');
-      
+
       expect(deleteChanges.some(c => c.content === 'old line')).toBe(true);
       expect(addChanges.some(c => c.content === 'new line')).toBe(true);
     });

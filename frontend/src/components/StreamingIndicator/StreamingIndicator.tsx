@@ -1,5 +1,5 @@
 import React from 'react';
-import type { StreamingState } from '@/context/GenerationContext';
+import type { StreamingState } from '@/context';
 import './StreamingIndicator.css';
 
 export interface StreamingIndicatorProps {
@@ -25,7 +25,7 @@ export function StreamingIndicator({ state }: StreamingIndicatorProps) {
         <div className="streaming-indicator-spinner">
           <div className="streaming-indicator-ring" />
         </div>
-        
+
         <div className="streaming-indicator-info">
           <div className="streaming-indicator-phase">
             {phase === 'connecting' && 'Connecting to AI...'}
@@ -34,20 +34,20 @@ export function StreamingIndicator({ state }: StreamingIndicatorProps) {
             {phase === 'complete' && 'Generation complete!'}
             {phase === 'error' && 'Error occurred'}
           </div>
-          
+
           {phase === 'generating' && textLength > 0 && (
             <div className="streaming-indicator-detail">
               {Math.round(textLength / 100) * 100}+ characters generated
             </div>
           )}
-          
+
           {phase === 'processing' && currentFile && (
             <div className="streaming-indicator-detail streaming-indicator-file">
               <span className="streaming-indicator-file-icon">📄</span>
               <span className="streaming-indicator-file-path">{currentFile}</span>
             </div>
           )}
-          
+
           {totalFiles > 0 && (
             <div className="streaming-indicator-progress-text">
               {filesReceived} / {totalFiles} files received
@@ -61,16 +61,16 @@ export function StreamingIndicator({ state }: StreamingIndicatorProps) {
           )}
         </div>
       </div>
-      
+
       {totalFiles > 0 && (
         <div className="streaming-indicator-progress">
-          <div 
+          <div
             className="streaming-indicator-progress-bar"
             style={{ width: `${(filesReceived / totalFiles) * 100}%` }}
           />
         </div>
       )}
-      
+
       {(phase === 'generating' || phase === 'processing') && (
         <div className="streaming-indicator-dots">
           <span className="streaming-dot" />

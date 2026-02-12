@@ -1,18 +1,7 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import type { ChatMessage } from '../components/ChatInterface';
 import type { ChangeSummary, FileDiff } from '@/shared';
-
-/**
- * Chat messages context value.
- */
-export interface ChatMessagesContextValue {
-  messages: ChatMessage[];
-  addUserMessage: (content: string) => ChatMessage;
-  addAssistantMessage: (content: string, changeSummary?: ChangeSummary, diffs?: FileDiff[]) => ChatMessage;
-  clearMessages: () => void;
-}
-
-const ChatMessagesContext = createContext<ChatMessagesContextValue | null>(null);
+import { ChatMessagesContext, type ChatMessagesContextValue } from './ChatMessagesContext.context';
 
 /**
  * Generates a unique ID for messages using crypto.randomUUID().
@@ -79,14 +68,4 @@ export function ChatMessagesProvider({ children }: { children: React.ReactNode }
   );
 }
 
-/**
- * Hook to access the chat messages context.
- * Must be used within a ChatMessagesProvider.
- */
-export function useChatMessages(): ChatMessagesContextValue {
-  const context = useContext(ChatMessagesContext);
-  if (!context) {
-    throw new Error('useChatMessages must be used within a ChatMessagesProvider');
-  }
-  return context;
-}
+

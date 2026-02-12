@@ -1,5 +1,5 @@
 import { forwardRef, useState, useCallback } from 'react';
-import { useChat } from '../../context';
+import { useProject } from '../../context';
 
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 
@@ -9,7 +9,7 @@ import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/cl
  * Requirements: 7.1
  */
 export const ExportButton = forwardRef<HTMLButtonElement, Record<string, never>>(function ExportButton(_props, ref) {
-    const { projectState } = useChat();
+    const { projectState } = useProject();
     const [isExporting, setIsExporting] = useState(false);
     const [exportError, setExportError] = useState<string | null>(null);
 

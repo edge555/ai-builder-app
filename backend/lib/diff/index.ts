@@ -14,9 +14,6 @@
 
 // Export all public symbols from diff-engine
 export {
-  computeDiffs,
-  computeDiffsFromFiles,
-  generateChangeSummary,
   DiffEngine,
   getDiffEngine,
   createDiffEngine,
