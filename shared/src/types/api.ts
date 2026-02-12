@@ -154,25 +154,26 @@ export interface ExportProjectRequest {
 
 // Response is a binary ZIP file download
 
-// ============================================================================
-// Error Response
-// ============================================================================
+/**
+ * Standard error shape for all API responses.
+ */
+export interface ApiError {
+  /** Category of the error */
+  type: 'ai_output' | 'api' | 'validation' | 'state' | 'unknown';
+  /** Error code for programmatic handling */
+  code: string;
+  /** Human-readable error message */
+  message: string;
+  /** Additional error details */
+  details?: Record<string, unknown>;
+  /** Whether the error is recoverable (user can retry) */
+  recoverable: boolean;
+}
 
 /**
  * Standard error response format for all API endpoints.
  */
 export interface ErrorResponse {
   success: false;
-  error: {
-    /** Category of the error */
-    type: 'ai_output' | 'api' | 'validation' | 'state' | 'unknown';
-    /** Error code for programmatic handling */
-    code: string;
-    /** Human-readable error message */
-    message: string;
-    /** Additional error details */
-    details?: Record<string, unknown>;
-    /** Whether the error is recoverable (user can retry) */
-    recoverable: boolean;
-  };
+  error: ApiError;
 }
