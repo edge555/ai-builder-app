@@ -3,10 +3,18 @@
  * Contains shared functionality between ProjectGenerator and StreamingProjectGenerator.
  */
 
-import type { FileDiff } from '@ai-app-builder/shared';
+import type { FileDiff, RepairAttempt } from '@ai-app-builder/shared';
 import { GeminiClient, createGeminiClient } from '../ai';
 import { ValidationPipeline } from './validation-pipeline';
 import { BuildValidator, createBuildValidator } from './build-validator';
+import { buildFixPrompt, type BuildFixMode } from './prompts/build-fix-prompt';
+import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
+import { ProjectOutputSchema } from './schemas';
+import { processFiles } from './file-processor';
+import { MAX_OUTPUT_TOKENS_MODIFICATION } from '../constants';
+import { createLogger } from '../logger';
+
+const logger = createLogger('BaseProjectGenerator');
 
 /**
  * Abstract base class for project generators.
@@ -16,7 +24,7 @@ export abstract class BaseProjectGenerator {
     protected readonly geminiClient: GeminiClient;
     protected readonly validationPipeline: ValidationPipeline;
     protected readonly buildValidator: BuildValidator;
-    protected readonly maxBuildRetries = 2;
+    protected readonly maxBuildRetries = 3;
 
     constructor(geminiClient?: GeminiClient) {
         this.geminiClient = geminiClient ?? createGeminiClient();
@@ -65,4 +73,166 @@ export abstract class BaseProjectGenerator {
             };
         });
     }
+
+    /**
+     * Universal build-fix retry loop with failure history accumulation.
+     * Runs build validation and retries with the AI if errors are found,
+     * accumulating previous failure context to help the AI avoid repeating mistakes.
+     * 
+     * @param files - The files to validate and potentially fix
+     * @param mode - Whether this is for 'generation' or 'modification'
+     * @param originalPrompt - The original user prompt/description
+     * @returns The fixed files, or the original files if all retries fail
+     */
+    protected async runBuildFixLoop(
+        files: Record<string, string>,
+        mode: BuildFixMode,
+        originalPrompt: string
+    ): Promise<Record<string, string>> {
+        let currentFiles = files;
+        let buildResult = this.buildValidator.validate(currentFiles);
+        let buildRetryCount = 0;
+        const failureHistory: RepairAttempt[] = [];
+
+        while (!buildResult.valid && buildRetryCount < this.maxBuildRetries) {
+            buildRetryCount++;
+            logger.info('Build validation retry', {
+                attempt: buildRetryCount,
+                maxRetries: this.maxBuildRetries,
+                errors: buildResult.errors.map(e => e.message),
+            });
+
+            // Format errors for AI
+            const errorContext = this.buildValidator.formatErrorsForAI(buildResult.errors);
+
+            // Build fix prompt with failure history
+            const fixPromptContent = buildFixPrompt({
+                mode,
+                errorContext,
+                originalPrompt,
+                failureHistory: failureHistory.length > 0 ? failureHistory : undefined,
+            });
+
+            const fixSystemInstruction = getGenerationPrompt(fixPromptContent) +
+                '\n\nIMPORTANT: You must fix ALL the build errors listed above. Make sure to either add missing dependencies to package.json OR use native alternatives.';
+
+            // Log what we're sending to Gemini for fix
+            logger.info('Sending build fix request to Gemini', {
+                attempt: buildRetryCount,
+                systemInstructionLength: fixSystemInstruction.length,
+                errorCount: buildResult.errors.length,
+                hasFailureHistory: failureHistory.length > 0,
+            });
+            logger.debug('Gemini fix request details', {
+                systemInstruction: fixSystemInstruction,
+            });
+
+            // Request AI to fix the errors
+            const fixResponse = await this.geminiClient.generate({
+                prompt: 'Generate the fixed project based on the error context in the system instruction.',
+                systemInstruction: fixSystemInstruction,
+                temperature: 0.5,
+                maxOutputTokens: MAX_OUTPUT_TOKENS_MODIFICATION,
+                responseSchema: PROJECT_OUTPUT_SCHEMA,
+            });
+
+            // Log what we received from Gemini
+            logger.info('Received fix response from Gemini', {
+                success: fixResponse.success,
+                contentLength: fixResponse.content?.length ?? 0,
+                hasError: !!fixResponse.error,
+            });
+            logger.debug('Gemini fix response content', {
+                content: fixResponse.content,
+                error: fixResponse.error,
+            });
+
+            if (!fixResponse.success || !fixResponse.content) {
+                logger.error('Failed to get fix response from AI');
+                // Record this failure
+                failureHistory.push({
+                    attempt: buildRetryCount,
+                    error: fixResponse.error || 'AI failed to generate fix',
+                    timestamp: new Date().toISOString(),
+                });
+                break;
+            }
+
+            // Parse and process the fixed output
+            try {
+                // With responseSchema, Gemini returns guaranteed valid JSON
+                const parsedData = JSON.parse(fixResponse.content);
+                const zodResult = ProjectOutputSchema.safeParse(parsedData);
+
+                if (!zodResult.success) {
+                    logger.error('Zod validation failed on fix response', {
+                        errors: zodResult.error.issues,
+                    });
+                    // Record this failure
+                    failureHistory.push({
+                        attempt: buildRetryCount,
+                        error: `Schema validation failed: ${zodResult.error.message}`,
+                        strategy: 'Attempted to fix build errors but returned invalid schema',
+                        timestamp: new Date().toISOString(),
+                    });
+                    break;
+                }
+
+                const fixedOutput = zodResult.data;
+                // Process fixed files
+                const fixedFiles = await processFiles(fixedOutput.files || [], { addFrontendPrefix: false });
+
+                // Re-validate syntax
+                const revalidation = this.validationPipeline.validate(fixedFiles);
+                if (!revalidation.valid) {
+                    logger.error('Fixed code failed syntax validation');
+                    // Record this failure
+                    failureHistory.push({
+                        attempt: buildRetryCount,
+                        error: `Syntax validation failed: ${revalidation.errors.map(e => e.message).join(', ')}`,
+                        strategy: 'Attempted to fix build errors but introduced syntax errors',
+                        timestamp: new Date().toISOString(),
+                    });
+                    break;
+                }
+
+                // Re-run build validation
+                currentFiles = revalidation.sanitizedOutput!;
+                const previousErrors = buildResult.errors.map(e => e.message).join('; ');
+                buildResult = this.buildValidator.validate(currentFiles);
+
+                if (buildResult.valid) {
+                    logger.info('Build errors fixed successfully');
+                } else {
+                    // Record this failure for next iteration
+                    failureHistory.push({
+                        attempt: buildRetryCount,
+                        error: buildResult.errors.map(e => e.message).join('; '),
+                        strategy: `Tried to fix: ${previousErrors}`,
+                        timestamp: new Date().toISOString(),
+                    });
+                }
+            } catch (e) {
+                logger.error('Failed to parse fix response', { error: e instanceof Error ? e.message : 'Unknown error' });
+                // Record this failure
+                failureHistory.push({
+                    attempt: buildRetryCount,
+                    error: e instanceof Error ? e.message : 'Unknown parsing error',
+                    timestamp: new Date().toISOString(),
+                });
+                break;
+            }
+        }
+
+        // Log if there are still build errors after retries
+        if (!buildResult.valid) {
+            logger.warn('Build warnings after retries', {
+                errors: buildResult.errors.map(e => ({ message: e.message, file: e.file })),
+                totalAttempts: buildRetryCount,
+            });
+        }
+
+        return currentFiles;
+    }
 }
+

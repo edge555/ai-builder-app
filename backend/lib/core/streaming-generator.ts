@@ -176,76 +176,16 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       };
     }
 
-    // Build validation with auto-retry
-    let finalFiles = validationResult.sanitizedOutput!;
-    let buildResult = this.buildValidator.validate(finalFiles);
-    let buildRetryCount = 0;
 
-    while (!buildResult.valid && buildRetryCount < this.maxBuildRetries) {
-      buildRetryCount++;
-      logger.info('Build validation retry', {
-        attempt: buildRetryCount,
-        maxRetries: this.maxBuildRetries,
-      });
-
-      const errorContext = this.buildValidator.formatErrorsForAI(buildResult.errors);
-      const fixPromptContent = buildFixPrompt({
-        mode: 'generation',
-        errorContext,
-        originalPrompt: description,
-      });
-      const fixSystemInstruction = getGenerationPrompt(fixPromptContent) + '\n\nIMPORTANT: You must fix ALL the build errors listed above.';
-
-      const fixResponse = await this.geminiClient.generate({
-        prompt: 'Generate the fixed project based on the error context in the system instruction.',
-        systemInstruction: fixSystemInstruction,
-        temperature: 0.5,
-        maxOutputTokens: MAX_OUTPUT_TOKENS_MODIFICATION,
-        responseSchema: PROJECT_OUTPUT_SCHEMA,
-      });
-
-      if (!fixResponse.success || !fixResponse.content) {
-        logger.error('Failed to get fix response from AI');
-        break;
-      }
-
-      try {
-        const parsedData = JSON.parse(fixResponse.content);
-        const zodResult = ProjectOutputSchema.safeParse(parsedData);
-
-        if (!zodResult.success) {
-          logger.error('Zod validation failed on fix response');
-          break;
-        }
-
-        const fixedOutput = zodResult.data;
-        const fixedFiles = await processFiles(fixedOutput.files || [], { addFrontendPrefix: false });
-
-        const revalidation = this.validationPipeline.validate(fixedFiles);
-        if (!revalidation.valid) {
-          logger.error('Fixed code failed syntax validation');
-          break;
-        }
-
-        finalFiles = revalidation.sanitizedOutput!;
-        buildResult = this.buildValidator.validate(finalFiles);
-
-        if (buildResult.valid) {
-          logger.info('Build errors fixed successfully');
-        }
-      } catch (e) {
-        logger.error('Failed to parse fix response');
-        break;
-      }
-    }
-
-    if (!buildResult.valid) {
-      logger.warn('Build warnings after retries', {
-        errors: buildResult.errors.map(e => ({ message: e.message, file: e.file })),
-      });
-    }
+    // Build validation with auto-retry using universal retry loop
+    const finalFiles = await this.runBuildFixLoop(
+      validationResult.sanitizedOutput!,
+      'generation',
+      description
+    );
 
     // Create project state
+
     const now = new Date();
     const projectId = uuidv4();
     const versionId = uuidv4();

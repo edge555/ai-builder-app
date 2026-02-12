@@ -20,6 +20,7 @@ import type {
   FileEdit,
   ModificationOutput,
   EditApplicationResult,
+  RepairAttempt,
 } from '@ai-app-builder/shared';
 import type { CodeSlice } from '../analysis/file-planner/types';
 import { GeminiClient, createGeminiClient } from '../ai';
@@ -143,7 +144,7 @@ export class ModificationEngine {
       const contextPrompt = buildModificationPrompt(prompt, slices, projectState);
 
       // Retry configuration
-      const MAX_RETRIES = 2;
+      const MAX_RETRIES = 3;
       let attempt = 0;
       let lastEditError: string | null = null;
       let updatedFiles: Record<string, string | null> = {};
@@ -201,10 +202,11 @@ export class ModificationEngine {
         });
         if (!response.success || !response.content) {
           logger.error('Gemini error', { error: response.error });
-          return {
-            success: false,
-            error: response.error ?? 'Failed to get modification from AI',
-          };
+
+          // Record this failure for retry
+          lastEditError = response.error ?? 'Failed to get modification from AI';
+          logger.info('Retrying due to AI error', { error: lastEditError });
+          continue; // Continue to next retry attempt
         }
 
         logger.debug('AI Response content preview', { contentLength: response.content.length });
@@ -219,10 +221,11 @@ export class ModificationEngine {
           logger.error('Failed to parse AI output as JSON', {
             error: e instanceof Error ? e.message : String(e),
           });
-          return {
-            success: false,
-            error: `Failed to parse AI response: ${e instanceof Error ? e.message : 'Invalid JSON'}`,
-          };
+
+          // Record this failure for retry
+          lastEditError = `Failed to parse AI response: ${e instanceof Error ? e.message : 'Invalid JSON'}`;
+          logger.info('Retrying due to JSON parse error', { error: lastEditError });
+          continue; // Continue to next retry attempt
         }
 
         const zodResult = ModificationOutputSchema.safeParse(parsedData);
@@ -230,10 +233,11 @@ export class ModificationEngine {
           logger.error('Zod validation failed on modification response', {
             errors: zodResult.error.issues,
           });
-          return {
-            success: false,
-            error: `Invalid AI modification structure: ${zodResult.error.message}`,
-          };
+
+          // Record this failure for retry
+          lastEditError = `Schema validation failed: ${zodResult.error.message}`;
+          logger.info('Retrying due to schema validation error', { error: lastEditError });
+          continue; // Continue to next retry attempt
         }
 
         const parsedOutput = zodResult.data;
@@ -243,21 +247,25 @@ export class ModificationEngine {
         logger.debug('Processing file edits', { fileCount: aiFilesArray?.length ?? 0 });
         if (!aiFilesArray || !Array.isArray(aiFilesArray)) {
           logger.error('AI response missing files array');
-          return {
-            success: false,
-            error: 'AI response missing files array',
-          };
+          lastEditError = 'AI response missing files array';
+          logger.info('Retrying due to missing files array', { error: lastEditError });
+          continue; // Continue to next retry attempt
         }
 
         // Validate all file paths for security
+        let hasUnsafePath = false;
         for (const fileEdit of aiFilesArray) {
           if (fileEdit.path && !isSafePath(fileEdit.path)) {
             logger.error('Unsafe file path detected', { path: fileEdit.path });
-            return {
-              success: false,
-              error: `Unsafe file path detected: ${fileEdit.path}`,
-            };
+            lastEditError = `Unsafe file path detected: ${fileEdit.path}`;
+            hasUnsafePath = true;
+            break;
           }
+        }
+
+        if (hasUnsafePath) {
+          logger.info('Retrying due to unsafe file path', { error: lastEditError });
+          continue; // Continue to next retry attempt
         }
 
 
@@ -382,9 +390,10 @@ export class ModificationEngine {
         }
       }
 
-      // Run build validation
+      // Run build validation with failure history accumulation
       let buildResult = this.buildValidator.validate(tempFiles);
       let buildRetryCount = 0;
+      const buildFailureHistory: RepairAttempt[] = [];
 
       while (!buildResult.valid && buildRetryCount < this.maxBuildRetries) {
         buildRetryCount++;
@@ -392,17 +401,18 @@ export class ModificationEngine {
           attempt: buildRetryCount,
           maxRetries: this.maxBuildRetries,
           errors: buildResult.errors.map(e => e.message),
+          hasFailureHistory: buildFailureHistory.length > 0,
         });
 
         // Format errors for AI
         const errorContext = this.buildValidator.formatErrorsForAI(buildResult.errors);
 
-        // Request AI to fix the errors
-        // We use the modification endpoint but focus on fixing errors
+        // Request AI to fix the errors with failure history
         const fixUserRequest = buildFixPrompt({
           mode: 'modification',
           errorContext,
           originalPrompt: prompt,
+          failureHistory: buildFailureHistory.length > 0 ? buildFailureHistory : undefined,
         });
         const fixSystemInstruction = getModificationPrompt(fixUserRequest, includeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
         const fixContextPrompt = buildModificationPrompt(fixUserRequest, slices, projectState);
@@ -417,6 +427,12 @@ export class ModificationEngine {
 
         if (!fixResponse.success || !fixResponse.content) {
           logger.error('Failed to get fix response from AI');
+          // Record this failure
+          buildFailureHistory.push({
+            attempt: buildRetryCount,
+            error: fixResponse.error || 'AI failed to generate fix',
+            timestamp: new Date().toISOString(),
+          });
           break;
         }
 
@@ -434,6 +450,13 @@ export class ModificationEngine {
             logger.error('Failed to parse fix response JSON', {
               error: parseError instanceof Error ? parseError.message : String(parseError),
             });
+            // Record this failure
+            buildFailureHistory.push({
+              attempt: buildRetryCount,
+              error: parseError instanceof Error ? parseError.message : 'JSON parse error',
+              strategy: 'Attempted to fix build errors but returned invalid JSON',
+              timestamp: new Date().toISOString(),
+            });
             continue;
           }
 
@@ -443,11 +466,24 @@ export class ModificationEngine {
             logger.error('Fix response failed Zod validation', {
               errors: fixZodResult.error.issues,
             });
+            // Record this failure
+            buildFailureHistory.push({
+              attempt: buildRetryCount,
+              error: `Schema validation failed: ${fixZodResult.error.message}`,
+              strategy: 'Attempted to fix build errors but returned invalid schema',
+              timestamp: new Date().toISOString(),
+            });
             continue;
           }
 
           const fixOutput = fixZodResult.data;
           if (!fixOutput.files || !Array.isArray(fixOutput.files)) {
+            // Record this failure
+            buildFailureHistory.push({
+              attempt: buildRetryCount,
+              error: 'Fix response missing files array',
+              timestamp: new Date().toISOString(),
+            });
             continue;
           }
 
@@ -470,12 +506,27 @@ export class ModificationEngine {
           }
 
           // Re-validate
+          const previousErrors = buildResult.errors.map(e => e.message).join('; ');
           buildResult = this.buildValidator.validate(tempFiles);
           if (buildResult.valid) {
             logger.info('Modification build errors fixed successfully');
+          } else {
+            // Record this failure for next iteration
+            buildFailureHistory.push({
+              attempt: buildRetryCount,
+              error: buildResult.errors.map(e => e.message).join('; '),
+              strategy: `Tried to fix: ${previousErrors}`,
+              timestamp: new Date().toISOString(),
+            });
           }
         } catch (e) {
           logger.error('Error applying fixes', { error: e instanceof Error ? e.message : 'Unknown error' });
+          // Record this failure
+          buildFailureHistory.push({
+            attempt: buildRetryCount,
+            error: e instanceof Error ? e.message : 'Unknown error',
+            timestamp: new Date().toISOString(),
+          });
         }
       }
 

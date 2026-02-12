@@ -1,18 +1,24 @@
-import type { RuntimeError } from '@/shared';
+import type { RuntimeError, RepairAttempt } from '@/shared';
 import type { ErrorAggregator } from '@/services/ErrorAggregator';
 
 /**
  * Builds a repair prompt for a runtime error or aggregated errors.
+ * Optionally includes failure history from previous repair attempts.
  */
 export function buildRepairPrompt(
     runtimeError: RuntimeError,
     projectFiles?: Record<string, string>,
-    errorAggregator?: ErrorAggregator
+    errorAggregator?: ErrorAggregator,
+    failureHistory?: RepairAttempt[]
 ): string {
     // Check if we have aggregated errors
     const aggregatedReport = errorAggregator?.buildErrorReport(projectFiles);
 
     if (aggregatedReport) {
+        // If we have failure history, append it to the aggregated report
+        if (failureHistory && failureHistory.length > 0) {
+            return aggregatedReport + '\n\n' + formatFailureHistory(failureHistory);
+        }
         return aggregatedReport;
     }
 
@@ -51,6 +57,11 @@ export function buildRepairPrompt(
         );
     }
 
+    // Add failure history section if previous attempts exist
+    if (failureHistory && failureHistory.length > 0) {
+        parts.push('', formatFailureHistory(failureHistory));
+    }
+
     parts.push(
         ``,
         `IMPORTANT: Apply the minimal fix needed to resolve this error.`,
@@ -58,6 +69,31 @@ export function buildRepairPrompt(
     );
 
     return parts.join('\n');
+}
+
+/**
+ * Formats failure history for inclusion in repair prompts.
+ */
+function formatFailureHistory(failureHistory: RepairAttempt[]): string {
+    const lines = [
+        '=== PREVIOUS REPAIR ATTEMPTS ===',
+        '',
+        'The following fixes were already tried and FAILED. Do NOT repeat these approaches:',
+        '',
+    ];
+
+    for (const attempt of failureHistory) {
+        lines.push(`Attempt ${attempt.attempt}:`);
+        lines.push(`  Error: ${attempt.error}`);
+        if (attempt.strategy) {
+            lines.push(`  What was tried: ${attempt.strategy}`);
+        }
+        lines.push('');
+    }
+
+    lines.push('You MUST try a DIFFERENT approach than the previous attempts.');
+
+    return lines.join('\n');
 }
 
 /**
