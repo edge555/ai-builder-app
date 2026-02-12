@@ -53,4 +53,6 @@ export interface EditApplicationResult {
     error?: string;
     /** Which edit failed (0-indexed) */
     failedEditIndex?: number;
+    /** Warning messages from edit application (e.g., fuzzy matching) */
+    warnings?: string[];
 }

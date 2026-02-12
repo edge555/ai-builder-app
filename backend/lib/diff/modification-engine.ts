@@ -36,11 +36,13 @@ import {
   SliceSelector,
   createSliceSelector
 } from '../analysis';
-import { computeLineHunks } from '../core/diff-utils';
 import { ModificationOutputSchema } from '../core/schemas';
-import { applySearchReplace } from './multi-tier-matcher';
 import { isSafePath } from '../utils';
 import { buildFixPrompt } from '../core/prompts/build-fix-prompt';
+import { applyEdits } from './edit-applicator';
+import { computeDiffs, createModifiedFileDiff } from './diff-computer';
+import { createChangeSummary } from './change-summarizer';
+import { buildModificationPrompt, buildSlicesFromFiles } from './prompt-builder';
 
 const logger = createLogger('ModificationEngine');
 
@@ -117,7 +119,7 @@ export class ModificationEngine {
       if (options?.skipPlanning) {
         // When skipPlanning is true, treat all provided files as primary files
         // Build slices directly without calling FilePlanner
-        slices = this.buildSlicesFromFiles(projectState);
+        slices = buildSlicesFromFiles(projectState);
         logger.info('Skipping FilePlanner, using all files as primary', {
           fileCount: slices.length
         });
@@ -138,7 +140,7 @@ export class ModificationEngine {
       logger.debug('System instruction determined', { category, includeDesignSystem });
 
       // Step 3: Build the modification prompt with context
-      const contextPrompt = this.buildModificationPrompt(prompt, slices, projectState);
+      const contextPrompt = buildModificationPrompt(prompt, slices, projectState);
 
       // Retry configuration
       const MAX_RETRIES = 2;
@@ -159,7 +161,7 @@ export class ModificationEngine {
 
         // Build system instruction with proper injection defense
         const systemInstruction = getModificationPrompt(userRequest, includeDesignSystem);
-        
+
         // Append context to the prompt
         const fullPrompt = contextPrompt;
 
@@ -309,7 +311,7 @@ export class ModificationEngine {
                 continue;
               }
               // Apply the edits
-              const editResult = this.applyEdits(originalContent, fileEdit.edits);
+              const editResult = applyEdits(originalContent, fileEdit.edits);
               if (!editResult.success) {
                 logger.warn('Failed to apply edits', { path: fileEdit.path, error: editResult.error });
                 lastEditError = `File: ${fileEdit.path} - ${editResult.error}`;
@@ -327,7 +329,7 @@ export class ModificationEngine {
               break;
 
             default:
-              logger.warn('Unknown operation type', { path: fileEdit.path });
+              logger.warn('Unknown operation type', { path: (fileEdit as any).path });
           }
 
           if (editFailed) break; // Exit the for loop to trigger retry
@@ -397,13 +399,13 @@ export class ModificationEngine {
 
         // Request AI to fix the errors
         // We use the modification endpoint but focus on fixing errors
-      const fixUserRequest = buildFixPrompt({
-        mode: 'modification',
-        errorContext,
-        originalPrompt: prompt,
-      });
+        const fixUserRequest = buildFixPrompt({
+          mode: 'modification',
+          errorContext,
+          originalPrompt: prompt,
+        });
         const fixSystemInstruction = getModificationPrompt(fixUserRequest, includeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
-        const fixContextPrompt = this.buildModificationPrompt(fixUserRequest, slices, projectState);
+        const fixContextPrompt = buildModificationPrompt(fixUserRequest, slices, projectState);
 
         const fixResponse = await this.geminiClient.generate({
           prompt: fixContextPrompt,
@@ -455,7 +457,7 @@ export class ModificationEngine {
               // We need to apply edits to the content in tempFiles (which has previous mods applied)
               const currentContent = tempFiles[fileEdit.path];
               if (currentContent) {
-                const editResult = this.applyEdits(currentContent, fileEdit.edits);
+                const editResult = applyEdits(currentContent, fileEdit.edits);
                 if (editResult.success) {
                   updatedFiles[fileEdit.path] = editResult.content!; // Update the modifications map
                   tempFiles[fileEdit.path] = editResult.content!;    // Update temp view
@@ -507,10 +509,10 @@ export class ModificationEngine {
       };
 
       // Step 10: Compute diffs
-      const diffs = this.computeDiffs(projectState.files, newFiles, deletedFiles);
+      const diffs = computeDiffs(projectState.files, newFiles, deletedFiles);
 
       // Step 11: Create change summary
-      const changeSummary = this.createChangeSummary(diffs, prompt);
+      const changeSummary = createChangeSummary(diffs, prompt);
 
       // Step 12: Create new version
       const version: Version = {
@@ -539,319 +541,7 @@ export class ModificationEngine {
   }
 
 
-  /**
-   * Build the modification prompt with relevant code slices.
-   */
-  private buildModificationPrompt(
-    userPrompt: string,
-    slices: CodeSlice[],
-    _projectState: ProjectState
-  ): string {
-    const primarySlices = slices.filter(s => s.relevance === 'primary');
-    const contextSlices = slices.filter(s => s.relevance === 'context');
 
-    let prompt = `User Request: ${userPrompt}\n\n`;
-
-    if (primarySlices.length > 0) {
-      prompt += `=== PRIMARY FILES (likely need modification) ===\n\n`;
-      for (const slice of primarySlices) {
-        prompt += `--- ${slice.filePath} ---\n`;
-        prompt += `${slice.content}\n\n`;
-      }
-    }
-
-    if (contextSlices.length > 0) {
-      prompt += `=== CONTEXT FILES (for reference) ===\n\n`;
-      for (const slice of contextSlices) {
-        prompt += `--- ${slice.filePath} ---\n`;
-        prompt += `${slice.content}\n\n`;
-      }
-    }
-
-    prompt += `Based on the user request, output ONLY the JSON with modified/new files.`;
-
-    return prompt;
-  }
-
-  /**
-   * Build code slices directly from project files without using FilePlanner.
-   * All files are treated as primary files (full content included).
-   * Used when skipPlanning option is true.
-   */
-  private buildSlicesFromFiles(projectState: ProjectState): CodeSlice[] {
-    const slices: CodeSlice[] = [];
-
-    for (const [filePath, content] of Object.entries(projectState.files)) {
-      slices.push({
-        filePath,
-        content,
-        relevance: 'primary',
-      });
-    }
-
-    return slices;
-  }
-
-  /**
-   * Apply search/replace edits to file content.
-   * Returns the modified content or an error if edits cannot be applied.
-   */
-  private applyEdits(
-    originalContent: string,
-    edits: EditOperation[]
-  ): EditApplicationResult {
-    let content = originalContent;
-    const warnings: string[] = [];
-
-    for (let i = 0; i < edits.length; i++) {
-      const edit = edits[i];
-
-      // Normalize escape sequences in search and replace strings
-      // Note: With structured output, this should be less necessary, but keep for safety
-      let search = edit.search;
-      let replace = edit.replace;
-
-      // Handle escaped newlines and tabs from JSON
-      if (search.includes('\\n')) search = search.replace(/\\n/g, '\n');
-      if (search.includes('\\t')) search = search.replace(/\\t/g, '\t');
-      if (replace.includes('\\n')) replace = replace.replace(/\\n/g, '\n');
-      if (replace.includes('\\t')) replace = replace.replace(/\\t/g, '\t');
-
-      // Use multi-tier matcher for robust search/replace
-      const occurrence = edit.occurrence ?? 1;
-      const result = applySearchReplace(content, search, replace, occurrence);
-
-      if (!result.success) {
-        logger.error('Edit application failed', {
-          editIndex: i,
-          error: result.error,
-          searchPreview: search.substring(0, 100),
-        });
-        return {
-          success: false,
-          error: result.error ?? 'Unknown error applying edit',
-          failedEditIndex: i,
-        };
-      }
-
-      content = result.content!;
-
-      // Log warnings from fuzzy matching
-      if (result.warning) {
-        logger.warn('Edit applied with warning', {
-          editIndex: i,
-          warning: result.warning,
-        });
-        warnings.push(`Edit ${i + 1}: ${result.warning}`);
-      }
-    }
-
-    return {
-      success: true,
-      content,
-      warnings: warnings.length > 0 ? warnings : undefined,
-    };
-  }
-
-  /**
-   * Normalize file content for comparison.
-   * Removes trailing whitespace from each line and ensures consistent line endings.
-   */
-  private normalizeContent(content: string): string {
-    return content
-      .split('\n')
-      .map(line => line.trimEnd())
-      .join('\n')
-      .trimEnd();
-  }
-
-  /**
-   * Compute diffs between old and new file states.
-   */
-  private computeDiffs(
-    oldFiles: Record<string, string>,
-    newFiles: Record<string, string>,
-    deletedFiles: string[]
-  ): FileDiff[] {
-    const diffs: FileDiff[] = [];
-    const processedPaths = new Set<string>();
-
-    // Handle modified and added files
-    for (const [path, newContent] of Object.entries(newFiles)) {
-      processedPaths.add(path);
-      const oldContent = oldFiles[path];
-
-      if (oldContent === undefined) {
-        // File was added
-        diffs.push(this.createAddedFileDiff(path, newContent));
-      } else {
-        // Normalize both contents for comparison
-        const normalizedOld = this.normalizeContent(oldContent);
-        const normalizedNew = this.normalizeContent(newContent);
-        
-        if (normalizedOld !== normalizedNew) {
-          // File was actually modified (not just whitespace changes)
-          const fileDiff = this.createModifiedFileDiff(path, oldContent, newContent);
-          // Only include if there are actual hunks with real changes
-          if (fileDiff.hunks.length > 0 && this.hasRealChanges(fileDiff)) {
-            diffs.push(fileDiff);
-          }
-        }
-      }
-    }
-
-    // Handle deleted files
-    for (const path of deletedFiles) {
-      if (oldFiles[path] !== undefined) {
-        diffs.push(this.createDeletedFileDiff(path, oldFiles[path]));
-      }
-    }
-
-    return diffs;
-  }
-
-  /**
-   * Check if a file diff has real changes (not just whitespace).
-   */
-  private hasRealChanges(fileDiff: FileDiff): boolean {
-    for (const hunk of fileDiff.hunks) {
-      for (const change of hunk.changes) {
-        if (change.type === 'add' || change.type === 'delete') {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Create a diff for an added file.
-   */
-  private createAddedFileDiff(filePath: string, content: string): FileDiff {
-    const lines = content.split('\n');
-    return {
-      filePath,
-      status: 'added',
-      hunks: [{
-        oldStart: 0,
-        oldLines: 0,
-        newStart: 1,
-        newLines: lines.length,
-        changes: lines.map((line, index) => ({
-          type: 'add' as const,
-          lineNumber: index + 1,
-          content: line,
-        })),
-      }],
-    };
-  }
-
-  /**
-   * Create a diff for a deleted file.
-   */
-  private createDeletedFileDiff(filePath: string, content: string): FileDiff {
-    const lines = content.split('\n');
-    return {
-      filePath,
-      status: 'deleted',
-      hunks: [{
-        oldStart: 1,
-        oldLines: lines.length,
-        newStart: 0,
-        newLines: 0,
-        changes: lines.map((line, index) => ({
-          type: 'delete' as const,
-          lineNumber: index + 1,
-          content: line,
-        })),
-      }],
-    };
-  }
-
-
-  /**
-   * Create a diff for a modified file.
-   */
-  private createModifiedFileDiff(
-    filePath: string,
-    oldContent: string,
-    newContent: string
-  ): FileDiff {
-    const oldLines = oldContent.split('\n');
-    const newLines = newContent.split('\n');
-
-    return {
-      filePath,
-      status: 'modified',
-      hunks: computeLineHunks(oldLines, newLines),
-    };
-  }
-
-
-
-  /**
-   * Create a human-readable change summary.
-   */
-  private createChangeSummary(diffs: FileDiff[], prompt: string): ChangeSummary {
-    let filesAdded = 0;
-    let filesModified = 0;
-    let filesDeleted = 0;
-    let linesAdded = 0;
-    let linesDeleted = 0;
-    const affectedFiles: string[] = [];
-
-    for (const diff of diffs) {
-      affectedFiles.push(diff.filePath);
-
-      switch (diff.status) {
-        case 'added':
-          filesAdded++;
-          break;
-        case 'modified':
-          filesModified++;
-          break;
-        case 'deleted':
-          filesDeleted++;
-          break;
-      }
-
-      for (const hunk of diff.hunks) {
-        for (const change of hunk.changes) {
-          if (change.type === 'add') {
-            linesAdded++;
-          } else if (change.type === 'delete') {
-            linesDeleted++;
-          }
-        }
-      }
-    }
-
-    // Generate description
-    const parts: string[] = [];
-    if (filesAdded > 0) {
-      parts.push(`${filesAdded} file${filesAdded > 1 ? 's' : ''} added`);
-    }
-    if (filesModified > 0) {
-      parts.push(`${filesModified} file${filesModified > 1 ? 's' : ''} modified`);
-    }
-    if (filesDeleted > 0) {
-      parts.push(`${filesDeleted} file${filesDeleted > 1 ? 's' : ''} deleted`);
-    }
-
-    const description = parts.length > 0
-      ? `${parts.join(', ')} (${linesAdded} lines added, ${linesDeleted} lines deleted)`
-      : 'No changes made';
-
-    return {
-      filesAdded,
-      filesModified,
-      filesDeleted,
-      linesAdded,
-      linesDeleted,
-      description,
-      affectedFiles,
-    };
-  }
 }
 
 /**

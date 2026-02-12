@@ -1,11 +1,12 @@
-import React, { useState, useRef, useEffect, forwardRef } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, lazy, Suspense } from 'react';
 import type { ChangeSummary, FileDiff } from '@/shared';
 import { ErrorMessage, classifyError } from '../ErrorMessage';
-import { DiffViewer } from '../DiffViewer';
+// import { DiffViewer } from '../DiffViewer';
+const DiffViewer = lazy(() => import('../DiffViewer/DiffViewer'));
 import { PromptSuggestions } from '../PromptSuggestions';
 import { StreamingIndicator } from '../StreamingIndicator';
 import type { PromptSuggestion } from '@/data/prompt-suggestions';
-import type { StreamingState } from '@/context/GenerationContext';
+import type { StreamingState } from '@/context';
 import './ChatInterface.css';
 
 /**
@@ -234,7 +235,9 @@ const MessageItemWithRef = React.memo(
         {message.changeSummary && <ChangeSummaryDisplay summary={message.changeSummary} />}
         {message.diffs && message.diffs.length > 0 && (
           <div className="message-diff-viewer">
-            <DiffViewer diffs={message.diffs} showActions={false} />
+            <Suspense fallback={<div className="chat-loading-info"><span className="chat-loading-text">Loading diff...</span></div>}>
+              <DiffViewer diffs={message.diffs} showActions={false} />
+            </Suspense>
           </div>
         )}
       </div>

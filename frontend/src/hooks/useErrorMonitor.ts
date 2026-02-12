@@ -4,14 +4,15 @@
  */
 
 import { useCallback, useRef, useEffect } from 'react';
-import { 
-  createRuntimeError, 
+import {
+  createRuntimeError,
   shouldIgnoreError,
   parseBundlerError,
   type RuntimeError,
-  type ErrorSource 
-} from '@/shared/types/runtime-error';
-import { errorAggregator, type AggregatedErrors } from '@/services/ErrorAggregator';
+  type ErrorSource
+} from '@ai-app-builder/shared';
+import { useErrorAggregator } from '@/context/ErrorAggregatorContext';
+import { type AggregatedErrors } from '@/services/ErrorAggregator';
 
 export interface UseErrorMonitorOptions {
   /** Callback when errors are ready for repair */
@@ -42,14 +43,15 @@ export interface UseErrorMonitorReturn {
  */
 export function useErrorMonitor(options: UseErrorMonitorOptions = {}): UseErrorMonitorReturn {
   const { onErrorsReady, enabled = true } = options;
+  const errorAggregator = useErrorAggregator();
   const isSetup = useRef(false);
 
   // Setup flush callback
   useEffect(() => {
     if (!enabled || isSetup.current) return;
-    
+
     isSetup.current = true;
-    
+
     if (onErrorsReady) {
       errorAggregator.setFlushCallback(onErrorsReady);
     }
@@ -65,7 +67,7 @@ export function useErrorMonitor(options: UseErrorMonitorOptions = {}): UseErrorM
    */
   const captureConsoleError = useCallback((message: string, stack?: string) => {
     if (!enabled) return;
-    
+
     // Ignore non-critical warnings
     if (shouldIgnoreError(message)) {
       return;
@@ -75,7 +77,7 @@ export function useErrorMonitor(options: UseErrorMonitorOptions = {}): UseErrorM
       new Error(message),
       'console' as ErrorSource
     );
-    
+
     if (stack) {
       error.stack = stack;
     }
@@ -90,7 +92,7 @@ export function useErrorMonitor(options: UseErrorMonitorOptions = {}): UseErrorM
     if (!enabled) return;
 
     const errorInfo = parseBundlerError(message);
-    
+
     const error: RuntimeError = {
       message: errorInfo.message || message,
       type: errorInfo.type || 'BUILD_ERROR',

@@ -6,7 +6,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { Version, ProjectState, FileDiff } from '@ai-app-builder/shared';
-import { computeDiffsFromFiles } from '../diff/diff-engine';
+import { getDiffEngine } from '../diff/diff-engine';
 
 /**
  * Options for creating a new version.
@@ -165,7 +165,7 @@ export class VersionManager {
    */
   undo(projectId: string): UndoRevertResult {
     const versions = this.getAllVersions(projectId);
-    
+
     if (versions.length < 2) {
       return {
         success: false,
@@ -178,7 +178,7 @@ export class VersionManager {
     const currentVersion = versions[versions.length - 1];
 
     // Compute diffs from current state to previous state
-    const diffs = computeDiffsFromFiles(currentVersion.files, previousVersion.files);
+    const diffs = getDiffEngine().computeDiffsFromFiles(currentVersion.files, previousVersion.files);
 
     // Create a new project state from the previous version's files
     const restoredProjectState: ProjectState = {
@@ -220,7 +220,7 @@ export class VersionManager {
    */
   revertToVersion(projectId: string, versionId: string): UndoRevertResult {
     const targetVersion = this.getVersion(projectId, versionId);
-    
+
     if (!targetVersion) {
       return {
         success: false,
@@ -229,7 +229,7 @@ export class VersionManager {
     }
 
     const latestVersion = this.getLatestVersion(projectId);
-    
+
     if (!latestVersion) {
       return {
         success: false,
@@ -239,9 +239,9 @@ export class VersionManager {
 
     // If reverting to the current version, no action needed but still create a version
     // to maintain the invariant that revert always creates a new version
-    
+
     // Compute diffs from current state to target state
-    const diffs = computeDiffsFromFiles(latestVersion.files, targetVersion.files);
+    const diffs = getDiffEngine().computeDiffsFromFiles(latestVersion.files, targetVersion.files);
 
     // Create a new project state from the target version's files
     const restoredProjectState: ProjectState = {

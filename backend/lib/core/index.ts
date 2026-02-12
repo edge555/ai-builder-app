@@ -57,3 +57,15 @@ export {
   validateSyntax,
   parseAIOutput,
 } from './validators';
+
+// Build Validator
+export {
+  BuildValidator,
+  getBuildValidator,
+  createBuildValidator,
+} from './build-validator';
+export type {
+  BuildError,
+  BuildValidationResult,
+} from './build-validator';
+

@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useChat, usePreviewError } from '../../context';
-import { ChatInterface, PreviewPanel, RepairStatus } from '../../components';
+import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+
+import { ChatInterface, RepairStatus } from '../../components';
+import { PreviewSkeleton } from '../PreviewPanel/PreviewSkeleton';
+const PreviewPanel = lazy(() => import('../PreviewPanel/PreviewPanel'));
 import { PreviewErrorBoundary } from '../PreviewPanel/PreviewErrorBoundary';
 import { ExportButton } from '../ExportButton';
 import { PanelToggle, type ActivePanel } from '../PanelToggle';
@@ -12,6 +14,8 @@ import { initialSuggestions, analyzeProjectForSuggestions } from '@/data/prompt-
 import { type RuntimeError } from '@/shared';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { Sparkles } from 'lucide-react';
+import { useProject, useChatMessages, useGeneration, usePreviewError } from '../../context';
+import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
 
 const RESIZE_MIN_WIDTH = 300;
 const RESIZE_MAX_FRACTION = 0.6;
@@ -22,7 +26,10 @@ const SIDE_PANEL_WIDTH_STORAGE_KEY = 'ai_app_builder:sidePanelWidth';
  * Main chat panel component that uses the chat context.
  */
 function ChatPanel() {
-    const { messages, isLoading, loadingPhase, submitPrompt, error, clearError, projectState, streamingState, isStreaming } = useChat();
+    const { messages, clearMessages } = useChatMessages();
+    const { isLoading, loadingPhase, error, clearError, streamingState, isStreaming } = useGeneration();
+    const { projectState } = useProject();
+    const { submitPrompt } = useSubmitPrompt();
     const [lastPrompt, setLastPrompt] = useState<string | null>(null);
 
     // Generate context-aware suggestions
@@ -69,20 +76,21 @@ function ChatPanel() {
  * Requirements: 9.2, 9.3
  */
 function PreviewSection() {
-    const { projectState, isLoading, loadingPhase, autoRepair, isAutoRepairing, autoRepairAttempt, resetAutoRepair } = useChat();
-    const { 
-      reportError, 
-      reportAggregatedErrors, 
-      repairPhase, 
-      setRepairPhase,
-      startAutoRepair,
-      completeAutoRepair,
-      clearAllErrors,
-      dismissRepairStatus,
-      shouldAutoRepair,
-      aggregatedErrors,
-      maxRepairAttempts,
-      repairAttempts,
+    const { projectState } = useProject();
+    const { isLoading, loadingPhase, autoRepair, isAutoRepairing, autoRepairAttempt, resetAutoRepair } = useGeneration();
+    const {
+        reportError,
+        reportAggregatedErrors,
+        repairPhase,
+        setRepairPhase,
+        startAutoRepair,
+        completeAutoRepair,
+        clearAllErrors,
+        dismissRepairStatus,
+        shouldAutoRepair,
+        aggregatedErrors,
+        maxRepairAttempts,
+        repairAttempts,
     } = usePreviewError();
 
     // Reset auto-repair attempts when project state changes successfully
@@ -108,9 +116,9 @@ function PreviewSection() {
         }
 
         startAutoRepair();
-        
+
         try {
-            const success = await autoRepair(runtimeError);
+            const success = await autoRepair(runtimeError, projectState);
             completeAutoRepair(success);
         } catch (err) {
             console.error('[PreviewSection] Auto-repair failed:', err);
@@ -150,16 +158,18 @@ function PreviewSection() {
                 canAutoRepair={canAutoRepair}
                 isAutoRepairing={isAutoRepairing}
             >
-                <PreviewPanel
-                    projectState={projectState}
-                    isLoading={isLoading}
-                    loadingPhase={loadingPhase}
-                    onErrorsReady={handleErrorsReady}
-                    errorMonitoringEnabled={!isLoading && projectState !== null}
-                    onBundlerIdle={handleBundlerIdle}
-                />
+                <Suspense fallback={loadingPhase !== 'idle' ? <PreviewSkeleton phase={loadingPhase} /> : null}>
+                    <PreviewPanel
+                        projectState={projectState}
+                        isLoading={isLoading}
+                        loadingPhase={loadingPhase}
+                        onErrorsReady={handleErrorsReady}
+                        errorMonitoringEnabled={!isLoading && projectState !== null}
+                        onBundlerIdle={handleBundlerIdle}
+                    />
+                </Suspense>
             </PreviewErrorBoundary>
-            
+
             {/* Repair status toast */}
             <RepairStatus
                 phase={repairPhase}
@@ -180,8 +190,25 @@ function PreviewSection() {
  * 
  * Requirements: 8.1, 9.1
  */
-export function AppLayout() {
-    const { undo, redo, canUndo, canRedo, isLoading, loadingPhase } = useChat();
+export function AppLayout({ initialPrompt }: { initialPrompt?: string }) {
+    const { undo, redo, submitPrompt } = useSubmitPrompt();
+    const project = useProject();
+    const { isLoading, loadingPhase } = useGeneration();
+    const { canUndo, canRedo } = project;
+
+    const initialPromptSubmittedRef = useRef(false);
+
+    // Submit initial prompt on mount if provided
+    useEffect(() => {
+        if (initialPrompt && !initialPromptSubmittedRef.current) {
+            initialPromptSubmittedRef.current = true;
+            // Short delay to ensure everything is ready
+            const timer = setTimeout(() => {
+                submitPrompt(initialPrompt);
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [initialPrompt, submitPrompt]);
     const [activePanel, setActivePanel] = useState<ActivePanel>('chat');
     const [sidePanelWidth, setSidePanelWidth] = useState(() => {
         const raw = localStorage.getItem(SIDE_PANEL_WIDTH_STORAGE_KEY);

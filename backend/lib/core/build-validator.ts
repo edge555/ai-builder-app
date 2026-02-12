@@ -192,152 +192,161 @@ function getPackageName(importPath: string): string {
 }
 
 /**
- * Validate generated files for build issues
- */
-export function validateBuild(files: Record<string, string>): BuildValidationResult {
-    const errors: BuildError[] = [];
-    const allFilePaths = Object.keys(files);
-
-    // Find package.json
-    const packageJsonPath = allFilePaths.find(p => p.endsWith('package.json'));
-    const declaredDeps = packageJsonPath
-        ? parseDependencies(files[packageJsonPath])
-        : new Set<string>();
-
-    // Add built-in React modules
-    BUILT_IN_MODULES.forEach(m => declaredDeps.add(m));
-
-    // Scan each TypeScript/JavaScript file
-    for (const [filePath, content] of Object.entries(files)) {
-        const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
-        if (!['.ts', '.tsx', '.js', '.jsx'].includes(ext)) {
-            continue;
-        }
-
-        const imports = extractImports(content);
-
-        for (const { module: importPath, line } of imports) {
-            // Skip CSS/asset imports
-            if (importPath.endsWith('.css') || importPath.endsWith('.scss') ||
-                importPath.endsWith('.png') || importPath.endsWith('.svg') ||
-                importPath.endsWith('.jpg') || importPath.endsWith('.json')) {
-                // For CSS imports, check if the file exists
-                if (importPath.endsWith('.css') && isRelativeImport(importPath)) {
-                    const resolved = resolveRelativeImport(filePath, importPath, allFilePaths);
-                    if (!resolved) {
-                        errors.push({
-                            type: 'missing_file',
-                            message: `CSS file not found: '${importPath}'`,
-                            file: filePath,
-                            line,
-                            suggestion: `Create the CSS file or remove the import`,
-                        });
-                    }
-                }
-                continue;
-            }
-
-            if (isRelativeImport(importPath)) {
-                // Check if relative import resolves to existing file
-                const resolved = resolveRelativeImport(filePath, importPath, allFilePaths);
-                if (!resolved) {
-                    errors.push({
-                        type: 'broken_import',
-                        message: `Cannot find module '${importPath}'`,
-                        file: filePath,
-                        line,
-                        suggestion: `Check if the file exists or fix the import path`,
-                    });
-                }
-            } else {
-                // External package import
-                const packageName = getPackageName(importPath);
-
-                // Check if it's a Node.js built-in (not usable in browser)
-                if (NODE_BUILT_INS.has(packageName)) {
-                    errors.push({
-                        type: 'missing_dependency',
-                        message: `Node.js module '${packageName}' cannot be used in browser code`,
-                        file: filePath,
-                        line,
-                        suggestion: `Use a browser-compatible alternative`,
-                    });
-                    continue;
-                }
-
-                // Check if package is declared in dependencies
-                if (!declaredDeps.has(packageName)) {
-                    // Provide specific suggestions for common packages
-                    let suggestion = `Add '${packageName}' to package.json dependencies`;
-
-                    if (packageName === 'uuid') {
-                        suggestion = `Use crypto.randomUUID() instead of uuid package, or add uuid to package.json`;
-                    } else if (packageName === 'lodash' || packageName === 'underscore') {
-                        suggestion = `Use native JavaScript methods instead, or add ${packageName} to package.json`;
-                    } else if (packageName === 'moment') {
-                        suggestion = `Use native Date or Intl.DateTimeFormat instead, or add moment to package.json`;
-                    } else if (packageName === 'axios') {
-                        suggestion = `Use native fetch() instead, or add axios to package.json`;
-                    }
-
-                    errors.push({
-                        type: 'missing_dependency',
-                        message: `Package '${packageName}' is imported but not in package.json`,
-                        file: filePath,
-                        line,
-                        suggestion,
-                    });
-                }
-            }
-        }
-    }
-
-    return {
-        valid: errors.length === 0,
-        errors,
-    };
-}
-
-/**
- * Format build errors for sending to AI for fixing
- */
-export function formatErrorsForAI(errors: BuildError[]): string {
-    if (errors.length === 0) return '';
-
-    let formatted = '=== BUILD ERRORS DETECTED ===\n\n';
-    formatted += 'The following errors were found in the generated code:\n\n';
-
-    for (const error of errors) {
-        formatted += `ERROR: ${error.message}\n`;
-        formatted += `  File: ${error.file}${error.line ? ` (line ${error.line})` : ''}\n`;
-        if (error.suggestion) {
-            formatted += `  Suggestion: ${error.suggestion}\n`;
-        }
-        formatted += '\n';
-    }
-
-    formatted += 'Please fix these errors in your response.\n';
-    formatted += 'Make sure all imported packages are either:\n';
-    formatted += '1. Added to package.json dependencies\n';
-    formatted += '2. Local files that exist in the project\n';
-    formatted += '3. Replaced with native browser APIs\n';
-
-    return formatted;
-}
-
-/**
  * BuildValidator class for service-oriented usage
  */
 export class BuildValidator {
+    /**
+     * Validate generated files for build issues
+     */
     validate(files: Record<string, string>): BuildValidationResult {
-        return validateBuild(files);
+        const errors: BuildError[] = [];
+        const allFilePaths = Object.keys(files);
+
+        // Find package.json
+        const packageJsonPath = allFilePaths.find(p => p.endsWith('package.json'));
+        const declaredDeps = packageJsonPath
+            ? parseDependencies(files[packageJsonPath])
+            : new Set<string>();
+
+        // Add built-in React modules
+        BUILT_IN_MODULES.forEach(m => declaredDeps.add(m));
+
+        // Scan each TypeScript/JavaScript file
+        for (const [filePath, content] of Object.entries(files)) {
+            const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
+            if (!['.ts', '.tsx', '.js', '.jsx'].includes(ext)) {
+                continue;
+            }
+
+            const imports = extractImports(content);
+
+            for (const { module: importPath, line } of imports) {
+                // Skip CSS/asset imports
+                if (importPath.endsWith('.css') || importPath.endsWith('.scss') ||
+                    importPath.endsWith('.png') || importPath.endsWith('.svg') ||
+                    importPath.endsWith('.jpg') || importPath.endsWith('.json')) {
+                    // For CSS imports, check if the file exists
+                    if (importPath.endsWith('.css') && isRelativeImport(importPath)) {
+                        const resolved = resolveRelativeImport(filePath, importPath, allFilePaths);
+                        if (!resolved) {
+                            errors.push({
+                                type: 'missing_file',
+                                message: `CSS file not found: '${importPath}'`,
+                                file: filePath,
+                                line,
+                                suggestion: `Create the CSS file or remove the import`,
+                            });
+                        }
+                    }
+                    continue;
+                }
+
+                if (isRelativeImport(importPath)) {
+                    // Check if relative import resolves to existing file
+                    const resolved = resolveRelativeImport(filePath, importPath, allFilePaths);
+                    if (!resolved) {
+                        errors.push({
+                            type: 'broken_import',
+                            message: `Cannot find module '${importPath}'`,
+                            file: filePath,
+                            line,
+                            suggestion: `Check if the file exists or fix the import path`,
+                        });
+                    }
+                } else {
+                    // External package import
+                    const packageName = getPackageName(importPath);
+
+                    // Check if it's a Node.js built-in (not usable in browser)
+                    if (NODE_BUILT_INS.has(packageName)) {
+                        errors.push({
+                            type: 'missing_dependency',
+                            message: `Node.js module '${packageName}' cannot be used in browser code`,
+                            file: filePath,
+                            line,
+                            suggestion: `Use a browser-compatible alternative`,
+                        });
+                        continue;
+                    }
+
+                    // Check if package is declared in dependencies
+                    if (!declaredDeps.has(packageName)) {
+                        // Provide specific suggestions for common packages
+                        let suggestion = `Add '${packageName}' to package.json dependencies`;
+
+                        if (packageName === 'uuid') {
+                            suggestion = `Use crypto.randomUUID() instead of uuid package, or add uuid to package.json`;
+                        } else if (packageName === 'lodash' || packageName === 'underscore') {
+                            suggestion = `Use native JavaScript methods instead, or add ${packageName} to package.json`;
+                        } else if (packageName === 'moment') {
+                            suggestion = `Use native Date or Intl.DateTimeFormat instead, or add moment to package.json`;
+                        } else if (packageName === 'axios') {
+                            suggestion = `Use native fetch() instead, or add axios to package.json`;
+                        }
+
+                        errors.push({
+                            type: 'missing_dependency',
+                            message: `Package '${packageName}' is imported but not in package.json`,
+                            file: filePath,
+                            line,
+                            suggestion,
+                        });
+                    }
+                }
+            }
+        }
+
+        return {
+            valid: errors.length === 0,
+            errors,
+        };
     }
 
+    /**
+     * Format build errors for sending to AI for fixing
+     */
     formatErrorsForAI(errors: BuildError[]): string {
-        return formatErrorsForAI(errors);
+        if (errors.length === 0) return '';
+
+        let formatted = '=== BUILD ERRORS DETECTED ===\n\n';
+        formatted += 'The following errors were found in the generated code:\n\n';
+
+        for (const error of errors) {
+            formatted += `ERROR: ${error.message}\n`;
+            formatted += `  File: ${error.file}${error.line ? ` (line ${error.line})` : ''}\n`;
+            if (error.suggestion) {
+                formatted += `  Suggestion: ${error.suggestion}\n`;
+            }
+            formatted += '\n';
+        }
+
+        formatted += 'Please fix these errors in your response.\n';
+        formatted += 'Make sure all imported packages are either:\n';
+        formatted += '1. Added to package.json dependencies\n';
+        formatted += '2. Local files that exist in the project\n';
+        formatted += '3. Replaced with native browser APIs\n';
+
+        return formatted;
     }
 }
 
+// Singleton instance
+let buildValidatorInstance: BuildValidator | null = null;
+
+/**
+ * Gets the singleton BuildValidator instance.
+ */
+export function getBuildValidator(): BuildValidator {
+    if (!buildValidatorInstance) {
+        buildValidatorInstance = new BuildValidator();
+    }
+    return buildValidatorInstance;
+}
+
+/**
+ * Creates a new BuildValidator instance.
+ * Use this for testing to get isolated instances.
+ */
 export function createBuildValidator(): BuildValidator {
     return new BuildValidator();
 }

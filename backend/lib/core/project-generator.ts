@@ -5,18 +5,17 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import type { ProjectState, Version, FileDiff } from '@ai-app-builder/shared';
-import { GeminiClient, createGeminiClient } from '../ai';
-import { ValidationPipeline } from './validation-pipeline';
-import { BuildValidator, createBuildValidator, type BuildError } from './build-validator';
+import type { ProjectState, Version } from '@ai-app-builder/shared';
+import { GeminiClient } from '../ai';
+import type { BuildError } from './build-validator';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
 import { buildFixPrompt } from './prompts/build-fix-prompt';
-import { formatCode } from '../prettier-config';
 import { createLogger } from '../logger';
 import { MAX_OUTPUT_TOKENS_GENERATION, MAX_OUTPUT_TOKENS_MODIFICATION } from '../constants';
 import { processFiles } from './file-processor';
 import { ProjectOutputSchema } from './schemas';
 import { isSafePath } from '../utils';
+import { BaseProjectGenerator } from './base-project-generator';
 
 const logger = createLogger('ProjectGenerator');
 
@@ -41,16 +40,9 @@ export interface GenerationResult {
  * Project Generator service for creating new projects from descriptions.
  * Includes build validation with auto-retry for fixing build errors.
  */
-export class ProjectGenerator {
-  private readonly geminiClient: GeminiClient;
-  private readonly validationPipeline: ValidationPipeline;
-  private readonly buildValidator: BuildValidator;
-  private readonly maxBuildRetries = 2;
-
+export class ProjectGenerator extends BaseProjectGenerator {
   constructor(geminiClient?: GeminiClient) {
-    this.geminiClient = geminiClient ?? createGeminiClient();
-    this.validationPipeline = new ValidationPipeline();
-    this.buildValidator = createBuildValidator();
+    super(geminiClient);
   }
 
   /**
@@ -304,48 +296,6 @@ export class ProjectGenerator {
       projectState,
       version,
     };
-  }
-
-  /**
-   * Extracts a project name from the description.
-   */
-  private extractProjectName(description: string): string {
-    // Take first few words, clean up, and use as name
-    const words = description
-      .replace(/[^a-zA-Z0-9\s]/g, '')
-      .split(/\s+/)
-      .filter(w => w.length > 0)
-      .slice(0, 3);
-
-    if (words.length === 0) {
-      return 'new-project';
-    }
-
-    return words.join('-').toLowerCase();
-  }
-
-  /**
-   * Computes initial diffs for a new project (all files are "added").
-   */
-  private computeInitialDiffs(files: Record<string, string>): FileDiff[] {
-    return Object.entries(files).map(([filePath, content]) => {
-      const lines = content.split('\n');
-      return {
-        filePath,
-        status: 'added' as const,
-        hunks: [{
-          oldStart: 0,
-          oldLines: 0,
-          newStart: 1,
-          newLines: lines.length,
-          changes: lines.map((line, index) => ({
-            type: 'add' as const,
-            lineNumber: index + 1,
-            content: line,
-          })),
-        }],
-      };
-    });
   }
 
 }

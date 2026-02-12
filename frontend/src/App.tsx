@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { ChatProvider, VersionProvider, PreviewErrorProvider } from './context';
+import {
+  ProjectProvider,
+  ChatMessagesProvider,
+  GenerationProvider,
+  AutoRepairProvider,
+  VersionProvider,
+  PreviewErrorProvider,
+  ErrorAggregatorProvider
+} from './context';
 import { ErrorBoundary, AppLayout } from './components';
 import { WelcomePage } from './pages';
 import './App.css';
@@ -33,13 +41,19 @@ function App() {
       onError={handleGlobalError}
       errorMessage="The application encountered an unexpected error. Please refresh the page to continue."
     >
-      <PreviewErrorProvider>
-        <ChatProvider initialPrompt={initialPrompt}>
-          <VersionProvider>
-            <AppLayout />
-          </VersionProvider>
-        </ChatProvider>
-      </PreviewErrorProvider>
+      <ErrorAggregatorProvider>
+        <ProjectProvider>
+          <ChatMessagesProvider>
+            <GenerationProvider>
+              <PreviewErrorProvider>
+                <AutoRepairProvider>
+                  <AppLayout initialPrompt={initialPrompt} />
+                </AutoRepairProvider>
+              </PreviewErrorProvider>
+            </GenerationProvider>
+          </ChatMessagesProvider>
+        </ProjectProvider>
+      </ErrorAggregatorProvider>
     </ErrorBoundary>
   );
 }

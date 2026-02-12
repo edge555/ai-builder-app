@@ -3,12 +3,12 @@
  * Provides a single point for error aggregation before repair.
  */
 
-import { 
-  type RuntimeError, 
-  ERROR_PRIORITY_ORDER, 
+import {
+  type RuntimeError,
+  ERROR_PRIORITY_ORDER,
   getErrorKey,
-  ERROR_REPAIR_DELAY 
-} from '@/shared/types/runtime-error';
+  ERROR_REPAIR_DELAY
+} from '@ai-app-builder/shared';
 
 export interface AggregatedErrors {
   /** All unique errors, sorted by priority */
@@ -44,7 +44,7 @@ export class ErrorAggregator {
    */
   addError(error: RuntimeError): boolean {
     const key = getErrorKey(error);
-    
+
     // Skip if we already have this exact error
     if (this.errorMap.has(key)) {
       return false;
@@ -60,7 +60,7 @@ export class ErrorAggregator {
    */
   private scheduleFlush(priority: RuntimeError['priority']): void {
     const delay = ERROR_REPAIR_DELAY[priority];
-    
+
     // Low priority errors don't trigger auto-repair
     if (delay < 0) return;
 
@@ -91,9 +91,9 @@ export class ErrorAggregator {
     }
 
     const errors = Array.from(this.errorMap.values());
-    
+
     // Sort by priority (critical first)
-    errors.sort((a, b) => 
+    errors.sort((a, b) =>
       ERROR_PRIORITY_ORDER[a.priority] - ERROR_PRIORITY_ORDER[b.priority]
     );
 
@@ -164,7 +164,7 @@ export class ErrorAggregator {
    * Build a formatted error report for the AI prompt.
    */
   buildErrorReport(includeContext?: Record<string, string>): string {
-    const errors = this.getErrors().sort((a, b) => 
+    const errors = this.getErrors().sort((a, b) =>
       ERROR_PRIORITY_ORDER[a.priority] - ERROR_PRIORITY_ORDER[b.priority]
     );
 
@@ -183,7 +183,7 @@ export class ErrorAggregator {
       lines.push(`--- ERROR ${index + 1} (${error.priority.toUpperCase()}) ---`);
       lines.push(`Type: ${error.type}`);
       lines.push(`Message: ${error.message}`);
-      
+
       if (error.filePath) {
         lines.push(`File: ${error.filePath}${error.line ? `:${error.line}` : ''}`);
       }
@@ -200,11 +200,11 @@ export class ErrorAggregator {
       if (includeContext && error.filePath && includeContext[error.filePath]) {
         const fileContent = includeContext[error.filePath];
         const fileLines = fileContent.split('\n');
-        
+
         if (error.line && error.line > 0) {
           const startLine = Math.max(0, error.line - 3);
           const endLine = Math.min(fileLines.length, error.line + 3);
-          
+
           lines.push('');
           lines.push('Code context:');
           for (let i = startLine; i < endLine; i++) {
@@ -229,5 +229,5 @@ export class ErrorAggregator {
   }
 }
 
-// Singleton instance for global use
-export const errorAggregator = new ErrorAggregator();
+// Removed singleton instance for React-friendly context pattern
+// export const errorAggregator = new ErrorAggregator();

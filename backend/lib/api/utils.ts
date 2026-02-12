@@ -8,15 +8,20 @@
  */
 
 import { NextResponse } from 'next/server';
-import type { ErrorResponse } from '@ai-app-builder/shared';
+import { ZodError } from 'zod';
+import type { ErrorResponse, ApiError } from '@ai-app-builder/shared';
 import { config } from '../config';
+import { AppError } from './error';
+import { createLogger } from '../logger';
+
+const logger = createLogger('api/utils');
 
 /**
  * Options for creating an error response
  */
 export interface ErrorResponseOptions {
   /** Category of the error */
-  type: 'api' | 'validation' | 'ai_output' | 'state' | 'unknown';
+  type: ApiError['type'];
   /** Error code for programmatic handling */
   code: string;
   /** Human-readable error message */
@@ -42,7 +47,7 @@ export function getCorsHeaders(): Record<string, string> {
 }
 
 /**
- * Creates a standardized error response.
+ * Creates a standardized error response body.
  * 
  * @param options - Error response options
  * @returns Formatted error response object
@@ -58,6 +63,48 @@ export function createErrorResponse(options: ErrorResponseOptions): ErrorRespons
       recoverable: options.recoverable ?? true,
     },
   };
+}
+
+/**
+ * Centralized error handler for API routes.
+ * Converts any error into a standardized NextResponse with ErrorResponse body.
+ * 
+ * @param error - The error to handle
+ * @param routeName - Name of the route for logging
+ * @returns Standardized NextResponse
+ */
+export function handleError(error: unknown, routeName: string): NextResponse<ErrorResponse> {
+  const corsHeaders = getCorsHeaders();
+
+  if (error instanceof AppError) {
+    return NextResponse.json(
+      { success: false, error: error.toApiError() },
+      { status: error.statusCode, headers: corsHeaders }
+    );
+  }
+
+  if (error instanceof ZodError) {
+    const appError = AppError.validation('Request validation failed', {
+      issues: error.issues,
+    });
+    return NextResponse.json(
+      { success: false, error: appError.toApiError() },
+      { status: appError.statusCode, headers: corsHeaders }
+    );
+  }
+
+  // Handle generic errors
+  const message = error instanceof Error ? error.message : String(error);
+  logger.error(`Error in ${routeName}`, { error: message });
+
+  const appError = AppError.unknown('An unexpected error occurred', {
+    originalError: message,
+  });
+
+  return NextResponse.json(
+    { success: false, error: appError.toApiError() },
+    { status: 500, headers: corsHeaders }
+  );
 }
 
 /**

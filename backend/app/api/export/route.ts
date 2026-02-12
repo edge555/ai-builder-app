@@ -7,11 +7,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { ExportProjectRequest, ErrorResponse } from '@ai-app-builder/shared';
-import { deserializeProjectState } from '@ai-app-builder/shared';
+import type { ErrorResponse } from '@ai-app-builder/shared';
+import { deserializeProjectState, ExportProjectRequestSchema } from '@ai-app-builder/shared';
 import { exportAsZipBuffer } from '../../../lib/core';
-import { ExportProjectRequestSchema } from '../../../lib/api/schemas';
-import { getCorsHeaders, handleOptions, createErrorResponse } from '../../../lib/api';
+import { getCorsHeaders, handleOptions, handleError, AppError } from '../../../lib/api';
 import { createLogger } from '../../../lib/logger';
 
 const logger = createLogger('api/export');
@@ -25,35 +24,16 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const corsHeaders = getCorsHeaders();
-  
+
   try {
     // Parse request body
-    let body: ExportProjectRequest;
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json(
-        createErrorResponse({ type: 'api', code: 'INVALID_REQUEST_BODY', message: 'Invalid JSON in request body' }),
-        { status: 400, headers: corsHeaders }
-      );
-    }
+    const body = await request.json();
 
-    const parsedRequest = ExportProjectRequestSchema.safeParse(body);
-    if (!parsedRequest.success) {
-      const issue = parsedRequest.error.issues[0];
-      return NextResponse.json(
-        createErrorResponse({
-          type: 'api',
-          code: 'INVALID_PROJECT_STATE',
-          message: issue?.message ?? 'Project state validation failed',
-          details: { issues: parsedRequest.error.issues },
-        }),
-        { status: 400, headers: corsHeaders }
-      );
-    }
+    // Validate request
+    const validatedRequest = ExportProjectRequestSchema.parse(body);
 
     // Deserialize project state
-    const projectState = deserializeProjectState(parsedRequest.data.projectState);
+    const projectState = deserializeProjectState(validatedRequest.projectState as any);
 
     // Generate ZIP file
     const zipBuffer = await exportAsZipBuffer(projectState);
@@ -78,19 +58,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
 
   } catch (error) {
-    logger.error('Error in export endpoint', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    
-    return NextResponse.json(
-      createErrorResponse({
-        type: 'unknown',
-        code: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred while exporting project',
-        details: { message: error instanceof Error ? error.message : 'Unknown error' },
-        recoverable: true
-      }),
-      { status: 500, headers: corsHeaders }
-    );
+    return handleError(error, 'api/export');
   }
 }

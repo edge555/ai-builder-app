@@ -1,54 +1,22 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import type { LoadingPhase } from '../components/ChatInterface';
 import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState } from '@/shared';
 import { config as appConfig } from '../config';
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
-import { errorAggregator } from '@/services/ErrorAggregator';
+import { parseSSEStream } from '@/utils/sse-parser';
+import { buildRepairPrompt } from '@/utils/repair-prompt';
+import { GenerationContext, type GenerationContextValue, type StreamingState } from './GenerationContext.context';
+import { useErrorAggregator } from './ErrorAggregatorContext';
 
 const MAX_AUTO_REPAIR_ATTEMPTS = 3;
 const STREAMING_TIMEOUT_MS = 120000; // 120 seconds
-
-export type StreamingPhase = 'idle' | 'connecting' | 'generating' | 'processing' | 'complete' | 'error';
-
-export interface StreamingState {
-  phase: StreamingPhase;
-  files: Record<string, string>;
-  currentFile: string | null;
-  filesReceived: number;
-  totalFiles: number;
-  textLength: number;
-  error: string | null;
-  lastHeartbeat: number | null;
-}
-
-/**
- * Generation context value.
- */
-export interface GenerationContextValue {
-  isLoading: boolean;
-  loadingPhase: LoadingPhase;
-  error: string | null;
-  isAutoRepairing: boolean;
-  autoRepairAttempt: number;
-  streamingState: StreamingState | null;
-  isStreaming: boolean;
-  generateProject: (description: string) => Promise<GenerateProjectResponse>;
-  generateProjectStreaming: (description: string) => Promise<GenerateProjectResponse>;
-  modifyProject: (currentState: SerializedProjectState, prompt: string, runtimeError?: RuntimeError) => Promise<ModifyProjectResponse>;
-  autoRepair: (runtimeError: RuntimeError, projectState: SerializedProjectState | null) => Promise<boolean>;
-  resetAutoRepair: () => void;
-  setIsLoading: (loading: boolean) => void;
-  setLoadingPhase: (phase: LoadingPhase) => void;
-  clearError: () => void;
-}
-
-const GenerationContext = createContext<GenerationContextValue | null>(null);
 
 /**
  * Provider for generation and modification operations.
  * Manages loading states, streaming, and auto-repair.
  */
 export function GenerationProvider({ children }: { children: React.ReactNode }) {
+  const errorAggregator = useErrorAggregator();
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -305,7 +273,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
 
     // Get file context for better repair prompts
     const fileContext = projectState.files;
-    const repairPrompt = buildRepairPrompt(runtimeError, fileContext);
+    const repairPrompt = buildRepairPrompt(runtimeError, fileContext, errorAggregator);
 
     try {
       const result = await modifyProject(projectState, repairPrompt, runtimeError);
@@ -325,7 +293,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
       setLoadingPhase('idle');
       return false;
     }
-  }, [isAutoRepairing, modifyProject]);
+  }, [isAutoRepairing, modifyProject, errorAggregator]);
 
   const value = useMemo<GenerationContextValue>(() => ({
     isLoading,
@@ -364,222 +332,4 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
       {children}
     </GenerationContext.Provider>
   );
-}
-
-/**
- * Hook to access the generation context.
- * Must be used within a GenerationProvider.
- */
-export function useGeneration(): GenerationContextValue {
-  const context = useContext(GenerationContext);
-  if (!context) {
-    throw new Error('useGeneration must be used within a GenerationProvider');
-  }
-  return context;
-}
-
-/**
- * Shared SSE parser utility with heartbeat support.
- */
-async function parseSSEStream(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  handlers: {
-    onStart?: () => void;
-    onProgress?: (length: number) => void;
-    onFile?: (data: any, files: Record<string, string>) => void;
-    onComplete?: (data: any, files: Record<string, string>) => void;
-    onError?: (error: string) => void;
-    onHeartbeat?: () => void;
-  }
-): Promise<GenerateProjectResponse> {
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let result: GenerateProjectResponse = { success: false };
-  const files: Record<string, string> = {};
-
-  // Persist across chunks so split events are properly handled
-  let currentEvent = '';
-  let currentData = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split('\n');
-    // Keep the last line in buffer if it doesn't end with newline (incomplete)
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      // Handle heartbeat comments
-      if (line.startsWith(':')) {
-        handlers.onHeartbeat?.();
-        continue;
-      }
-
-      if (line.startsWith('event: ')) {
-        currentEvent = line.slice(7).trim();
-      } else if (line.startsWith('data: ')) {
-        currentData = line.slice(6).trim();
-      } else if (line === '' && currentEvent && currentData) {
-        try {
-          const data = JSON.parse(currentData);
-
-          switch (currentEvent) {
-            case 'start':
-              handlers.onStart?.();
-              break;
-
-            case 'progress':
-              handlers.onProgress?.(data.length || 0);
-              break;
-
-            case 'file':
-              files[data.path] = data.content;
-              handlers.onFile?.(data, files);
-              break;
-
-            case 'complete':
-              result = {
-                success: true,
-                projectState: data.projectState,
-                version: data.version,
-              };
-              handlers.onComplete?.(data, files);
-              break;
-
-            case 'error':
-              result = { success: false, error: data.error };
-              handlers.onError?.(data.error);
-              break;
-          }
-        } catch {
-          // Skip invalid JSON
-        }
-        currentEvent = '';
-        currentData = '';
-      }
-      // Unrecognized lines are ignored (they're typically partial lines kept in buffer)
-    }
-  }
-
-  return result;
-}
-
-/**
- * Builds a repair prompt for a runtime error or aggregated errors.
- */
-function buildRepairPrompt(runtimeError: RuntimeError, projectFiles?: Record<string, string>): string {
-  // Check if we have aggregated errors
-  const aggregatedReport = errorAggregator.buildErrorReport(projectFiles);
-
-  if (aggregatedReport) {
-    return aggregatedReport;
-  }
-
-  // Fallback to single error prompt
-  const parts = [
-    `Fix the following runtime error that crashed the application preview:`,
-    ``,
-    `Error Type: ${runtimeError.type}`,
-    `Error Message: ${runtimeError.message}`,
-  ];
-
-  if (runtimeError.filePath) {
-    parts.push(`File: ${runtimeError.filePath}`);
-  }
-  if (runtimeError.line) {
-    parts.push(`Line: ${runtimeError.line}`);
-  }
-  if (runtimeError.componentStack) {
-    parts.push(``, `Component Stack:`, runtimeError.componentStack.slice(0, 500));
-  }
-  if (runtimeError.stack) {
-    parts.push(``, `Stack Trace:`, runtimeError.stack.slice(0, 800));
-  }
-
-  // Add suggested fixes from the error
-  if (runtimeError.suggestedFixes && runtimeError.suggestedFixes.length > 0) {
-    parts.push(``, `Suggested fixes:`);
-    runtimeError.suggestedFixes.forEach(fix => {
-      parts.push(`- ${fix}`);
-    });
-  } else {
-    parts.push(
-      ``,
-      `Common fixes for ${runtimeError.type}:`,
-      ...getRepairHints(runtimeError.type)
-    );
-  }
-
-  parts.push(
-    ``,
-    `IMPORTANT: Apply the minimal fix needed to resolve this error.`,
-    `Ensure the project compiles and runs after the fix.`
-  );
-
-  return parts.join('\n');
-}
-
-/**
- * Returns repair hints based on error type.
- */
-function getRepairHints(errorType: RuntimeError['type']): string[] {
-  switch (errorType) {
-    case 'BUILD_ERROR':
-      return [
-        '- Check for syntax errors in the affected file',
-        '- Verify all imports are correct',
-        '- Ensure TypeScript/JSX syntax is valid',
-      ];
-    case 'IMPORT_ERROR':
-      return [
-        '- Check if the module path is correct',
-        '- Use an already installed alternative (lucide-react instead of react-icons)',
-        '- Remove the import if not essential',
-      ];
-    case 'UNDEFINED_EXPORT':
-      return [
-        '- Verify the export name matches what the module provides',
-        '- Check for typos in the import name',
-        '- Use default import if named export does not exist',
-      ];
-    case 'REFERENCE_ERROR':
-      return [
-        '- Check if the variable is defined before use',
-        '- Add missing imports',
-        '- Fix typos in variable names',
-      ];
-    case 'TYPE_ERROR':
-      return [
-        '- Add null/undefined checks before accessing properties',
-        '- Provide default values for optional properties',
-        '- Ensure functions are called correctly',
-      ];
-    case 'RENDER_ERROR':
-      return [
-        '- Check component props and state initialization',
-        '- Ensure hooks are called unconditionally',
-        '- Verify JSX structure is valid',
-      ];
-    case 'SYNTAX_ERROR':
-      return [
-        '- Fix bracket matching',
-        '- Close unclosed strings',
-        '- Check for missing semicolons or commas',
-      ];
-    case 'CSS_ERROR':
-      return [
-        '- Fix CSS syntax (semicolons, brackets)',
-        '- Verify property names are valid',
-        '- Check for unclosed rules',
-      ];
-    default:
-      return [
-        '- Check for undefined values',
-        '- Verify imports are correct',
-        '- Ensure proper error handling',
-      ];
-  }
 }
