@@ -34,6 +34,12 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
         : previewError.currentError;
 
       if (errorToRepair && project.projectState) {
+        // Show repair attempt number
+        const attemptNumber = generation.autoRepairAttempt + 1;
+        chatMessages.addAssistantMessage(
+          `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
+        );
+
         generation.autoRepair(errorToRepair, project.projectState).then(success => {
           if (success) {
             // Repair succeeded
@@ -42,7 +48,7 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
 
             // Add assistant message
             chatMessages.addAssistantMessage(
-              `🔧 Auto-repair applied: Fixed ${errorToRepair.type.toLowerCase().replace('_', ' ')} in ${errorToRepair.filePath || 'the application'}.`
+              `✅ Auto-repair successful: Fixed ${errorToRepair.type.toLowerCase().replace('_', ' ')} in ${errorToRepair.filePath || 'the application'}.`
             );
           } else {
             // Repair failed
@@ -73,13 +79,20 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
     }
 
     previewError.startAutoRepair();
+
+    // Show repair attempt number
+    const attemptNumber = generation.autoRepairAttempt + 1;
+    chatMessages.addAssistantMessage(
+      `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
+    );
+
     const success = await generation.autoRepair(errorToRepair, project.projectState);
 
     if (success) {
       previewError.completeAutoRepair(true);
       generation.resetAutoRepair();
       chatMessages.addAssistantMessage(
-        `🔧 Auto-repair applied: Fixed ${errorToRepair.type.toLowerCase().replace('_', ' ')} in ${errorToRepair.filePath || 'the application'}.`
+        `✅ Auto-repair successful: Fixed ${errorToRepair.type.toLowerCase().replace('_', ' ')} in ${errorToRepair.filePath || 'the application'}.`
       );
     } else {
       previewError.completeAutoRepair(false);

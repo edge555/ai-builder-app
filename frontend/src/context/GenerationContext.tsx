@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import type { LoadingPhase } from '../components/ChatInterface';
-import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState } from '@/shared';
+import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState, RepairAttempt } from '@/shared';
 import { config as appConfig } from '../config';
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 import { parseSSEStream } from '@/utils/sse-parser';
@@ -29,6 +29,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
   const streamAbortRef = useRef<AbortController | null>(null);
   const lastRepairErrorRef = useRef<string | null>(null);
   const autoRepairAttemptRef = useRef(0);
+  const repairHistoryRef = useRef<RepairAttempt[]>([]);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -62,6 +63,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     setAutoRepairAttempt(0);
     setIsAutoRepairing(false);
     lastRepairErrorRef.current = null;
+    repairHistoryRef.current = [];
   }, []);
 
   /**
@@ -243,6 +245,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
   /**
    * Triggers auto-repair for a runtime error.
    * Returns true if repair was successful.
+   * Accumulates failure history across attempts to help AI avoid repeating mistakes.
    */
   const autoRepair = useCallback(async (runtimeError: RuntimeError, projectState: SerializedProjectState | null): Promise<boolean> => {
     // Prevent duplicate repairs for the same error
@@ -273,7 +276,14 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
 
     // Get file context for better repair prompts
     const fileContext = projectState.files;
-    const repairPrompt = buildRepairPrompt(runtimeError, fileContext, errorAggregator);
+
+    // Build repair prompt with failure history from previous attempts
+    const repairPrompt = buildRepairPrompt(
+      runtimeError,
+      fileContext,
+      errorAggregator,
+      repairHistoryRef.current.length > 0 ? repairHistoryRef.current : undefined
+    );
 
     try {
       const result = await modifyProject(projectState, repairPrompt, runtimeError);
@@ -282,13 +292,33 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
       setLoadingPhase('idle');
 
       if (result.success && result.projectState) {
+        // Success - clear history for next error
+        repairHistoryRef.current = [];
         return true;
       } else {
         console.error('[AutoRepair] Repair failed:', result.error);
+
+        // Record this failure in history
+        repairHistoryRef.current.push({
+          attempt: autoRepairAttemptRef.current,
+          error: result.error || 'Repair modification failed',
+          strategy: `Attempted to fix ${runtimeError.type}: ${runtimeError.message}`,
+          timestamp: new Date().toISOString(),
+        });
+
         return false;
       }
     } catch (err) {
       console.error('[AutoRepair] Repair threw error:', err);
+
+      // Record this failure in history
+      repairHistoryRef.current.push({
+        attempt: autoRepairAttemptRef.current,
+        error: err instanceof Error ? err.message : 'Unknown error',
+        strategy: `Attempted to fix ${runtimeError.type}: ${runtimeError.message}`,
+        timestamp: new Date().toISOString(),
+      });
+
       setIsAutoRepairing(false);
       setLoadingPhase('idle');
       return false;

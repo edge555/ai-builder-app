@@ -80,6 +80,8 @@ type ZodDef = {
     element?: z.ZodTypeAny;
     innerType?: z.ZodTypeAny;
     values?: string[];
+    options?: z.ZodTypeAny[];
+    discriminator?: string;
 };
 
 function getZodDef(schema: z.ZodTypeAny): ZodDef | undefined {
@@ -177,6 +179,44 @@ export function toGeminiSchema(schema: z.ZodTypeAny): GeminiSchema {
             return toGeminiSchema(innerType);
         }
         result.type = 'string';
+    } else if (schemaType === 'discriminatedUnion' || schemaType === 'union') {
+        // Handle discriminated unions and regular unions
+        // Gemini doesn't support oneOf/anyOf, so we merge all variants into a single object
+        const options = (schema as { options?: z.ZodTypeAny[] }).options ?? def?.options;
+        
+        if (options && Array.isArray(options) && options.length > 0) {
+            result.type = 'object';
+            const allProperties: Record<string, GeminiSchema> = {};
+            const propertyCounts: Record<string, number> = {};
+            
+            // Process each variant (should be objects)
+            for (const variant of options) {
+                const variantSchema = toGeminiSchema(variant);
+                
+                if (variantSchema.type === 'object' && variantSchema.properties) {
+                    for (const [key, value] of Object.entries(variantSchema.properties)) {
+                        allProperties[key] = value;
+                        propertyCounts[key] = (propertyCounts[key] || 0) + 1;
+                    }
+                }
+            }
+            
+            // Properties that appear in ALL variants are required
+            const required: string[] = [];
+            for (const [key, count] of Object.entries(propertyCounts)) {
+                if (count === options.length) {
+                    required.push(key);
+                }
+            }
+            
+            result.properties = allProperties;
+            if (required.length > 0) {
+                result.required = required;
+            }
+        } else {
+            // Fallback if we can't get options
+            result.type = 'string';
+        }
     } else {
         result.type = 'string';
     }
