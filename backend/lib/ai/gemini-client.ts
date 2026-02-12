@@ -57,7 +57,7 @@ export class GeminiClient {
         return {
           success: true,
           content: response,
-          retryCount,
+          retryCount: attempt,
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -96,7 +96,7 @@ export class GeminiClient {
         return {
           success: true,
           content: response,
-          retryCount,
+          retryCount: attempt,
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));

@@ -49,6 +49,88 @@ describe('GeminiClient', () => {
     expect(response.success).toBe(false);
     expect(response.error).toContain('Gemini API error');
   });
+
+  it('should handle streaming responses', async () => {
+    const mockChunks = [
+      JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Hello ' }] } }] }),
+      JSON.stringify({ candidates: [{ content: { parts: [{ text: 'world!' }] } }] }),
+    ];
+
+    const stream = new ReadableStream({
+      start(controller) {
+        for (const chunk of mockChunks) {
+          controller.enqueue(new TextEncoder().encode(chunk));
+        }
+        controller.close();
+      },
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: stream,
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const client = new GeminiClient({ apiKey: 'test-key' });
+    const chunks: string[] = [];
+    const response = await client.generateStreaming({
+      prompt: 'test',
+      onChunk: (chunk) => chunks.push(chunk),
+    });
+
+    expect(response.success).toBe(true);
+    expect(response.content).toBe('Hello world!');
+    expect(chunks).toEqual(['Hello ', 'world!']);
+  });
+
+  it('should retry on retryable errors', async () => {
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        text: vi.fn().mockResolvedValue(JSON.stringify({ error: { message: 'Rate limit' } })),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ candidates: [{ content: { parts: [{ text: 'Success' }] } }] }),
+      });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const client = new GeminiClient({
+      apiKey: 'test-key',
+      maxRetries: 1,
+      retryBaseDelay: 0, // No delay for tests
+    });
+
+    const response = await client.generate({ prompt: 'test' });
+
+    expect(response.success).toBe(true);
+    expect(response.content).toBe('Success');
+    expect(response.retryCount).toBe(1);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('should not retry on non-retryable errors', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      text: vi.fn().mockResolvedValue(JSON.stringify({ error: { message: 'Bad request' } })),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const client = new GeminiClient({
+      apiKey: 'test-key',
+      maxRetries: 3,
+      retryBaseDelay: 0,
+    });
+
+    const response = await client.generate({ prompt: 'test' });
+
+    expect(response.success).toBe(false);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('createGeminiClient', () => {
