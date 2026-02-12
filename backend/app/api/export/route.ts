@@ -11,9 +11,6 @@ import type { ErrorResponse } from '@ai-app-builder/shared';
 import { deserializeProjectState, ExportProjectRequestSchema } from '@ai-app-builder/shared';
 import { exportAsZipBuffer } from '../../../lib/core';
 import { getCorsHeaders, handleOptions, handleError, AppError } from '../../../lib/api';
-import { createLogger } from '../../../lib/logger';
-
-const logger = createLogger('api/export');
 
 /**
  * Handle OPTIONS preflight request

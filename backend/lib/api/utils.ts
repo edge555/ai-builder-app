@@ -84,8 +84,15 @@ export function handleError(error: unknown, routeName: string): NextResponse<Err
   }
 
   if (error instanceof ZodError) {
+    // Sanitize issues to only include serializable properties
+    const sanitizedIssues = error.issues.map(issue => ({
+      path: issue.path.join('.'),
+      message: issue.message,
+      code: issue.code,
+    }));
+
     const appError = AppError.validation('Request validation failed', {
-      issues: error.issues,
+      issues: sanitizedIssues,
     });
     return NextResponse.json(
       { success: false, error: appError.toApiError() },

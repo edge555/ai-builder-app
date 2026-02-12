@@ -8,7 +8,7 @@ export const SerializedProjectStateSchema = z.object({
     id: z.string().min(1, 'Project state must have a valid id'),
     name: z.string().min(1, 'Project name is required'),
     description: z.string(),
-    files: z.record(z.string()),
+    files: z.record(z.string(), z.string()),
     createdAt: z.string(),
     updatedAt: z.string(),
     currentVersionId: z.string(),

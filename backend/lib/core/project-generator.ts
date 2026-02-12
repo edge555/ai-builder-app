@@ -148,7 +148,7 @@ export class ProjectGenerator extends BaseProjectGenerator {
     }
 
     // Process files: sanitize paths, normalize newlines, format with Prettier
-    const prefixedFiles = await processFiles(files, { addFrontendPrefix: true });
+    const prefixedFiles = await processFiles(files, { addFrontendPrefix: false });
 
     // Validate the output (syntax validation)
     logger.debug('Validating files', { files: Object.keys(prefixedFiles) });
@@ -236,7 +236,7 @@ export class ProjectGenerator extends BaseProjectGenerator {
 
         const fixedOutput = zodResult.data;
         // Process fixed files
-        const fixedFiles = await processFiles(fixedOutput.files || [], { addFrontendPrefix: true });
+        const fixedFiles = await processFiles(fixedOutput.files || [], { addFrontendPrefix: false });
 
         // Re-validate syntax
         const revalidation = this.validationPipeline.validate(fixedFiles);

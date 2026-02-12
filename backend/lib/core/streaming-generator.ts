@@ -159,7 +159,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     const files = parsedOutput.files;
 
     // Process files: sanitize paths, normalize newlines, format with Prettier
-    const prefixedFiles = await processFiles(files, { addFrontendPrefix: true });
+    const prefixedFiles = await processFiles(files, { addFrontendPrefix: false });
 
     // Validate the output (syntax validation)
     logger.debug('Validating files', { files: Object.keys(prefixedFiles) });
@@ -219,7 +219,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
         }
 
         const fixedOutput = zodResult.data;
-        const fixedFiles = await processFiles(fixedOutput.files || [], { addFrontendPrefix: true });
+        const fixedFiles = await processFiles(fixedOutput.files || [], { addFrontendPrefix: false });
 
         const revalidation = this.validationPipeline.validate(fixedFiles);
         if (!revalidation.valid) {

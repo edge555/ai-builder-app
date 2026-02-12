@@ -84,12 +84,11 @@ type ZodDef = {
 
 function getZodDef(schema: z.ZodTypeAny): ZodDef | undefined {
     const maybeSchema = schema as {
-        _zod?: { def?: ZodDef };
         _def?: ZodDef;
         def?: ZodDef;
     };
 
-    return maybeSchema._zod?.def ?? maybeSchema._def ?? maybeSchema.def;
+    return maybeSchema._def ?? maybeSchema.def;
 }
 
 function resolveShape(shape: ZodDef['shape']): Record<string, z.ZodTypeAny> | undefined {

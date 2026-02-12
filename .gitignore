@@ -102,3 +102,5 @@ kiro-specs/
 .cache/
 .eslintcache
 *.tgz
+
+.claude
