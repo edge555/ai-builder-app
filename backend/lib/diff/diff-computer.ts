@@ -3,10 +3,17 @@
  * 
  * Handles computing diffs between file states and creating FileDiff objects.
  * Extracted from ModificationEngine for better separation of concerns.
+ * 
+ * This module now delegates core logic to the @ai-app-builder/shared package.
  */
 
-import type { FileDiff } from '@ai-app-builder/shared';
-import { computeLineHunks } from '../core/diff-utils';
+import type { FileDiff, DiffHunk } from '@ai-app-builder/shared';
+import {
+    computeFileDiff as sharedComputeFileDiff,
+    hasRealChanges as sharedHasRealChanges,
+    trimTrailingEmptyLines,
+    normalizeLine
+} from '@ai-app-builder/shared';
 import { normalizeContent } from './edit-applicator';
 
 /**
@@ -18,11 +25,9 @@ export function computeDiffs(
     deletedFiles: string[]
 ): FileDiff[] {
     const diffs: FileDiff[] = [];
-    const processedPaths = new Set<string>();
 
     // Handle modified and added files
     for (const [path, newContent] of Object.entries(newFiles)) {
-        processedPaths.add(path);
         const oldContent = oldFiles[path];
 
         if (oldContent === undefined) {
@@ -58,25 +63,18 @@ export function computeDiffs(
  * Check if a file diff has real changes (not just whitespace).
  */
 export function hasRealChanges(fileDiff: FileDiff): boolean {
-    for (const hunk of fileDiff.hunks) {
-        for (const change of hunk.changes) {
-            if (change.type === 'add' || change.type === 'delete') {
-                return true;
-            }
-        }
-    }
-    return false;
+    return sharedHasRealChanges(fileDiff.hunks);
 }
 
 /**
  * Create a diff for an added file.
  */
 export function createAddedFileDiff(filePath: string, content: string): FileDiff {
-    const lines = content.split('\n');
+    const lines = trimTrailingEmptyLines(content.split('\n').map(normalizeLine));
     return {
         filePath,
         status: 'added',
-        hunks: [{
+        hunks: lines.length > 0 ? [{
             oldStart: 0,
             oldLines: 0,
             newStart: 1,
@@ -86,7 +84,7 @@ export function createAddedFileDiff(filePath: string, content: string): FileDiff
                 lineNumber: index + 1,
                 content: line,
             })),
-        }],
+        }] : [],
     };
 }
 
@@ -94,11 +92,11 @@ export function createAddedFileDiff(filePath: string, content: string): FileDiff
  * Create a diff for a deleted file.
  */
 export function createDeletedFileDiff(filePath: string, content: string): FileDiff {
-    const lines = content.split('\n');
+    const lines = trimTrailingEmptyLines(content.split('\n').map(normalizeLine));
     return {
         filePath,
         status: 'deleted',
-        hunks: [{
+        hunks: lines.length > 0 ? [{
             oldStart: 1,
             oldLines: lines.length,
             newStart: 0,
@@ -108,7 +106,7 @@ export function createDeletedFileDiff(filePath: string, content: string): FileDi
                 lineNumber: index + 1,
                 content: line,
             })),
-        }],
+        }] : [],
     };
 }
 
@@ -120,12 +118,9 @@ export function createModifiedFileDiff(
     oldContent: string,
     newContent: string
 ): FileDiff {
-    const oldLines = oldContent.split('\n');
-    const newLines = newContent.split('\n');
-
     return {
         filePath,
         status: 'modified',
-        hunks: computeLineHunks(oldLines, newLines),
+        hunks: sharedComputeFileDiff(oldContent, newContent),
     };
 }

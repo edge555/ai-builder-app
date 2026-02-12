@@ -4,10 +4,8 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import type { ProjectState, Version, FileDiff } from '@ai-app-builder/shared';
-import { GeminiClient, createGeminiClient } from '../ai';
-import { ValidationPipeline } from './validation-pipeline';
-import { BuildValidator, createBuildValidator } from './build-validator';
+import type { ProjectState, Version } from '@ai-app-builder/shared';
+import { GeminiClient } from '../ai';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
 import { buildFixPrompt } from './prompts/build-fix-prompt';
 import { processFiles } from './file-processor';
@@ -15,6 +13,7 @@ import { ProjectOutputSchema } from './schemas';
 import { createLogger } from '../logger';
 import { MAX_OUTPUT_TOKENS_GENERATION, MAX_OUTPUT_TOKENS_MODIFICATION } from '../constants';
 import { parseIncrementalFiles, estimateTotalFiles } from '../utils/incremental-json-parser';
+import { BaseProjectGenerator } from './base-project-generator';
 
 const logger = createLogger('StreamingGenerator');
 
@@ -49,16 +48,9 @@ export interface StreamingGenerationResult {
 /**
  * Streaming Project Generator that emits files as they're generated.
  */
-export class StreamingProjectGenerator {
-  private readonly geminiClient: GeminiClient;
-  private readonly validationPipeline: ValidationPipeline;
-  private readonly buildValidator: BuildValidator;
-  private readonly maxBuildRetries = 2;
-
+export class StreamingProjectGenerator extends BaseProjectGenerator {
   constructor(geminiClient?: GeminiClient) {
-    this.geminiClient = geminiClient ?? createGeminiClient();
-    this.validationPipeline = new ValidationPipeline();
-    this.buildValidator = createBuildValidator();
+    super(geminiClient);
   }
 
   /**
@@ -105,13 +97,13 @@ export class StreamingProjectGenerator {
       onChunk: (chunk: string, accumulatedLength: number) => {
         accumulatedText += chunk;
         callbacks.onProgress?.(accumulatedLength);
-        
+
         // Try to parse incrementally for complete file objects
         const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
-        
+
         if (parseResult.files.length > 0) {
           const totalEstimate = estimateTotalFiles(accumulatedText);
-          
+
           // Emit newly parsed files
           for (const file of parseResult.files) {
             if (!emittedFiles.has(file.path)) {
@@ -124,7 +116,7 @@ export class StreamingProjectGenerator {
               });
             }
           }
-          
+
           lastParsedIndex = parseResult.lastParsedIndex;
         }
       },
@@ -172,7 +164,7 @@ export class StreamingProjectGenerator {
     // Validate the output (syntax validation)
     logger.debug('Validating files', { files: Object.keys(prefixedFiles) });
     const validationResult = this.validationPipeline.validate(prefixedFiles);
-    
+
     if (!validationResult.valid) {
       logger.error('Validation errors', { errors: validationResult.errors });
       const error = 'AI output failed validation';
@@ -299,46 +291,6 @@ export class StreamingProjectGenerator {
     };
   }
 
-  /**
-   * Extracts a project name from the description.
-   */
-  private extractProjectName(description: string): string {
-    const words = description
-      .replace(/[^a-zA-Z0-9\s]/g, '')
-      .split(/\s+/)
-      .filter(w => w.length > 0)
-      .slice(0, 3);
-
-    if (words.length === 0) {
-      return 'new-project';
-    }
-
-    return words.join('-').toLowerCase();
-  }
-
-  /**
-   * Computes initial diffs for a new project (all files are "added").
-   */
-  private computeInitialDiffs(files: Record<string, string>): FileDiff[] {
-    return Object.entries(files).map(([filePath, content]) => {
-      const lines = content.split('\n');
-      return {
-        filePath,
-        status: 'added' as const,
-        hunks: [{
-          oldStart: 0,
-          oldLines: 0,
-          newStart: 1,
-          newLines: lines.length,
-          changes: lines.map((line, index) => ({
-            type: 'add' as const,
-            lineNumber: index + 1,
-            content: line,
-          })),
-        }],
-      };
-    });
-  }
 }
 
 /**
