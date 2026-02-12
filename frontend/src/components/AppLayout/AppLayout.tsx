@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 
-import { ChatInterface, PreviewPanel, RepairStatus } from '../../components';
+import { ChatInterface, RepairStatus } from '../../components';
+import { PreviewSkeleton } from '../PreviewPanel/PreviewSkeleton';
+const PreviewPanel = lazy(() => import('../PreviewPanel/PreviewPanel'));
 import { PreviewErrorBoundary } from '../PreviewPanel/PreviewErrorBoundary';
 import { ExportButton } from '../ExportButton';
 import { PanelToggle, type ActivePanel } from '../PanelToggle';
@@ -156,14 +158,16 @@ function PreviewSection() {
                 canAutoRepair={canAutoRepair}
                 isAutoRepairing={isAutoRepairing}
             >
-                <PreviewPanel
-                    projectState={projectState}
-                    isLoading={isLoading}
-                    loadingPhase={loadingPhase}
-                    onErrorsReady={handleErrorsReady}
-                    errorMonitoringEnabled={!isLoading && projectState !== null}
-                    onBundlerIdle={handleBundlerIdle}
-                />
+                <Suspense fallback={loadingPhase !== 'idle' ? <PreviewSkeleton phase={loadingPhase} /> : null}>
+                    <PreviewPanel
+                        projectState={projectState}
+                        isLoading={isLoading}
+                        loadingPhase={loadingPhase}
+                        onErrorsReady={handleErrorsReady}
+                        errorMonitoringEnabled={!isLoading && projectState !== null}
+                        onBundlerIdle={handleBundlerIdle}
+                    />
+                </Suspense>
             </PreviewErrorBoundary>
 
             {/* Repair status toast */}
