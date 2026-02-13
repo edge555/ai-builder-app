@@ -3,16 +3,15 @@ import {
   SandpackProvider,
   SandpackLayout,
   SandpackPreview,
-  SandpackCodeEditor,
-  SandpackFileExplorer,
 } from '@codesandbox/sandpack-react';
-import { RefreshCw, Code, EyeOff } from 'lucide-react';
+import { RefreshCw, Code, Monitor } from 'lucide-react';
 import type { SerializedProjectState } from '@/shared';
 import type { LoadingPhase } from '../ChatInterface';
 import { PreviewToolbar, type DeviceMode } from './PreviewToolbar';
 import { PreviewSkeleton } from './PreviewSkeleton';
 import { SandpackErrorListener } from './SandpackErrorListener';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
+import { CodeEditorView } from '../CodeEditor';
 import './PreviewPanel.css';
 
 /**
@@ -161,35 +160,39 @@ export function PreviewPanel({
           {projectState?.name && <span className="preview-project-name">{projectState.name}</span>}
         </div>
 
-        <div className="preview-header-center">
-          <PreviewToolbar
-            currentMode={deviceMode}
-            isRotated={isRotated}
-            onModeChange={(mode) => {
-              setDeviceMode(mode);
-              setIsRotated(false); // Reset rotation on mode change
-            }}
-            onRotate={() => setIsRotated(!isRotated)}
-          />
-        </div>
+        {!showCode && (
+          <div className="preview-header-center">
+            <PreviewToolbar
+              currentMode={deviceMode}
+              isRotated={isRotated}
+              onModeChange={(mode) => {
+                setDeviceMode(mode);
+                setIsRotated(false); // Reset rotation on mode change
+              }}
+              onRotate={() => setIsRotated(!isRotated)}
+            />
+          </div>
+        )}
 
         <div className="preview-header-right preview-controls">
-          <button
-            className={`toggle-code-btn refresh-btn ${isRefreshing ? 'refreshing' : ''}`}
-            onClick={handleRefresh}
-            title="Refresh Preview"
-            aria-label="Refresh preview"
-          >
-            <RefreshCw size={14} className={isRefreshing ? 'animate-spin-slow' : ''} />
-            <span>Refresh</span>
-          </button>
+          {!showCode && (
+            <button
+              className={`toggle-code-btn refresh-btn ${isRefreshing ? 'refreshing' : ''}`}
+              onClick={handleRefresh}
+              title="Refresh Preview"
+              aria-label="Refresh preview"
+            >
+              <RefreshCw size={14} className={isRefreshing ? 'animate-spin-slow' : ''} />
+              <span>Refresh</span>
+            </button>
+          )}
           <button
             className={`toggle-code-btn ${showCode ? 'active' : ''}`}
             onClick={() => setShowCode(!showCode)}
-            aria-label={showCode ? 'Hide code panel' : 'Show code panel'}
+            aria-label={showCode ? 'Switch to preview' : 'Switch to code editor'}
           >
-            {showCode ? <EyeOff size={14} /> : <Code size={14} />}
-            <span>{showCode ? 'Hide Code' : 'Show Code'}</span>
+            {showCode ? <Monitor size={14} /> : <Code size={14} />}
+            <span>{showCode ? 'Preview' : 'Code'}</span>
           </button>
         </div>
       </div>
@@ -199,6 +202,10 @@ export function PreviewPanel({
       {/* Show skeleton during loading */}
       {isLoading && loadingPhase !== 'idle' ? (
         <PreviewSkeleton phase={loadingPhase} />
+      ) : showCode ? (
+        <div className="preview-content">
+          <CodeEditorView files={projectState?.files || {}} />
+        </div>
       ) : (
         <div className="preview-content">
           <SandpackProvider
@@ -233,20 +240,6 @@ export function PreviewPanel({
               />
             )}
             <SandpackLayout>
-              {showCode && (
-                <>
-                  <SandpackFileExplorer
-                    autoHiddenFiles
-                  />
-                  <SandpackCodeEditor
-                    showTabs={false}
-                    showLineNumbers
-                    showInlineErrors
-                    wrapContent
-                    style={{ height: '100%' }}
-                  />
-                </>
-              )}
               {deviceMode === 'desktop' ? (
                 <SandpackPreview
                   showOpenInCodeSandbox={false}

@@ -314,15 +314,7 @@
   background: transparent !important;
 }
 
-/* Custom File Explorer Styling */
-.preview-content .sp-file-explorer {
-  min-width: 200px;
-  max-width: 300px;
-  background: hsl(var(--pv-surface)) !important;
-  border-right: 1px solid hsl(var(--pv-border));
-  height: 100% !important;
-}
-
+/* Sandpack Preview Styling */
 .preview-content .sp-stack {
   height: 100% !important;
   flex: 1;
@@ -331,8 +323,7 @@
 .preview-content .sp-preview {
   height: 100% !important;
   min-height: 100% !important;
-  flex: 1.5;
-  /* Give preview more space */
+  flex: 1;
 }
 
 .preview-content .sp-preview-container {
@@ -341,22 +332,6 @@
 
 .preview-content .sp-preview-iframe {
   height: 100% !important;
-}
-
-.preview-content .sp-code-editor {
-  height: 100% !important;
-}
-
-.preview-content .sp-cm {
-  height: 100% !important;
-}
-
-.preview-content .cm-editor {
-  height: 100% !important;
-}
-
-.preview-content .cm-scroller {
-  overflow: auto !important;
 }
 
 .preview-error {

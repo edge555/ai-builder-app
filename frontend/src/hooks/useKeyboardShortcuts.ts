@@ -11,9 +11,14 @@ export interface KeyboardShortcutHandlers {
  */
 export function useKeyboardShortcuts(handlers: KeyboardShortcutHandlers) {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Don't trigger shortcuts when typing in inputs
+    // Don't trigger shortcuts when typing in inputs or Monaco editor
     const target = e.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+    if (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.isContentEditable ||
+      target.closest('.monaco-editor')
+    ) {
       return;
     }
 
