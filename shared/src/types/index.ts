@@ -11,4 +11,5 @@ export * from './edit-operation';
 export * from './plan';
 export * from './runtime-error';
 export * from './repair-types';
+export * from './operation-result';
 

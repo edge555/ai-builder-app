@@ -7,6 +7,8 @@ import { createLogger } from '../logger';
 import { config, GEMINI_TIMEOUT } from '../config';
 import { GeminiCache } from './gemini-cache';
 import { sanitizeUrl, truncatePayload } from './gemini-utils';
+import { createParserState, parseStreamChunk, trimParserBuffer } from './gemini-json-parser';
+import { extractResponseContent, validateStreamingContent } from './gemini-response-validator';
 import type {
   GeminiClientConfig,
   GeminiRequest,
@@ -206,87 +208,26 @@ export class GeminiClient {
 
       const decoder = new TextDecoder();
       let accumulated = '';
-      let buffer = '';
-      let braceCount = 0;
-      let inString = false;
-      let escapeNext = false;
-      let objectStart = -1;
+      const parserState = createParserState();
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const chunkText = decoder.decode(value, { stream: true });
-        buffer += chunkText;
+        const chunks = parseStreamChunk(chunkText, parserState);
 
-        for (let i = buffer.length - chunkText.length; i < buffer.length; i++) {
-          const char = buffer[i];
-
-          if (escapeNext) {
-            escapeNext = false;
-            continue;
-          }
-
-          if (char === '\\') {
-            escapeNext = true;
-            continue;
-          }
-
-          if (char === '"') {
-            inString = !inString;
-            continue;
-          }
-
-          if (!inString) {
-            if (char === '{') {
-              if (braceCount === 0) {
-                objectStart = i;
-              }
-              braceCount++;
-            } else if (char === '}') {
-              braceCount--;
-              if (braceCount === 0 && objectStart !== -1) {
-                // We found a complete JSON object
-                const objectText = buffer.substring(objectStart, i + 1);
-
-                try {
-                  const data = JSON.parse(objectText) as GeminiAPIResponse;
-                  const chunk = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-                  if (chunk) {
-                    accumulated += chunk;
-                    request.onChunk?.(chunk, accumulated.length);
-                  }
-                } catch (e) {
-                  // This captures partial or malformed objects which can happen at the very start/end
-                  logger.debug('Skipping non-candidate JSON object in stream', {
-                    error: e instanceof Error ? e.message : String(e),
-                    text: truncatePayload(objectText)
-                  });
-                }
-
-                objectStart = -1;
-              }
-            }
-          }
+        for (const chunk of chunks) {
+          accumulated += chunk;
+          request.onChunk?.(chunk, accumulated.length);
         }
 
-        // Periodically trim the buffer to keep it manageable
-        // Only trim when we are between objects to avoid cutting an object in half
-        if (objectStart === -1 && buffer.length > 5000 && braceCount === 0) {
-          buffer = '';
-        } else if (objectStart > 2000) {
-          // If we've started an object but have a lot of garbage before it
-          buffer = buffer.substring(objectStart);
-          objectStart = 0;
-        }
+        // Periodically trim the buffer to manage memory
+        trimParserBuffer(parserState);
       }
 
       clearTimeout(timeoutId);
-
-      if (!accumulated) {
-        throw new Error('No content in streaming response');
-      }
+      validateStreamingContent(accumulated);
 
       logger.info('Gemini streaming request completed', {
         contentLength: accumulated.length,
@@ -416,14 +357,7 @@ export class GeminiClient {
         responseStructure: truncatePayload(JSON.stringify(data, null, 2)),
       });
 
-      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!content) {
-        logger.error('No content found in Gemini response', {
-          response: truncatePayload(JSON.stringify(data, null, 2)),
-        });
-        throw new Error('No content in Gemini response');
-      }
+      const content = extractResponseContent(data);
 
       logger.info('Gemini request completed successfully', {
         contentLength: content.length,
