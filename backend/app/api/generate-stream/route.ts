@@ -12,6 +12,7 @@ import { serializeProjectState, serializeVersion } from '@ai-app-builder/shared'
 import { createStreamingProjectGenerator } from '../../../lib/core/streaming-generator';
 import { handleOptions, getCorsHeaders } from '../../../lib/api';
 import { createLogger } from '../../../lib/logger';
+import { generateRequestId } from '../../../lib/request-id';
 
 const logger = createLogger('api/generate-stream');
 
@@ -48,6 +49,10 @@ class SSEEncoder {
 }
 
 export async function POST(request: NextRequest) {
+  // Generate request ID for correlation
+  const requestId = generateRequestId();
+  const contextLogger = logger.withRequestId(requestId);
+
   try {
     // Parse request body
     let body: GenerateProjectRequest;
@@ -66,7 +71,7 @@ export async function POST(request: NextRequest) {
       return new Response('Project description cannot be empty', { status: 400 });
     }
 
-    logger.info('Starting streaming generation', {
+    contextLogger.info('Starting streaming generation', {
       descriptionLength: body.description.length,
     });
 
@@ -129,8 +134,13 @@ export async function POST(request: NextRequest) {
               controller.enqueue(encoder.encode('complete', response));
             },
 
-            onError: (error) => {
-              controller.enqueue(encoder.encode('error', { error }));
+            onError: (error, errorData) => {
+              controller.enqueue(encoder.encode('error', {
+                error,
+                errorCode: errorData?.errorCode,
+                errorType: errorData?.errorType,
+                partialContent: errorData?.partialContent,
+              }));
             },
 
             onHeartbeat: () => {
@@ -149,7 +159,7 @@ export async function POST(request: NextRequest) {
           cleanup();
           controller.close();
 
-          logger.info('Streaming generation completed', {
+          contextLogger.info('Streaming generation completed', {
             success: result.success,
           });
 
@@ -157,7 +167,7 @@ export async function POST(request: NextRequest) {
           cleanup();
 
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          logger.error('Streaming generation error', { error: errorMessage });
+          contextLogger.error('Streaming generation error', { error: errorMessage });
 
           controller.enqueue(encoder.encode('error', { error: errorMessage }));
           controller.close();
@@ -168,7 +178,7 @@ export async function POST(request: NextRequest) {
     // Return SSE response
     return new Response(stream, {
       headers: {
-        ...getCorsHeaders(),
+        ...getCorsHeaders(request),
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
@@ -176,7 +186,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    logger.error('Error in generate-stream endpoint', {
+    contextLogger.error('Error in generate-stream endpoint', {
       error: error instanceof Error ? error.message : String(error),
     });
 

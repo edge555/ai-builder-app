@@ -34,6 +34,7 @@ export interface GenerationContextValue {
     setIsLoading: (loading: boolean) => void;
     setLoadingPhase: (phase: LoadingPhase) => void;
     clearError: () => void;
+    abortCurrentRequest: () => void;
 }
 
 export const GenerationContext = createContext<GenerationContextValue | null>(null);

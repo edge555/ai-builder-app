@@ -5,6 +5,7 @@ import { config as appConfig } from '../config';
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 import { parseSSEStream } from '@/utils/sse-parser';
 import { buildRepairPrompt } from '@/utils/repair-prompt';
+import { getUserFriendlyErrorMessage } from '@/utils/error-messages';
 import { GenerationContext, type GenerationContextValue, type StreamingState } from './GenerationContext.context';
 import { useErrorAggregator } from './ErrorAggregatorContext';
 
@@ -54,6 +55,23 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
    */
   const clearError = useCallback(() => {
     setError(null);
+  }, []);
+
+  /**
+   * Resets auto-repair state.
+   */
+  /**
+   * Aborts the current in-flight request.
+   */
+  const abortCurrentRequest = useCallback(() => {
+    const activeRequest = activeRequestRef.current;
+    if (activeRequest) {
+      activeRequest.controller.abort();
+      clearTimeout(activeRequest.timeoutId);
+      activeRequestRef.current = null;
+    }
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
   }, []);
 
   /**
@@ -138,8 +156,21 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
             lastHeartbeat: Date.now(),
           } : null);
         },
-        onError: (errorMsg: string) => {
-          setStreamingState(prev => prev ? { ...prev, phase: 'error', error: errorMsg, lastHeartbeat: Date.now() } : null);
+        onError: (errorData) => {
+          // Create user-friendly error message based on error type
+          const userMessage = getUserFriendlyErrorMessage({
+            errorType: errorData.errorType,
+            errorCode: errorData.errorCode,
+            partialContent: errorData.partialContent,
+            originalMessage: errorData.error,
+          });
+
+          setStreamingState(prev => prev ? {
+            ...prev,
+            phase: 'error',
+            error: userMessage,
+            lastHeartbeat: Date.now(),
+          } : null);
         },
         onHeartbeat: () => {
           setStreamingState(prev => prev ? { ...prev, lastHeartbeat: Date.now() } : null);
@@ -151,6 +182,16 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     } catch (e) {
       clearTimeout(timeoutId);
       if (e instanceof Error && e.name === 'AbortError') {
+        // Check if it was user-initiated abort
+        if (controller.signal.aborted) {
+          // User cancelled - return partial results if available
+          return {
+            success: false,
+            error: 'Request was cancelled',
+            // Don't throw - let caller handle gracefully
+          };
+        }
+        // Timeout
         return { success: false, error: 'Generation timed out or was cancelled' };
       }
       throw e;
@@ -341,6 +382,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     setIsLoading,
     setLoadingPhase,
     clearError,
+    abortCurrentRequest,
   }), [
     isLoading,
     loadingPhase,
@@ -355,6 +397,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     autoRepair,
     resetAutoRepair,
     clearError,
+    abortCurrentRequest,
   ]);
 
   return (

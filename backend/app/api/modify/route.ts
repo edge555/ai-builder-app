@@ -1,7 +1,7 @@
 /**
  * Modify Project API Endpoint
  * POST /api/modify
- * 
+ *
  * Accepts a project state and modification prompt, returns updated project.
  * Implements Requirement 10.2
  */
@@ -19,6 +19,10 @@ import {
 } from '@ai-app-builder/shared';
 import { createModificationEngine } from '../../../lib/diff';
 import { getCorsHeaders, handleOptions, handleError, AppError } from '../../../lib/api';
+import { generateRequestId } from '../../../lib/request-id';
+import { createLogger } from '../../../lib/logger';
+
+const logger = createLogger('api/modify');
 
 /**
  * Handle OPTIONS preflight request
@@ -30,12 +34,21 @@ export async function OPTIONS() {
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<ModifyProjectResponse | ErrorResponse>> {
+  // Generate request ID for correlation
+  const requestId = generateRequestId();
+  const contextLogger = logger.withRequestId(requestId);
+
   try {
     // Parse request body
     const body = await request.json();
 
     // Validate request
     const validatedRequest = ModifyProjectRequestSchema.parse(body);
+
+    contextLogger.info('Modifying project', {
+      promptLength: validatedRequest.prompt.length,
+      skipPlanning: validatedRequest.skipPlanning,
+    });
 
     // Deserialize project state
     const projectState = deserializeProjectState(validatedRequest.projectState as any);
@@ -45,6 +58,7 @@ export async function POST(
 
     // Modify project
     const engine = createModificationEngine();
+    // TODO: Pass requestId to engine when it supports it
     const result = await engine.modifyProject(projectState, validatedRequest.prompt, { skipPlanning });
 
     if (!result.success) {
@@ -65,8 +79,16 @@ export async function POST(
       changeSummary: result.changeSummary,
     };
 
-    return NextResponse.json(response, { status: 200, headers: getCorsHeaders() });
+    contextLogger.info('Project modification completed', {
+      success: true,
+      changedFiles: result.diffs?.length ?? 0,
+    });
+
+    return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
   } catch (error) {
-    return handleError(error, 'api/modify');
+    contextLogger.error('Project modification failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return handleError(error, 'api/modify', request);
   }
 }

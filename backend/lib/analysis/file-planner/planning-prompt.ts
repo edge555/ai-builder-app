@@ -9,7 +9,8 @@
  */
 
 import type { PlanningResponse } from './types';
-import { PlanningResponseSchema, toGeminiSchema } from '../../core/schemas';
+import { PlanningResponseSchema } from '../../core/schemas';
+import { toGeminiSchema } from '../../core/gemini-schema-converter';
 
 /**
  * System prompt for the AI planning call.

@@ -1,9 +1,11 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/integrations/supabase/types';
 
-// Environment variables - use fallbacks for development/preview
-const SUPABASE_URL_ENV = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY_ENV = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+import { config } from '@/config';
+
+// Environment variables from validated config
+const SUPABASE_URL_ENV = config.supabase.url;
+const SUPABASE_ANON_KEY_ENV = config.supabase.key;
 
 // Fallback placeholder URL for when env vars are not set (prevents crash)
 const PLACEHOLDER_URL = 'https://placeholder.supabase.co';
@@ -22,8 +24,8 @@ if (!hasValidConfig) {
 export const SUPABASE_URL = SUPABASE_URL_ENV || PLACEHOLDER_URL;
 export const SUPABASE_ANON_KEY = SUPABASE_ANON_KEY_ENV || PLACEHOLDER_KEY;
 
-// For local development, use VITE_API_BASE_URL; for production, use Supabase Edge Functions
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+// API base URL from validated config
+const API_BASE_URL = config.api.baseUrl;
 
 // If a local API URL is configured, use /api routes; otherwise fall back to Supabase Edge Functions
 export const FUNCTIONS_BASE_URL = API_BASE_URL

@@ -19,17 +19,17 @@ export {
   ProjectGenerator,
   createProjectGenerator,
 } from './project-generator';
-export type {
-  GenerationResult,
-} from './project-generator';
+// Re-export from shared package
+export type { OperationResult as GenerationResult } from '@ai-app-builder/shared';
 
 // Streaming Project Generator
 export {
   StreamingProjectGenerator,
   createStreamingProjectGenerator,
 } from './streaming-generator';
+// Re-export from shared package
+export type { OperationResult as StreamingGenerationResult } from '@ai-app-builder/shared';
 export type {
-  StreamingGenerationResult,
   StreamingCallbacks,
 } from './streaming-generator';
 

@@ -1,0 +1,144 @@
+import { useEffect, useState } from 'react';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import type { SerializedProjectState } from '@/shared';
+import type { ChatMessage } from '@/components';
+import {
+  ProjectProvider,
+  ChatMessagesProvider,
+  GenerationProvider,
+  AutoRepairProvider,
+  PreviewErrorProvider,
+  ErrorAggregatorProvider,
+  useProject,
+} from '@/context';
+import { ErrorBoundary, AppLayout } from '@/components';
+import {
+  storageService,
+  toSerializedProjectState,
+  deserializeChatMessages,
+} from '@/services/storage';
+
+/**
+ * URL sync component that updates the URL when a new project gets an ID.
+ * Must be rendered inside ProjectProvider to access project state.
+ */
+function ProjectUrlSync() {
+  const { projectState } = useProject();
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // When starting at /project/new, update URL to /project/{id} after first generation
+    if (projectId === 'new' && projectState?.id) {
+      navigate(`/project/${projectState.id}`, { replace: true });
+    }
+  }, [projectId, projectState?.id, navigate]);
+
+  return null;
+}
+
+/**
+ * Builder page component that handles project routing.
+ * Routes:
+ * - /project/new - New project with optional ?prompt= query param
+ * - /project/:projectId - Existing project loaded from storage
+ */
+export function BuilderPage() {
+  const { projectId } = useParams<{ projectId: string }>();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [initialState, setInitialState] = useState<SerializedProjectState | null>(null);
+  const [initialMessages, setInitialMessages] = useState<ChatMessage[]>([]);
+  const [initialPrompt, setInitialPrompt] = useState<string | undefined>();
+
+  // Hydrate project on mount or when projectId changes
+  useEffect(() => {
+    const loadProject = async () => {
+      if (projectId === 'new') {
+        // New project mode
+        const prompt = searchParams.get('prompt') || undefined;
+        setInitialPrompt(prompt);
+        setInitialState(null);
+        setInitialMessages([]);
+        setIsLoading(false);
+      } else if (projectId) {
+        // Load existing project from storage
+        try {
+          const storedProject = await storageService.getProject(projectId);
+          if (!storedProject) {
+            console.error('Project not found:', projectId);
+            navigate('/', { replace: true });
+            return;
+          }
+
+          setInitialState(toSerializedProjectState(storedProject));
+          setInitialMessages(deserializeChatMessages(storedProject.chatMessages));
+          setInitialPrompt(undefined);
+        } catch (error) {
+          console.error('Failed to load project:', error);
+          navigate('/', { replace: true });
+          return;
+        }
+        setIsLoading(false);
+      }
+    };
+
+    loadProject();
+  }, [projectId, searchParams, navigate]);
+
+  const handleBackToDashboard = () => {
+    navigate('/');
+  };
+
+  const handleGlobalError = (error: Error) => {
+    console.error('Global error caught:', error);
+  };
+
+  // Show loading state while hydrating
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          fontSize: '0.875rem',
+          color: 'hsl(var(--muted-foreground))',
+        }}
+      >
+        Loading project...
+      </div>
+    );
+  }
+
+  // Use project ID as key to force remount when switching projects
+  const projectKey = initialState?.id || 'new-project';
+
+  return (
+    <ErrorBoundary
+      onError={handleGlobalError}
+      errorMessage="The application encountered an unexpected error. Please refresh the page to continue."
+    >
+      <ErrorAggregatorProvider key={projectKey}>
+        <ProjectProvider initialState={initialState}>
+          <ProjectUrlSync />
+          <ChatMessagesProvider initialMessages={initialMessages}>
+            <GenerationProvider>
+              <PreviewErrorProvider>
+                <AutoRepairProvider>
+                  <AppLayout
+                    initialPrompt={initialPrompt}
+                    onBackToDashboard={handleBackToDashboard}
+                  />
+                </AutoRepairProvider>
+              </PreviewErrorProvider>
+            </GenerationProvider>
+          </ChatMessagesProvider>
+        </ProjectProvider>
+      </ErrorAggregatorProvider>
+    </ErrorBoundary>
+  );
+}

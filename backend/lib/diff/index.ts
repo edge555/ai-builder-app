@@ -20,7 +20,8 @@ export {
 } from './diff-engine';
 
 // Export all public symbols from modification-engine
-export type { ModificationResult } from './modification-engine';
+// Re-export from shared package
+export type { ModificationResult } from '@ai-app-builder/shared';
 export {
   ModificationEngine,
   createModificationEngine,

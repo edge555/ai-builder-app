@@ -159,7 +159,8 @@ export function getGenerationPrompt(userPrompt: string): string {
   return buildGenerationPrompt(userPrompt);
 }
 
-import { ProjectOutputSchema, toGeminiSchema } from '../schemas';
+import { ProjectOutputSchema } from '../schemas';
+import { toGeminiSchema } from '../gemini-schema-converter';
 
 /**
  * JSON Schema for project generation output.

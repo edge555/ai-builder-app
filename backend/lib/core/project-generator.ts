@@ -5,7 +5,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import type { ProjectState, Version } from '@ai-app-builder/shared';
+import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared';
 import { GeminiClient } from '../ai';
 import type { BuildError } from './build-validator';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
@@ -22,19 +22,9 @@ const logger = createLogger('ProjectGenerator');
 
 /**
  * Result of project generation.
+ * Alias for OperationResult from shared package.
  */
-export interface GenerationResult {
-  success: boolean;
-  projectState?: ProjectState;
-  version?: Version;
-  error?: string;
-  validationErrors?: Array<{
-    type: string;
-    message: string;
-    filePath?: string;
-    line?: number;
-  }>;
-}
+export type GenerationResult = OperationResult;
 
 /**
  * Project Generator service for creating new projects from descriptions.

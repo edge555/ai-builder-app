@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { useProject, useChatMessages, useGeneration } from '../context';
 import type { RepairAttempt } from '@/shared';
+import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError } from '../utils/error-messages';
 
 const MAX_API_RETRIES = 3;
 
@@ -92,6 +93,13 @@ export function useSubmitPrompt() {
                     } else {
                         // Record failure
                         const errorMsg = result.error || 'Failed to generate project';
+                        const errorType = detectErrorType(errorMsg);
+
+                        // Don't show error message for user-initiated cancellation
+                        if (errorType === 'cancelled') {
+                            break;
+                        }
+
                         apiRetryHistoryRef.current.push({
                             attempt: retryCount,
                             error: errorMsg,
@@ -99,9 +107,20 @@ export function useSubmitPrompt() {
                             timestamp: new Date().toISOString(),
                         });
 
-                        // If this was the last retry, show error
-                        if (retryCount >= MAX_API_RETRIES) {
-                            chatMessages.addAssistantMessage(`Sorry, I couldn't generate the project after ${MAX_API_RETRIES} attempts: ${errorMsg}`);
+                        // If this was the last retry or error is not retryable, show error
+                        if (retryCount >= MAX_API_RETRIES || !isRetryableError(errorType)) {
+                            const userMessage = getUserFriendlyErrorMessage({
+                                errorType,
+                                originalMessage: errorMsg,
+                            });
+                            chatMessages.addAssistantMessage(
+                                retryCount >= MAX_API_RETRIES
+                                    ? `Sorry, I couldn't generate the project after ${MAX_API_RETRIES} attempts. ${userMessage}`
+                                    : userMessage
+                            );
+                            if (!isRetryableError(errorType)) {
+                                break; // Stop retrying non-retryable errors
+                            }
                         }
                         // Otherwise continue to next retry
                     }
@@ -136,6 +155,13 @@ export function useSubmitPrompt() {
                     } else {
                         // Record failure
                         const errorMsg = result.error || 'Failed to modify project';
+                        const errorType = detectErrorType(errorMsg);
+
+                        // Don't show error message for user-initiated cancellation
+                        if (errorType === 'cancelled') {
+                            break;
+                        }
+
                         apiRetryHistoryRef.current.push({
                             attempt: retryCount,
                             error: errorMsg,
@@ -143,9 +169,20 @@ export function useSubmitPrompt() {
                             timestamp: new Date().toISOString(),
                         });
 
-                        // If this was the last retry, show error
-                        if (retryCount >= MAX_API_RETRIES) {
-                            chatMessages.addAssistantMessage(`Sorry, I couldn't make those changes after ${MAX_API_RETRIES} attempts: ${errorMsg}`);
+                        // If this was the last retry or error is not retryable, show error
+                        if (retryCount >= MAX_API_RETRIES || !isRetryableError(errorType)) {
+                            const userMessage = getUserFriendlyErrorMessage({
+                                errorType,
+                                originalMessage: errorMsg,
+                            });
+                            chatMessages.addAssistantMessage(
+                                retryCount >= MAX_API_RETRIES
+                                    ? `Sorry, I couldn't make those changes after ${MAX_API_RETRIES} attempts. ${userMessage}`
+                                    : userMessage
+                            );
+                            if (!isRetryableError(errorType)) {
+                                break; // Stop retrying non-retryable errors
+                            }
                         }
                         // Otherwise continue to next retry
                     }
@@ -154,7 +191,16 @@ export function useSubmitPrompt() {
         } catch (err) {
             // Network/timeout/auth errors - don't retry these
             const errorMsg = err instanceof Error ? err.message : 'An unexpected error occurred';
-            chatMessages.addAssistantMessage(`Sorry, something went wrong: ${errorMsg}`);
+            const errorType = detectErrorType(errorMsg);
+
+            // Don't show error message for user-initiated cancellation
+            if (errorType !== 'cancelled') {
+                const userMessage = getUserFriendlyErrorMessage({
+                    errorType,
+                    originalMessage: errorMsg,
+                });
+                chatMessages.addAssistantMessage(`Sorry, something went wrong: ${userMessage}`);
+            }
         } finally {
             generation.setIsLoading(false);
             generation.setLoadingPhase('idle');
@@ -189,5 +235,6 @@ export function useSubmitPrompt() {
         undo,
         redo,
         isSubmitting: isSubmittingRef.current,
+        abortCurrentRequest: generation.abortCurrentRequest,
     };
 }

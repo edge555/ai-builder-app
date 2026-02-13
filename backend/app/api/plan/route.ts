@@ -18,6 +18,10 @@ import type {
 import { PlanProjectRequestSchema } from '@ai-app-builder/shared';
 import { createMetadataFilePlanner } from '../../../lib/analysis';
 import { getCorsHeaders, handleOptions, handleError } from '../../../lib/api';
+import { generateRequestId } from '../../../lib/request-id';
+import { createLogger } from '../../../lib/logger';
+
+const logger = createLogger('api/plan');
 
 /**
  * Handle OPTIONS preflight request
@@ -29,6 +33,9 @@ export async function OPTIONS() {
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<PlanProjectResponse | ErrorResponse>> {
+  // Generate request ID for correlation
+  const requestId = generateRequestId();
+  const contextLogger = logger.withRequestId(requestId);
   const startTime = Date.now();
 
   try {
@@ -38,8 +45,14 @@ export async function POST(
     // Validate request
     const validatedRequest = PlanProjectRequestSchema.parse(body);
 
+    contextLogger.info('Planning project modification', {
+      promptLength: validatedRequest.prompt.length,
+      totalFiles: validatedRequest.fileTreeMetadata.length,
+    });
+
     // Call MetadataFilePlanner.plan()
     const planner = createMetadataFilePlanner();
+    // TODO: Pass requestId to planner when it supports it
     const planResult = await planner.plan(
       validatedRequest.prompt,
       validatedRequest.fileTreeMetadata,
@@ -57,6 +70,13 @@ export async function POST(
       contextFileCount: planResult.contextFiles.length,
     };
 
+    contextLogger.info('Planning completed', {
+      planningTimeMs,
+      primaryFiles: planResult.primaryFiles.length,
+      contextFiles: planResult.contextFiles.length,
+      usedFallback: planResult.usedFallback,
+    });
+
     // Return successful response
     const response: PlanProjectResponse = {
       success: true,
@@ -67,8 +87,11 @@ export async function POST(
       metadata,
     };
 
-    return NextResponse.json(response, { status: 200, headers: getCorsHeaders() });
+    return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
   } catch (error) {
-    return handleError(error, 'api/plan');
+    contextLogger.error('Planning failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return handleError(error, 'api/plan', request);
   }
 }

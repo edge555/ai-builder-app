@@ -4,7 +4,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import type { ProjectState, Version } from '@ai-app-builder/shared';
+import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared';
 import { GeminiClient } from '../ai';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
 import { buildFixPrompt } from './prompts/build-fix-prompt';
@@ -25,25 +25,15 @@ export interface StreamingCallbacks {
   onProgress?: (length: number) => void;
   onFile?: (data: { path: string; content: string; index: number; total: number }) => void;
   onComplete?: (result: { projectState: ProjectState; version: Version }) => void;
-  onError?: (error: string) => void;
+  onError?: (error: string, errorData?: { errorCode?: string; errorType?: string; partialContent?: string }) => void;
   onHeartbeat?: () => void;
 }
 
 /**
  * Result of streaming generation.
+ * Alias for OperationResult from shared package.
  */
-export interface StreamingGenerationResult {
-  success: boolean;
-  projectState?: ProjectState;
-  version?: Version;
-  error?: string;
-  validationErrors?: Array<{
-    type: string;
-    message: string;
-    filePath?: string;
-    line?: number;
-  }>;
-}
+export type StreamingGenerationResult = OperationResult;
 
 /**
  * Streaming Project Generator that emits files as they're generated.
@@ -124,7 +114,11 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
 
     if (!response.success || !response.content) {
       const error = response.error ?? 'Failed to generate project from AI';
-      callbacks.onError?.(error);
+      callbacks.onError?.(error, {
+        errorCode: response.errorCode,
+        errorType: response.errorType,
+        partialContent: response.partialContent,
+      });
       return {
         success: false,
         error,

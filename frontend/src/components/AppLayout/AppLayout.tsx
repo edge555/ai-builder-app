@@ -50,7 +50,7 @@ function formatTimestamp(date: Date): string {
  */
 function ChatPanel() {
     const { messages, clearMessages } = useChatMessages();
-    const { isLoading, loadingPhase, error, clearError, streamingState, isStreaming } = useGeneration();
+    const { isLoading, loadingPhase, error, clearError, streamingState, isStreaming, abortCurrentRequest } = useGeneration();
     const { projectState } = useProject();
     const { submitPrompt } = useSubmitPrompt();
     const [lastPrompt, setLastPrompt] = useState<string | null>(null);
@@ -87,6 +87,7 @@ function ChatPanel() {
             suggestions={suggestions}
             streamingState={streamingState}
             isStreaming={isStreaming}
+            onAbort={abortCurrentRequest}
         />
     );
 }
@@ -332,8 +333,8 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                             <ArrowLeft size={18} />
                         </button>
                     )}
-                    <div className="app-logo" aria-hidden="true">
-                        <Sparkles size={18} />
+                    <div className="app-logo" aria-label="App Logo">
+                        <Sparkles size={18} aria-hidden="true" />
                     </div>
                     {projectState ? (
                         <EditableProjectName

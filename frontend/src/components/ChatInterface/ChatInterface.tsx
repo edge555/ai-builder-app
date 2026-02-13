@@ -51,6 +51,8 @@ export interface ChatInterfaceProps {
   streamingState?: StreamingState | null;
   /** Whether streaming generation is active */
   isStreaming?: boolean;
+  /** Callback to abort current request */
+  onAbort?: () => void;
 }
 
 /**
@@ -70,6 +72,7 @@ export function ChatInterface({
   suggestions = [],
   streamingState,
   isStreaming = false,
+  onAbort,
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
@@ -105,8 +108,8 @@ export function ChatInterface({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Submit on Enter (without Shift)
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Submit on Ctrl+Enter (Windows/Linux) or Meta+Enter (Mac)
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSubmit(e);
     }
@@ -202,6 +205,22 @@ export function ChatInterface({
             </svg>
           )}
         </button>
+        {isLoading && onAbort && (
+          <button
+            type="button"
+            className="chat-abort-button ui-button"
+            data-variant="secondary"
+            onClick={onAbort}
+            aria-label="Cancel request"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="15" y1="9" x2="9" y2="15"></line>
+              <line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+            Cancel
+          </button>
+        )}
       </form>
     </div>
   );

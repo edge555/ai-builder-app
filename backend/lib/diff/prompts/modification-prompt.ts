@@ -117,7 +117,8 @@ export function getModificationPrompt(userPrompt: string, includeDesignSystem: b
   return buildModificationPrompt(userPrompt, includeDesignSystem);
 }
 
-import { ModificationOutputSchema, toGeminiSchema } from '../../core/schemas';
+import { ModificationOutputSchema } from '../../core/schemas';
+import { toGeminiSchema } from '../../core/gemini-schema-converter';
 
 /**
  * JSON Schema for diff-based modification output.

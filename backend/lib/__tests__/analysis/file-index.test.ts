@@ -50,6 +50,55 @@ describe('FileIndex', () => {
       expect(fileIndex.getEntry('src/old.ts')).toBeNull();
       expect(fileIndex.getEntry('src/new.ts')).not.toBeNull();
     });
+
+    it('should incrementally update only changed files', () => {
+      const projectState1 = createProjectState({
+        'src/App.tsx': 'export default function App() { return <div>Hello</div>; }',
+        'src/utils.ts': 'export function helper() { return 42; }',
+      });
+
+      fileIndex.index(projectState1);
+      const entry1_App = fileIndex.getEntry('src/App.tsx');
+      const entry1_Utils = fileIndex.getEntry('src/utils.ts');
+
+      expect(entry1_App).not.toBeNull();
+      expect(entry1_Utils).not.toBeNull();
+
+      const projectState2 = createProjectState({
+        'src/App.tsx': 'export default function App() { return <div>Hello World</div>; }',
+        'src/utils.ts': 'export function helper() { return 42; }',
+      });
+
+      fileIndex.index(projectState2);
+      const entry2_App = fileIndex.getEntry('src/App.tsx');
+      const entry2_Utils = fileIndex.getEntry('src/utils.ts');
+
+      // Changed file should have a new entry
+      expect(entry2_App).not.toBe(entry1_App);
+      expect(entry2_App?.hash).not.toBe(entry1_App?.hash);
+
+      // Unchanged file should have the EXACT SAME entry object (incremental)
+      expect(entry2_Utils).toBe(entry1_Utils);
+      expect(entry2_Utils?.hash).toBe(entry1_Utils?.hash);
+    });
+
+    it('should remove entries for deleted files', () => {
+      const projectState1 = createProjectState({
+        'src/App.tsx': 'export default function App() { return <div>Hello</div>; }',
+        'src/utils.ts': 'export function helper() { return 42; }',
+      });
+
+      fileIndex.index(projectState1);
+      expect(fileIndex.getEntry('src/utils.ts')).not.toBeNull();
+
+      const projectState2 = createProjectState({
+        'src/App.tsx': 'export default function App() { return <div>Hello</div>; }',
+      });
+
+      fileIndex.index(projectState2);
+      expect(fileIndex.getEntry('src/utils.ts')).toBeNull();
+      expect(fileIndex.getEntry('src/App.tsx')).not.toBeNull();
+    });
   });
 
   describe('parseExports', () => {
@@ -205,8 +254,8 @@ export default function App() { return <div />; }`,
 
       fileIndex.index(projectState);
 
-      expect(fileIndex.getEntry('vite.config.ts')?.type).toBe('config');
-      expect(fileIndex.getEntry('tsconfig.json')?.type).toBe('config');
+      expect(fileIndex.getEntry('vite.config.ts')?.fileType).toBe('config');
+      expect(fileIndex.getEntry('tsconfig.json')?.fileType).toBe('config');
     });
 
     it('should identify style files', () => {
@@ -216,7 +265,7 @@ export default function App() { return <div />; }`,
 
       fileIndex.index(projectState);
 
-      expect(fileIndex.getEntry('src/styles.css')?.type).toBe('style');
+      expect(fileIndex.getEntry('src/styles.css')?.fileType).toBe('style');
     });
 
     it('should identify API routes', () => {
@@ -226,7 +275,7 @@ export default function App() { return <div />; }`,
 
       fileIndex.index(projectState);
 
-      expect(fileIndex.getEntry('app/api/users/route.ts')?.type).toBe('api_route');
+      expect(fileIndex.getEntry('app/api/users/route.ts')?.fileType).toBe('api_route');
     });
 
     it('should identify components', () => {
@@ -236,7 +285,7 @@ export default function App() { return <div />; }`,
 
       fileIndex.index(projectState);
 
-      expect(fileIndex.getEntry('src/components/Button.tsx')?.type).toBe('component');
+      expect(fileIndex.getEntry('src/components/Button.tsx')?.fileType).toBe('component');
     });
   });
 
