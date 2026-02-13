@@ -333,8 +333,8 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                             <ArrowLeft size={18} />
                         </button>
                     )}
-                    <div className="app-logo" aria-hidden="true">
-                        <Sparkles size={18} />
+                    <div className="app-logo" aria-label="App Logo">
+                        <Sparkles size={18} aria-hidden="true" />
                     </div>
                     {projectState ? (
                         <EditableProjectName

@@ -94,9 +94,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ComputeDi
       diffs,
     };
 
-    return NextResponse.json(response, { status: 200, headers: getCorsHeaders() });
+    return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
 
   } catch (error) {
-    return handleError(error, 'api/diff');
+    return handleError(error, 'api/diff', request);
   }
 }

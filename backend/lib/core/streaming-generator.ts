@@ -25,7 +25,7 @@ export interface StreamingCallbacks {
   onProgress?: (length: number) => void;
   onFile?: (data: { path: string; content: string; index: number; total: number }) => void;
   onComplete?: (result: { projectState: ProjectState; version: Version }) => void;
-  onError?: (error: string) => void;
+  onError?: (error: string, errorData?: { errorCode?: string; errorType?: string; partialContent?: string }) => void;
   onHeartbeat?: () => void;
 }
 
@@ -114,7 +114,11 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
 
     if (!response.success || !response.content) {
       const error = response.error ?? 'Failed to generate project from AI';
-      callbacks.onError?.(error);
+      callbacks.onError?.(error, {
+        errorCode: response.errorCode,
+        errorType: response.errorType,
+        partialContent: response.partialContent,
+      });
       return {
         success: false,
         error,

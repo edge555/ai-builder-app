@@ -61,6 +61,20 @@ export class AppError extends Error {
     }
 
     /**
+     * Factory for timeout errors (408)
+     */
+    static timeout(message: string, details?: Record<string, unknown>): AppError {
+        return new AppError({ type: 'timeout', code: 'TIMEOUT', message, details, recoverable: true, statusCode: 408 });
+    }
+
+    /**
+     * Factory for rate limit errors (429)
+     */
+    static rateLimit(message: string, details?: Record<string, unknown>): AppError {
+        return new AppError({ type: 'rate_limit', code: 'RATE_LIMIT_EXCEEDED', message, details, recoverable: true, statusCode: 429 });
+    }
+
+    /**
      * Factory for unknown/internal errors (500)
      */
     static unknown(message = 'An unexpected error occurred', details?: Record<string, unknown>): AppError {

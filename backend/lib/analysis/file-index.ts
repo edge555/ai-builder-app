@@ -7,6 +7,7 @@
  * Requirements: 3.1
  */
 
+import { createHash } from 'crypto';
 import type {
   FileIndexEntry,
   ExportInfo,
@@ -29,13 +30,31 @@ export class FileIndex {
   private entries: Map<string, FileIndexEntry> = new Map();
 
   /**
-   * Index all files in a project state.
+   * Index all files in a project state incrementally.
+   * Only re-parses files that have changed based on content hash.
    */
   index(projectState: ProjectState): void {
-    this.entries.clear();
-    
+    const newPaths = new Set(Object.keys(projectState.files));
+
+    // 1. Remove entries for files that no longer exist
+    for (const filePath of this.entries.keys()) {
+      if (!newPaths.has(filePath)) {
+        this.entries.delete(filePath);
+      }
+    }
+
+    // 2. Update or add entries for current files
     for (const [filePath, content] of Object.entries(projectState.files)) {
-      const entry = this.parseFile(filePath, content);
+      const hash = this.calculateHash(content);
+      const existingEntry = this.entries.get(filePath);
+
+      if (existingEntry && existingEntry.hash === hash) {
+        // Content hasn't changed, skip parsing
+        continue;
+      }
+
+      // Content changed or new file, parse it
+      const entry = this.parseFile(filePath, content, hash);
       this.entries.set(filePath, entry);
     }
   }
@@ -46,33 +65,33 @@ export class FileIndex {
   search(query: string): FileIndexEntry[] {
     const results: FileIndexEntry[] = [];
     const lowerQuery = query.toLowerCase();
-    
+
     for (const entry of this.entries.values()) {
       // Match file path
       if (entry.filePath.toLowerCase().includes(lowerQuery)) {
         results.push(entry);
         continue;
       }
-      
+
       // Match component names
       if (entry.components.some(c => c.name.toLowerCase().includes(lowerQuery))) {
         results.push(entry);
         continue;
       }
-      
+
       // Match function names
       if (entry.functions.some(f => f.name.toLowerCase().includes(lowerQuery))) {
         results.push(entry);
         continue;
       }
 
-      
+
       // Match export names
       if (entry.exports.some(e => e.name.toLowerCase().includes(lowerQuery))) {
         results.push(entry);
       }
     }
-    
+
     return results;
   }
 
@@ -105,18 +124,27 @@ export class FileIndex {
   }
 
   /**
+   * Calculate SHA-256 hash of content.
+   */
+  private calculateHash(content: string): string {
+    return createHash('sha256').update(content).digest('hex');
+  }
+
+  /**
    * Parse a single file and extract metadata.
    */
-  private parseFile(filePath: string, content: string): FileIndexEntry {
+  private parseFile(filePath: string, content: string, hash?: string): FileIndexEntry {
     const fileType = this.determineFileType(filePath);
     const exports = parseExports(content);
     const imports = parseImports(content);
     const components = parseComponents(content);
     const functions = parseFunctions(content);
+    const finalHash = hash ?? this.calculateHash(content);
 
     return {
       filePath,
       fileType,
+      hash: finalHash,
       exports,
       imports,
       components,
@@ -129,7 +157,7 @@ export class FileIndex {
    */
   private determineFileType(filePath: string): FileIndexEntry['fileType'] {
     const lowerPath = filePath.toLowerCase();
-    
+
     // Config files
     if (
       lowerPath.endsWith('.config.ts') ||
@@ -139,22 +167,22 @@ export class FileIndex {
     ) {
       return 'config';
     }
-    
+
     // Style files
     if (lowerPath.endsWith('.css') || lowerPath.endsWith('.scss') || lowerPath.endsWith('.less')) {
       return 'style';
     }
-    
+
     // API routes (Next.js convention)
     if (lowerPath.includes('/api/') && lowerPath.includes('route.')) {
       return 'api_route';
     }
-    
+
     // Hooks (React convention)
     if (lowerPath.includes('/hooks/') || /use[A-Z]/.test(filePath)) {
       return 'hook';
     }
-    
+
     // Components (check for JSX patterns or component directory)
     if (
       lowerPath.includes('/components/') ||
@@ -163,12 +191,12 @@ export class FileIndex {
     ) {
       return 'component';
     }
-    
+
     // Utility files
     if (lowerPath.includes('/utils/') || lowerPath.includes('/lib/') || lowerPath.includes('/helpers/')) {
       return 'utility';
     }
-    
+
     return 'other';
   }
 

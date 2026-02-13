@@ -159,7 +159,7 @@ export interface ExportProjectRequest {
  */
 export interface ApiError {
   /** Category of the error */
-  type: 'ai_output' | 'api' | 'validation' | 'state' | 'unknown';
+  type: 'ai_output' | 'api' | 'validation' | 'state' | 'timeout' | 'rate_limit' | 'unknown';
   /** Error code for programmatic handling */
   code: string;
   /** Human-readable error message */
@@ -169,6 +169,38 @@ export interface ApiError {
   /** Whether the error is recoverable (user can retry) */
   recoverable: boolean;
 }
+
+/**
+ * Common error codes for API errors.
+ */
+export const ERROR_CODES = {
+  // Timeout errors
+  TIMEOUT: 'TIMEOUT',
+  REQUEST_TIMEOUT: 'REQUEST_TIMEOUT',
+
+  // Rate limit errors
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  QUOTA_EXCEEDED: 'QUOTA_EXCEEDED',
+
+  // API errors
+  API_ERROR: 'API_ERROR',
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  CANCELLED: 'CANCELLED',
+
+  // Validation errors
+  VALIDATION_FAILED: 'VALIDATION_FAILED',
+
+  // AI output errors
+  GENERATION_FAILED: 'GENERATION_FAILED',
+
+  // State errors
+  STATE_ERROR: 'STATE_ERROR',
+
+  // Unknown errors
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+} as const;
+
+export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];
 
 /**
  * Standard error response format for all API endpoints.

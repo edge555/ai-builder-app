@@ -9,6 +9,7 @@ import { GeminiCache } from './gemini-cache';
 import { sanitizeUrl, truncatePayload } from './gemini-utils';
 import { createParserState, parseStreamChunk, trimParserBuffer } from './gemini-json-parser';
 import { extractResponseContent, validateStreamingContent } from './gemini-response-validator';
+import { OperationTimer, formatMetrics } from '../metrics';
 import type {
   GeminiClientConfig,
   GeminiRequest,
@@ -50,16 +51,32 @@ export class GeminiClient {
    * Sends a request to the Gemini API with retry logic.
    */
   async generate(request: GeminiRequest): Promise<GeminiResponse> {
+    const timer = new OperationTimer('generate', request.requestId);
+    const contextLogger = request.requestId ? logger.withRequestId(request.requestId) : logger;
+
     let lastError: Error | null = null;
     let retryCount = 0;
+    let usage: GeminiResponse['usage'] | undefined;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
-        const response = await this.makeRequest(request);
+        const { content, usage: requestUsage } = await this.makeRequest(request);
+        usage = requestUsage;
+
+        const metrics = timer.complete(true, {
+          retryCount: attempt,
+          inputTokens: usage?.inputTokens,
+          outputTokens: usage?.outputTokens,
+          totalTokens: usage?.totalTokens,
+        });
+
+        contextLogger.info('Gemini generate completed', formatMetrics(metrics));
+
         return {
           success: true,
-          content: response,
+          content,
           retryCount: attempt,
+          usage,
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -77,9 +94,20 @@ export class GeminiClient {
       }
     }
 
+    const metrics = timer.complete(false, {
+      retryCount,
+      error: lastError?.message ?? 'Unknown error occurred',
+    });
+
+    contextLogger.error('Gemini generate failed', formatMetrics(metrics));
+
+    const { errorType, errorCode } = this.categorizeError(lastError!);
+
     return {
       success: false,
       error: lastError?.message ?? 'Unknown error occurred',
+      errorType,
+      errorCode,
       retryCount,
     };
   }
@@ -89,20 +117,43 @@ export class GeminiClient {
    * Calls onChunk callback as content is received.
    */
   async generateStreaming(request: GeminiStreamingRequest): Promise<GeminiResponse> {
+    const timer = new OperationTimer('generateStreaming', request.requestId);
+    const contextLogger = request.requestId ? logger.withRequestId(request.requestId) : logger;
+
     let lastError: Error | null = null;
     let retryCount = 0;
+    let usage: GeminiResponse['usage'] | undefined;
+    let partialContent: string | undefined;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
-        const response = await this.makeStreamingRequest(request);
+        const { content, usage: requestUsage, partialContent: partial } = await this.makeStreamingRequest(request);
+        usage = requestUsage;
+        partialContent = partial;
+
+        const metrics = timer.complete(true, {
+          retryCount: attempt,
+          inputTokens: usage?.inputTokens,
+          outputTokens: usage?.outputTokens,
+          totalTokens: usage?.totalTokens,
+        });
+
+        contextLogger.info('Gemini generateStreaming completed', formatMetrics(metrics));
+
         return {
           success: true,
-          content: response,
+          content,
           retryCount: attempt,
+          usage,
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         retryCount = attempt;
+
+        // Capture partial content from error if available
+        if (error && typeof error === 'object' && 'partialContent' in error) {
+          partialContent = (error as { partialContent?: string }).partialContent;
+        }
 
         // Don't retry on non-retryable errors
         if (!this.isRetryableError(lastError)) {
@@ -116,17 +167,30 @@ export class GeminiClient {
       }
     }
 
+    const metrics = timer.complete(false, {
+      retryCount,
+      error: lastError?.message ?? 'Unknown error occurred',
+      ...(partialContent && { partialContentLength: partialContent.length }),
+    });
+
+    contextLogger.error('Gemini generateStreaming failed', formatMetrics(metrics));
+
+    const { errorType, errorCode } = this.categorizeError(lastError!);
+
     return {
       success: false,
       error: lastError?.message ?? 'Unknown error occurred',
+      errorType,
+      errorCode,
       retryCount,
+      partialContent,
     };
   }
 
   /**
    * Makes a streaming request to the Gemini API.
    */
-  private async makeStreamingRequest(request: GeminiStreamingRequest): Promise<string> {
+  private async makeStreamingRequest(request: GeminiStreamingRequest): Promise<{ content: string; usage?: GeminiResponse['usage']; partialContent?: string }> {
     const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent?key=${this.apiKey}`;
     // Determine cached content and dynamic system instruction
     let cachedContentName: string | undefined;
@@ -233,17 +297,31 @@ export class GeminiClient {
         contentLength: accumulated.length,
       });
 
-      return accumulated;
+      // Note: Token usage is typically not available in streaming responses
+      // It may be included in the final chunk, but we don't parse it currently
+      return { content: accumulated, usage: undefined };
     } catch (error) {
       clearTimeout(timeoutId);
 
       if (error instanceof Error && error.name === 'AbortError') {
         // Check if it was a timeout or user-initiated abort
         if (timeoutController.signal.aborted && !request.signal?.aborted) {
-          throw new Error(`Request timeout after ${this.timeout}ms`);
+          // Timeout - attach partial content if available
+          const timeoutError = new Error(`Request timeout after ${this.timeout}ms`) as Error & { partialContent?: string };
+          if (accumulated.length > 0) {
+            timeoutError.partialContent = accumulated;
+            logger.warn('Streaming timeout with partial content', {
+              partialContentLength: accumulated.length,
+            });
+          }
+          throw timeoutError;
         }
         // User-initiated abort
-        throw new Error('Request was cancelled');
+        const cancelError = new Error('Request was cancelled') as Error & { partialContent?: string };
+        if (accumulated.length > 0) {
+          cancelError.partialContent = accumulated;
+        }
+        throw cancelError;
       }
 
       logger.error('Gemini streaming API exception', {
@@ -256,7 +334,7 @@ export class GeminiClient {
   /**
    * Makes a single request to the Gemini API.
    */
-  private async makeRequest(request: GeminiRequest): Promise<string> {
+  private async makeRequest(request: GeminiRequest): Promise<{ content: string; usage?: GeminiResponse['usage'] }> {
     const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
     // Determine cached content and dynamic system instruction
     let cachedContentName: string | undefined;
@@ -347,9 +425,16 @@ export class GeminiClient {
         }
 
         const errorMessage = errorData.error?.message ?? response.statusText;
-        throw new Error(
-          `Gemini API error: ${response.status} - ${errorMessage}`
-        );
+        const errorStatus = response.status;
+
+        // Enhance error message based on status code
+        if (errorStatus === 429) {
+          throw new Error(`Rate limit exceeded: ${errorMessage}`);
+        } else if (errorStatus === 408) {
+          throw new Error(`Request timeout: ${errorMessage}`);
+        } else {
+          throw new Error(`Gemini API error: ${errorStatus} - ${errorMessage}`);
+        }
       }
 
       const data = (await response.json()) as GeminiAPIResponse;
@@ -359,10 +444,21 @@ export class GeminiClient {
 
       const content = extractResponseContent(data);
 
+      // Extract token usage if available
+      const usage = data.usageMetadata
+        ? {
+            inputTokens: data.usageMetadata.promptTokenCount,
+            outputTokens: data.usageMetadata.candidatesTokenCount,
+            totalTokens: data.usageMetadata.totalTokenCount,
+          }
+        : undefined;
+
       logger.info('Gemini request completed successfully', {
         contentLength: content.length,
+        ...(usage && { usage }),
       });
-      return content;
+
+      return { content, usage };
     } catch (error) {
       clearTimeout(timeoutId);
 
@@ -383,25 +479,48 @@ export class GeminiClient {
   }
 
   /**
+   * Categorizes an error into a type and code.
+   */
+  private categorizeError(error: Error): { errorType: GeminiResponse['errorType']; errorCode: string } {
+    const message = error.message.toLowerCase();
+
+    // Timeout errors
+    if (message.includes('timeout')) {
+      return { errorType: 'timeout', errorCode: 'TIMEOUT' };
+    }
+
+    // Cancelled/aborted requests
+    if (message.includes('cancel') || message.includes('abort')) {
+      return { errorType: 'cancelled', errorCode: 'CANCELLED' };
+    }
+
+    // Rate limit errors
+    if (message.includes('rate limit') || message.includes('429') || message.includes('quota')) {
+      return { errorType: 'rate_limit', errorCode: 'RATE_LIMIT_EXCEEDED' };
+    }
+
+    // API errors (4xx, 5xx)
+    if (message.includes('gemini api error') || /[45]\d{2}/.test(message)) {
+      return { errorType: 'api_error', errorCode: 'API_ERROR' };
+    }
+
+    // Unknown errors
+    return { errorType: 'unknown', errorCode: 'INTERNAL_ERROR' };
+  }
+
+  /**
    * Determines if an error is retryable.
    */
   private isRetryableError(error: Error): boolean {
-    const message = error.message.toLowerCase();
+    const { errorType } = this.categorizeError(error);
 
-    // NEVER retry on timeout - this ensures 60s max wait
-    if (message.includes('timeout')) {
+    // NEVER retry on timeout or cancelled - this ensures 60s max wait
+    if (errorType === 'timeout' || errorType === 'cancelled') {
       return false;
     }
 
     // Retry on rate limiting and server errors
-    return (
-      message.includes('rate limit') ||
-      message.includes('429') ||
-      message.includes('500') ||
-      message.includes('502') ||
-      message.includes('503') ||
-      message.includes('504')
-    );
+    return errorType === 'rate_limit' || errorType === 'api_error';
   }
 
 

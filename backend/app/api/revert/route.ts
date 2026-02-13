@@ -51,8 +51,8 @@ export async function POST(
       version: serializeVersion(result.version!),
     };
 
-    return NextResponse.json(response, { status: 200, headers: getCorsHeaders() });
+    return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
   } catch (error) {
-    return handleError(error, 'api/revert');
+    return handleError(error, 'api/revert', request);
   }
 }

@@ -8,6 +8,8 @@ export interface FileIndexEntry {
   filePath: string;
   /** Type of file */
   fileType: FileType;
+  /** SHA-256 hash of file content */
+  hash: string;
   /** Exports from this file */
   exports: ExportInfo[];
   /** Imports in this file */

@@ -1,6 +1,8 @@
 export { ChatInterface, type ChatInterfaceProps, type ChatMessage, type LoadingPhase } from './ChatInterface';
-export { PreviewPanel, type PreviewPanelProps } from './PreviewPanel';
-export { DiffViewer, type DiffViewerProps } from './DiffViewer';
+// PreviewPanel is lazy-loaded in AppLayout - not exported to enable code-splitting
+// export { PreviewPanel, type PreviewPanelProps } from './PreviewPanel';
+// DiffViewer is lazy-loaded in ChatInterface - not exported to enable code-splitting
+// export { DiffViewer, type DiffViewerProps } from './DiffViewer';
 export { HistoryPanel, type HistoryPanelProps } from './HistoryPanel';
 export { ErrorBoundary, type ErrorBoundaryProps } from './ErrorBoundary';
 export { ErrorMessage, classifyError, type ErrorMessageProps, type ErrorType } from './ErrorMessage';

@@ -5,6 +5,7 @@ interface FileTreeNodeProps {
   node: TreeNode;
   depth: number;
   activeFile: string | null;
+  focusedId: string | null;
   expandedDirs: Set<string>;
   onFileSelect: (path: string) => void;
   onToggleDir: (path: string) => void;
@@ -14,6 +15,7 @@ export function FileTreeNode({
   node,
   depth,
   activeFile,
+  focusedId,
   expandedDirs,
   onFileSelect,
   onToggleDir,
@@ -21,6 +23,7 @@ export function FileTreeNode({
   const isDirectory = node.type === 'directory';
   const isExpanded = expandedDirs.has(node.path);
   const isActive = activeFile === node.path;
+  const isFocused = focusedId === node.path;
 
   const handleClick = () => {
     if (isDirectory) {
@@ -34,6 +37,10 @@ export function FileTreeNode({
     <div>
       <div
         onClick={handleClick}
+        role="treeitem"
+        aria-selected={isActive}
+        aria-expanded={isDirectory ? isExpanded : undefined}
+        aria-current={isActive ? 'page' : undefined}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -42,10 +49,15 @@ export function FileTreeNode({
           cursor: 'pointer',
           color: isActive
             ? 'hsl(var(--pv-accent))'
-            : 'hsl(var(--pv-text))',
+            : isFocused
+              ? 'hsl(var(--pv-text))'
+              : 'hsl(var(--pv-text))',
           backgroundColor: isActive
             ? 'hsl(var(--pv-accent) / 0.15)'
-            : 'transparent',
+            : isFocused
+              ? 'hsl(var(--pv-surface-3))'
+              : 'transparent',
+          outline: isFocused ? '1px inset hsl(var(--pv-accent) / 0.5)' : 'none',
           fontSize: '13px',
           userSelect: 'none',
           transition: 'background-color 0.15s ease',
@@ -125,6 +137,7 @@ export function FileTreeNode({
               node={child}
               depth={depth + 1}
               activeFile={activeFile}
+              focusedId={focusedId}
               expandedDirs={expandedDirs}
               onFileSelect={onFileSelect}
               onToggleDir={onToggleDir}

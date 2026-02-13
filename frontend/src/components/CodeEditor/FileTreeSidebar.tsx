@@ -14,6 +14,7 @@ export function FileTreeSidebar({
   onFileSelect,
 }: FileTreeSidebarProps) {
   const tree = useMemo(() => buildFileTree(files), [files]);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
 
   // Function to get all directory paths from the tree
   const getAllDirPaths = (nodes: TreeNode[]): string[] => {
@@ -67,6 +68,100 @@ export function FileTreeSidebar({
     });
   };
 
+  // Flatten tree for easy navigation
+  const flatNodes = useMemo(() => {
+    const list: TreeNode[] = [];
+    const traverse = (nodes: TreeNode[]) => {
+      for (const node of nodes) {
+        list.push(node);
+        if (node.type === 'directory' && expandedDirs.has(node.path) && node.children) {
+          traverse(node.children);
+        }
+      }
+    };
+    traverse(tree);
+    return list;
+  }, [tree, expandedDirs]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (flatNodes.length === 0) return;
+
+    const currentIndex = focusedId ? flatNodes.findIndex(n => n.path === focusedId) : -1;
+
+    switch (e.key) {
+      case 'ArrowDown': {
+        e.preventDefault();
+        const nextIndex = (currentIndex + 1) % flatNodes.length;
+        setFocusedId(flatNodes[nextIndex].path);
+        break;
+      }
+      case 'ArrowUp': {
+        e.preventDefault();
+        const prevIndex = currentIndex <= 0 ? flatNodes.length - 1 : currentIndex - 1;
+        setFocusedId(flatNodes[prevIndex].path);
+        break;
+      }
+      case 'ArrowRight': {
+        e.preventDefault();
+        if (focusedId) {
+          const node = flatNodes.find(n => n.path === focusedId);
+          if (node?.type === 'directory') {
+            if (!expandedDirs.has(focusedId)) {
+              handleToggleDir(focusedId);
+            } else if (node.children?.length) {
+              // Move focus to first child
+              const nextIndex = (currentIndex + 1) % flatNodes.length;
+              setFocusedId(flatNodes[nextIndex].path);
+            }
+          }
+        }
+        break;
+      }
+      case 'ArrowLeft': {
+        e.preventDefault();
+        if (focusedId) {
+          const node = flatNodes.find(n => n.path === focusedId);
+          if (node?.type === 'directory' && expandedDirs.has(focusedId)) {
+            handleToggleDir(focusedId);
+          } else {
+            // Move focus to parent directory
+            const pathParts = focusedId.split('/');
+            if (pathParts.length > 1) {
+              const parentPath = pathParts.slice(0, -1).join('/');
+              setFocusedId(parentPath);
+            }
+          }
+        }
+        break;
+      }
+      case 'Enter':
+      case ' ': {
+        e.preventDefault();
+        if (focusedId) {
+          const node = flatNodes.find(n => n.path === focusedId);
+          if (node) {
+            if (node.type === 'directory') {
+              handleToggleDir(node.path);
+            } else {
+              onFileSelect(node.path);
+            }
+          }
+        }
+        break;
+      }
+      case 'Home': {
+        e.preventDefault();
+        setFocusedId(flatNodes[0].path);
+        break;
+      }
+      case 'End': {
+        e.preventDefault();
+        setFocusedId(flatNodes[flatNodes.length - 1].path);
+        break;
+      }
+    }
+  };
+
   return (
     <div
       style={{
@@ -94,12 +189,21 @@ export function FileTreeSidebar({
         Files
       </div>
 
-      {/* Tree Container */}
       <div
+        role="tree"
+        aria-label="File explorer"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        onFocus={() => {
+          if (!focusedId && flatNodes.length > 0) {
+            setFocusedId(flatNodes[0].path);
+          }
+        }}
         style={{
           flex: 1,
           overflowY: 'auto',
           overflowX: 'hidden',
+          outline: 'none',
         }}
       >
         {tree.length === 0 ? (
@@ -120,6 +224,7 @@ export function FileTreeSidebar({
               node={node}
               depth={0}
               activeFile={activeFile}
+              focusedId={focusedId}
               expandedDirs={expandedDirs}
               onFileSelect={onFileSelect}
               onToggleDir={handleToggleDir}

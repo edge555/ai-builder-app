@@ -114,7 +114,10 @@ The `@ai-app-builder/shared` package exports:
 - TypeScript types for API contracts
 - Zod schemas for validation
 - Utility functions for diffs and errors
+- `sanitizeError()`: Redacts sensitive data (API keys, secrets, tokens) from error messages — used by both backend and Supabase edge functions
 - Built with tsup for dual ESM/CJS support
+
+Supabase edge functions (`supabase/functions/_shared/`) import shared utilities directly from this package (e.g., `diff-utils.ts` and `error-utils.ts` delegate to `@ai-app-builder/shared`).
 
 ## Environment Variables
 

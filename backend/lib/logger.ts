@@ -1,8 +1,9 @@
 /**
  * Logging Service
- * 
+ *
  * Provides structured logging with configurable log levels.
  * Supports debug, info, warn, and error levels with ISO timestamps.
+ * Includes request correlation ID support for distributed tracing.
  */
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -12,6 +13,11 @@ export interface Logger {
   info(message: string, context?: Record<string, unknown>): void;
   warn(message: string, context?: Record<string, unknown>): void;
   error(message: string, context?: Record<string, unknown>): void;
+
+  /**
+   * Creates a child logger with the given request ID automatically added to all log entries
+   */
+  withRequestId(requestId: string): Logger;
 }
 
 // Log level hierarchy for filtering
@@ -39,12 +45,19 @@ function getConfiguredLogLevel(): LogLevel {
 /**
  * Format a log message with ISO timestamp and level indicator
  */
-function formatMessage(level: LogLevel, message: string, context?: Record<string, unknown>): string {
+function formatMessage(
+  level: LogLevel,
+  message: string,
+  context?: Record<string, unknown>,
+  requestId?: string
+): string {
   const timestamp = new Date().toISOString();
   const levelUpper = level.toUpperCase().padEnd(5);
-  
-  let formatted = `[${timestamp}] ${levelUpper} ${message}`;
-  
+
+  // Include request ID in message if provided
+  const requestIdPrefix = requestId ? `[${requestId}] ` : '';
+  let formatted = `[${timestamp}] ${levelUpper} ${requestIdPrefix}${message}`;
+
   if (context && Object.keys(context).length > 0) {
     // For debug level, pretty-print large string values for readability
     if (level === 'debug') {
@@ -62,44 +75,48 @@ function formatMessage(level: LogLevel, message: string, context?: Record<string
       formatted += ` ${JSON.stringify(context)}`;
     }
   }
-  
+
   return formatted;
 }
 
 /**
- * Create a logger instance with the specified name
+ * Create a logger instance with the specified name and optional request ID
  */
-export function createLogger(name: string): Logger {
+export function createLogger(name: string, requestId?: string): Logger {
   const configuredLevel = getConfiguredLogLevel();
   const minLevel = LOG_LEVELS[configuredLevel];
-  
+
   const shouldLog = (level: LogLevel): boolean => {
     return LOG_LEVELS[level] >= minLevel;
   };
-  
+
   return {
     debug(message: string, context?: Record<string, unknown>): void {
       if (shouldLog('debug')) {
-        console.log(formatMessage('debug', `[${name}] ${message}`, context));
+        console.log(formatMessage('debug', `[${name}] ${message}`, context, requestId));
       }
     },
-    
+
     info(message: string, context?: Record<string, unknown>): void {
       if (shouldLog('info')) {
-        console.log(formatMessage('info', `[${name}] ${message}`, context));
+        console.log(formatMessage('info', `[${name}] ${message}`, context, requestId));
       }
     },
-    
+
     warn(message: string, context?: Record<string, unknown>): void {
       if (shouldLog('warn')) {
-        console.warn(formatMessage('warn', `[${name}] ${message}`, context));
+        console.warn(formatMessage('warn', `[${name}] ${message}`, context, requestId));
       }
     },
-    
+
     error(message: string, context?: Record<string, unknown>): void {
       if (shouldLog('error')) {
-        console.error(formatMessage('error', `[${name}] ${message}`, context));
+        console.error(formatMessage('error', `[${name}] ${message}`, context, requestId));
       }
+    },
+
+    withRequestId(newRequestId: string): Logger {
+      return createLogger(name, newRequestId);
     },
   };
 }

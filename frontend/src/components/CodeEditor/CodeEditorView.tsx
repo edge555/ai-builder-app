@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import type { SerializedProjectState } from '@/shared';
 import { useProject } from '@/context/ProjectContext.context';
 import { FileTreeSidebar } from './FileTreeSidebar';
 import { TabBar } from './TabBar';
-import { MonacoEditorWrapper } from './MonacoEditorWrapper';
+const MonacoEditorWrapper = lazy(() => import('./MonacoEditorWrapper').then(m => ({ default: m.MonacoEditorWrapper })));
+import { CodeEditorSkeleton } from './CodeEditorSkeleton';
 import './CodeEditorView.css';
 
 interface CodeEditorViewProps {
@@ -198,16 +199,18 @@ export function CodeEditorView({ files }: CodeEditorViewProps) {
 
         {/* Monaco Editor */}
         <div className="code-editor-content">
-          <MonacoEditorWrapper
-            filePath={activeFile}
-            content={getActiveFileContent()}
-            onChange={(value) => {
-              if (activeFile) {
-                handleFileChange(activeFile, value);
-              }
-            }}
-            externalUpdateKey={externalUpdateKey}
-          />
+          <Suspense fallback={<CodeEditorSkeleton />}>
+            <MonacoEditorWrapper
+              filePath={activeFile}
+              content={getActiveFileContent()}
+              onChange={(value) => {
+                if (activeFile) {
+                  handleFileChange(activeFile, value);
+                }
+              }}
+              externalUpdateKey={externalUpdateKey}
+            />
+          </Suspense>
         </div>
       </div>
     </div>

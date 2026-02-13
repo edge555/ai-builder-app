@@ -4,9 +4,9 @@ export async function OPTIONS() {
   return handleOptions();
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   return Response.json(
     { status: 'ok', timestamp: new Date().toISOString() },
-    { headers: getCorsHeaders() }
+    { headers: getCorsHeaders(request) }
   );
 }

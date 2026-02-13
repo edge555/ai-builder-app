@@ -1,17 +1,13 @@
 /**
- * Shared error handling utilities
+ * Shared error handling utilities for Supabase Edge Functions
+ *
+ * This module now delegates to the shared package for common error utilities.
  */
 
+import { sanitizeError as sharedSanitizeError } from "../../../shared/src/utils/error-utils.ts";
+
 /**
- * Sanitizes error messages to prevent API key exposure.
+ * Re-export sanitizeError from shared package for backward compatibility.
+ * Sanitizes error messages to prevent API key and sensitive data exposure.
  */
-export function sanitizeError(message: string): string {
-  return message
-    .replace(/key=[^&\s"']+/gi, 'key=REDACTED')
-    .replace(/apikey=[^&\s"']+/gi, 'apikey=REDACTED')
-    .replace(/token=[^&\s"']+/gi, 'token=REDACTED')
-    .replace(/secret=[^&\s"']+/gi, 'secret=REDACTED')
-    .replace(/password=[^&\s"']+/gi, 'password=REDACTED')
-    .replace(/SUPABASE_SERVICE_ROLE_KEY[^&\s"']*/gi, 'SUPABASE_SERVICE_ROLE_KEY=REDACTED')
-    .replace(/GEMINI_API_KEY[^&\s"']*/gi, 'GEMINI_API_KEY=REDACTED');
-}
+export const sanitizeError = sharedSanitizeError;

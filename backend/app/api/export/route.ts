@@ -20,7 +20,7 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const corsHeaders = getCorsHeaders();
+  const corsHeaders = getCorsHeaders(request);
 
   try {
     // Parse request body
@@ -55,6 +55,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
 
   } catch (error) {
-    return handleError(error, 'api/export');
+    return handleError(error, 'api/export', request);
   }
 }

@@ -40,9 +40,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<GetVersion
       versions: serializedVersions,
     };
 
-    return NextResponse.json(response, { status: 200, headers: getCorsHeaders() });
+    return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
 
   } catch (error) {
-    return handleError(error, 'api/versions');
+    return handleError(error, 'api/versions', request);
   }
 }

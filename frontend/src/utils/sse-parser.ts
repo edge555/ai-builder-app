@@ -3,6 +3,13 @@ import type { GenerateProjectResponse } from '@/shared';
 /**
  * Shared SSE parser utility with heartbeat support.
  */
+export interface StreamErrorData {
+    error: string;
+    errorCode?: string;
+    errorType?: 'timeout' | 'rate_limit' | 'api_error' | 'cancelled' | 'unknown';
+    partialContent?: string;
+}
+
 export async function parseSSEStream(
     reader: ReadableStreamDefaultReader<Uint8Array>,
     handlers: {
@@ -10,7 +17,7 @@ export async function parseSSEStream(
         onProgress?: (length: number) => void;
         onFile?: (data: any, files: Record<string, string>) => void;
         onComplete?: (data: any, files: Record<string, string>) => void;
-        onError?: (error: string) => void;
+        onError?: (errorData: StreamErrorData) => void;
         onHeartbeat?: () => void;
     }
 ): Promise<GenerateProjectResponse> {
@@ -72,8 +79,14 @@ export async function parseSSEStream(
                             break;
 
                         case 'error':
+                            const errorData: StreamErrorData = {
+                                error: data.error,
+                                errorCode: data.errorCode,
+                                errorType: data.errorType,
+                                partialContent: data.partialContent,
+                            };
                             result = { success: false, error: data.error };
-                            handlers.onError?.(data.error);
+                            handlers.onError?.(errorData);
                             break;
                     }
                 } catch {

@@ -45,6 +45,8 @@ export interface GeminiRequest {
     responseSchema?: object;
     /** Optional abort signal for request cancellation */
     signal?: AbortSignal;
+    /** Optional request ID for correlation and tracking */
+    requestId?: string;
 }
 
 export interface GeminiStreamingRequest extends GeminiRequest {
@@ -59,8 +61,23 @@ export interface GeminiResponse {
     content?: string;
     /** Error message if unsuccessful */
     error?: string;
+    /** Error code for programmatic handling */
+    errorCode?: string;
+    /** Error type categorization */
+    errorType?: 'timeout' | 'rate_limit' | 'api_error' | 'cancelled' | 'unknown';
     /** Number of retry attempts made */
     retryCount?: number;
+    /** Token usage information */
+    usage?: {
+        /** Number of input tokens */
+        inputTokens?: number;
+        /** Number of output tokens */
+        outputTokens?: number;
+        /** Total tokens used */
+        totalTokens?: number;
+    };
+    /** Partial content if streaming was interrupted (e.g., by timeout) */
+    partialContent?: string;
 }
 
 export interface GeminiAPIResponse {
@@ -72,6 +89,11 @@ export interface GeminiAPIResponse {
         };
         finishReason?: string;
     }>;
+    usageMetadata?: {
+        promptTokenCount?: number;
+        candidatesTokenCount?: number;
+        totalTokenCount?: number;
+    };
     error?: {
         message: string;
         code: number;

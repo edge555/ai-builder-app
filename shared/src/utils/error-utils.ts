@@ -6,6 +6,26 @@ import {
 } from '../types/runtime-error';
 
 /**
+ * Sanitizes error messages to prevent API key and sensitive data exposure.
+ * Replaces common sensitive patterns with REDACTED placeholders.
+ *
+ * This utility is used across backend, frontend, and Supabase edge functions.
+ *
+ * @param message - The error message to sanitize
+ * @returns Sanitized error message with sensitive data redacted
+ */
+export function sanitizeError(message: string): string {
+    return message
+        .replace(/key=[^&\s"']+/gi, 'key=REDACTED')
+        .replace(/apikey=[^&\s"']+/gi, 'apikey=REDACTED')
+        .replace(/token=[^&\s"']+/gi, 'token=REDACTED')
+        .replace(/secret=[^&\s"']+/gi, 'secret=REDACTED')
+        .replace(/password=[^&\s"']+/gi, 'password=REDACTED')
+        .replace(/SUPABASE_SERVICE_ROLE_KEY[^&\s"']*/gi, 'SUPABASE_SERVICE_ROLE_KEY=REDACTED')
+        .replace(/GEMINI_API_KEY[^&\s"']*/gi, 'GEMINI_API_KEY=REDACTED');
+}
+
+/**
  * Priority order for sorting (lower = higher priority).
  */
 export const ERROR_PRIORITY_ORDER: Record<ErrorPriority, number> = {

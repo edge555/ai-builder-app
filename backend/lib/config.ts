@@ -16,7 +16,7 @@ const envSchema = z.object({
   GEMINI_EASY_MODEL: z.string().default('gemini-2.5-flash-lite'),
   GEMINI_HARD_MODEL: z.string().default('gemini-2.5-flash'),
   MAX_OUTPUT_TOKENS: z.preprocess((val) => Number(val), z.number().default(16384)),
-  CORS_ORIGIN: z.string().default('http://localhost:8080'),
+  ALLOWED_ORIGINS: z.string().default('http://localhost:8080'),
   PORT: z.preprocess((val) => Number(val), z.number().default(4000)),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
@@ -46,7 +46,7 @@ const env = validateEnv();
 
 export interface BackendConfig {
   cors: {
-    origin: string;
+    allowedOrigins: string[];
     methods: string[];
     headers: string[];
   };
@@ -71,7 +71,7 @@ export interface BackendConfig {
 
 export const config: BackendConfig = {
   cors: {
-    origin: env.CORS_ORIGIN,
+    allowedOrigins: env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim()),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     headers: [
       'Content-Type',

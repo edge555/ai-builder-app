@@ -5,6 +5,7 @@ import { config as appConfig } from '../config';
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 import { parseSSEStream } from '@/utils/sse-parser';
 import { buildRepairPrompt } from '@/utils/repair-prompt';
+import { getUserFriendlyErrorMessage } from '@/utils/error-messages';
 import { GenerationContext, type GenerationContextValue, type StreamingState } from './GenerationContext.context';
 import { useErrorAggregator } from './ErrorAggregatorContext';
 
@@ -155,8 +156,21 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
             lastHeartbeat: Date.now(),
           } : null);
         },
-        onError: (errorMsg: string) => {
-          setStreamingState(prev => prev ? { ...prev, phase: 'error', error: errorMsg, lastHeartbeat: Date.now() } : null);
+        onError: (errorData) => {
+          // Create user-friendly error message based on error type
+          const userMessage = getUserFriendlyErrorMessage({
+            errorType: errorData.errorType,
+            errorCode: errorData.errorCode,
+            partialContent: errorData.partialContent,
+            originalMessage: errorData.error,
+          });
+
+          setStreamingState(prev => prev ? {
+            ...prev,
+            phase: 'error',
+            error: userMessage,
+            lastHeartbeat: Date.now(),
+          } : null);
         },
         onHeartbeat: () => {
           setStreamingState(prev => prev ? { ...prev, lastHeartbeat: Date.now() } : null);
