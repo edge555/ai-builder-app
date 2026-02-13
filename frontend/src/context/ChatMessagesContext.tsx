@@ -10,12 +10,18 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
+export interface ChatMessagesProviderProps {
+  children: React.ReactNode;
+  /** Optional initial messages for restoration */
+  initialMessages?: ChatMessage[];
+}
+
 /**
  * Provider for chat messages management.
  * Manages message history.
  */
-export function ChatMessagesProvider({ children }: { children: React.ReactNode }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export function ChatMessagesProvider({ children, initialMessages }: ChatMessagesProviderProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages ?? []);
 
   /**
    * Adds a user message to the chat history.

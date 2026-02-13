@@ -3,12 +3,18 @@ import type { SerializedProjectState } from '@/shared';
 import { useUndoRedo } from '@/hooks/useUndoRedo';
 import { ProjectContext, type ProjectContextValue, type VersionCallbacks } from './ProjectContext.context';
 
+export interface ProjectProviderProps {
+  children: React.ReactNode;
+  /** Optional initial project state for restoration */
+  initialState?: SerializedProjectState | null;
+}
+
 /**
  * Provider for project state management.
  * Manages project state, undo/redo, and version callbacks.
  */
-export function ProjectProvider({ children }: { children: React.ReactNode }) {
-  const [projectState, setProjectStateInternal] = useState<SerializedProjectState | null>(null);
+export function ProjectProvider({ children, initialState }: ProjectProviderProps) {
+  const [projectState, setProjectStateInternal] = useState<SerializedProjectState | null>(initialState ?? null);
   const versionCallbacksRef = useRef<VersionCallbacks>({});
 
   // Undo/Redo hook
@@ -56,15 +62,32 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }
   }, [undoRedo]);
 
+  /**
+   * Renames the current project.
+   * Updates the project name and updatedAt timestamp.
+   */
+  const renameProject = useCallback((newName: string) => {
+    if (!projectState) return;
+
+    const updatedState: SerializedProjectState = {
+      ...projectState,
+      name: newName,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProjectState(updatedState, false);
+  }, [projectState, setProjectState]);
+
   const value = useMemo<ProjectContextValue>(() => ({
     projectState,
     setProjectState,
     setVersionCallbacks,
+    renameProject,
     undo,
     redo,
     canUndo: undoRedo.canUndo,
     canRedo: undoRedo.canRedo,
-  }), [projectState, setProjectState, setVersionCallbacks, undo, redo, undoRedo.canUndo, undoRedo.canRedo]);
+  }), [projectState, setProjectState, setVersionCallbacks, renameProject, undo, redo, undoRedo.canUndo, undoRedo.canRedo]);
 
   return (
     <ProjectContext.Provider value={value}>

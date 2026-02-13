@@ -1,9 +1,24 @@
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRight, Sparkles, Plus } from 'lucide-react';
 import { initialSuggestions } from '@/data/prompt-suggestions';
+import { ProjectGallery } from '@/components/ProjectGallery/ProjectGallery';
+import { ConfirmDialog } from '@/components/ConfirmDialog/ConfirmDialog';
+import type { StoredProject } from '@/services/storage';
 import './WelcomePage.css';
 
 interface WelcomePageProps {
   onEnterApp: (initialPrompt?: string) => void;
+  onOpenProject: (projectId: string) => void;
+  onDeleteProject: (projectId: string) => void;
+  onRenameProject: (projectId: string, newName: string) => void;
+  onDuplicateProject: (projectId: string) => void;
+  savedProjects: StoredProject[];
+}
+
+interface DeleteConfirmState {
+  isOpen: boolean;
+  projectId: string | null;
+  projectName: string | null;
 }
 
 const features = [
@@ -24,7 +39,57 @@ const features = [
   },
 ];
 
-export function WelcomePage({ onEnterApp }: WelcomePageProps) {
+export function WelcomePage({
+  onEnterApp,
+  onOpenProject,
+  onDeleteProject,
+  onRenameProject,
+  onDuplicateProject,
+  savedProjects,
+}: WelcomePageProps) {
+  const hasProjects = savedProjects.length > 0;
+  const ctaText = hasProjects ? 'New Project' : 'Get Started';
+  const ctaIcon = hasProjects ? Plus : ArrowRight;
+  const CtaIcon = ctaIcon;
+
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>({
+    isOpen: false,
+    projectId: null,
+    projectName: null,
+  });
+
+  const handleDeleteRequest = (projectId: string) => {
+    const project = savedProjects.find(p => p.id === projectId);
+    if (project) {
+      setDeleteConfirm({
+        isOpen: true,
+        projectId,
+        projectName: project.name,
+      });
+    }
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deleteConfirm.projectId) {
+      onDeleteProject(deleteConfirm.projectId);
+    }
+    setDeleteConfirm({ isOpen: false, projectId: null, projectName: null });
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirm({ isOpen: false, projectId: null, projectName: null });
+  };
+
+  const handleRenameRequest = (projectId: string) => {
+    const project = savedProjects.find(p => p.id === projectId);
+    if (project) {
+      const newName = prompt('Enter new project name:', project.name);
+      if (newName && newName.trim()) {
+        onRenameProject(projectId, newName.trim());
+      }
+    }
+  };
+
   return (
     <div className="welcome-page">
       {/* Header */}
@@ -39,8 +104,8 @@ export function WelcomePage({ onEnterApp }: WelcomePageProps) {
           className="welcome-header-nav-btn"
           onClick={() => onEnterApp()}
         >
-          Go to App
-          <ArrowRight size={16} />
+          {ctaText}
+          <CtaIcon size={16} />
         </button>
       </header>
 
@@ -59,10 +124,21 @@ export function WelcomePage({ onEnterApp }: WelcomePageProps) {
           className="welcome-hero-cta"
           onClick={() => onEnterApp()}
         >
-          Get Started
-          <ArrowRight size={18} />
+          {ctaText}
+          <CtaIcon size={18} />
         </button>
       </section>
+
+      {/* Project Gallery - shown when there are saved projects */}
+      {hasProjects && (
+        <ProjectGallery
+          projects={savedProjects}
+          onOpenProject={onOpenProject}
+          onRenameProject={handleRenameRequest}
+          onDuplicateProject={onDuplicateProject}
+          onDeleteProject={handleDeleteRequest}
+        />
+      )}
 
       {/* Features Section */}
       <section className="welcome-features">
@@ -98,6 +174,17 @@ export function WelcomePage({ onEnterApp }: WelcomePageProps) {
       <footer className="welcome-footer">
         <p className="welcome-footer-text">© 2024 AI App Builder</p>
       </footer>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        title="Delete Project"
+        message={`Are you sure you want to delete "${deleteConfirm.projectName}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+      />
     </div>
   );
 }

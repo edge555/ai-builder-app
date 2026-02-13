@@ -68,6 +68,39 @@
   margin: 0 4px;
 }
 
+/* Back Button */
+.back-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-sm);
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.back-button:hover {
+  background: hsl(var(--accent));
+  border-color: hsl(var(--primary) / 0.3);
+}
+
+.back-button:active {
+  transform: scale(0.95);
+}
+
+/* Save Indicator */
+.save-indicator {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  padding-left: 0.5rem;
+}
+
 .app-header-right {
   display: flex;
   align-items: center;
@@ -331,6 +364,15 @@
 
   .app-header-divider {
     display: none;
+  }
+
+  .save-indicator {
+    display: none;
+  }
+
+  .back-button {
+    width: 28px;
+    height: 28px;
   }
 
   .export-button {

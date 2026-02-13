@@ -9,11 +9,13 @@ import { PanelToggle, type ActivePanel } from '../PanelToggle';
 import { UndoRedoButtons } from '../UndoRedoButtons';
 import { StatusIndicator } from '../StatusIndicator';
 import { KeyboardHint } from '../KeyboardHint';
+import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useAutoSave } from '@/hooks/useAutoSave';
 import { initialSuggestions, analyzeProjectForSuggestions } from '@/data/prompt-suggestions';
 import { type RuntimeError } from '@/shared';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ArrowLeft } from 'lucide-react';
 import { useProject, useChatMessages, useGeneration, usePreviewError } from '../../context';
 import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
 
@@ -21,6 +23,27 @@ const RESIZE_MIN_WIDTH = 300;
 const RESIZE_MAX_FRACTION = 0.6;
 const DESKTOP_BREAKPOINT = 1023;
 const SIDE_PANEL_WIDTH_STORAGE_KEY = 'ai_app_builder:sidePanelWidth';
+
+/**
+ * Formats a timestamp for the save indicator.
+ * Shows relative time (e.g., "just now", "2 min ago") for recent saves.
+ */
+function formatTimestamp(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+
+    if (diffSec < 5) return 'just now';
+    if (diffSec < 60) return `${diffSec}s ago`;
+
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} min ago`;
+
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+
+    return date.toLocaleDateString();
+}
 
 /**
  * Main chat panel component that uses the chat context.
@@ -183,18 +206,29 @@ function PreviewSection() {
     );
 }
 
+export interface AppLayoutProps {
+    /** Optional initial prompt to submit on mount */
+    initialPrompt?: string;
+    /** Optional callback when user wants to return to dashboard */
+    onBackToDashboard?: () => void;
+}
+
 /**
  * Main application layout component.
  * Two-panel layout: Chat and Preview
  * Responsive design for different screen sizes.
- * 
+ *
  * Requirements: 8.1, 9.1
  */
-export function AppLayout({ initialPrompt }: { initialPrompt?: string }) {
+export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) {
     const { undo, redo, submitPrompt } = useSubmitPrompt();
     const project = useProject();
+    const { messages } = useChatMessages();
     const { isLoading, loadingPhase } = useGeneration();
-    const { canUndo, canRedo } = project;
+    const { projectState, canUndo, canRedo, renameProject } = project;
+
+    // Auto-save project state and messages
+    const { isSaving, lastSavedAt } = useAutoSave(projectState, messages);
 
     const initialPromptSubmittedRef = useRef(false);
 
@@ -277,16 +311,46 @@ export function AppLayout({ initialPrompt }: { initialPrompt?: string }) {
         };
     }, [resize, stopResizing]);
 
+    // Format save indicator text
+    const saveIndicatorText = isSaving
+        ? 'Saving...'
+        : lastSavedAt
+            ? `Saved ${formatTimestamp(lastSavedAt)}`
+            : '';
+
     return (
         <div className="app">
             <header className="app-header">
                 <div className="app-header-left">
+                    {onBackToDashboard && (
+                        <button
+                            className="back-button"
+                            onClick={onBackToDashboard}
+                            aria-label="Back to dashboard"
+                            title="Back to dashboard"
+                        >
+                            <ArrowLeft size={18} />
+                        </button>
+                    )}
                     <div className="app-logo" aria-hidden="true">
                         <Sparkles size={18} />
                     </div>
-                    <h1>AI App Builder</h1>
+                    {projectState ? (
+                        <EditableProjectName
+                            name={projectState.name}
+                            onRename={renameProject}
+                            disabled={isLoading}
+                        />
+                    ) : (
+                        <h1>AI App Builder</h1>
+                    )}
                     <div className="app-header-divider" />
                     <StatusIndicator phase={loadingPhase} isLoading={isLoading} />
+                    {saveIndicatorText && (
+                        <span className="save-indicator" aria-live="polite">
+                            {saveIndicatorText}
+                        </span>
+                    )}
                 </div>
                 <div className="app-header-right">
                     <div className="app-header-actions">

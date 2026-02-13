@@ -17,6 +17,7 @@ export interface ProjectContextValue {
     projectState: SerializedProjectState | null;
     setProjectState: (projectState: SerializedProjectState | null, saveToUndo?: boolean) => void;
     setVersionCallbacks: (callbacks: VersionCallbacks) => void;
+    renameProject: (newName: string) => void;
     undo: () => void;
     redo: () => void;
     canUndo: boolean;
