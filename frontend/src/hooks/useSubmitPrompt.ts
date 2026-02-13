@@ -92,6 +92,12 @@ export function useSubmitPrompt() {
                     } else {
                         // Record failure
                         const errorMsg = result.error || 'Failed to generate project';
+
+                        // Don't show error message for user-initiated cancellation
+                        if (errorMsg === 'Request was cancelled') {
+                            break;
+                        }
+
                         apiRetryHistoryRef.current.push({
                             attempt: retryCount,
                             error: errorMsg,
@@ -136,6 +142,12 @@ export function useSubmitPrompt() {
                     } else {
                         // Record failure
                         const errorMsg = result.error || 'Failed to modify project';
+
+                        // Don't show error message for user-initiated cancellation
+                        if (errorMsg === 'Request was cancelled') {
+                            break;
+                        }
+
                         apiRetryHistoryRef.current.push({
                             attempt: retryCount,
                             error: errorMsg,
@@ -154,7 +166,11 @@ export function useSubmitPrompt() {
         } catch (err) {
             // Network/timeout/auth errors - don't retry these
             const errorMsg = err instanceof Error ? err.message : 'An unexpected error occurred';
-            chatMessages.addAssistantMessage(`Sorry, something went wrong: ${errorMsg}`);
+
+            // Don't show error message for user-initiated cancellation
+            if (errorMsg !== 'Request was cancelled') {
+                chatMessages.addAssistantMessage(`Sorry, something went wrong: ${errorMsg}`);
+            }
         } finally {
             generation.setIsLoading(false);
             generation.setLoadingPhase('idle');
@@ -189,5 +205,6 @@ export function useSubmitPrompt() {
         undo,
         redo,
         isSubmitting: isSubmittingRef.current,
+        abortCurrentRequest: generation.abortCurrentRequest,
     };
 }

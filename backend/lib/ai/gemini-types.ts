@@ -43,6 +43,8 @@ export interface GeminiRequest {
     maxOutputTokens?: number;
     /** JSON schema for structured output */
     responseSchema?: object;
+    /** Optional abort signal for request cancellation */
+    signal?: AbortSignal;
 }
 
 export interface GeminiStreamingRequest extends GeminiRequest {

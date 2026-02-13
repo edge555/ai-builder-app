@@ -54,20 +54,20 @@ function normalizeTrimmedLines(text: string): string {
 function calculateLineSimilarity(text1: string, text2: string): number {
   const lines1 = text1.split('\n').map(l => l.trim()).filter(l => l.length > 0);
   const lines2 = text2.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  
+
   if (lines1.length === 0 && lines2.length === 0) return 1;
   if (lines1.length === 0 || lines2.length === 0) return 0;
-  
+
   // Count matching lines
   let matches = 0;
   const maxLen = Math.max(lines1.length, lines2.length);
-  
+
   for (let i = 0; i < Math.min(lines1.length, lines2.length); i++) {
     if (lines1[i] === lines2[i]) {
       matches++;
     }
   }
-  
+
   return matches / maxLen;
 }
 
@@ -77,12 +77,12 @@ function calculateLineSimilarity(text1: string, text2: string): number {
 function findAllExact(content: string, search: string): number[] {
   const indices: number[] = [];
   let index = 0;
-  
+
   while ((index = content.indexOf(search, index)) !== -1) {
     indices.push(index);
     index += search.length;
   }
-  
+
   return indices;
 }
 
@@ -93,17 +93,17 @@ function findAllExact(content: string, search: string): number[] {
 function findWithNormalizedWhitespace(content: string, search: string): number[] {
   const normalizedContent = normalizeWhitespace(content);
   const normalizedSearch = normalizeWhitespace(search);
-  
+
   const indices: number[] = [];
   let normIndex = 0;
-  
+
   while ((normIndex = normalizedContent.indexOf(normalizedSearch, normIndex)) !== -1) {
     // Map back to original content index (approximate)
     // This is a heuristic - we find the position in the original that corresponds
     // to this normalized position
     let originalIndex = 0;
     let normalizedPos = 0;
-    
+
     for (let i = 0; i < content.length && normalizedPos < normIndex; i++) {
       const char = content[i];
       if (char === '\n' || char === '\r' || char === '\t' || char === ' ') {
@@ -119,11 +119,11 @@ function findWithNormalizedWhitespace(content: string, search: string): number[]
       }
       originalIndex = i + 1;
     }
-    
+
     indices.push(originalIndex);
     normIndex += normalizedSearch.length;
   }
-  
+
   return indices;
 }
 
@@ -134,82 +134,150 @@ function findWithNormalizedWhitespace(content: string, search: string): number[]
 function findWithTrimmedLines(content: string, search: string): number[] {
   const contentLines = content.split('\n');
   const searchLines = search.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  
+
   if (searchLines.length === 0) return [];
-  
-  const indices: number[] = [];
-  
+
+  const results: Array<{ index: number; length: number }> = [];
+
   for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
     let match = true;
     let searchIdx = 0;
     let contentIdx = i;
-    
+
     // Try to match all search lines starting from this position
     while (searchIdx < searchLines.length && contentIdx < contentLines.length) {
       const contentLine = contentLines[contentIdx].trim();
-      
+
       // Skip empty lines in content
       if (contentLine.length === 0) {
         contentIdx++;
         continue;
       }
-      
+
       if (contentLine !== searchLines[searchIdx]) {
         match = false;
         break;
       }
-      
+
       searchIdx++;
       contentIdx++;
     }
-    
+
     if (match && searchIdx === searchLines.length) {
-      // Found a match - calculate the character index
+      // Found a match - calculate character index and total length
       let charIndex = 0;
       for (let j = 0; j < i; j++) {
-        charIndex += contentLines[j].length + 1; // +1 for newline
+        charIndex += contentLines[j].length + 1;
       }
-      indices.push(charIndex);
+
+      let matchLength = 0;
+      for (let j = i; j < contentIdx; j++) {
+        matchLength += contentLines[j].length + 1;
+      }
+      // Remove trailing newline if it wasn't in original content (e.g. last line)
+      if (charIndex + matchLength > content.length) {
+        matchLength = content.length - charIndex;
+      } else if (matchLength > 0 && content[charIndex + matchLength - 1] === '\n') {
+        // If the search string didn't have a trailing newline, but we matched the whole line...
+        // actually, trimmed line matching is line-based, so it makes sense to replace whole lines.
+      }
+
+      results.push({ index: charIndex, length: matchLength });
     }
   }
-  
-  return indices;
+
+  return results.map(r => r.index);
+}
+
+// Internal version that returns more info
+function findWithTrimmedLinesInfo(content: string, search: string): Array<{ index: number; length: number }> {
+  const contentLines = content.split('\n');
+  const searchLines = search.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  if (searchLines.length === 0) return [];
+
+  const results: Array<{ index: number; length: number }> = [];
+
+  for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
+    let match = true;
+    let searchIdx = 0;
+    let contentIdx = i;
+
+    while (searchIdx < searchLines.length && contentIdx < contentLines.length) {
+      const contentLine = contentLines[contentIdx].trim();
+      if (contentLine.length === 0) {
+        contentIdx++;
+        continue;
+      }
+      if (contentLine !== searchLines[searchIdx]) {
+        match = false;
+        break;
+      }
+      searchIdx++;
+      contentIdx++;
+    }
+
+    if (match && searchIdx === searchLines.length) {
+      let charIndex = 0;
+      for (let j = 0; j < i; j++) {
+        charIndex += contentLines[j].length + 1;
+      }
+
+      let matchLength = 0;
+      for (let j = i; j < contentIdx; j++) {
+        matchLength += contentLines[j].length + 1;
+      }
+      if (charIndex + matchLength > content.length) {
+        matchLength = content.length - charIndex;
+      }
+
+      results.push({ index: charIndex, length: matchLength });
+    }
+  }
+
+  return results;
 }
 
 /**
  * Find occurrences using fuzzy line matching.
  * Looks for regions where at least 80% of lines match.
  */
-function findWithFuzzyLines(content: string, search: string, threshold: number = 0.8): Array<{ index: number; similarity: number }> {
+function findWithFuzzyLines(content: string, search: string, threshold: number = 0.8): Array<{ index: number; length: number; similarity: number }> {
   const contentLines = content.split('\n');
   const searchLines = search.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  
+
   if (searchLines.length === 0) return [];
-  
-  const results: Array<{ index: number; similarity: number }> = [];
-  
+
+  const results: Array<{ index: number; length: number; similarity: number }> = [];
+
   for (let i = 0; i <= contentLines.length - searchLines.length; i++) {
     const windowLines = contentLines.slice(i, i + searchLines.length).map(l => l.trim()).filter(l => l.length > 0);
-    
+
     if (windowLines.length === 0) continue;
-    
-    // Calculate similarity
+
     const similarity = calculateLineSimilarity(
       windowLines.join('\n'),
       searchLines.join('\n')
     );
-    
+
     if (similarity >= threshold) {
-      // Calculate character index
       let charIndex = 0;
       for (let j = 0; j < i; j++) {
-        charIndex += contentLines[j].length + 1; // +1 for newline
+        charIndex += contentLines[j].length + 1;
       }
-      results.push({ index: charIndex, similarity });
+
+      let matchLength = 0;
+      for (let j = i; j < i + searchLines.length; j++) {
+        matchLength += contentLines[j].length + 1;
+      }
+      if (charIndex + matchLength > content.length) {
+        matchLength = content.length - charIndex;
+      }
+
+      results.push({ index: charIndex, length: matchLength, similarity });
     }
   }
-  
-  // Sort by similarity (best matches first)
+
   return results.sort((a, b) => b.similarity - a.similarity);
 }
 
@@ -231,11 +299,11 @@ export function multiTierMatch(content: string, search: string, occurrence: numb
   if (!search || search.length === 0) {
     return { found: false, index: -1, tier: 0 };
   }
-  
+
   if (occurrence < 1) {
     occurrence = 1;
   }
-  
+
   // Tier 1: Exact match
   const exactMatches = findAllExact(content, search);
   if (exactMatches.length >= occurrence) {
@@ -248,7 +316,7 @@ export function multiTierMatch(content: string, search: string, occurrence: numb
       matchedText: content.substring(index, index + search.length),
     };
   }
-  
+
   // Tier 2: Whitespace-normalized match
   const normalizedMatches = findWithNormalizedWhitespace(content, search);
   if (normalizedMatches.length >= occurrence) {
@@ -258,25 +326,25 @@ export function multiTierMatch(content: string, search: string, occurrence: numb
       found: true,
       index,
       tier: 2,
-      matchedText: content.substring(index, index + search.length),
+      matchedText: content.substring(index, index + search.length), // Approx, for replacement we use search.length anyway for Tier 2 usually if we want to be safe, but wait...
       warning: 'Match found using whitespace normalization - original had different whitespace',
     };
   }
-  
+
   // Tier 3: Trimmed-line match
-  const trimmedMatches = findWithTrimmedLines(content, search);
+  const trimmedMatches = findWithTrimmedLinesInfo(content, search);
   if (trimmedMatches.length >= occurrence) {
-    const index = trimmedMatches[occurrence - 1];
-    logger.info('Tier 3 (trimmed-line) match found', { occurrence, index });
+    const match = trimmedMatches[occurrence - 1];
+    logger.info('Tier 3 (trimmed-line) match found', { occurrence, index: match.index });
     return {
       found: true,
-      index,
+      index: match.index,
       tier: 3,
-      matchedText: content.substring(index, Math.min(index + search.length * 2, content.length)),
+      matchedText: content.substring(match.index, match.index + match.length),
       warning: 'Match found using trimmed-line matching - formatting may differ',
     };
   }
-  
+
   // Tier 4: Fuzzy line match
   const fuzzyMatches = findWithFuzzyLines(content, search);
   if (fuzzyMatches.length >= occurrence) {
@@ -286,18 +354,18 @@ export function multiTierMatch(content: string, search: string, occurrence: numb
       found: true,
       index: match.index,
       tier: 4,
-      matchedText: content.substring(match.index, Math.min(match.index + search.length * 2, content.length)),
+      matchedText: content.substring(match.index, match.index + match.length),
       warning: `Fuzzy match found with ${Math.round(match.similarity * 100)}% similarity - content may differ significantly`,
     };
   }
-  
+
   // No match found at any tier
   logger.error('No match found at any tier', {
     searchLength: search.length,
     searchPreview: search.substring(0, 100),
     occurrence,
   });
-  
+
   return { found: false, index: -1, tier: 0 };
 }
 
@@ -317,7 +385,7 @@ export function applySearchReplace(
   occurrence: number = 1
 ): { success: boolean; content?: string; warning?: string; error?: string } {
   const matchResult = multiTierMatch(content, search, occurrence);
-  
+
   if (!matchResult.found) {
     const searchPreview = search.length > 200 ? search.substring(0, 200) + '...' : search;
     return {
@@ -325,7 +393,7 @@ export function applySearchReplace(
       error: `Search text not found (occurrence ${occurrence}). Search preview: ${searchPreview}`,
     };
   }
-  
+
   // For exact matches (tier 1), we can do a simple replacement
   if (matchResult.tier === 1) {
     const before = content.substring(0, matchResult.index);
@@ -335,13 +403,13 @@ export function applySearchReplace(
       content: before + replace + after,
     };
   }
-  
+
   // For other tiers, we need to be more careful
   // Extract the actual matched region and replace it
   const matchLength = matchResult.matchedText?.length ?? search.length;
   const before = content.substring(0, matchResult.index);
   const after = content.substring(matchResult.index + matchLength);
-  
+
   return {
     success: true,
     content: before + replace + after,

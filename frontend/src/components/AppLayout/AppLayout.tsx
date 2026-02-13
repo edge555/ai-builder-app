@@ -50,7 +50,7 @@ function formatTimestamp(date: Date): string {
  */
 function ChatPanel() {
     const { messages, clearMessages } = useChatMessages();
-    const { isLoading, loadingPhase, error, clearError, streamingState, isStreaming } = useGeneration();
+    const { isLoading, loadingPhase, error, clearError, streamingState, isStreaming, abortCurrentRequest } = useGeneration();
     const { projectState } = useProject();
     const { submitPrompt } = useSubmitPrompt();
     const [lastPrompt, setLastPrompt] = useState<string | null>(null);
@@ -87,6 +87,7 @@ function ChatPanel() {
             suggestions={suggestions}
             streamingState={streamingState}
             isStreaming={isStreaming}
+            onAbort={abortCurrentRequest}
         />
     );
 }

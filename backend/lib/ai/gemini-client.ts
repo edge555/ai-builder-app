@@ -169,8 +169,14 @@ export class GeminiClient {
       systemInstructionLength: systemInstructionText?.length ?? 0,
     });
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    // Create timeout controller
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
+
+    // Combine external signal (if provided) with timeout signal
+    const signal = request.signal
+      ? AbortSignal.any([request.signal, timeoutController.signal])
+      : timeoutController.signal;
 
     try {
       const response = await fetch(url, {
@@ -179,7 +185,7 @@ export class GeminiClient {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal,
       });
 
       if (!response.ok) {
@@ -291,7 +297,12 @@ export class GeminiClient {
       clearTimeout(timeoutId);
 
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Request timeout after ${this.timeout}ms`);
+        // Check if it was a timeout or user-initiated abort
+        if (timeoutController.signal.aborted && !request.signal?.aborted) {
+          throw new Error(`Request timeout after ${this.timeout}ms`);
+        }
+        // User-initiated abort
+        throw new Error('Request was cancelled');
       }
 
       logger.error('Gemini streaming API exception', {
@@ -351,8 +362,14 @@ export class GeminiClient {
       body: truncatePayload(JSON.stringify(body, null, 2)),
     });
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    // Create timeout controller
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
+
+    // Combine external signal (if provided) with timeout signal
+    const signal = request.signal
+      ? AbortSignal.any([request.signal, timeoutController.signal])
+      : timeoutController.signal;
 
     try {
       const response = await fetch(url, {
@@ -361,7 +378,7 @@ export class GeminiClient {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal,
       });
 
       clearTimeout(timeoutId);
@@ -416,7 +433,12 @@ export class GeminiClient {
       clearTimeout(timeoutId);
 
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Request timeout after ${this.timeout}ms`);
+        // Check if it was a timeout or user-initiated abort
+        if (timeoutController.signal.aborted && !request.signal?.aborted) {
+          throw new Error(`Request timeout after ${this.timeout}ms`);
+        }
+        // User-initiated abort
+        throw new Error('Request was cancelled');
       }
 
       logger.error('Gemini API exception', {

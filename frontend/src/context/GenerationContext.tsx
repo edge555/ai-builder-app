@@ -59,6 +59,23 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
   /**
    * Resets auto-repair state.
    */
+  /**
+   * Aborts the current in-flight request.
+   */
+  const abortCurrentRequest = useCallback(() => {
+    const activeRequest = activeRequestRef.current;
+    if (activeRequest) {
+      activeRequest.controller.abort();
+      clearTimeout(activeRequest.timeoutId);
+      activeRequestRef.current = null;
+    }
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
+  }, []);
+
+  /**
+   * Resets auto-repair state.
+   */
   const resetAutoRepair = useCallback(() => {
     setAutoRepairAttempt(0);
     setIsAutoRepairing(false);
@@ -151,6 +168,16 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     } catch (e) {
       clearTimeout(timeoutId);
       if (e instanceof Error && e.name === 'AbortError') {
+        // Check if it was user-initiated abort
+        if (controller.signal.aborted) {
+          // User cancelled - return partial results if available
+          return {
+            success: false,
+            error: 'Request was cancelled',
+            // Don't throw - let caller handle gracefully
+          };
+        }
+        // Timeout
         return { success: false, error: 'Generation timed out or was cancelled' };
       }
       throw e;
@@ -341,6 +368,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     setIsLoading,
     setLoadingPhase,
     clearError,
+    abortCurrentRequest,
   }), [
     isLoading,
     loadingPhase,
@@ -355,6 +383,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     autoRepair,
     resetAutoRepair,
     clearError,
+    abortCurrentRequest,
   ]);
 
   return (
