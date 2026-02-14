@@ -2,7 +2,7 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: 
+  background:
     radial-gradient(ellipse 80% 50% at 50% -20%, hsl(262 83% 58% / 0.15), transparent),
     radial-gradient(ellipse 60% 40% at 100% 0%, hsl(280 85% 60% / 0.1), transparent),
     radial-gradient(ellipse 50% 30% at 0% 100%, hsl(210 100% 50% / 0.08), transparent),
@@ -79,7 +79,6 @@
 
 /* Hero Section */
 .welcome-hero {
-  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -100,7 +99,7 @@
   color: white;
   margin-bottom: 32px;
   animation: float 3s ease-in-out infinite;
-  box-shadow: 
+  box-shadow:
     0 8px 32px hsl(262 83% 58% / 0.4),
     0 0 60px hsl(262 83% 58% / 0.2);
   position: relative;
@@ -119,13 +118,29 @@
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.05); }
+
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.6;
+    transform: scale(1.05);
+  }
 }
 
 .welcome-hero-headline {
@@ -235,57 +250,20 @@
   line-height: 1.5;
 }
 
-/* Examples Section */
-.welcome-examples {
+/* Templates Section */
+.welcome-templates {
   padding: 32px 24px 48px;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-.welcome-examples-title {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: hsl(var(--muted-foreground));
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 20px;
-}
-
-.welcome-examples-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  max-width: 400px;
-  width: 100%;
-}
-
-.welcome-example-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 18px;
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-  background: hsl(var(--card) / 0.6);
+.welcome-templates-title {
+  font-size: 1.5rem;
+  font-weight: 600;
   color: hsl(var(--foreground));
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 200ms ease;
-  text-align: left;
-}
-
-.welcome-example-card:hover {
-  background: hsl(var(--accent));
-  border-color: hsl(262 83% 58% / 0.3);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.welcome-example-icon {
-  font-size: 18px;
-  flex-shrink: 0;
+  margin-bottom: 32px;
+  text-align: center;
 }
 
 /* Footer */
@@ -308,9 +286,9 @@
     max-width: 320px;
   }
 
-  .welcome-examples-grid {
-    grid-template-columns: 1fr;
-    max-width: 280px;
+  .welcome-templates-title {
+    font-size: 1.25rem;
+    margin-bottom: 24px;
   }
 
   .welcome-hero {

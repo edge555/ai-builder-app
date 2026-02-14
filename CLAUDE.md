@@ -45,13 +45,39 @@ npm run lint --workspace=@ai-app-builder/backend  # Backend only
 
 ## Architecture Overview
 
+### User Experience Flow
+
+1. **Landing** → User lands on WelcomePage (`/`)
+2. **Project Start** → User can:
+   - Click "Get Started" / "New Project" for blank project
+   - Select a starter template (auto-fills prompt)
+   - Open a saved project from gallery
+3. **Building** → User enters BuilderPage with:
+   - Chat interface for prompts
+   - Monaco code editor (file tree + editor)
+   - Live Sandpack preview
+4. **Auto-Save** → Projects automatically save to IndexedDB
+5. **Project Management** → Users can:
+   - Rename projects (inline editing)
+   - Duplicate projects
+   - Delete projects (with confirmation)
+   - Return to dashboard
+
+### Routing
+
+The frontend uses React Router with the following routes:
+- `/`: Welcome page with templates and saved projects
+- `/project/new`: Create new project (optional `?prompt=` query param)
+- `/project/:id`: Open existing project from IndexedDB
+
 ### Request Flow
-1. User enters prompt in **frontend** ChatInterface
+1. User enters prompt in **frontend** ChatInterface (or selects a starter template)
 2. **frontend** sends request to **backend** `/api/generate-stream` or `/api/modify-stream`
 3. **backend** uses GeminiClient to stream AI responses via SSE
 4. Incremental JSON parser extracts files as they arrive
 5. Files are validated and processed, then streamed back to frontend
 6. **frontend** updates ProjectContext and renders in PreviewPanel (Sandpack)
+7. Project auto-saves to IndexedDB via `useAutoSave` hook
 
 ### Key Backend Components
 
@@ -73,25 +99,34 @@ npm run lint --workspace=@ai-app-builder/backend  # Backend only
 
 ### Key Frontend Components
 
+**Pages** (`frontend/src/pages/`):
+- `WelcomePage`: Landing page with hero section, features showcase, starter templates grid, and saved projects gallery
+- `BuilderPage`: Main builder interface with project routing (`/project/new` for new projects, `/project/:id` for existing)
+
 **Context Providers** (`frontend/src/context/`):
 - `ProjectContext`: Manages current project state (files, versions)
 - `ChatMessagesContext`: Chat message history
 - `GenerationContext`: Tracks ongoing AI generation/modification
 - `VersionContext`: Version history and undo/redo
-- `AutoRepairContext`: Automatic error repair system
-- `PreviewErrorContext`: Runtime error detection from preview
+- `AutoRepairProvider`: Automatic error repair system
+- `PreviewErrorProvider`: Runtime error detection from preview
+- `ErrorAggregatorProvider`: Aggregates errors from multiple sources
 
 **Core Hooks** (`frontend/src/hooks/`):
 - `useSubmitPrompt`: Handles prompt submission and streaming response
-- `useAutoSave`: Automatic project persistence to Supabase
+- `useAutoSave`: Automatic project persistence to IndexedDB with debouncing
 - `useErrorMonitor`: Monitors and aggregates preview errors
 - `useKeyboardShortcuts`: Global keyboard shortcuts
 
 **Components** (`frontend/src/components/`):
 - `ChatInterface/`: Chat UI with prompt input
-- `CodeEditor/`: Monaco-based code editor
-- `PreviewPanel/`: Sandpack preview with error detection
-- `ProjectGallery/`: Saved projects browser
+- `CodeEditor/`: Monaco-based code editor with file tree sidebar and skeleton loading states
+- `PreviewPanel/`: Sandpack preview with runtime error detection
+- `ProjectGallery/`: Saved projects browser with project cards, rename, duplicate, and delete actions
+- `TemplateGrid/`: Grid of starter templates (Analytics Dashboard, Landing Page, Task Manager, etc.) with categories
+- `EditableProjectName/`: Inline editable project name component with pencil icon
+- `ConfirmDialog/`: Reusable confirmation dialog for destructive actions (delete, etc.)
+- `AppLayout/`: Main layout wrapper for the builder interface
 
 ### State Management Pattern
 
@@ -104,9 +139,34 @@ All major contexts follow this pattern:
 ### Storage System
 
 **frontend** uses `storageService` (`frontend/src/services/storage/`) for:
-- Saving projects to Supabase (serialized)
-- Loading project history
-- Auto-save with debouncing
+- **IndexedDB**: Primary local storage for projects (no server required)
+  - Projects are saved to browser's IndexedDB with auto-save
+  - Stores project files, chat history, versions, and metadata
+  - Projects indexed by ID and sorted by last modified date
+- **Project Management**: CRUD operations (create, read, update, delete, rename, duplicate)
+- **Auto-save**: Automatic persistence with debouncing to prevent excessive writes
+- **Serialization**: Projects serialized to `StoredProject` format with timestamps
+
+### Starter Templates System
+
+The app includes a curated collection of starter templates (`frontend/src/data/templates.ts`) to help users quickly generate common app types:
+
+**Available Templates**:
+- **Analytics Dashboard**: Charts, metrics cards, data tables with glassmorphism effects
+- **Landing Page**: Hero section, features grid, testimonials, pricing, FAQ
+- **Task Manager**: Task lists, categories, completion tracking, priority indicators
+- **E-Commerce Store**: Product grid, filters, shopping cart, checkout flow
+- **Portfolio Website**: Projects gallery, skills, contact form
+- **Social Media Feed**: Posts, comments, likes, user interactions
+- **Weather App**: Location search, forecasts, conditions display
+- **Blog/CMS**: Article editor, categories, rich formatting
+
+Each template includes:
+- Pre-written detailed prompt for AI generation
+- Category classification (Dashboard, Marketing, Productivity, etc.)
+- Icon and description for UI display
+
+Templates are displayed on the WelcomePage and can be selected to instantly start a new project with a pre-filled prompt.
 
 ### Shared Package
 
@@ -130,8 +190,8 @@ Copy `.env.example` to create environment files:
 
 **Frontend** (`.env` or inline):
 - `VITE_API_BASE_URL`: Backend URL (default: http://localhost:4000)
-- `VITE_SUPABASE_URL`: Supabase project URL
-- `VITE_SUPABASE_PUBLISHABLE_KEY`: Supabase anon key
+- `VITE_SUPABASE_URL`: Supabase project URL (optional, for future cloud sync)
+- `VITE_SUPABASE_PUBLISHABLE_KEY`: Supabase anon key (optional, for future cloud sync)
 
 ## Path Aliases
 
@@ -152,3 +212,6 @@ Both frontend and backend use path aliases:
 3. **Immutable Versions**: Each generation/modification creates a new immutable version
 4. **Context Composition**: Heavy use of React Context for global state
 5. **Type Safety**: Shared Zod schemas ensure frontend/backend contract safety
+6. **Local-First Storage**: IndexedDB for client-side project persistence (no server/auth required)
+7. **Template-Driven Generation**: Curated starter templates with pre-written prompts for common use cases
+8. **Progressive Enhancement**: Skeleton loading states for better perceived performance
