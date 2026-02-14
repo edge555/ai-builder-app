@@ -240,10 +240,15 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
             // Short delay to ensure everything is ready
             const timer = setTimeout(() => {
                 submitPrompt(initialPrompt);
-            }, 100);
-            return () => clearTimeout(timer);
+            }, 150);
+            return () => {
+                clearTimeout(timer);
+                // Reset ref on cleanup so React Strict Mode re-mount can fire again
+                initialPromptSubmittedRef.current = false;
+            };
         }
-    }, [initialPrompt, submitPrompt]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialPrompt]);
     const [activePanel, setActivePanel] = useState<ActivePanel>('chat');
     const [sidePanelWidth, setSidePanelWidth] = useState(() => {
         const raw = localStorage.getItem(SIDE_PANEL_WIDTH_STORAGE_KEY);
@@ -363,9 +368,6 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                                 onRedo={redo}
                                 disabled={isLoading}
                             />
-                            <div className="app-header-shortcuts">
-                                <KeyboardHint keys={['⌘', 'Z']} />
-                            </div>
                         </div>
                         <ExportButton />
                     </div>

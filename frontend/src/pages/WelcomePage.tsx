@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowRight, Sparkles, Plus } from 'lucide-react';
-import { initialSuggestions } from '@/data/prompt-suggestions';
+import { starterTemplates } from '@/data/templates';
+import { TemplateGrid } from '@/components/TemplateGrid/TemplateGrid';
 import { ProjectGallery } from '@/components/ProjectGallery/ProjectGallery';
 import { ConfirmDialog } from '@/components/ConfirmDialog/ConfirmDialog';
 import type { StoredProject } from '@/services/storage';
@@ -100,13 +101,6 @@ export function WelcomePage({
           </div>
           <span className="welcome-header-title">AI App Builder</span>
         </div>
-        <button
-          className="welcome-header-nav-btn"
-          onClick={() => onEnterApp()}
-        >
-          {ctaText}
-          <CtaIcon size={16} />
-        </button>
       </header>
 
       {/* Hero Section */}
@@ -140,6 +134,15 @@ export function WelcomePage({
         />
       )}
 
+      {/* Templates Section */}
+      <section className="welcome-templates">
+        <h2 className="welcome-templates-title">Start from a template</h2>
+        <TemplateGrid
+          templates={starterTemplates}
+          onSelect={(template) => onEnterApp(template.prompt)}
+        />
+      </section>
+
       {/* Features Section */}
       <section className="welcome-features">
         <div className="welcome-features-grid">
@@ -153,26 +156,9 @@ export function WelcomePage({
         </div>
       </section>
 
-      {/* Examples Section */}
-      <section className="welcome-examples">
-        <h2 className="welcome-examples-title">Try an example</h2>
-        <div className="welcome-examples-grid">
-          {initialSuggestions.map((suggestion) => (
-            <button
-              key={suggestion.id}
-              className="welcome-example-card"
-              onClick={() => onEnterApp(suggestion.prompt)}
-            >
-              <span className="welcome-example-icon">{suggestion.icon}</span>
-              <span>{suggestion.label}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="welcome-footer">
-        <p className="welcome-footer-text">© 2024 AI App Builder</p>
+        <p className="welcome-footer-text">© 2026 AI App Builder</p>
       </footer>
 
       {/* Delete Confirmation Dialog */}
