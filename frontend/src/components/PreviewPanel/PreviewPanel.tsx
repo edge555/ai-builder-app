@@ -162,8 +162,8 @@ export function PreviewPanel({
 
   return (
     <div className="preview-panel">
-      {/* Tab Bar for Preview/Code switching */}
-      <div className="preview-tab-bar-container">
+      {/* Unified Header - combines tabs, browser controls, and device toolbar */}
+      <div className="preview-unified-header">
         <TabBar
           tabs={[
             { id: 'preview', label: 'Preview', icon: <Monitor size={16} /> },
@@ -173,30 +173,72 @@ export function PreviewPanel({
           onTabChange={(tabId) => setShowCode(tabId === 'code')}
         />
 
-        {/* Device toolbar - only shown in preview mode */}
+        {/* Browser controls and device toolbar - only shown in preview mode */}
         {!effectiveShowCode && (
-          <div className="preview-toolbar-container">
-            <PreviewToolbar
-              currentMode={deviceMode}
-              isRotated={isRotated}
-              onModeChange={(mode) => {
-                setDeviceMode(mode);
-                setIsRotated(false); // Reset rotation on mode change
-              }}
-              onRotate={() => setIsRotated(!isRotated)}
-            />
-          </div>
+          <>
+            {/* Browser Chrome Controls */}
+            {!isLoading && projectState && (
+              <div className="preview-browser-controls">
+                <button
+                  className="preview-refresh-btn"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  aria-label="Refresh preview"
+                  title="Refresh preview"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={isRefreshing ? 'spin' : ''}
+                  >
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <polyline points="1 20 1 14 7 14"></polyline>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                  </svg>
+                </button>
+
+                <div className="preview-url-bar">
+                  <svg
+                    className="preview-url-lock"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                  <span className="preview-url-protocol">https://</span>
+                  <span className="preview-url-text">{projectState.name || 'preview'}.app/</span>
+                </div>
+              </div>
+            )}
+
+            {/* Device Toolbar */}
+            <div className="preview-device-toolbar">
+              <PreviewToolbar
+                currentMode={deviceMode}
+                isRotated={isRotated}
+                onModeChange={(mode) => {
+                  setDeviceMode(mode);
+                  setIsRotated(false); // Reset rotation on mode change
+                }}
+                onRotate={() => setIsRotated(!isRotated)}
+              />
+            </div>
+          </>
         )}
       </div>
-
-      {/* Browser Chrome - only shown in preview mode */}
-      {!effectiveShowCode && !isLoading && projectState && (
-        <BrowserChrome
-          url={`https://${projectState.name || 'preview'}.app/`}
-          onRefresh={handleRefresh}
-          isRefreshing={isRefreshing}
-        />
-      )}
 
       {/* Show skeleton during loading */}
       {isLoading && loadingPhase !== 'idle' ? (
