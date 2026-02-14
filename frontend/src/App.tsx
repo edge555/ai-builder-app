@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { WelcomePage, BuilderPage } from './pages';
 import { storageService, type StoredProject } from '@/services/storage';
+import { createLogger } from '@/utils/logger';
 import './App.css';
+
+const appLogger = createLogger('App');
 
 /**
  * Main application component with route-based navigation.
@@ -25,7 +28,7 @@ function App() {
         const projects = await storageService.getAllProjects();
         setSavedProjects(projects);
       } catch (error) {
-        console.error('Failed to initialize storage:', error);
+        appLogger.error('Failed to initialize storage', { error });
       } finally {
         setIsInitializing(false);
       }
@@ -40,7 +43,7 @@ function App() {
       const projects = await storageService.getAllProjects();
       setSavedProjects(projects);
     } catch (error) {
-      console.error('Failed to refresh project list:', error);
+      appLogger.error('Failed to refresh project list', { error });
     }
   };
 
@@ -107,7 +110,7 @@ function WelcomePageWrapper({
       await storageService.deleteProject(projectId);
       await onProjectsChanged();
     } catch (error) {
-      console.error('Failed to delete project:', error);
+      appLogger.error('Failed to delete project', { error });
     }
   };
 
@@ -116,7 +119,7 @@ function WelcomePageWrapper({
       await storageService.renameProject(projectId, newName);
       await onProjectsChanged();
     } catch (error) {
-      console.error('Failed to rename project:', error);
+      appLogger.error('Failed to rename project', { error });
     }
   };
 
@@ -125,7 +128,7 @@ function WelcomePageWrapper({
       await storageService.duplicateProject(projectId);
       await onProjectsChanged();
     } catch (error) {
-      console.error('Failed to duplicate project:', error);
+      appLogger.error('Failed to duplicate project', { error });
     }
   };
 

@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { createLogger } from './utils/logger';
+
+const configLogger = createLogger('Config');
 
 /**
  * Zod schema for frontend environment variables.
@@ -17,9 +20,9 @@ export function validateEnv() {
   const result = envSchema.safeParse(import.meta.env);
 
   if (!result.success) {
-    console.error('❌ Invalid environment variables:');
+    configLogger.error('Invalid environment variables');
     result.error.issues.forEach((issue) => {
-      console.error(`   - ${issue.path.join('.')}: ${issue.message}`);
+      configLogger.error(`   - ${issue.path.join('.')}: ${issue.message}`);
     });
     // In frontend, we'll return the error-prone values but they will be caught by 
     // the application if it uses them. We don't throw here to avoid 

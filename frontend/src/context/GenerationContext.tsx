@@ -8,6 +8,9 @@ import { buildRepairPrompt } from '@/utils/repair-prompt';
 import { getUserFriendlyErrorMessage } from '@/utils/error-messages';
 import { GenerationContext, type GenerationContextValue, type StreamingState } from './GenerationContext.context';
 import { useErrorAggregator } from './ErrorAggregatorContext';
+import { createLogger } from '@/utils/logger';
+
+const genLogger = createLogger('Generation');
 
 const MAX_AUTO_REPAIR_ATTEMPTS = 3;
 const STREAMING_TIMEOUT_MS = 120000; // 120 seconds
@@ -337,7 +340,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
         repairHistoryRef.current = [];
         return true;
       } else {
-        console.error('[AutoRepair] Repair failed:', result.error);
+        genLogger.error('Repair failed', { error: result.error });
 
         // Record this failure in history
         repairHistoryRef.current.push({
@@ -350,7 +353,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
         return false;
       }
     } catch (err) {
-      console.error('[AutoRepair] Repair threw error:', err);
+      genLogger.error('Repair threw error', { error: err });
 
       // Record this failure in history
       repairHistoryRef.current.push({

@@ -2,6 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import type { SerializedProjectState } from '@/shared';
 import type { ChatMessage } from '@/components';
 import { storageService, toStoredProject } from '@/services/storage';
+import { createLogger } from '@/utils/logger';
+
+const autoSaveLogger = createLogger('AutoSave');
 
 export interface UseAutoSaveOptions {
   /** Debounce delay in milliseconds (default: 1500ms) */
@@ -63,7 +66,7 @@ export function useAutoSave(
         // Update last saved timestamp
         setLastSavedAt(new Date());
       } catch (error) {
-        console.error('Auto-save failed:', error);
+        autoSaveLogger.error('Auto-save failed', { error });
         setSaveError(error instanceof Error ? error : new Error('Unknown save error'));
       } finally {
         setIsSaving(false);

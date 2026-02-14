@@ -2,6 +2,9 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/integrations/supabase/types';
 
 import { config } from '@/config';
+import { createLogger } from '@/utils/logger';
+
+const backendClientLogger = createLogger('Backend');
 
 // Environment variables from validated config
 const SUPABASE_URL_ENV = config.supabase.url;
@@ -14,8 +17,8 @@ const PLACEHOLDER_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const hasValidConfig = Boolean(SUPABASE_URL_ENV && SUPABASE_ANON_KEY_ENV);
 
 if (!hasValidConfig) {
-  console.warn(
-    '[Backend] Supabase environment variables not configured. ' +
+  backendClientLogger.warn(
+    'Supabase environment variables not configured. ' +
     'Backend features will be unavailable. ' +
     'To enable, set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.'
   );

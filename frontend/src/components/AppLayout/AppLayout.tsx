@@ -16,6 +16,7 @@ import { initialSuggestions, analyzeProjectForSuggestions } from '@/data/prompt-
 import { type RuntimeError } from '@/shared';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { Sparkles, ArrowLeft } from 'lucide-react';
+import { createLogger } from '@/utils/logger';
 import { useProject, useChatMessages, useGeneration, usePreviewError } from '../../context';
 import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
 
@@ -99,6 +100,8 @@ function ChatPanel() {
  * 
  * Requirements: 9.2, 9.3
  */
+const appLayoutLogger = createLogger('AppLayout');
+
 function PreviewSection() {
     const { projectState } = useProject();
     const { isLoading, loadingPhase, autoRepair, isAutoRepairing, autoRepairAttempt, resetAutoRepair } = useGeneration();
@@ -125,12 +128,15 @@ function PreviewSection() {
     }, [projectState?.currentVersionId, repairPhase, resetAutoRepair]);
 
     const handlePreviewError = useCallback((runtimeError: RuntimeError) => {
-        console.error('[PreviewSection] Error captured:', runtimeError.type, runtimeError.message.slice(0, 100));
+        appLayoutLogger.error('Preview error captured', {
+            type: runtimeError.type,
+            message: runtimeError.message
+        });
         reportError(runtimeError);
     }, [reportError]);
 
     const handleErrorsReady = useCallback((errors: AggregatedErrors) => {
-        console.log('[PreviewSection] Errors ready for repair:', errors.totalCount);
+        appLayoutLogger.info('Errors ready for repair', { totalCount: errors.totalCount });
         reportAggregatedErrors(errors);
     }, [reportAggregatedErrors]);
 
@@ -145,7 +151,7 @@ function PreviewSection() {
             const success = await autoRepair(runtimeError, projectState);
             completeAutoRepair(success);
         } catch (err) {
-            console.error('[PreviewSection] Auto-repair failed:', err);
+            appLayoutLogger.error('Auto-repair failed', { err });
             completeAutoRepair(false);
         }
     }, [autoRepair, shouldAutoRepair, startAutoRepair, completeAutoRepair]);

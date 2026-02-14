@@ -2,6 +2,9 @@ import { forwardRef, useState, useCallback } from 'react';
 import { useProject } from '../../context';
 
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
+import { createLogger } from '@/utils/logger';
+
+const exportLogger = createLogger('ExportButton');
 
 /**
  * Export button component for downloading project as ZIP.
@@ -54,7 +57,7 @@ export const ExportButton = forwardRef<HTMLButtonElement, Record<string, never>>
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : 'Export failed';
             setExportError(errorMsg);
-            console.error('Export error:', err);
+            exportLogger.error('Export error', { error: err });
         } finally {
             setIsExporting(false);
         }

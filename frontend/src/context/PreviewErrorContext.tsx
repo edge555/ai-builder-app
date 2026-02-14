@@ -4,6 +4,9 @@ import type { RepairPhase } from '@/components/RepairStatus';
 import { PreviewErrorContext, type PreviewErrorContextValue } from './PreviewErrorContext.context';
 import { useErrorAggregator } from './ErrorAggregatorContext';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
+import { createLogger } from '@/utils/logger';
+
+const previewErrorLogger = createLogger('PreviewError');
 
 const MAX_REPAIR_ATTEMPTS = 3;
 const AUTO_REPAIR_DEBOUNCE_MS = 800;
@@ -63,10 +66,10 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
       setRepairPhase('detecting');
     }
 
-    console.error('[PreviewError] Runtime error captured:', {
+    previewErrorLogger.error('Runtime error captured', {
       type: error.type,
       priority: error.priority,
-      message: error.message.slice(0, 100),
+      message: error.message,
       file: error.filePath,
     });
   }, [repairPhase]);

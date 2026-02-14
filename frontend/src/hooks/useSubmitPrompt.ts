@@ -3,6 +3,9 @@ import { useProject, useChatMessages, useGeneration } from '../context';
 import type { RepairAttempt } from '@/shared';
 import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError } from '../utils/error-messages';
 import { storageService, toStoredProject } from '../services/storage';
+import { createLogger } from '../utils/logger';
+
+const submitLogger = createLogger('SubmitPrompt');
 
 const MAX_API_RETRIES = 3;
 
@@ -101,7 +104,7 @@ export function useSubmitPrompt() {
                             await storageService.saveProject(storedProject);
                             await storageService.setMetadata('lastOpenedProjectId', result.projectState.id);
                         } catch (saveError) {
-                            console.error('Failed to save project after generation:', saveError);
+                            submitLogger.error('Failed to save project after generation', { error: saveError });
                             // Continue anyway - auto-save will retry
                         }
 

@@ -1,4 +1,7 @@
 import type { StoredProject } from './types';
+import { createLogger } from '@/utils/logger';
+
+const storageLogger = createLogger('Storage');
 
 /**
  * IndexedDB-based storage service for projects.
@@ -32,7 +35,7 @@ class StorageService {
       const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
 
       request.onerror = () => {
-        console.error('Failed to open IndexedDB:', request.error);
+        storageLogger.error('Failed to open IndexedDB', { error: request.error });
         reject(request.error);
       };
 
@@ -98,7 +101,7 @@ class StorageService {
         request.onerror = () => reject(request.error);
       });
     } catch (error) {
-      console.error('Failed to save project:', error);
+      storageLogger.error('Failed to save project', { error });
       // Swallow save errors per plan spec
     }
   }
@@ -118,7 +121,7 @@ class StorageService {
         request.onerror = () => reject(request.error);
       });
     } catch (error) {
-      console.error('Failed to get project:', error);
+      storageLogger.error('Failed to get project', { error });
       return undefined;
     }
   }
@@ -152,7 +155,7 @@ class StorageService {
 
       return projects;
     } catch (error) {
-      console.error('Failed to get all projects:', error);
+      storageLogger.error('Failed to get all projects', { error });
       return [];
     }
   }
@@ -172,7 +175,7 @@ class StorageService {
         request.onerror = () => reject(request.error);
       });
     } catch (error) {
-      console.error('Failed to delete project:', error);
+      storageLogger.error('Failed to delete project', { error });
       throw error;
     }
   }
@@ -192,7 +195,7 @@ class StorageService {
         name: newName,
       });
     } catch (error) {
-      console.error('Failed to rename project:', error);
+      storageLogger.error('Failed to rename project', { error });
       throw error;
     }
   }
@@ -219,7 +222,7 @@ class StorageService {
       await this.saveProject(duplicatedProject);
       return duplicatedProject;
     } catch (error) {
-      console.error('Failed to duplicate project:', error);
+      storageLogger.error('Failed to duplicate project', { error });
       throw error;
     }
   }
@@ -241,7 +244,7 @@ class StorageService {
 
       return result;
     } catch (error) {
-      console.error('Failed to get metadata:', error);
+      storageLogger.error('Failed to get metadata', { error });
       return undefined;
     }
   }
@@ -261,7 +264,7 @@ class StorageService {
         request.onerror = () => reject(request.error);
       });
     } catch (error) {
-      console.error('Failed to set metadata:', error);
+      storageLogger.error('Failed to set metadata', { error });
       throw error;
     }
   }
@@ -276,7 +279,7 @@ class StorageService {
       }
       return null;
     } catch (error) {
-      console.error('Failed to get storage estimate:', error);
+      storageLogger.error('Failed to get storage estimate', { error });
       return null;
     }
   }

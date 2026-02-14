@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import type { SerializedProjectState } from '@/shared';
 import type { ChatMessage } from '@/components';
+import { createLogger } from '@/utils/logger';
 import {
   ProjectProvider,
   ChatMessagesProvider,
@@ -43,6 +44,8 @@ function ProjectUrlSync() {
  * - /project/new - New project with optional ?prompt= query param
  * - /project/:projectId - Existing project loaded from storage
  */
+const builderLogger = createLogger('BuilderPage');
+
 export function BuilderPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams] = useSearchParams();
@@ -68,7 +71,7 @@ export function BuilderPage() {
         try {
           const storedProject = await storageService.getProject(projectId);
           if (!storedProject) {
-            console.error('Project not found:', projectId);
+            builderLogger.error('Project not found', { projectId });
             navigate('/', { replace: true });
             return;
           }
@@ -77,7 +80,7 @@ export function BuilderPage() {
           setInitialMessages(deserializeChatMessages(storedProject.chatMessages));
           setInitialPrompt(undefined);
         } catch (error) {
-          console.error('Failed to load project:', error);
+          builderLogger.error('Failed to load project', { error });
           navigate('/', { replace: true });
           return;
         }
@@ -93,7 +96,7 @@ export function BuilderPage() {
   };
 
   const handleGlobalError = (error: Error) => {
-    console.error('Global error caught:', error);
+    builderLogger.error('Global error caught', { error });
   };
 
   // Show loading state while hydrating
