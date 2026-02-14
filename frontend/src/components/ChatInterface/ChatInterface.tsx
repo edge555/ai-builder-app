@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, forwardRef, lazy, Suspense } from 'react';
 import type { ChangeSummary, FileDiff } from '@/shared';
 import { ErrorMessage, classifyError } from '../ErrorMessage';
-// import { DiffViewer } from '../DiffViewer';
-const DiffViewer = lazy(() => import('../DiffViewer/DiffViewer'));
 import { PromptSuggestions } from '../PromptSuggestions';
 import { StreamingIndicator } from '../StreamingIndicator';
+import { MarkdownRenderer } from '../MarkdownRenderer/MarkdownRenderer';
+import { FileChangeSummary } from '../FileChangeSummary/FileChangeSummary';
+import { QuickActions } from '../QuickActions/QuickActions';
 import type { PromptSuggestion } from '@/data/prompt-suggestions';
 import type { StreamingState } from '@/context';
 import './ChatInterface.css';
@@ -53,6 +54,8 @@ export interface ChatInterfaceProps {
   isStreaming?: boolean;
   /** Callback to abort current request */
   onAbort?: () => void;
+  /** Callback when a file change indicator is clicked */
+  onFileClick?: (filePath: string) => void;
 }
 
 /**
@@ -73,6 +76,7 @@ export function ChatInterface({
   streamingState,
   isStreaming = false,
   onAbort,
+  onFileClick,
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
@@ -145,7 +149,7 @@ export function ChatInterface({
           </div>
         )}
         {messages.map((message) => (
-          <MessageItemWithRef key={message.id} message={message} />
+          <MessageItemWithRef key={message.id} message={message} onFileClick={onFileClick} />
         ))}
         {isStreaming && streamingState && (
           <StreamingIndicator state={streamingState} />
@@ -165,16 +169,14 @@ export function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Show contextual suggestions above input when project exists */}
-      {messages.length > 0 && suggestions.length > 0 && !isLoading && (
-        <div className="chat-contextual-suggestions">
-          <PromptSuggestions
-            suggestions={suggestions.slice(0, 4)}
-            onSelect={handleSuggestionSelect}
-            variant="chips"
-            disabled={isLoading}
-          />
-        </div>
+      {/* Contextual suggestions above input when project exists */}
+      {messages.length > 0 && !isLoading && (
+        <QuickActions
+          suggestions={suggestions}
+          onSelect={handleSuggestionSelect}
+          disabled={isLoading}
+          error={error}
+        />
       )}
 
       <form className="chat-input-form" onSubmit={handleSubmit}>
@@ -232,6 +234,7 @@ export function ChatInterface({
  */
 interface MessageItemProps {
   message: ChatMessage;
+  onFileClick?: (filePath: string) => void;
 }
 
 /**
@@ -239,7 +242,7 @@ interface MessageItemProps {
  * Accepts refs to avoid React dev warnings when something upstream attaches refs.
  */
 const MessageItemWithRef = React.memo(
-  forwardRef<HTMLDivElement, MessageItemProps>(function MessageItemWithRef({ message }, ref) {
+  forwardRef<HTMLDivElement, MessageItemProps>(function MessageItemWithRef({ message, onFileClick }, ref) {
     const isUser = message.role === 'user';
 
     return (
@@ -250,14 +253,19 @@ const MessageItemWithRef = React.memo(
             {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
-        <div className="chat-message-content">{message.content}</div>
-        {message.changeSummary && <ChangeSummaryDisplay summary={message.changeSummary} />}
-        {message.diffs && message.diffs.length > 0 && (
-          <div className="message-diff-viewer">
-            <Suspense fallback={<div className="chat-loading-info"><span className="chat-loading-text">Loading diff...</span></div>}>
-              <DiffViewer diffs={message.diffs} showActions={false} />
-            </Suspense>
-          </div>
+        <div className="chat-message-content">
+          {isUser ? (
+            message.content
+          ) : (
+            <MarkdownRenderer content={message.content} />
+          )}
+        </div>
+        {message.changeSummary && (
+          <FileChangeSummary
+            changeSummary={message.changeSummary}
+            diffs={message.diffs}
+            onFileClick={onFileClick}
+          />
         )}
       </div>
     );

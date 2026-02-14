@@ -15,3 +15,9 @@ export { StreamingIndicator, type StreamingIndicatorProps } from './StreamingInd
 export { RepairStatus, type RepairStatusProps, type RepairPhase } from './RepairStatus';
 export { StatusIndicator } from './StatusIndicator';
 export { KeyboardHint } from './KeyboardHint';
+export { TabBar, type TabBarProps, type Tab } from './TabBar/TabBar';
+export { BrowserChrome, type BrowserChromeProps } from './BrowserChrome/BrowserChrome';
+export { MarkdownRenderer } from './MarkdownRenderer/MarkdownRenderer';
+export { FileChangeIndicator, type FileChangeIndicatorProps } from './FileChangeIndicator/FileChangeIndicator';
+export { FileChangeSummary, type FileChangeSummaryProps } from './FileChangeSummary/FileChangeSummary';
+export { QuickActions, type QuickActionsProps } from './QuickActions/QuickActions';

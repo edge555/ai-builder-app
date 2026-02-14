@@ -4,7 +4,7 @@ import {
   SandpackLayout,
   SandpackPreview,
 } from '@codesandbox/sandpack-react';
-import { RefreshCw, Code, Monitor } from 'lucide-react';
+import { Code, Monitor } from 'lucide-react';
 import type { SerializedProjectState } from '@/shared';
 import type { LoadingPhase } from '../ChatInterface';
 import { PreviewToolbar, type DeviceMode } from './PreviewToolbar';
@@ -12,6 +12,8 @@ import { PreviewSkeleton } from './PreviewSkeleton';
 import { SandpackErrorListener } from './SandpackErrorListener';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { CodeEditorView } from '../CodeEditor';
+import { TabBar } from '../TabBar/TabBar';
+import { BrowserChrome } from '../BrowserChrome/BrowserChrome';
 import './PreviewPanel.css';
 
 /**
@@ -30,6 +32,8 @@ export interface PreviewPanelProps {
   errorMonitoringEnabled?: boolean;
   /** Callback when bundler becomes idle (no errors) */
   onBundlerIdle?: () => void;
+  /** Force code view (for mobile three-tab layout) */
+  forceCodeView?: boolean;
 }
 
 /**
@@ -96,19 +100,23 @@ createRoot(document.getElementById('root')!).render(
  * 
  * Requirements: 9.1, 9.2, 9.3
  */
-export function PreviewPanel({ 
-  projectState, 
-  isLoading = false, 
+export function PreviewPanel({
+  projectState,
+  isLoading = false,
   loadingPhase = 'idle',
   onErrorsReady,
   errorMonitoringEnabled = true,
   onBundlerIdle,
+  forceCodeView = false,
 }: PreviewPanelProps) {
   const [showCode, setShowCode] = useState(false);
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
   const [isRotated, setIsRotated] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Use forceCodeView when provided (for mobile three-tab layout)
+  const effectiveShowCode = forceCodeView || showCode;
 
   // Refresh animation duration in milliseconds
   const REFRESH_ANIMATION_MS = 600;
@@ -154,60 +162,93 @@ export function PreviewPanel({
 
   return (
     <div className="preview-panel">
-      <div className="preview-header">
-        <div className="preview-header-left">
-          <h2>Preview</h2>
-          {projectState?.name && <span className="preview-project-name">{projectState.name}</span>}
-        </div>
+      {/* Unified Header - combines tabs, browser controls, and device toolbar */}
+      <div className="preview-unified-header">
+        <TabBar
+          tabs={[
+            { id: 'preview', label: 'Preview', icon: <Monitor size={16} /> },
+            { id: 'code', label: 'Code', icon: <Code size={16} /> },
+          ]}
+          activeTab={effectiveShowCode ? 'code' : 'preview'}
+          onTabChange={(tabId) => setShowCode(tabId === 'code')}
+        />
 
-        {!showCode && (
-          <div className="preview-header-center">
-            <PreviewToolbar
-              currentMode={deviceMode}
-              isRotated={isRotated}
-              onModeChange={(mode) => {
-                setDeviceMode(mode);
-                setIsRotated(false); // Reset rotation on mode change
-              }}
-              onRotate={() => setIsRotated(!isRotated)}
-            />
-          </div>
+        {/* Browser controls and device toolbar - only shown in preview mode */}
+        {!effectiveShowCode && (
+          <>
+            {/* Browser Chrome Controls */}
+            {!isLoading && projectState && (
+              <div className="preview-browser-controls">
+                <button
+                  className="preview-refresh-btn"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  aria-label="Refresh preview"
+                  title="Refresh preview"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={isRefreshing ? 'spin' : ''}
+                  >
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <polyline points="1 20 1 14 7 14"></polyline>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                  </svg>
+                </button>
+
+                <div className="preview-url-bar">
+                  <svg
+                    className="preview-url-lock"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                  <span className="preview-url-protocol">https://</span>
+                  <span className="preview-url-text">{projectState.name || 'preview'}.app/</span>
+                </div>
+              </div>
+            )}
+
+            {/* Device Toolbar */}
+            <div className="preview-device-toolbar">
+              <PreviewToolbar
+                currentMode={deviceMode}
+                isRotated={isRotated}
+                onModeChange={(mode) => {
+                  setDeviceMode(mode);
+                  setIsRotated(false); // Reset rotation on mode change
+                }}
+                onRotate={() => setIsRotated(!isRotated)}
+              />
+            </div>
+          </>
         )}
-
-        <div className="preview-header-right preview-controls">
-          {!showCode && (
-            <button
-              className={`toggle-code-btn refresh-btn ${isRefreshing ? 'refreshing' : ''}`}
-              onClick={handleRefresh}
-              title="Refresh Preview"
-              aria-label="Refresh preview"
-            >
-              <RefreshCw size={14} className={isRefreshing ? 'animate-spin-slow' : ''} />
-              <span>Refresh</span>
-            </button>
-          )}
-          <button
-            className={`toggle-code-btn ${showCode ? 'active' : ''}`}
-            onClick={() => setShowCode(!showCode)}
-            aria-label={showCode ? 'Switch to preview' : 'Switch to code editor'}
-          >
-            {showCode ? <Monitor size={14} /> : <Code size={14} />}
-            <span>{showCode ? 'Preview' : 'Code'}</span>
-          </button>
-        </div>
       </div>
-
-
 
       {/* Show skeleton during loading */}
       {isLoading && loadingPhase !== 'idle' ? (
         <PreviewSkeleton phase={loadingPhase} />
-      ) : showCode ? (
-        <div className="preview-content">
+      ) : effectiveShowCode ? (
+        <div className="preview-content" role="tabpanel" id="tabpanel-code">
           <CodeEditorView files={projectState?.files || {}} />
         </div>
       ) : (
-        <div className="preview-content">
+        <div className="preview-content" role="tabpanel" id="tabpanel-preview">
           <SandpackProvider
             key={refreshKey}
             files={Object.fromEntries(

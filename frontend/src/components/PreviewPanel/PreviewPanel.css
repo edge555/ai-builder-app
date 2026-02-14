@@ -93,124 +93,112 @@
   background: hsl(var(--pv-surface));
 }
 
-.preview-header {
+/* Unified Header - combines tabs, browser controls, and device toolbar */
+.preview-unified-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   padding: 12px 16px;
   background: hsl(var(--pv-surface));
   border-bottom: 1px solid hsl(var(--pv-border));
+  flex-wrap: nowrap;
 }
 
-.preview-header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-
-.preview-header h2 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: hsl(var(--pv-text));
-  letter-spacing: -0.01em;
-}
-
-.preview-project-name {
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: hsl(var(--pv-text-muted));
-}
-
-.preview-header-center {
+/* Browser Controls (refresh + URL bar) */
+.preview-browser-controls {
   flex: 1;
   display: flex;
-  justify-content: center;
-  min-width: 0;
-}
-
-.preview-header-right {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.preview-controls {
-  display: flex;
+  align-items: center;
   gap: 8px;
+  min-width: 0;
+  /* Allow flex shrinking */
 }
 
-.toggle-code-btn {
+.preview-refresh-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  background: hsl(var(--pv-surface-2));
-  color: hsl(var(--pv-text));
-  border: 1px solid hsl(var(--pv-border));
-  border-radius: var(--radius);
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: hsl(var(--primary));
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+  transition: all 150ms ease;
 }
 
-.toggle-code-btn:hover {
-  background: hsl(var(--pv-surface-2) / 0.85);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px hsl(0 0% 0% / 0.2);
+.preview-refresh-btn:hover:not(:disabled) {
+  background: hsl(var(--primary) / 0.1);
 }
 
-.toggle-code-btn:active {
-  transform: translateY(0);
+.preview-refresh-btn:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
-.toggle-code-btn.active {
-  background: hsl(var(--pv-accent) / 0.18);
-  border-color: hsl(var(--pv-accent) / 0.35);
-  color: hsl(212 100% 70%);
+.preview-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-/* Refresh button - distinct warning/action color */
-.refresh-btn {
-  background: hsl(38 92% 50% / 0.15);
-  border-color: hsl(38 92% 50% / 0.3);
-  color: hsl(38 92% 65%);
-}
-
-.refresh-btn:hover {
-  background: hsl(38 92% 50% / 0.25);
-  border-color: hsl(38 92% 50% / 0.5);
-  color: hsl(38 92% 70%);
-}
-
-.refresh-btn.refreshing {
-  opacity: 0.7;
-  pointer-events: none;
-}
-
-.refresh-btn svg {
-  transition: transform 0.15s ease;
-}
-
-.refresh-btn:hover svg:not(.animate-spin-slow) {
-  transform: rotate(45deg);
-}
-
-.animate-spin-slow {
+.preview-refresh-btn .spin {
   animation: spin 0.6s linear infinite;
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
+
+/* URL Bar */
+.preview-url-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: hsl(var(--pv-surface-2));
+  border: 1px solid hsl(var(--pv-border));
+  border-radius: var(--radius-sm);
+  min-height: 32px;
+  min-width: 0;
+  /* Allow flex shrinking */
+}
+
+.preview-url-lock {
+  flex-shrink: 0;
+  color: hsl(var(--pv-text-muted));
+}
+
+.preview-url-protocol {
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+  color: hsl(var(--pv-text-muted));
+}
+
+.preview-url-text {
+  flex: 1;
+  font-size: 13px;
+  color: hsl(var(--pv-text-muted));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Device Toolbar */
+.preview-device-toolbar {
+  flex-shrink: 0;
+}
+
 
 .preview-content {
   flex: 1;
@@ -224,8 +212,6 @@
 .device-simulation-container {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
   background-color: hsl(var(--pv-bg));
   background-image:
     radial-gradient(circle at 50% 0%, hsl(var(--pv-surface) / 0.5), transparent 50%),
@@ -236,10 +222,11 @@
 }
 
 .device-frame {
+  margin: auto;
   position: relative;
   background: hsl(0 0% 100%);
   border-radius: 12px;
-  box-shadow: 
+  box-shadow:
     0 0 0 1px hsl(var(--pv-border)),
     0 8px 32px hsl(0 0% 0% / 0.4),
     0 32px 64px hsl(0 0% 0% / 0.3);
@@ -305,10 +292,16 @@
 
 .preview-content .sp-wrapper {
   height: 100% !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .preview-content .sp-layout {
   height: 100% !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border: none;
   border-radius: 0;
   background: transparent !important;
@@ -317,12 +310,17 @@
 /* Sandpack Preview Styling */
 .preview-content .sp-stack {
   height: 100% !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   flex: 1;
 }
 
 .preview-content .sp-preview {
   height: 100% !important;
   min-height: 100% !important;
+  display: flex;
+  flex-direction: column;
   flex: 1;
 }
 
@@ -408,14 +406,13 @@
 }
 
 @media (max-width: 1023px) {
-  .preview-header {
-    flex-wrap: wrap;
-    justify-content: flex-start;
+  .preview-unified-header {
+    gap: 12px;
   }
 
-  .preview-header-center {
-    width: 100%;
-    justify-content: flex-start;
+  .preview-url-bar {
+    max-width: 200px;
+    /* Shrink URL bar on tablet */
   }
 
   .preview-toolbar {
@@ -424,6 +421,21 @@
 }
 
 @media (max-width: 767px) {
+  .preview-unified-header {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .preview-url-bar {
+    display: none;
+    /* Hide URL bar on mobile */
+  }
+
+  .preview-refresh-btn {
+    width: 28px;
+    height: 28px;
+  }
+
   .device-simulation-container {
     padding: 18px;
   }

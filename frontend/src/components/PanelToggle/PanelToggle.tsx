@@ -1,7 +1,7 @@
 /**
  * Mobile panel selector for responsive design.
  */
-export type ActivePanel = 'chat' | 'preview';
+export type ActivePanel = 'chat' | 'preview' | 'code';
 
 interface PanelToggleProps {
     activePanel: ActivePanel;
@@ -28,6 +28,15 @@ export function PanelToggle({ activePanel, onPanelChange }: PanelToggleProps) {
                 aria-label="Show preview panel"
             >
                 Preview
+            </button>
+            <button
+                className={`panel-toggle-btn ${activePanel === 'code' ? 'active' : ''}`}
+                onClick={() => onPanelChange('code')}
+                role="tab"
+                aria-selected={activePanel === 'code'}
+                aria-label="Show code editor"
+            >
+                Code
             </button>
         </div>
     );
