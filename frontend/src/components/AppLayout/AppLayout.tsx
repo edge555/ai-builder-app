@@ -52,7 +52,11 @@ function formatTimestamp(date: Date): string {
 /**
  * Main chat panel component that uses the chat context.
  */
-function ChatPanel() {
+interface ChatPanelProps {
+    onFileClick?: (filePath: string) => void;
+}
+
+function ChatPanel({ onFileClick }: ChatPanelProps) {
     const { messages, clearMessages } = useChatMessages();
     const { isLoading, loadingPhase, error, clearError, streamingState, isStreaming, abortCurrentRequest } = useGeneration();
     const { projectState } = useProject();
@@ -92,6 +96,7 @@ function ChatPanel() {
             streamingState={streamingState}
             isStreaming={isStreaming}
             onAbort={abortCurrentRequest}
+            onFileClick={onFileClick}
         />
     );
 }
@@ -436,7 +441,12 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                             : undefined
                     }}
                 >
-                    {!isSidebarCollapsed && <ChatPanel />}
+                    {!isSidebarCollapsed && <ChatPanel onFileClick={(filePath) => {
+                        // Switch to preview panel when file is clicked
+                        setActivePanel('preview');
+                        // TODO: In future, we could also programmatically switch to code view
+                        // and open the specific file in the code editor
+                    }} />}
                     {isSidebarCollapsed && windowWidth > DESKTOP_BREAKPOINT && (
                         <div className="sidebar-collapsed-rail">
                             <button

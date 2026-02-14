@@ -17,3 +17,6 @@ export { StatusIndicator } from './StatusIndicator';
 export { KeyboardHint } from './KeyboardHint';
 export { TabBar, type TabBarProps, type Tab } from './TabBar/TabBar';
 export { BrowserChrome, type BrowserChromeProps } from './BrowserChrome/BrowserChrome';
+export { MarkdownRenderer } from './MarkdownRenderer/MarkdownRenderer';
+export { FileChangeIndicator, type FileChangeIndicatorProps } from './FileChangeIndicator/FileChangeIndicator';
+export { QuickActions, type QuickActionsProps } from './QuickActions/QuickActions';

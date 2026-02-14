@@ -1,0 +1,127 @@
+.markdown-renderer {
+    line-height: 1.6;
+    font-size: 0.95rem;
+    color: var(--foreground);
+}
+
+.markdown-renderer p {
+    margin-bottom: 1rem;
+}
+
+.markdown-renderer p:last-child {
+    margin-bottom: 0;
+}
+
+.markdown-renderer h1,
+.markdown-renderer h2,
+.markdown-renderer h3,
+.markdown-renderer h4 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.markdown-renderer h1 {
+    font-size: 1.5rem;
+}
+
+.markdown-renderer h2 {
+    font-size: 1.25rem;
+}
+
+.markdown-renderer h3 {
+    font-size: 1.1rem;
+}
+
+.markdown-renderer h4 {
+    font-size: 1rem;
+}
+
+.markdown-renderer ul,
+.markdown-renderer ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+
+.markdown-renderer li {
+    margin-bottom: 0.25rem;
+}
+
+.markdown-renderer code {
+    background-color: hsl(var(--muted) / 0.5);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+}
+
+.markdown-renderer .code-block-container {
+    margin: 1rem 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--card);
+}
+
+.markdown-renderer .code-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background-color: hsl(var(--muted) / 0.3);
+    border-bottom: 1px solid var(--border);
+}
+
+.markdown-renderer .code-block-lang {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    letter-spacing: 0.05em;
+}
+
+.markdown-renderer .syntax-highlighter {
+    margin: 0 !important;
+    padding: 1rem !important;
+    background: transparent !important;
+    font-size: 0.85rem !important;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.markdown-renderer a {
+    color: hsl(var(--primary));
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.markdown-renderer blockquote {
+    border-left: 4px solid var(--border);
+    padding-left: 1rem;
+    margin: 1rem 0;
+    color: var(--muted-foreground);
+}
+
+.markdown-renderer table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+.markdown-renderer th,
+.markdown-renderer td {
+    border: 1px solid var(--border);
+    padding: 0.5rem;
+    text-align: left;
+}
+
+.markdown-renderer th {
+    background-color: hsl(var(--muted) / 0.3);
+}
+
+.markdown-renderer img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+}
