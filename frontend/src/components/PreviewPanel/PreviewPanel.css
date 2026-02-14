@@ -123,8 +123,6 @@
 .device-simulation-container {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
   background-color: hsl(var(--pv-bg));
   background-image:
     radial-gradient(circle at 50% 0%, hsl(var(--pv-surface) / 0.5), transparent 50%),
@@ -135,6 +133,7 @@
 }
 
 .device-frame {
+  margin: auto;
   position: relative;
   background: hsl(0 0% 100%);
   border-radius: 12px;
@@ -204,10 +203,16 @@
 
 .preview-content .sp-wrapper {
   height: 100% !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .preview-content .sp-layout {
   height: 100% !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border: none;
   border-radius: 0;
   background: transparent !important;
@@ -216,12 +221,17 @@
 /* Sandpack Preview Styling */
 .preview-content .sp-stack {
   height: 100% !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   flex: 1;
 }
 
 .preview-content .sp-preview {
   height: 100% !important;
   min-height: 100% !important;
+  display: flex;
+  flex-direction: column;
   flex: 1;
 }
 

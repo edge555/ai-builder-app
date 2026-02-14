@@ -91,6 +91,7 @@
 }
 
 .ui-button[data-variant='primary']:hover:not(:disabled) {
+  background: var(--gradient-primary);
   opacity: 0.9;
   box-shadow: var(--shadow-md);
 }
@@ -104,6 +105,8 @@
 }
 
 .ui-button[data-variant='success']:hover:not(:disabled) {
+  background: linear-gradient(135deg, hsl(var(--success)), hsl(160 75% 45%));
+  opacity: 0.9;
   box-shadow: var(--shadow-md), 0 8px 20px hsl(var(--success) / 0.35);
 }
 
@@ -112,6 +115,11 @@
   --ui-btn-fg: hsl(var(--destructive-foreground));
   --ui-btn-border: hsl(var(--destructive));
   background: linear-gradient(135deg, hsl(var(--destructive)), hsl(10 80% 55%));
+}
+
+.ui-button[data-variant='danger']:hover:not(:disabled) {
+  background: linear-gradient(135deg, hsl(var(--destructive)), hsl(10 80% 55%));
+  opacity: 0.9;
 }
 
 .ui-button[data-variant='ghost'] {
