@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { useProject, useChatMessages, useGeneration } from '../context';
 import type { RepairAttempt } from '@/shared';
 import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError } from '../utils/error-messages';
+import { storageService, toStoredProject } from '../services/storage';
 
 const MAX_API_RETRIES = 3;
 
@@ -57,7 +58,9 @@ export function useSubmitPrompt() {
         isSubmittingRef.current = true;
         generation.clearError();
         generation.setIsLoading(true);
-        chatMessages.addUserMessage(prompt);
+
+        // Store the user message reference (state updates are async)
+        const userMessage = chatMessages.addUserMessage(prompt);
 
         // Reset retry history for new request
         apiRetryHistoryRef.current = [];
@@ -83,10 +86,25 @@ export function useSubmitPrompt() {
                     generation.setLoadingPhase('validating');
                     if (result.success && result.projectState) {
                         project.setProjectState(result.projectState, false);
+
                         const fileCount = Object.keys(result.projectState.files).length;
-                        chatMessages.addAssistantMessage(
-                            getGenerationSuccessMessage(result.projectState.name, fileCount)
-                        );
+                        const successMessage = getGenerationSuccessMessage(result.projectState.name, fileCount);
+
+                        // Create assistant message and store reference
+                        const assistantMessage = chatMessages.addAssistantMessage(successMessage);
+
+                        // Immediately save to storage with complete message history
+                        // Build from current state + the two messages we just added (state hasn't updated yet)
+                        try {
+                            const completeMessages = [...chatMessages.messages, userMessage, assistantMessage];
+                            const storedProject = toStoredProject(result.projectState, completeMessages);
+                            await storageService.saveProject(storedProject);
+                            await storageService.setMetadata('lastOpenedProjectId', result.projectState.id);
+                        } catch (saveError) {
+                            console.error('Failed to save project after generation:', saveError);
+                            // Continue anyway - auto-save will retry
+                        }
+
                         // Success - clear retry history
                         apiRetryHistoryRef.current = [];
                         break;

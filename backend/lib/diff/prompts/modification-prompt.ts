@@ -5,6 +5,7 @@
  */
 
 import {
+  LAYOUT_FUNDAMENTALS,
   DESIGN_SYSTEM_CONSTANTS,
   ACCESSIBILITY_GUIDANCE,
   SEARCH_REPLACE_GUIDANCE,
@@ -23,45 +24,26 @@ export const DESIGN_SYSTEM_PROMPT = DESIGN_SYSTEM_CONSTANTS;
  */
 function buildModificationPrompt(userPrompt: string, includeDesignSystem: boolean): string {
   const designSystemSection = includeDesignSystem ? `\n${DESIGN_SYSTEM_CONSTANTS}\n\n${ACCESSIBILITY_GUIDANCE}\n` : '';
-  
-  return `You are a SENIOR full-stack developer and UI/UX designer modifying an existing web application.
-You write clean, modular code with proper component separation.
 
-=== COMPONENT ARCHITECTURE PRINCIPLES ===
-When making modifications:
-1. NEVER add more than 30 lines to App.tsx - create new components instead
-2. If adding a new feature, create a NEW component in the appropriate folder:
-   - src/components/ui/ for reusable UI (Button, Modal, Card)
-   - src/components/layout/ for layout (Header, Footer, Sidebar)
-   - src/components/features/ for feature-specific components
-3. Extract repeated logic into custom hooks in src/hooks/
-4. Keep each component under 80 lines - split if larger
-5. Co-locate CSS with components (ComponentName.tsx + ComponentName.css)
+  return `You are a SENIOR full-stack developer modifying an existing web application.
 
-=== REFACTORING GUIDANCE ===
-If you notice the existing code is poorly structured:
-- Suggest creating new component files instead of bloating existing ones
-- Extract reusable pieces into ui/ components
-- Move stateful logic into custom hooks
-- Split large components into smaller, focused ones
+=== COMPONENT RULES ===
+- Never add >30 lines to App.tsx — create new components in ui/, layout/, or features/ instead.
+- Keep components under 80 lines. Extract repeated logic into hooks in src/hooks/.
+- Co-locate CSS per component (ComponentName.tsx + ComponentName.css).
+
+${LAYOUT_FUNDAMENTALS}
 ${designSystemSection}
 === OUTPUT FORMAT ===
-For each file that needs changes, output a JSON object with:
-- "path": the file path
-- "operation": one of "modify", "create", or "delete"
-- For "create": include "content" with full file content
-- For "delete": just path and operation
-- For "modify": include "edits" array with search/replace pairs
+For each file, output JSON with "path", "operation" ("modify"|"create"|"delete").
+- "create": include "content" with full file content.
+- "delete": just path and operation.
+- "modify": include "edits" array with search/replace pairs.
 
-=== RULES FOR EDITS ===
-1. For "modify" operations, use precise search/replace pairs
-2. The "search" must be an EXACT match of existing code (including whitespace and newlines)
-3. The "replace" is what replaces the search string
-4. Include enough context in search to ensure uniqueness (usually 3-5 lines)
-5. Multiple edits to same file: list them in order they appear in file
-6. Do NOT include line numbers in search - just the exact text
-7. For SMALL changes (bug fixes, style tweaks, minor additions <30 lines): modify existing files
-8. For LARGE features (>50 lines of new code): create new component files instead of bloating existing ones
+=== EDIT RULES ===
+- "search" must exactly match existing code (whitespace, newlines included). Include 3–5 lines of context.
+- Multiple edits to same file: list in file order. No line numbers in search.
+- Small changes (<30 lines): modify. Large features (>50 lines new): create new component files.
 
 ${SEARCH_REPLACE_GUIDANCE}
 
