@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { ArrowRight, Sparkles, Plus } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowRight, Sparkles, Plus, Eye, Zap, Download, Code } from 'lucide-react';
 import { starterTemplates } from '@/data/templates';
 import { TemplateGrid } from '@/components/TemplateGrid/TemplateGrid';
 import { ProjectGallery } from '@/components/ProjectGallery/ProjectGallery';
+import { ThemeToggle } from '@/components/ThemeToggle/ThemeToggle';
 import { ConfirmDialog } from '@/components/ConfirmDialog/ConfirmDialog';
 import type { StoredProject } from '@/services/storage';
 import './WelcomePage.css';
@@ -14,6 +15,7 @@ interface WelcomePageProps {
   onRenameProject: (projectId: string, newName: string) => void;
   onDuplicateProject: (projectId: string) => void;
   savedProjects: StoredProject[];
+  isLoadingProjects?: boolean;
 }
 
 interface DeleteConfirmState {
@@ -24,20 +26,35 @@ interface DeleteConfirmState {
 
 const features = [
   {
-    icon: '🎨',
+    icon: Eye,
     title: 'Live Preview',
     description: 'See changes instantly as you describe your ideas',
+    accentColor: 'hsl(200 80% 60%)', // Blue
   },
   {
-    icon: '⚡',
+    icon: Zap,
     title: 'Fast Generation',
     description: 'Complete apps in seconds, not hours',
+    accentColor: 'hsl(45 100% 55%)', // Yellow
   },
   {
-    icon: '📦',
+    icon: Download,
     title: 'Export Ready',
     description: 'Download your project as a ZIP file',
+    accentColor: 'hsl(150 60% 50%)', // Green
   },
+  {
+    icon: Code,
+    title: 'Code Editor',
+    description: 'Full Monaco editor with syntax highlighting',
+    accentColor: 'hsl(280 70% 60%)', // Purple
+  },
+];
+
+const suggestionChips = [
+  'A todo app with categories',
+  'Landing page for a SaaS product',
+  'Analytics dashboard with charts',
 ];
 
 export function WelcomePage({
@@ -47,17 +64,42 @@ export function WelcomePage({
   onRenameProject,
   onDuplicateProject,
   savedProjects,
+  isLoadingProjects = false,
 }: WelcomePageProps) {
   const hasProjects = savedProjects.length > 0;
-  const ctaText = hasProjects ? 'New Project' : 'Get Started';
-  const ctaIcon = hasProjects ? Plus : ArrowRight;
-  const CtaIcon = ctaIcon;
 
+  const [promptInput, setPromptInput] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>({
     isOpen: false,
     projectId: null,
     projectName: null,
   });
+  const [isScrolled, setIsScrolled] = useState(false);
+  const heroRef = useRef<HTMLElement>(null);
+
+  // Detect when user has scrolled past the hero section
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // When hero is NOT intersecting (not visible), show shadow
+        setIsScrolled(!entry.isIntersecting);
+      },
+      {
+        threshold: 0,
+        rootMargin: '-80px 0px 0px 0px', // Trigger when hero is 80px from top
+      }
+    );
+
+    if (heroRef.current) {
+      observer.observe(heroRef.current);
+    }
+
+    return () => {
+      if (heroRef.current) {
+        observer.unobserve(heroRef.current);
+      }
+    };
+  }, []);
 
   const handleDeleteRequest = (projectId: string) => {
     const project = savedProjects.find(p => p.id === projectId);
@@ -81,32 +123,50 @@ export function WelcomePage({
     setDeleteConfirm({ isOpen: false, projectId: null, projectName: null });
   };
 
-  const handleRenameRequest = (projectId: string) => {
-    const project = savedProjects.find(p => p.id === projectId);
-    if (project) {
-      const newName = prompt('Enter new project name:', project.name);
-      if (newName && newName.trim()) {
-        onRenameProject(projectId, newName.trim());
-      }
+  const handlePromptSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (promptInput.trim()) {
+      onEnterApp(promptInput.trim());
+    } else {
+      onEnterApp();
     }
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setPromptInput(suggestion);
   };
 
   return (
     <div className="welcome-page">
       {/* Header */}
-      <header className="welcome-header">
-        <div className="welcome-header-brand">
-          <div className="welcome-header-logo">
-            <Sparkles size={18} />
+      <header className={`welcome-header ${isScrolled ? 'welcome-header-scrolled' : ''}`}>
+        <div className="welcome-header-content">
+          <div className="welcome-header-brand">
+            <div className="welcome-header-logo">
+              <Sparkles size={18} />
+            </div>
+            <span className="welcome-header-title">AI App Builder</span>
           </div>
-          <span className="welcome-header-title">AI App Builder</span>
+          <div className="welcome-header-actions">
+            {hasProjects && (
+              <button
+                className="welcome-header-new-project-btn"
+                onClick={() => onEnterApp()}
+                aria-label="Create new project"
+              >
+                <Plus size={16} />
+                <span>New Project</span>
+              </button>
+            )}
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="welcome-hero">
+      <section ref={heroRef} className="welcome-hero ui-section">
         <div className="welcome-hero-logo">
-          <Sparkles size={40} />
+          <Sparkles size={24} />
         </div>
         <h1 className="welcome-hero-headline">
           Build apps with AI in seconds
@@ -114,28 +174,67 @@ export function WelcomePage({
         <p className="welcome-hero-subheadline">
           Describe your idea and watch it come to life. No coding required.
         </p>
-        <button
-          className="welcome-hero-cta"
-          onClick={() => onEnterApp()}
-        >
-          {ctaText}
-          <CtaIcon size={18} />
-        </button>
+
+        {/* Inline Prompt Input */}
+        <form className="welcome-hero-prompt-form" onSubmit={handlePromptSubmit}>
+          <div className="welcome-hero-prompt-wrapper">
+            <textarea
+              className="welcome-hero-prompt-input"
+              placeholder="Describe the app you want to build..."
+              value={promptInput}
+              onChange={(e) => {
+                setPromptInput(e.target.value);
+                // Auto-resize
+                e.target.style.height = 'auto';
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handlePromptSubmit(e);
+                }
+              }}
+              rows={1}
+            />
+            <button
+              type="submit"
+              className="welcome-hero-prompt-submit"
+              aria-label="Start building"
+              disabled={!promptInput.trim()}
+            >
+              <ArrowRight size={20} />
+            </button>
+          </div>
+        </form>
+
+        {/* Suggestion Chips */}
+        <div className="welcome-hero-suggestions">
+          {suggestionChips.map((suggestion) => (
+            <button
+              key={suggestion}
+              className="welcome-hero-suggestion-chip"
+              onClick={() => handleSuggestionClick(suggestion)}
+              type="button"
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
       </section>
 
-      {/* Project Gallery - shown when there are saved projects */}
-      {hasProjects && (
-        <ProjectGallery
-          projects={savedProjects}
-          onOpenProject={onOpenProject}
-          onRenameProject={handleRenameRequest}
-          onDuplicateProject={onDuplicateProject}
-          onDeleteProject={handleDeleteRequest}
-        />
-      )}
+      {/* Project Gallery - always shown, handles its own loading/empty states */}
+      <ProjectGallery
+        projects={savedProjects}
+        onOpenProject={onOpenProject}
+        onRenameProject={onRenameProject}
+        onDuplicateProject={onDuplicateProject}
+        onDeleteProject={handleDeleteRequest}
+        isLoading={isLoadingProjects}
+        onCreateProject={() => onEnterApp()}
+      />
 
       {/* Templates Section */}
-      <section className="welcome-templates">
+      <section className="welcome-templates ui-section">
         <h2 className="welcome-templates-title">Start from a template</h2>
         <TemplateGrid
           templates={starterTemplates}
@@ -144,21 +243,40 @@ export function WelcomePage({
       </section>
 
       {/* Features Section */}
-      <section className="welcome-features">
+      <section className="welcome-features ui-section">
         <div className="welcome-features-grid">
-          {features.map((feature) => (
-            <div key={feature.title} className="welcome-feature-card">
-              <div className="welcome-feature-icon">{feature.icon}</div>
-              <h3 className="welcome-feature-title">{feature.title}</h3>
-              <p className="welcome-feature-desc">{feature.description}</p>
-            </div>
-          ))}
+          {features.map((feature) => {
+            const IconComponent = feature.icon;
+            return (
+              <div key={feature.title} className="welcome-feature-card">
+                <div
+                  className="welcome-feature-icon"
+                  style={{ '--accent-color': feature.accentColor } as React.CSSProperties}
+                >
+                  <IconComponent size={24} strokeWidth={2} />
+                </div>
+                <h3 className="welcome-feature-title">{feature.title}</h3>
+                <p className="welcome-feature-desc">{feature.description}</p>
+              </div>
+            );
+          })}
         </div>
       </section>
 
       {/* Footer */}
       <footer className="welcome-footer">
-        <p className="welcome-footer-text">© 2026 AI App Builder</p>
+        <div className="welcome-footer-container">
+          <p className="welcome-footer-text">© 2026 AI App Builder</p>
+          <div className="welcome-footer-links">
+            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="welcome-footer-link">
+              GitHub
+            </a>
+            <span className="footer-dot">•</span>
+            <a href="#" className="welcome-footer-link">
+              Built with AI
+            </a>
+          </div>
+        </div>
       </footer>
 
       {/* Delete Confirmation Dialog */}

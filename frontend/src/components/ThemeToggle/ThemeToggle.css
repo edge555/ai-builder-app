@@ -1,0 +1,33 @@
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--foreground);
+    cursor: pointer;
+    transition: all 200ms ease-out;
+    padding: 0;
+}
+
+.theme-toggle:hover {
+    background: var(--muted);
+    border-color: var(--primary);
+    color: hsl(var(--primary));
+}
+
+.theme-toggle:active {
+    transform: scale(0.95);
+}
+
+.theme-toggle__icon {
+    stroke-width: 2px;
+}
+
+/* Specific icon adjustments if needed */
+[data-theme="dark"] .theme-toggle:hover {
+    box-shadow: 0 0 12px hsl(var(--primary) / 0.15);
+}
