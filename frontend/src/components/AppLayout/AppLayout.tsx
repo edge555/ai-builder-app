@@ -110,7 +110,7 @@ function ChatPanel({ onFileClick }: ChatPanelProps) {
  */
 const appLayoutLogger = createLogger('AppLayout');
 
-function PreviewSection() {
+function PreviewSection({ activePanel }: { activePanel: ActivePanel }) {
     const { projectState } = useProject();
     const { isLoading, loadingPhase, autoRepair, isAutoRepairing, autoRepairAttempt, resetAutoRepair } = useGeneration();
     const {
@@ -204,6 +204,7 @@ function PreviewSection() {
                         onErrorsReady={handleErrorsReady}
                         errorMonitoringEnabled={!isLoading && projectState !== null}
                         onBundlerIdle={handleBundlerIdle}
+                        forceCodeView={activePanel === 'code'}
                     />
                 </Suspense>
             </PreviewErrorBoundary>
@@ -500,8 +501,8 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                     }}
                 />
 
-                <section className={`preview-section ${activePanel === 'preview' ? 'active' : ''}`}>
-                    <PreviewSection />
+                <section className={`preview-section ${activePanel === 'preview' || activePanel === 'code' ? 'active' : ''}`} data-view={activePanel === 'code' ? 'code' : 'preview'}>
+                    <PreviewSection activePanel={activePanel} />
                 </section>
             </main>
         </div>

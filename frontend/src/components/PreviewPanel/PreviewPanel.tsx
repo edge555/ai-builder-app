@@ -32,6 +32,8 @@ export interface PreviewPanelProps {
   errorMonitoringEnabled?: boolean;
   /** Callback when bundler becomes idle (no errors) */
   onBundlerIdle?: () => void;
+  /** Force code view (for mobile three-tab layout) */
+  forceCodeView?: boolean;
 }
 
 /**
@@ -105,12 +107,16 @@ export function PreviewPanel({
   onErrorsReady,
   errorMonitoringEnabled = true,
   onBundlerIdle,
+  forceCodeView = false,
 }: PreviewPanelProps) {
   const [showCode, setShowCode] = useState(false);
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
   const [isRotated, setIsRotated] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Use forceCodeView when provided (for mobile three-tab layout)
+  const effectiveShowCode = forceCodeView || showCode;
 
   // Refresh animation duration in milliseconds
   const REFRESH_ANIMATION_MS = 600;
@@ -163,12 +169,12 @@ export function PreviewPanel({
             { id: 'preview', label: 'Preview', icon: <Monitor size={16} /> },
             { id: 'code', label: 'Code', icon: <Code size={16} /> },
           ]}
-          activeTab={showCode ? 'code' : 'preview'}
+          activeTab={effectiveShowCode ? 'code' : 'preview'}
           onTabChange={(tabId) => setShowCode(tabId === 'code')}
         />
 
         {/* Device toolbar - only shown in preview mode */}
-        {!showCode && (
+        {!effectiveShowCode && (
           <div className="preview-toolbar-container">
             <PreviewToolbar
               currentMode={deviceMode}
@@ -184,7 +190,7 @@ export function PreviewPanel({
       </div>
 
       {/* Browser Chrome - only shown in preview mode */}
-      {!showCode && !isLoading && projectState && (
+      {!effectiveShowCode && !isLoading && projectState && (
         <BrowserChrome
           url={`https://${projectState.name || 'preview'}.app/`}
           onRefresh={handleRefresh}
@@ -195,7 +201,7 @@ export function PreviewPanel({
       {/* Show skeleton during loading */}
       {isLoading && loadingPhase !== 'idle' ? (
         <PreviewSkeleton phase={loadingPhase} />
-      ) : showCode ? (
+      ) : effectiveShowCode ? (
         <div className="preview-content" role="tabpanel" id="tabpanel-code">
           <CodeEditorView files={projectState?.files || {}} />
         </div>
