@@ -3,6 +3,7 @@ import { ArrowRight, Sparkles, Plus } from 'lucide-react';
 import { starterTemplates } from '@/data/templates';
 import { TemplateGrid } from '@/components/TemplateGrid/TemplateGrid';
 import { ProjectGallery } from '@/components/ProjectGallery/ProjectGallery';
+import { ThemeToggle } from '@/components/ThemeToggle/ThemeToggle';
 import { ConfirmDialog } from '@/components/ConfirmDialog/ConfirmDialog';
 import type { StoredProject } from '@/services/storage';
 import './WelcomePage.css';
@@ -40,6 +41,12 @@ const features = [
   },
 ];
 
+const suggestionChips = [
+  'A todo app with categories',
+  'Landing page for a SaaS product',
+  'Analytics dashboard with charts',
+];
+
 export function WelcomePage({
   onEnterApp,
   onOpenProject,
@@ -49,10 +56,8 @@ export function WelcomePage({
   savedProjects,
 }: WelcomePageProps) {
   const hasProjects = savedProjects.length > 0;
-  const ctaText = hasProjects ? 'New Project' : 'Get Started';
-  const ctaIcon = hasProjects ? Plus : ArrowRight;
-  const CtaIcon = ctaIcon;
 
+  const [promptInput, setPromptInput] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>({
     isOpen: false,
     projectId: null,
@@ -91,22 +96,40 @@ export function WelcomePage({
     }
   };
 
+  const handlePromptSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (promptInput.trim()) {
+      onEnterApp(promptInput.trim());
+    } else {
+      onEnterApp();
+    }
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setPromptInput(suggestion);
+  };
+
   return (
     <div className="welcome-page">
       {/* Header */}
       <header className="welcome-header">
-        <div className="welcome-header-brand">
-          <div className="welcome-header-logo">
-            <Sparkles size={18} />
+        <div className="welcome-header-content">
+          <div className="welcome-header-brand">
+            <div className="welcome-header-logo">
+              <Sparkles size={18} />
+            </div>
+            <span className="welcome-header-title">AI App Builder</span>
           </div>
-          <span className="welcome-header-title">AI App Builder</span>
+          <div className="welcome-header-actions">
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
       {/* Hero Section */}
       <section className="welcome-hero">
         <div className="welcome-hero-logo">
-          <Sparkles size={40} />
+          <Sparkles size={24} />
         </div>
         <h1 className="welcome-hero-headline">
           Build apps with AI in seconds
@@ -114,13 +137,52 @@ export function WelcomePage({
         <p className="welcome-hero-subheadline">
           Describe your idea and watch it come to life. No coding required.
         </p>
-        <button
-          className="welcome-hero-cta"
-          onClick={() => onEnterApp()}
-        >
-          {ctaText}
-          <CtaIcon size={18} />
-        </button>
+
+        {/* Inline Prompt Input */}
+        <form className="welcome-hero-prompt-form" onSubmit={handlePromptSubmit}>
+          <div className="welcome-hero-prompt-wrapper">
+            <textarea
+              className="welcome-hero-prompt-input"
+              placeholder="Describe the app you want to build..."
+              value={promptInput}
+              onChange={(e) => {
+                setPromptInput(e.target.value);
+                // Auto-resize
+                e.target.style.height = 'auto';
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handlePromptSubmit(e);
+                }
+              }}
+              rows={1}
+            />
+            <button
+              type="submit"
+              className="welcome-hero-prompt-submit"
+              aria-label="Start building"
+              disabled={!promptInput.trim()}
+            >
+              <ArrowRight size={20} />
+            </button>
+          </div>
+        </form>
+
+        {/* Suggestion Chips */}
+        <div className="welcome-hero-suggestions">
+          {suggestionChips.map((suggestion) => (
+            <button
+              key={suggestion}
+              className="welcome-hero-suggestion-chip"
+              onClick={() => handleSuggestionClick(suggestion)}
+              type="button"
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
       </section>
 
       {/* Project Gallery - shown when there are saved projects */}
