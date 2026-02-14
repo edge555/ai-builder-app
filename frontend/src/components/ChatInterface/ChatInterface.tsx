@@ -1,12 +1,10 @@
 import React, { useState, useRef, useEffect, forwardRef, lazy, Suspense } from 'react';
 import type { ChangeSummary, FileDiff } from '@/shared';
 import { ErrorMessage, classifyError } from '../ErrorMessage';
-// import { DiffViewer } from '../DiffViewer';
-const DiffViewer = lazy(() => import('../DiffViewer/DiffViewer'));
 import { PromptSuggestions } from '../PromptSuggestions';
 import { StreamingIndicator } from '../StreamingIndicator';
 import { MarkdownRenderer } from '../MarkdownRenderer/MarkdownRenderer';
-import { FileChangeIndicator } from '../FileChangeIndicator/FileChangeIndicator';
+import { FileChangeSummary } from '../FileChangeSummary/FileChangeSummary';
 import { QuickActions } from '../QuickActions/QuickActions';
 import type { PromptSuggestion } from '@/data/prompt-suggestions';
 import type { StreamingState } from '@/context';
@@ -263,20 +261,11 @@ const MessageItemWithRef = React.memo(
           )}
         </div>
         {message.changeSummary && (
-          <>
-            <FileChangeIndicator
-              changeSummary={message.changeSummary}
-              onFileClick={onFileClick}
-            />
-            <ChangeSummaryDisplay summary={message.changeSummary} />
-          </>
-        )}
-        {message.diffs && message.diffs.length > 0 && (
-          <div className="message-diff-viewer">
-            <Suspense fallback={<div className="chat-loading-info"><span className="chat-loading-text">Loading diff...</span></div>}>
-              <DiffViewer diffs={message.diffs} showActions={false} />
-            </Suspense>
-          </div>
+          <FileChangeSummary
+            changeSummary={message.changeSummary}
+            diffs={message.diffs}
+            onFileClick={onFileClick}
+          />
         )}
       </div>
     );
