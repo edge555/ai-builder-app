@@ -8,23 +8,38 @@ describe('ProjectGallery', () => {
         {
             id: '1',
             name: 'Project Alpha',
-            projectState: { name: 'Project Alpha', files: {} },
+            description: 'Test project',
+            files: {},
+            currentVersionId: 'v1',
             createdAt: '2024-01-01T10:00:00Z',
             updatedAt: '2024-01-03T10:00:00Z',
+            chatMessages: [],
+            fileCount: 0,
+            thumbnailFiles: [],
         },
         {
             id: '2',
             name: 'Project Beta',
-            projectState: { name: 'Project Beta', files: {} },
+            description: 'Test project',
+            files: {},
+            currentVersionId: 'v1',
             createdAt: '2024-01-02T10:00:00Z',
             updatedAt: '2024-01-02T10:00:00Z',
+            chatMessages: [],
+            fileCount: 0,
+            thumbnailFiles: [],
         },
         {
             id: '3',
             name: 'Test Project',
-            projectState: { name: 'Test Project', files: {} },
+            description: 'Test project',
+            files: {},
+            currentVersionId: 'v1',
             createdAt: '2024-01-01T12:00:00Z',
             updatedAt: '2024-01-01T12:00:00Z',
+            chatMessages: [],
+            fileCount: 0,
+            thumbnailFiles: [],
         },
     ];
 
@@ -187,4 +202,151 @@ describe('ProjectGallery', () => {
         expect(screen.getByText('Project Alpha')).toBeInTheDocument();
         expect(screen.queryByText('Project Beta')).not.toBeInTheDocument();
     });
+
+    // ========== Tab Functionality Tests ==========
+
+    describe('Tab Navigation', () => {
+        it('should render tabs when projects exist', () => {
+            render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+
+            expect(screen.getByRole('tab', { name: /recent/i })).toBeInTheDocument();
+            expect(screen.getByRole('tab', { name: /all projects/i })).toBeInTheDocument();
+        });
+
+        it('should not render tabs when no projects exist', () => {
+            render(<ProjectGallery projects={[]} {...mockHandlers} />);
+
+            expect(screen.queryByRole('tab', { name: /recent/i })).not.toBeInTheDocument();
+            expect(screen.queryByRole('tab', { name: /all projects/i })).not.toBeInTheDocument();
+        });
+
+        it('should default to "Recent" tab', () => {
+            render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+
+            const recentTab = screen.getByRole('tab', { name: /recent/i });
+            expect(recentTab).toHaveAttribute('aria-selected', 'true');
+        });
+
+        it('should switch to "All Projects" tab when clicked', () => {
+            render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+
+            const allProjectsTab = screen.getByRole('tab', { name: /all projects/i });
+            fireEvent.click(allProjectsTab);
+
+            expect(allProjectsTab).toHaveAttribute('aria-selected', 'true');
+            expect(screen.getByRole('tab', { name: /recent/i })).toHaveAttribute('aria-selected', 'false');
+        });
+    });
+
+    describe('Recent Projects View', () => {
+        const fourProjects: StoredProject[] = [
+            ...mockProjects,
+            {
+                id: '4',
+                name: 'Project Delta',
+                description: 'Test project',
+                files: {},
+                currentVersionId: 'v1',
+                createdAt: '2024-01-04T10:00:00Z',
+                updatedAt: '2024-01-04T10:00:00Z',
+                chatMessages: [],
+                fileCount: 0,
+                thumbnailFiles: [],
+            },
+        ];
+
+        it('should show all projects when 3 or fewer exist', () => {
+            render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+
+            // Should be on Recent tab by default
+            expect(screen.getByText('Project Alpha')).toBeInTheDocument();
+            expect(screen.getByText('Project Beta')).toBeInTheDocument();
+            expect(screen.getByText('Test Project')).toBeInTheDocument();
+        });
+
+        it('should show only 3 most recent projects when more than 3 exist', () => {
+            render(<ProjectGallery projects={fourProjects} {...mockHandlers} />);
+
+            // Should show the 3 most recently updated projects
+            const projectCards = screen.getAllByRole('article');
+            expect(projectCards.length).toBe(3);
+        });
+
+        it('should show "View all projects" link when more than 3 projects exist', () => {
+            render(<ProjectGallery projects={fourProjects} {...mockHandlers} />);
+
+            expect(screen.getByText(/view all projects/i)).toBeInTheDocument();
+        });
+
+        it('should not show "View all projects" link when 3 or fewer projects exist', () => {
+            render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+
+            expect(screen.queryByText(/view all projects/i)).not.toBeInTheDocument();
+        });
+
+        it('should switch to "All Projects" tab when "View all" link is clicked', () => {
+            render(<ProjectGallery projects={fourProjects} {...mockHandlers} />);
+
+            const viewAllLink = screen.getByText(/view all projects/i);
+            fireEvent.click(viewAllLink);
+
+            const allProjectsTab = screen.getByRole('tab', { name: /all projects/i });
+            expect(allProjectsTab).toHaveAttribute('aria-selected', 'true');
+        });
+
+        it('should sort recent projects by most recently updated', () => {
+            render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+
+            const projectCards = screen.getAllByRole('article');
+            // Project Alpha has updatedAt: 2024-01-03 (most recent)
+            // Project Beta has updatedAt: 2024-01-02
+            // Test Project has updatedAt: 2024-01-01 (oldest)
+            expect(within(projectCards[0]).getByText('Project Alpha')).toBeInTheDocument();
+            expect(within(projectCards[1]).getByText('Project Beta')).toBeInTheDocument();
+            expect(within(projectCards[2]).getByText('Test Project')).toBeInTheDocument();
+        });
+    });
+
+    describe('Search and Sort Controls', () => {
+        it('should hide search and sort controls on "Recent" tab', () => {
+            render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+
+            // Should be on Recent tab by default
+            expect(screen.queryByPlaceholderText('Search projects...')).not.toBeInTheDocument();
+            expect(screen.queryByLabelText('Sort projects')).not.toBeInTheDocument();
+        });
+
+        it('should show search and sort controls on "All Projects" tab', () => {
+            render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+
+            const allProjectsTab = screen.getByRole('tab', { name: /all projects/i });
+            fireEvent.click(allProjectsTab);
+
+            expect(screen.getByPlaceholderText('Search projects...')).toBeInTheDocument();
+            expect(screen.getByLabelText('Sort projects')).toBeInTheDocument();
+        });
+
+        it('should maintain search query when switching tabs', () => {
+            render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+
+            // Switch to All Projects tab
+            const allProjectsTab = screen.getByRole('tab', { name: /all projects/i });
+            fireEvent.click(allProjectsTab);
+
+            // Enter search query
+            const searchInput = screen.getByPlaceholderText('Search projects...');
+            fireEvent.change(searchInput, { target: { value: 'Alpha' } });
+
+            // Switch back to Recent tab
+            const recentTab = screen.getByRole('tab', { name: /recent/i });
+            fireEvent.click(recentTab);
+
+            // Switch to All Projects tab again
+            fireEvent.click(allProjectsTab);
+
+            // Search query should be maintained
+            expect(screen.getByPlaceholderText('Search projects...')).toHaveValue('Alpha');
+        });
+    });
 });
+

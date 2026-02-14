@@ -1,0 +1,89 @@
+/* Tab Container */
+.project-gallery-tabs {
+    position: relative;
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid hsl(var(--border));
+    margin-bottom: 32px;
+}
+
+/* Individual Tab Button */
+.project-gallery-tab {
+    position: relative;
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.9375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    border-radius: 0;
+}
+
+.project-gallery-tab:hover {
+    color: hsl(var(--foreground));
+}
+
+.project-gallery-tab--active {
+    color: hsl(var(--primary));
+    font-weight: 600;
+}
+
+.project-gallery-tab:focus-visible {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+
+/* Animated Underline Indicator */
+.project-gallery-tab-indicator {
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    background: hsl(var(--primary));
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 2px 2px 0 0;
+}
+
+/* Position indicator based on active tab */
+.project-gallery-tab-indicator[data-active-tab='recent'] {
+    width: 68px;
+    /* Approximate width of "Recent" button */
+    transform: translateX(0);
+}
+
+.project-gallery-tab-indicator[data-active-tab='all'] {
+    width: 100px;
+    /* Approximate width of "All Projects" button */
+    transform: translateX(76px);
+    /* Width of Recent + gap */
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .project-gallery-tabs {
+        margin-bottom: 24px;
+    }
+
+    .project-gallery-tab {
+        padding: 10px 16px;
+        font-size: 0.875rem;
+    }
+
+    .project-gallery-tab-indicator[data-active-tab='recent'] {
+        width: 60px;
+    }
+
+    .project-gallery-tab-indicator[data-active-tab='all'] {
+        width: 92px;
+        transform: translateX(68px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .project-gallery-tab-indicator {
+        transition: none;
+    }
+}

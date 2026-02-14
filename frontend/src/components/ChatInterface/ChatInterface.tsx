@@ -6,6 +6,9 @@ import { StreamingIndicator } from '../StreamingIndicator';
 import { MarkdownRenderer } from '../MarkdownRenderer/MarkdownRenderer';
 import { FileChangeSummary } from '../FileChangeSummary/FileChangeSummary';
 import { QuickActions } from '../QuickActions/QuickActions';
+import { CollapsibleMessage } from './CollapsibleMessage';
+import { CollapseAllButton } from './CollapseAllButton';
+import { useCollapsibleMessages } from '@/hooks/useCollapsibleMessages';
 import type { PromptSuggestion } from '@/data/prompt-suggestions';
 import type { StreamingState } from '@/context';
 import './ChatInterface.css';
@@ -83,6 +86,18 @@ export function ChatInterface({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Collapsible messages state
+  const {
+    isCollapsed,
+    canCollapse,
+    toggle,
+    collapseAll,
+    expandAll,
+    allCollapsed,
+    anyCollapsed,
+    hasCollapsibleMessages,
+  } = useCollapsibleMessages(messages);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -148,8 +163,25 @@ export function ChatInterface({
             </div>
           </div>
         )}
+        {/* Collapse All button - only show when there are collapsible messages */}
+        {hasCollapsibleMessages && (
+          <CollapseAllButton
+            allCollapsed={allCollapsed}
+            anyCollapsed={anyCollapsed}
+            onCollapseAll={collapseAll}
+            onExpandAll={expandAll}
+          />
+        )}
         {messages.map((message) => (
-          <MessageItemWithRef key={message.id} message={message} onFileClick={onFileClick} />
+          <CollapsibleMessage
+            key={message.id}
+            message={message}
+            isCollapsed={isCollapsed(message.id)}
+            canCollapse={canCollapse(message.id)}
+            onToggle={() => toggle(message.id)}
+          >
+            <MessageItemWithRef message={message} onFileClick={onFileClick} />
+          </CollapsibleMessage>
         ))}
         {isStreaming && streamingState && (
           <StreamingIndicator state={streamingState} />

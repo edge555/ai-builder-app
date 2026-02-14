@@ -1,0 +1,112 @@
+/* Recent Projects Container */
+.recent-projects {
+    width: 100%;
+}
+
+/* Horizontal Row */
+.recent-projects-row {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 24px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+}
+
+.recent-projects-row::-webkit-scrollbar {
+    height: 8px;
+}
+
+.recent-projects-row::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.recent-projects-row::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 4px;
+}
+
+.recent-projects-row::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Card Wrapper */
+.recent-projects-card-wrapper {
+    flex: 0 0 auto;
+    width: 320px;
+    scroll-snap-align: start;
+}
+
+/* View All Link */
+.recent-projects-view-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: transparent;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-md);
+    color: hsl(var(--foreground));
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.recent-projects-view-all:hover {
+    background: hsl(var(--muted) / 0.5);
+    border-color: hsl(var(--primary));
+    color: hsl(var(--primary));
+    transform: translateX(4px);
+}
+
+.recent-projects-view-all:active {
+    transform: translateX(2px);
+}
+
+.recent-projects-view-all:focus-visible {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 2px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .recent-projects-card-wrapper {
+        width: 280px;
+    }
+}
+
+@media (max-width: 640px) {
+    .recent-projects-row {
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+
+    .recent-projects-card-wrapper {
+        width: 260px;
+    }
+
+    .recent-projects-view-all {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Disable scroll snap on larger screens where all cards fit */
+@media (min-width: 1200px) {
+    .recent-projects-row {
+        scroll-snap-type: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .recent-projects-view-all {
+        transition: none;
+    }
+
+    .recent-projects-view-all:hover {
+        transform: none;
+    }
+}

@@ -116,7 +116,7 @@ The frontend uses React Router with the following routes:
 - `useSubmitPrompt`: Handles prompt submission and streaming response
 - `useAutoSave`: Automatic project persistence to IndexedDB with debouncing
 - `useErrorMonitor`: Monitors and aggregates preview errors
-- `useKeyboardShortcuts`: Global keyboard shortcuts
+- `useKeyboardShortcuts`: Global keyboard shortcuts (Ctrl+Z undo, Ctrl+Y/Shift+Z redo, Ctrl+B toggle sidebar)
 
 **Components** (`frontend/src/components/`):
 - `ChatInterface/`: Chat UI with prompt input
@@ -126,7 +126,44 @@ The frontend uses React Router with the following routes:
 - `TemplateGrid/`: Grid of starter templates (Analytics Dashboard, Landing Page, Task Manager, etc.) with categories
 - `EditableProjectName/`: Inline editable project name component with pencil icon
 - `ConfirmDialog/`: Reusable confirmation dialog for destructive actions (delete, etc.)
-- `AppLayout/`: Main layout wrapper for the builder interface
+- `AppLayout/`: Main layout wrapper with collapsible sidebar, responsive breakpoints, and header (48px height)
+
+### Layout System & Responsive Design
+
+**AppLayout Component** provides a modern, responsive two-panel layout:
+
+**Desktop (1024px+)**:
+- Collapsible chat sidebar (default: 340px, collapsed: 48px)
+- Resizable sidebar (min 300px, max 60% viewport width)
+- Smooth 200ms transitions for collapse/expand
+- Resizer with keyboard navigation support
+- Sidebar state persisted to localStorage
+
+**Tablet (768px - 1023px)**:
+- Sidebar defaults to collapsed (48px rail)
+- When expanded, sidebar overlays content as fixed panel (380px, max 85vw)
+- Semi-transparent backdrop with 4px blur effect
+- Click backdrop or toggle button to dismiss
+- Slide-in animation (200ms) for sidebar appearance
+
+**Mobile (<768px)**:
+- Full-screen panel switching (Chat/Preview tabs)
+- Bottom tab bar for navigation
+- Active panel takes entire viewport
+- Sidebar collapse state maintained
+
+**Keyboard Shortcuts**:
+- `Ctrl+B` / `Cmd+B`: Toggle sidebar collapse/expand
+- `Ctrl+Z` / `Cmd+Z`: Undo
+- `Ctrl+Y` / `Ctrl+Shift+Z`: Redo
+
+**CSS Variables** (`index.css`):
+- `--sidebar-width: 340px`: Default sidebar width
+- `--sidebar-collapsed-width: 48px`: Collapsed sidebar width
+- `--header-height: 48px`: Compact header height
+- Browser chrome colors (`--chrome-bg`, `--chrome-border`, `--chrome-url-bg`)
+- File change indicators (`--file-created`, `--file-modified`, `--file-deleted`)
+- Chat message colors (`--msg-user-bg`, `--msg-ai-bg`)
 
 ### State Management Pattern
 
@@ -215,3 +252,4 @@ Both frontend and backend use path aliases:
 6. **Local-First Storage**: IndexedDB for client-side project persistence (no server/auth required)
 7. **Template-Driven Generation**: Curated starter templates with pre-written prompts for common use cases
 8. **Progressive Enhancement**: Skeleton loading states for better perceived performance
+9. **Responsive Layout**: Mobile-first responsive design with collapsible sidebar, overlay panels on tablet, and full resizable layout on desktop

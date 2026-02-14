@@ -1,0 +1,144 @@
+/* Collapsible Message Styles */
+
+.collapsible-message {
+    position: relative;
+    transition: all 200ms ease;
+}
+
+/* Collapsed State */
+.collapsible-message-collapsed {
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background-color 150ms ease;
+}
+
+.collapsible-message-collapsed:hover {
+    background-color: var(--color-bg-secondary);
+}
+
+.collapsible-message-collapsed:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.collapsible-message-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    min-height: 40px;
+}
+
+.collapsible-message-role {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.collapsible-message-role.role-user {
+    background-color: var(--color-primary-alpha);
+    color: var(--color-primary);
+}
+
+.collapsible-message-role.role-assistant {
+    background-color: var(--color-success-alpha);
+    color: var(--color-success);
+}
+
+.collapsible-message-summary-text {
+    flex: 1;
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.collapsible-message-time {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Expanded State */
+.collapsible-message-expanded {
+    display: flex;
+    gap: 8px;
+}
+
+.collapsible-message-content {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Toggle Button */
+.collapsible-message-toggle {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--color-text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 150ms ease;
+    flex-shrink: 0;
+}
+
+.collapsible-message-toggle:hover {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+}
+
+.collapsible-message-toggle:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.collapsible-message-toggle-expanded {
+    align-self: flex-start;
+    margin-top: 8px;
+}
+
+/* Chevron Icon */
+.collapsible-message-chevron {
+    transition: transform 200ms ease;
+}
+
+.collapsible-message-collapsed .collapsible-message-chevron {
+    transform: rotate(0deg);
+}
+
+.collapsible-message-expanded .collapsible-message-chevron {
+    transform: rotate(0deg);
+}
+
+/* Animation */
+@keyframes collapse {
+    from {
+        opacity: 1;
+        max-height: 1000px;
+    }
+
+    to {
+        opacity: 0;
+        max-height: 40px;
+    }
+}
+
+@keyframes expand {
+    from {
+        opacity: 0;
+        max-height: 40px;
+    }
+
+    to {
+        opacity: 1;
+        max-height: 1000px;
+    }
+}

@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { Search, X, FolderSearch, ArrowUpDown, FolderPlus, Sparkles } from 'lucide-react';
 import { ProjectCard } from './ProjectCard';
 import { ProjectCardSkeleton } from './ProjectCardSkeleton';
+import { ProjectGalleryTabs } from './ProjectGalleryTabs';
+import { RecentProjects } from './RecentProjects';
 import type { StoredProject } from '@/services/storage';
 import './ProjectGallery.css';
 
@@ -32,6 +34,7 @@ export function ProjectGallery({
 }: ProjectGalleryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('lastModified');
+  const [activeTab, setActiveTab] = useState<'recent' | 'all'>('recent');
 
   const filteredAndSortedProjects = useMemo(() => {
     let result = [...projects];
@@ -63,6 +66,14 @@ export function ProjectGallery({
 
     return result;
   }, [projects, searchQuery, sortBy]);
+
+  // Get the 3 most recent projects for the Recent tab
+  const recentProjects = useMemo(() => {
+    const sorted = [...projects].sort((a, b) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+    return sorted.slice(0, 3);
+  }, [projects]);
 
   // Show loading state
   if (isLoading) {
@@ -117,79 +128,103 @@ export function ProjectGallery({
           </p>
         </div>
 
-        <div className="project-gallery-controls">
-          {/* Search Bar */}
-          <div className="project-gallery-search" role="search">
-            <div className="project-gallery-search-inner">
-              <Search className="project-gallery-search-icon" size={18} aria-hidden="true" />
-              <input
-                type="search"
-                placeholder="Search projects..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="project-gallery-search-input"
-                aria-label="Search projects"
-              />
-              {searchQuery && (
-                <button
-                  className="project-gallery-search-clear"
-                  onClick={() => setSearchQuery('')}
-                  aria-label="Clear search"
-                >
-                  <X size={16} aria-hidden="true" />
-                </button>
-              )}
+        {/* Show search/sort controls only on "All Projects" tab */}
+        {activeTab === 'all' && (
+          <div className="project-gallery-controls">
+            {/* Search Bar */}
+            <div className="project-gallery-search" role="search">
+              <div className="project-gallery-search-inner">
+                <Search className="project-gallery-search-icon" size={18} aria-hidden="true" />
+                <input
+                  type="search"
+                  placeholder="Search projects..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="project-gallery-search-input"
+                  aria-label="Search projects"
+                />
+                {searchQuery && (
+                  <button
+                    className="project-gallery-search-clear"
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Clear search"
+                  >
+                    <X size={16} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Sort Dropdown */}
-          <div className="project-gallery-sort">
-            <div className="project-gallery-sort-icon">
-              <ArrowUpDown size={16} />
+            {/* Sort Dropdown */}
+            <div className="project-gallery-sort">
+              <div className="project-gallery-sort-icon">
+                <ArrowUpDown size={16} />
+              </div>
+              <select
+                className="project-gallery-sort-select"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                aria-label="Sort projects"
+              >
+                <option value="lastModified">Last modified</option>
+                <option value="nameAsc">Name (A-Z)</option>
+                <option value="oldestFirst">Oldest first</option>
+              </select>
             </div>
-            <select
-              className="project-gallery-sort-select"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              aria-label="Sort projects"
-            >
-              <option value="lastModified">Last modified</option>
-              <option value="nameAsc">Name (A-Z)</option>
-              <option value="oldestFirst">Oldest first</option>
-            </select>
           </div>
-        </div>
+        )}
       </div>
 
-      {filteredAndSortedProjects.length > 0 ? (
-        <div className="project-gallery-grid">
-          {filteredAndSortedProjects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onOpen={onOpenProject}
-              onRename={onRenameProject}
-              onDuplicate={onDuplicateProject}
-              onDelete={onDeleteProject}
-            />
-          ))}
-        </div>
+      {/* Tabs */}
+      <ProjectGalleryTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
+
+      {/* Conditional Content Based on Active Tab */}
+      {activeTab === 'recent' ? (
+        <RecentProjects
+          projects={recentProjects}
+          onOpenProject={onOpenProject}
+          onRenameProject={onRenameProject}
+          onDuplicateProject={onDuplicateProject}
+          onDeleteProject={onDeleteProject}
+          onViewAll={() => setActiveTab('all')}
+          totalProjectCount={projects.length}
+        />
       ) : (
-        <div className="project-gallery-empty-search">
-          <div className="project-gallery-empty-icon">
-            <FolderSearch size={48} />
-          </div>
-          <h3 className="project-gallery-empty-title">No projects found</h3>
-          <p className="project-gallery-empty-desc">
-            No projects match "{searchQuery}"
-          </p>
-          <button
-            className="project-gallery-empty-clear"
-            onClick={() => setSearchQuery('')}
-          >
-            Clear Search
-          </button>
-        </div>
+        <>
+          {filteredAndSortedProjects.length > 0 ? (
+            <div className="project-gallery-grid" role="tabpanel" id="all-projects-panel">
+              {filteredAndSortedProjects.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onOpen={onOpenProject}
+                  onRename={onRenameProject}
+                  onDuplicate={onDuplicateProject}
+                  onDelete={onDeleteProject}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="project-gallery-empty-search">
+              <div className="project-gallery-empty-icon">
+                <FolderSearch size={48} />
+              </div>
+              <h3 className="project-gallery-empty-title">No projects found</h3>
+              <p className="project-gallery-empty-desc">
+                No projects match "{searchQuery}"
+              </p>
+              <button
+                className="project-gallery-empty-clear"
+                onClick={() => setSearchQuery('')}
+              >
+                Clear Search
+              </button>
+            </div>
+          )}
+        </>
       )}
     </section>
   );
