@@ -1,0 +1,80 @@
+.tab-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: hsl(var(--muted));
+  border-radius: var(--radius);
+  position: relative;
+}
+
+.tab-bar-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  position: relative;
+  z-index: 1;
+}
+
+.tab-bar-item:hover:not(.active) {
+  color: hsl(var(--foreground));
+  background: hsl(var(--background) / 0.5);
+}
+
+.tab-bar-item.active {
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--primary));
+  box-shadow: var(--shadow-sm);
+}
+
+.tab-bar-item:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.tab-bar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.tab-bar-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tab-bar-label {
+  line-height: 1;
+}
+
+/* Responsive adjustments */
+@media (max-width: 767px) {
+  .tab-bar-item {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .tab-bar-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .tab-bar-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+}

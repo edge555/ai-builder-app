@@ -4,7 +4,7 @@ import {
   SandpackLayout,
   SandpackPreview,
 } from '@codesandbox/sandpack-react';
-import { RefreshCw, Code, Monitor } from 'lucide-react';
+import { Code, Monitor } from 'lucide-react';
 import type { SerializedProjectState } from '@/shared';
 import type { LoadingPhase } from '../ChatInterface';
 import { PreviewToolbar, type DeviceMode } from './PreviewToolbar';
@@ -12,6 +12,8 @@ import { PreviewSkeleton } from './PreviewSkeleton';
 import { SandpackErrorListener } from './SandpackErrorListener';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { CodeEditorView } from '../CodeEditor';
+import { TabBar } from '../TabBar/TabBar';
+import { BrowserChrome } from '../BrowserChrome/BrowserChrome';
 import './PreviewPanel.css';
 
 /**
@@ -96,9 +98,9 @@ createRoot(document.getElementById('root')!).render(
  * 
  * Requirements: 9.1, 9.2, 9.3
  */
-export function PreviewPanel({ 
-  projectState, 
-  isLoading = false, 
+export function PreviewPanel({
+  projectState,
+  isLoading = false,
   loadingPhase = 'idle',
   onErrorsReady,
   errorMonitoringEnabled = true,
@@ -154,14 +156,20 @@ export function PreviewPanel({
 
   return (
     <div className="preview-panel">
-      <div className="preview-header">
-        <div className="preview-header-left">
-          <h2>Preview</h2>
-          {projectState?.name && <span className="preview-project-name">{projectState.name}</span>}
-        </div>
+      {/* Tab Bar for Preview/Code switching */}
+      <div className="preview-tab-bar-container">
+        <TabBar
+          tabs={[
+            { id: 'preview', label: 'Preview', icon: <Monitor size={16} /> },
+            { id: 'code', label: 'Code', icon: <Code size={16} /> },
+          ]}
+          activeTab={showCode ? 'code' : 'preview'}
+          onTabChange={(tabId) => setShowCode(tabId === 'code')}
+        />
 
+        {/* Device toolbar - only shown in preview mode */}
         {!showCode && (
-          <div className="preview-header-center">
+          <div className="preview-toolbar-container">
             <PreviewToolbar
               currentMode={deviceMode}
               isRotated={isRotated}
@@ -173,41 +181,26 @@ export function PreviewPanel({
             />
           </div>
         )}
-
-        <div className="preview-header-right preview-controls">
-          {!showCode && (
-            <button
-              className={`toggle-code-btn refresh-btn ${isRefreshing ? 'refreshing' : ''}`}
-              onClick={handleRefresh}
-              title="Refresh Preview"
-              aria-label="Refresh preview"
-            >
-              <RefreshCw size={14} className={isRefreshing ? 'animate-spin-slow' : ''} />
-              <span>Refresh</span>
-            </button>
-          )}
-          <button
-            className={`toggle-code-btn ${showCode ? 'active' : ''}`}
-            onClick={() => setShowCode(!showCode)}
-            aria-label={showCode ? 'Switch to preview' : 'Switch to code editor'}
-          >
-            {showCode ? <Monitor size={14} /> : <Code size={14} />}
-            <span>{showCode ? 'Preview' : 'Code'}</span>
-          </button>
-        </div>
       </div>
 
-
+      {/* Browser Chrome - only shown in preview mode */}
+      {!showCode && !isLoading && projectState && (
+        <BrowserChrome
+          url={`https://${projectState.name || 'preview'}.app/`}
+          onRefresh={handleRefresh}
+          isRefreshing={isRefreshing}
+        />
+      )}
 
       {/* Show skeleton during loading */}
       {isLoading && loadingPhase !== 'idle' ? (
         <PreviewSkeleton phase={loadingPhase} />
       ) : showCode ? (
-        <div className="preview-content">
+        <div className="preview-content" role="tabpanel" id="tabpanel-code">
           <CodeEditorView files={projectState?.files || {}} />
         </div>
       ) : (
-        <div className="preview-content">
+        <div className="preview-content" role="tabpanel" id="tabpanel-preview">
           <SandpackProvider
             key={refreshKey}
             files={Object.fromEntries(

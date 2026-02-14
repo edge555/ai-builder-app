@@ -15,3 +15,5 @@ export { StreamingIndicator, type StreamingIndicatorProps } from './StreamingInd
 export { RepairStatus, type RepairStatusProps, type RepairPhase } from './RepairStatus';
 export { StatusIndicator } from './StatusIndicator';
 export { KeyboardHint } from './KeyboardHint';
+export { TabBar, type TabBarProps, type Tab } from './TabBar/TabBar';
+export { BrowserChrome, type BrowserChromeProps } from './BrowserChrome/BrowserChrome';

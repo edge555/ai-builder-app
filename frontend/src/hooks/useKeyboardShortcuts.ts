@@ -3,11 +3,15 @@ import { useEffect, useCallback } from 'react';
 export interface KeyboardShortcutHandlers {
   onUndo?: () => void;
   onRedo?: () => void;
+  onToggleSidebar?: () => void;
 }
 
 /**
  * Hook for handling keyboard shortcuts throughout the app.
- * Supports Ctrl+Z (undo), Ctrl+Shift+Z / Ctrl+Y (redo).
+ * Supports:
+ * - Ctrl+Z / Cmd+Z (undo)
+ * - Ctrl+Shift+Z / Cmd+Shift+Z / Ctrl+Y (redo)
+ * - Ctrl+B / Cmd+B (toggle sidebar)
  */
 export function useKeyboardShortcuts(handlers: KeyboardShortcutHandlers) {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -36,6 +40,13 @@ export function useKeyboardShortcuts(handlers: KeyboardShortcutHandlers) {
     if ((modKey && e.key === 'z' && e.shiftKey) || (modKey && e.key === 'y')) {
       e.preventDefault();
       handlers.onRedo?.();
+      return;
+    }
+
+    // Toggle Sidebar: Ctrl+B / Cmd+B
+    if (modKey && e.key === 'b' && !e.shiftKey) {
+      e.preventDefault();
+      handlers.onToggleSidebar?.();
       return;
     }
   }, [handlers]);

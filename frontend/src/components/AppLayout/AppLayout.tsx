@@ -15,7 +15,7 @@ import { useAutoSave } from '@/hooks/useAutoSave';
 import { initialSuggestions, analyzeProjectForSuggestions } from '@/data/prompt-suggestions';
 import { type RuntimeError } from '@/shared';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
-import { Sparkles, ArrowLeft } from 'lucide-react';
+import { Sparkles, ArrowLeft, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { createLogger } from '@/utils/logger';
 import { useProject, useChatMessages, useGeneration, usePreviewError } from '../../context';
 import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
@@ -24,6 +24,9 @@ const RESIZE_MIN_WIDTH = 300;
 const RESIZE_MAX_FRACTION = 0.6;
 const DESKTOP_BREAKPOINT = 1023;
 const SIDE_PANEL_WIDTH_STORAGE_KEY = 'ai_app_builder:sidePanelWidth';
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'ai_app_builder:sidebarCollapsed';
+const SIDEBAR_COLLAPSED_WIDTH = 48;
+const SIDEBAR_DEFAULT_WIDTH = 340;
 
 /**
  * Formats a timestamp for the save indicator.
@@ -256,10 +259,18 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialPrompt]);
     const [activePanel, setActivePanel] = useState<ActivePanel>('chat');
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+        const raw = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
+        // Default to collapsed on tablet/mobile, expanded on desktop
+        if (raw === null) {
+            return window.innerWidth <= DESKTOP_BREAKPOINT;
+        }
+        return raw === 'true';
+    });
     const [sidePanelWidth, setSidePanelWidth] = useState(() => {
         const raw = localStorage.getItem(SIDE_PANEL_WIDTH_STORAGE_KEY);
         const parsed = raw ? Number(raw) : NaN;
-        return Number.isFinite(parsed) ? parsed : 380;
+        return Number.isFinite(parsed) ? parsed : SIDEBAR_DEFAULT_WIDTH;
     });
     const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
     const isResizing = useRef(false);
@@ -280,15 +291,33 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
         localStorage.setItem(SIDE_PANEL_WIDTH_STORAGE_KEY, String(sidePanelWidth));
     }, [sidePanelWidth]);
 
+    // Persist sidebar collapsed state
+    useEffect(() => {
+        localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(isSidebarCollapsed));
+    }, [isSidebarCollapsed]);
+
     // If the viewport shrinks, clamp the stored width to avoid layout issues.
     useEffect(() => {
         setSidePanelWidth((w) => Math.max(RESIZE_MIN_WIDTH, Math.min(w, maxSidePanelWidth)));
     }, [maxSidePanelWidth]);
 
-    // Register keyboard shortcuts for undo/redo
+    // Toggle sidebar collapse
+    const toggleSidebar = useCallback(() => {
+        setIsSidebarCollapsed((prev) => !prev);
+    }, []);
+
+    // Close sidebar when clicking backdrop on tablet
+    const handleBackdropClick = useCallback(() => {
+        if (windowWidth <= DESKTOP_BREAKPOINT && !isSidebarCollapsed) {
+            setIsSidebarCollapsed(true);
+        }
+    }, [windowWidth, isSidebarCollapsed]);
+
+    // Register keyboard shortcuts for undo/redo and sidebar toggle
     useKeyboardShortcuts({
         onUndo: undo,
         onRedo: redo,
+        onToggleSidebar: toggleSidebar,
     });
 
     const startResizing = useCallback(() => {
@@ -334,6 +363,14 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
         <div className="app">
             <header className="app-header">
                 <div className="app-header-left">
+                    <button
+                        className="sidebar-toggle-button"
+                        onClick={toggleSidebar}
+                        aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                        title={isSidebarCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
+                    >
+                        {isSidebarCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
+                    </button>
                     {onBackToDashboard && (
                         <button
                             className="back-button"
@@ -383,14 +420,35 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
             <PanelToggle activePanel={activePanel} onPanelChange={setActivePanel} />
 
             <main className="app-main">
+                {/* Backdrop for tablet overlay */}
+                {windowWidth <= DESKTOP_BREAKPOINT && !isSidebarCollapsed && (
+                    <div className="sidebar-backdrop" onClick={handleBackdropClick} />
+                )}
+
                 <section
-                    className={`chat-panel ${activePanel === 'chat' ? 'active' : ''}`}
+                    className={`chat-panel ${activePanel === 'chat' ? 'active' : ''} ${isSidebarCollapsed ? 'collapsed' : ''}`}
                     style={{
-                        flexBasis: windowWidth > DESKTOP_BREAKPOINT ? `${sidePanelWidth}px` : undefined,
-                        width: windowWidth > DESKTOP_BREAKPOINT ? `${sidePanelWidth}px` : undefined
+                        flexBasis: windowWidth > DESKTOP_BREAKPOINT
+                            ? `${isSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidePanelWidth}px`
+                            : undefined,
+                        width: windowWidth > DESKTOP_BREAKPOINT
+                            ? `${isSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidePanelWidth}px`
+                            : undefined
                     }}
                 >
-                    <ChatPanel />
+                    {!isSidebarCollapsed && <ChatPanel />}
+                    {isSidebarCollapsed && windowWidth > DESKTOP_BREAKPOINT && (
+                        <div className="sidebar-collapsed-rail">
+                            <button
+                                className="sidebar-rail-toggle"
+                                onClick={toggleSidebar}
+                                aria-label="Expand sidebar"
+                                title="Expand sidebar (Ctrl+B)"
+                            >
+                                <PanelLeft size={20} />
+                            </button>
+                        </div>
+                    )}
                 </section>
 
                 <div

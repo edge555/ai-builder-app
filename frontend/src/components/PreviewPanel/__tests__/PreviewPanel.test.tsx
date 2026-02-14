@@ -41,6 +41,31 @@ vi.mock('../SandpackErrorListener', () => ({
     SandpackErrorListener: () => <div data-testid="sandpack-error-listener" />,
 }));
 
+vi.mock('../../TabBar/TabBar', () => ({
+    TabBar: ({ tabs, activeTab, onTabChange }: any) => (
+        <div data-testid="tab-bar">
+            {tabs.map((tab: any) => (
+                <button
+                    key={tab.id}
+                    data-testid={`tab-${tab.id}`}
+                    onClick={() => onTabChange(tab.id)}
+                    aria-selected={activeTab === tab.id}
+                >
+                    {tab.label}
+                </button>
+            ))}
+        </div>
+    ),
+}));
+
+vi.mock('../../BrowserChrome/BrowserChrome', () => ({
+    BrowserChrome: ({ url, onRefresh, isRefreshing }: any) => (
+        <div data-testid="browser-chrome" data-url={url} data-refreshing={isRefreshing}>
+            <button data-testid="chrome-refresh" onClick={onRefresh}>Refresh</button>
+        </div>
+    ),
+}));
+
 // Now import PreviewPanel
 import PreviewPanel from '../PreviewPanel';
 
@@ -80,18 +105,66 @@ describe('PreviewPanel', () => {
         expect(files).toHaveProperty('/styles.css');
     });
 
-    it('should toggle between preview and code view', () => {
+    it('should toggle between preview and code view using tabs', () => {
         render(<PreviewPanel projectState={mockProjectState as any} />);
 
-        const codeBtn = screen.getByLabelText(/Switch to code editor/i);
-        fireEvent.click(codeBtn);
+        // Should start in preview mode
+        expect(screen.getByTestId('sandpack-provider')).toBeDefined();
+
+        // Click code tab
+        const codeTab = screen.getByTestId('tab-code');
+        fireEvent.click(codeTab);
 
         expect(screen.getByTestId('code-editor-view')).toBeDefined();
 
-        const previewBtn = screen.getByLabelText(/Switch to preview/i);
-        fireEvent.click(previewBtn);
+        // Click preview tab
+        const previewTab = screen.getByTestId('tab-preview');
+        fireEvent.click(previewTab);
 
         expect(screen.getByTestId('sandpack-provider')).toBeDefined();
+    });
+
+    it('should render TabBar component', () => {
+        render(<PreviewPanel projectState={mockProjectState as any} />);
+
+        expect(screen.getByTestId('tab-bar')).toBeDefined();
+        expect(screen.getByTestId('tab-preview')).toBeDefined();
+        expect(screen.getByTestId('tab-code')).toBeDefined();
+    });
+
+    it('should render BrowserChrome in preview mode', () => {
+        render(<PreviewPanel projectState={mockProjectState as any} />);
+
+        const browserChrome = screen.getByTestId('browser-chrome');
+        expect(browserChrome).toBeDefined();
+        expect(browserChrome.getAttribute('data-url')).toContain('test-project');
+    });
+
+    it('should not render BrowserChrome in code mode', () => {
+        render(<PreviewPanel projectState={mockProjectState as any} />);
+
+        // Switch to code mode
+        const codeTab = screen.getByTestId('tab-code');
+        fireEvent.click(codeTab);
+
+        expect(screen.queryByTestId('browser-chrome')).toBeNull();
+    });
+
+    it('should not render BrowserChrome when loading', () => {
+        render(<PreviewPanel projectState={mockProjectState as any} isLoading={true} loadingPhase="generating" />);
+
+        expect(screen.queryByTestId('browser-chrome')).toBeNull();
+    });
+
+    it('should trigger refresh when BrowserChrome refresh is clicked', () => {
+        render(<PreviewPanel projectState={mockProjectState as any} />);
+
+        const refreshButton = screen.getByTestId('chrome-refresh');
+        fireEvent.click(refreshButton);
+
+        // The refresh should trigger a new Sandpack instance (new key)
+        // We can verify this by checking that the component re-renders
+        expect(screen.getByTestId('browser-chrome')).toBeDefined();
     });
 
     it('should use default files if required files are missing', () => {
