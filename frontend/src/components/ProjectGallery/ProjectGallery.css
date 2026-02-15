@@ -63,6 +63,19 @@
   pointer-events: none;
 }
 
+.project-gallery-search-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .project-gallery-search-input {
   width: 100%;
   height: 40px;

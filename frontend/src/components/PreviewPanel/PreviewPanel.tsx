@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, memo, useRef } from 'react';
 import {
   SandpackProvider,
   SandpackLayout,
@@ -97,10 +97,10 @@ createRoot(document.getElementById('root')!).render(
 /**
  * PreviewPanel component that renders a live preview of the generated project.
  * Uses Sandpack to provide an isolated sandbox environment for React projects.
- * 
+ *
  * Requirements: 9.1, 9.2, 9.3
  */
-export function PreviewPanel({
+const PreviewPanelComponent = function PreviewPanel({
   projectState,
   isLoading = false,
   loadingPhase = 'idle',
@@ -127,21 +127,43 @@ export function PreviewPanel({
     setTimeout(() => setIsRefreshing(false), REFRESH_ANIMATION_MS);
   }, []);
 
+  // Track previous files for deep equality check
+  const prevFilesRef = useRef<Record<string, string> | null>(null);
+  const cachedSandpackFilesRef = useRef<Record<string, string>>(DEFAULT_FILES);
+
   // Transform project files for Sandpack
+  // Only recompute if files actually changed (deep equality)
   const sandpackFiles = useMemo(() => {
-    if (!projectState || Object.keys(projectState.files).length === 0) {
+    const currentFiles = projectState?.files;
+
+    if (!currentFiles || Object.keys(currentFiles).length === 0) {
+      prevFilesRef.current = null;
+      cachedSandpackFilesRef.current = DEFAULT_FILES;
       return DEFAULT_FILES;
     }
 
-    const transformed = transformFilesForSandpack(projectState.files);
+    // Deep equality check: only recompute if files changed
+    const filesChanged = !prevFilesRef.current ||
+      Object.keys(currentFiles).length !== Object.keys(prevFilesRef.current).length ||
+      Object.keys(currentFiles).some(key => currentFiles[key] !== prevFilesRef.current![key]);
+
+    if (!filesChanged) {
+      return cachedSandpackFilesRef.current;
+    }
+
+    // Files changed, recompute
+    prevFilesRef.current = currentFiles;
+    const transformed = transformFilesForSandpack(currentFiles);
 
     // If project doesn't have required entry files, use defaults
     if (!hasRequiredFiles(transformed)) {
-      return { ...DEFAULT_FILES, ...transformed };
+      cachedSandpackFilesRef.current = { ...DEFAULT_FILES, ...transformed };
+      return cachedSandpackFilesRef.current;
     }
 
+    cachedSandpackFilesRef.current = transformed;
     return transformed;
-  }, [projectState]);
+  }, [projectState?.files]);
 
   // Determine the entry file
   const entryFile = useMemo(() => {
@@ -310,7 +332,63 @@ export function PreviewPanel({
       )}
     </div>
   );
+};
+
+/**
+ * Custom comparator for PreviewPanel memoization.
+ * Only re-render when relevant props actually change.
+ */
+function arePropsEqual(
+  prevProps: Readonly<PreviewPanelProps>,
+  nextProps: Readonly<PreviewPanelProps>
+): boolean {
+  // Compare primitive props
+  if (
+    prevProps.isLoading !== nextProps.isLoading ||
+    prevProps.loadingPhase !== nextProps.loadingPhase ||
+    prevProps.errorMonitoringEnabled !== nextProps.errorMonitoringEnabled ||
+    prevProps.forceCodeView !== nextProps.forceCodeView
+  ) {
+    return false;
+  }
+
+  // Compare callbacks (reference equality is fine for stable callbacks)
+  if (
+    prevProps.onErrorsReady !== nextProps.onErrorsReady ||
+    prevProps.onBundlerIdle !== nextProps.onBundlerIdle
+  ) {
+    return false;
+  }
+
+  // Deep compare project files (not entire projectState)
+  const prevFiles = prevProps.projectState?.files;
+  const nextFiles = nextProps.projectState?.files;
+
+  if (prevFiles === nextFiles) {
+    return true; // Same reference
+  }
+
+  if (!prevFiles || !nextFiles) {
+    return prevFiles === nextFiles; // Both null/undefined
+  }
+
+  // Compare file keys and contents
+  const prevKeys = Object.keys(prevFiles);
+  const nextKeys = Object.keys(nextFiles);
+
+  if (prevKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  // Check if all files are the same
+  return prevKeys.every(key => prevFiles[key] === nextFiles[key]);
 }
+
+/**
+ * Memoized PreviewPanel - only re-renders when files or relevant props change.
+ * Sandpack is expensive to reinitialize, so this prevents unnecessary updates.
+ */
+export const PreviewPanel = memo(PreviewPanelComponent, arePropsEqual);
 
 export default PreviewPanel;
 

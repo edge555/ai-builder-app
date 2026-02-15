@@ -1,6 +1,6 @@
-import React, { useCallback, useMemo, useEffect } from 'react';
-import { usePreviewError } from './PreviewErrorContext.context';
-import { useGeneration } from './GenerationContext.context';
+import React, { useCallback, useMemo, useEffect, useRef } from 'react';
+import { usePreviewErrorState, usePreviewErrorActions } from './PreviewErrorContext.context';
+import { useGenerationState, useGenerationActions } from './GenerationContext.context';
 import { useProject } from './ProjectContext.context';
 import { useChatMessages } from './ChatMessagesContext.context';
 import { AutoRepairContext, type AutoRepairContextValue } from './AutoRepairContext.context';
@@ -10,41 +10,64 @@ import { AutoRepairContext, type AutoRepairContextValue } from './AutoRepairCont
  * Bridges PreviewErrorContext (error detection) and GenerationContext (repair execution).
  */
 export function AutoRepairProvider({ children }: { children: React.ReactNode }) {
-  const previewError = usePreviewError();
-  const generation = useGeneration();
+  // Split state and actions to reduce re-renders
+  const previewErrorState = usePreviewErrorState();
+  const previewErrorActions = usePreviewErrorActions();
+  const generationState = useGenerationState();
+  const generationActions = useGenerationActions();
   const project = useProject();
   const chatMessages = useChatMessages();
+
+  // Prevent concurrent auto-repair evaluations
+  const isEvaluatingRef = useRef(false);
 
   /**
    * Trigger auto-repair when errors are detected and ready.
    */
   useEffect(() => {
-    // Check if we should auto-repair
-    if (
-      previewError.repairPhase === 'repairing' &&
-      !generation.isAutoRepairing &&
-      previewError.shouldAutoRepair()
-    ) {
-      // Start the repair
-      previewError.startAutoRepair();
+    // Prevent concurrent evaluations
+    if (isEvaluatingRef.current) {
+      return;
+    }
 
-      // Get the error to repair (prefer aggregated, fallback to current)
-      const errorToRepair = previewError.aggregatedErrors?.totalCount
-        ? previewError.currentError // Use current as representative
-        : previewError.currentError;
+    // Check if we should auto-repair (inline the check to avoid unstable function dependency)
+    const hasError = previewErrorState.currentError !== null ||
+                     (previewErrorState.aggregatedErrors?.totalCount ?? 0) > 0;
+    const shouldRepair =
+      previewErrorState.repairPhase === 'repairing' &&
+      !generationState.isAutoRepairing &&
+      !previewErrorState.isAutoRepairing &&
+      hasError &&
+      previewErrorState.repairAttempts < previewErrorState.maxRepairAttempts;
 
-      if (errorToRepair && project.projectState) {
-        // Show repair attempt number
-        const attemptNumber = generation.autoRepairAttempt + 1;
-        chatMessages.addAssistantMessage(
-          `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
-        );
+    if (!shouldRepair) {
+      return;
+    }
 
-        generation.autoRepair(errorToRepair, project.projectState).then(success => {
+    // Mark as evaluating
+    isEvaluatingRef.current = true;
+
+    // Start the repair
+    previewErrorActions.startAutoRepair();
+
+    // Get the error to repair (prefer aggregated, fallback to current)
+    const errorToRepair = previewErrorState.aggregatedErrors?.totalCount
+      ? previewErrorState.currentError // Use current as representative
+      : previewErrorState.currentError;
+
+    if (errorToRepair && project.projectState) {
+      // Show repair attempt number
+      const attemptNumber = generationState.autoRepairAttempt + 1;
+      chatMessages.addAssistantMessage(
+        `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
+      );
+
+      generationActions.autoRepair(errorToRepair, project.projectState)
+        .then(success => {
           if (success) {
             // Repair succeeded
-            previewError.completeAutoRepair(true);
-            generation.resetAutoRepair();
+            previewErrorActions.completeAutoRepair(true);
+            generationActions.resetAutoRepair();
 
             // Add assistant message
             chatMessages.addAssistantMessage(
@@ -52,58 +75,103 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
             );
           } else {
             // Repair failed
-            previewError.completeAutoRepair(false);
+            previewErrorActions.completeAutoRepair(false);
           }
+        })
+        .catch(error => {
+          // Handle unexpected errors during auto-repair
+          console.error('Auto-repair failed with error:', error);
+          previewErrorActions.completeAutoRepair(false);
+          chatMessages.addAssistantMessage(
+            `❌ Auto-repair encountered an error: ${error.message || 'Unknown error'}`
+          );
+        })
+        .finally(() => {
+          // Reset evaluating flag
+          isEvaluatingRef.current = false;
         });
-      } else {
-        // No error or project to repair
-        previewError.completeAutoRepair(false);
-      }
+    } else {
+      // No error or project to repair
+      previewErrorActions.completeAutoRepair(false);
+      isEvaluatingRef.current = false;
     }
   }, [
-    previewError.repairPhase,
-    previewError.shouldAutoRepair,
-    generation.isAutoRepairing,
-    previewError.currentError,
-    previewError.aggregatedErrors,
+    // Only depend on the actual state values we need to check
+    previewErrorState.repairPhase,
+    previewErrorState.currentError,
+    previewErrorState.aggregatedErrors,
+    previewErrorState.isAutoRepairing,
+    previewErrorState.repairAttempts,
+    previewErrorState.maxRepairAttempts,
+    generationState.isAutoRepairing,
+    generationState.autoRepairAttempt,
     project.projectState,
+    // Stable actions (wrapped in useCallback)
+    previewErrorActions.startAutoRepair,
+    previewErrorActions.completeAutoRepair,
+    generationActions.autoRepair,
+    generationActions.resetAutoRepair,
+    chatMessages.addAssistantMessage,
   ]);
 
   /**
    * Manually trigger auto-repair.
    */
   const triggerAutoRepair = useCallback(async (): Promise<boolean> => {
-    const errorToRepair = previewError.currentError;
+    const errorToRepair = previewErrorState.currentError;
     if (!errorToRepair || !project.projectState) {
       return false;
     }
 
-    previewError.startAutoRepair();
-
-    // Show repair attempt number
-    const attemptNumber = generation.autoRepairAttempt + 1;
-    chatMessages.addAssistantMessage(
-      `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
-    );
-
-    const success = await generation.autoRepair(errorToRepair, project.projectState);
-
-    if (success) {
-      previewError.completeAutoRepair(true);
-      generation.resetAutoRepair();
-      chatMessages.addAssistantMessage(
-        `✅ Auto-repair successful: Fixed ${errorToRepair.type.toLowerCase().replace('_', ' ')} in ${errorToRepair.filePath || 'the application'}.`
-      );
-    } else {
-      previewError.completeAutoRepair(false);
+    // Prevent concurrent manual repairs
+    if (isEvaluatingRef.current) {
+      return false;
     }
 
-    return success;
+    isEvaluatingRef.current = true;
+
+    try {
+      previewErrorActions.startAutoRepair();
+
+      // Show repair attempt number
+      const attemptNumber = generationState.autoRepairAttempt + 1;
+      chatMessages.addAssistantMessage(
+        `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
+      );
+
+      const success = await generationActions.autoRepair(errorToRepair, project.projectState);
+
+      if (success) {
+        previewErrorActions.completeAutoRepair(true);
+        generationActions.resetAutoRepair();
+        chatMessages.addAssistantMessage(
+          `✅ Auto-repair successful: Fixed ${errorToRepair.type.toLowerCase().replace('_', ' ')} in ${errorToRepair.filePath || 'the application'}.`
+        );
+      } else {
+        previewErrorActions.completeAutoRepair(false);
+      }
+
+      return success;
+    } catch (error) {
+      // Handle unexpected errors during manual repair
+      console.error('Manual auto-repair failed with error:', error);
+      previewErrorActions.completeAutoRepair(false);
+      chatMessages.addAssistantMessage(
+        `❌ Auto-repair encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      return false;
+    } finally {
+      isEvaluatingRef.current = false;
+    }
   }, [
-    previewError,
-    generation,
+    previewErrorState.currentError,
+    previewErrorActions.startAutoRepair,
+    previewErrorActions.completeAutoRepair,
+    generationState.autoRepairAttempt,
+    generationActions.autoRepair,
+    generationActions.resetAutoRepair,
     project.projectState,
-    chatMessages,
+    chatMessages.addAssistantMessage,
   ]);
 
   const value = useMemo<AutoRepairContextValue>(() => ({

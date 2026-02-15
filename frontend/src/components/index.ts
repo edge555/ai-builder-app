@@ -5,6 +5,7 @@ export { ChatInterface, type ChatInterfaceProps, type ChatMessage, type LoadingP
 // export { DiffViewer, type DiffViewerProps } from './DiffViewer';
 export { HistoryPanel, type HistoryPanelProps } from './HistoryPanel';
 export { ErrorBoundary, type ErrorBoundaryProps } from './ErrorBoundary';
+export { ComponentErrorBoundary, type ComponentErrorBoundaryProps } from './ComponentErrorBoundary';
 export { ErrorMessage, classifyError, type ErrorMessageProps, type ErrorType } from './ErrorMessage';
 export { AppLayout } from './AppLayout';
 export { ExportButton } from './ExportButton';

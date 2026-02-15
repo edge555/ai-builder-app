@@ -1,7 +1,14 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import type { RuntimeError } from '@/shared';
 import type { RepairPhase } from '@/components/RepairStatus';
-import { PreviewErrorContext, type PreviewErrorContextValue } from './PreviewErrorContext.context';
+import {
+  PreviewErrorContext,
+  PreviewErrorStateContext,
+  PreviewErrorActionsContext,
+  type PreviewErrorContextValue,
+  type PreviewErrorState,
+  type PreviewErrorActions
+} from './PreviewErrorContext.context';
 import { useErrorAggregator } from './ErrorAggregatorContext';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { createLogger } from '@/utils/logger';
@@ -193,7 +200,8 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     setRepairPhase('idle');
   }, []);
 
-  const value = useMemo<PreviewErrorContextValue>(() => ({
+  // Separate state and actions for optimized re-renders
+  const stateValue = useMemo<PreviewErrorState>(() => ({
     currentError,
     errorQueue,
     aggregatedErrors,
@@ -201,6 +209,16 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     isAutoRepairing,
     repairAttempts,
     maxRepairAttempts: MAX_REPAIR_ATTEMPTS,
+  }), [
+    currentError,
+    errorQueue,
+    aggregatedErrors,
+    repairPhase,
+    isAutoRepairing,
+    repairAttempts,
+  ]);
+
+  const actionsValue = useMemo<PreviewErrorActions>(() => ({
     reportError,
     reportAggregatedErrors,
     clearError,
@@ -212,12 +230,6 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     setRepairPhase,
     dismissRepairStatus,
   }), [
-    currentError,
-    errorQueue,
-    aggregatedErrors,
-    repairPhase,
-    isAutoRepairing,
-    repairAttempts,
     reportError,
     reportAggregatedErrors,
     clearError,
@@ -229,9 +241,19 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     dismissRepairStatus,
   ]);
 
+  // Combined value for backward compatibility
+  const value = useMemo<PreviewErrorContextValue>(() => ({
+    ...stateValue,
+    ...actionsValue,
+  }), [stateValue, actionsValue]);
+
   return (
-    <PreviewErrorContext.Provider value={value}>
-      {children}
-    </PreviewErrorContext.Provider>
+    <PreviewErrorStateContext.Provider value={stateValue}>
+      <PreviewErrorActionsContext.Provider value={actionsValue}>
+        <PreviewErrorContext.Provider value={value}>
+          {children}
+        </PreviewErrorContext.Provider>
+      </PreviewErrorActionsContext.Provider>
+    </PreviewErrorStateContext.Provider>
   );
 }
