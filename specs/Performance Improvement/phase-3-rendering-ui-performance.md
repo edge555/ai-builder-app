@@ -5,7 +5,7 @@
 
 ---
 
-## [ ] Task 3.1: Split Context Providers to Reduce Cascading Re-renders
+## [x] Task 3.1: Split Context Providers to Reduce Cascading Re-renders
 
 **Files:**
 - `frontend/src/context/GenerationContext.tsx` (lines 372-404)
@@ -30,7 +30,7 @@
 
 ---
 
-## [ ] Task 3.2: Add React.memo to Expensive Components
+## [x] Task 3.2: Add React.memo to Expensive Components
 
 **Files:**
 - `frontend/src/components/PreviewPanel/PreviewPanel.tsx` (line 103)

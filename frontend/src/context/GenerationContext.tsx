@@ -6,7 +6,15 @@ import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/cl
 import { parseSSEStream } from '@/utils/sse-parser';
 import { buildRepairPrompt } from '@/utils/repair-prompt';
 import { getUserFriendlyErrorMessage } from '@/utils/error-messages';
-import { GenerationContext, type GenerationContextValue, type StreamingState } from './GenerationContext.context';
+import {
+  GenerationContext,
+  GenerationStateContext,
+  GenerationActionsContext,
+  type GenerationContextValue,
+  type GenerationStateValue,
+  type GenerationActionsValue,
+  type StreamingState
+} from './GenerationContext.context';
 import { useErrorAggregator } from './ErrorAggregatorContext';
 import { createLogger } from '@/utils/logger';
 
@@ -369,7 +377,8 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     }
   }, [isAutoRepairing, modifyProject, errorAggregator]);
 
-  const value = useMemo<GenerationContextValue>(() => ({
+  // Split context into state and actions to reduce re-renders
+  const stateValue = useMemo<GenerationStateValue>(() => ({
     isLoading,
     loadingPhase,
     error,
@@ -377,6 +386,19 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     autoRepairAttempt,
     streamingState,
     isStreaming,
+  }), [
+    isLoading,
+    loadingPhase,
+    error,
+    isAutoRepairing,
+    autoRepairAttempt,
+    streamingState,
+    isStreaming,
+  ]);
+
+  // Actions are stable (all callbacks wrapped in useCallback)
+  // This value rarely changes, preventing re-renders in action-only consumers
+  const actionsValue = useMemo<GenerationActionsValue>(() => ({
     generateProject,
     generateProjectStreaming,
     modifyProject,
@@ -387,13 +409,6 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     clearError,
     abortCurrentRequest,
   }), [
-    isLoading,
-    loadingPhase,
-    error,
-    isAutoRepairing,
-    autoRepairAttempt,
-    streamingState,
-    isStreaming,
     generateProject,
     generateProjectStreaming,
     modifyProject,
@@ -403,9 +418,19 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     abortCurrentRequest,
   ]);
 
+  // Combined value for backward compatibility
+  const value = useMemo<GenerationContextValue>(() => ({
+    ...stateValue,
+    ...actionsValue,
+  }), [stateValue, actionsValue]);
+
   return (
-    <GenerationContext.Provider value={value}>
-      {children}
-    </GenerationContext.Provider>
+    <GenerationStateContext.Provider value={stateValue}>
+      <GenerationActionsContext.Provider value={actionsValue}>
+        <GenerationContext.Provider value={value}>
+          {children}
+        </GenerationContext.Provider>
+      </GenerationActionsContext.Provider>
+    </GenerationStateContext.Provider>
   );
 }

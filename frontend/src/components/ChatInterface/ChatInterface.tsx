@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, forwardRef, lazy, Suspense } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, lazy, Suspense, memo } from 'react';
 import type { ChangeSummary, FileDiff } from '@/shared';
 import { ErrorMessage, classifyError } from '../ErrorMessage';
 import { PromptSuggestions } from '../PromptSuggestions';
@@ -64,10 +64,10 @@ export interface ChatInterfaceProps {
 /**
  * Chat interface component for interacting with the AI App Builder.
  * Displays message history and provides input for new prompts.
- * 
+ *
  * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5
  */
-export function ChatInterface({
+const ChatInterfaceComponent = function ChatInterface({
   onSubmitPrompt,
   messages,
   isLoading,
@@ -258,8 +258,92 @@ export function ChatInterface({
       </form>
     </div>
   );
+};
+
+/**
+ * Custom comparator for ChatInterface memoization.
+ * Compares messages array by checking each message's id to avoid unnecessary re-renders.
+ */
+function areChatPropsEqual(
+  prevProps: Readonly<ChatInterfaceProps>,
+  nextProps: Readonly<ChatInterfaceProps>
+): boolean {
+  // Compare primitives
+  if (
+    prevProps.isLoading !== nextProps.isLoading ||
+    prevProps.loadingPhase !== nextProps.loadingPhase ||
+    prevProps.error !== nextProps.error ||
+    prevProps.isStreaming !== nextProps.isStreaming
+  ) {
+    return false;
+  }
+
+  // Compare callbacks (reference equality for stable callbacks)
+  if (
+    prevProps.onSubmitPrompt !== nextProps.onSubmitPrompt ||
+    prevProps.onClearError !== nextProps.onClearError ||
+    prevProps.onRetry !== nextProps.onRetry ||
+    prevProps.onAbort !== nextProps.onAbort ||
+    prevProps.onFileClick !== nextProps.onFileClick
+  ) {
+    return false;
+  }
+
+  // Compare messages array (shallow comparison by ids and timestamps)
+  if (prevProps.messages.length !== nextProps.messages.length) {
+    return false;
+  }
+
+  for (let i = 0; i < prevProps.messages.length; i++) {
+    const prevMsg = prevProps.messages[i];
+    const nextMsg = nextProps.messages[i];
+
+    // Compare by id and content (sufficient for detecting changes)
+    if (
+      prevMsg.id !== nextMsg.id ||
+      prevMsg.content !== nextMsg.content ||
+      prevMsg.role !== nextMsg.role
+    ) {
+      return false;
+    }
+  }
+
+  // Compare suggestions array
+  const prevSuggestions = prevProps.suggestions || [];
+  const nextSuggestions = nextProps.suggestions || [];
+
+  if (prevSuggestions.length !== nextSuggestions.length) {
+    return false;
+  }
+
+  // Compare streamingState (shallow)
+  const prevStreaming = prevProps.streamingState;
+  const nextStreaming = nextProps.streamingState;
+
+  if (prevStreaming !== nextStreaming) {
+    if (!prevStreaming || !nextStreaming) {
+      return false; // One is null, other is not
+    }
+
+    // Compare key streaming properties
+    if (
+      prevStreaming.phase !== nextStreaming.phase ||
+      prevStreaming.filesReceived !== nextStreaming.filesReceived ||
+      prevStreaming.totalFiles !== nextStreaming.totalFiles ||
+      prevStreaming.textLength !== nextStreaming.textLength
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
+/**
+ * Memoized ChatInterface - avoids re-rendering when props haven't changed.
+ * Particularly important for large message lists.
+ */
+export const ChatInterface = memo(ChatInterfaceComponent, areChatPropsEqual);
 
 /**
  * Props for the MessageItem component.

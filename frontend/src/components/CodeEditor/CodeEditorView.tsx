@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense, memo } from 'react';
 import type { SerializedProjectState } from '@/shared';
 import { useProject } from '@/context/ProjectContext.context';
 import { FileTreeSidebar } from './FileTreeSidebar';
@@ -11,7 +11,7 @@ interface CodeEditorViewProps {
   files: Record<string, string>;
 }
 
-export function CodeEditorView({ files }: CodeEditorViewProps) {
+const CodeEditorViewComponent = function CodeEditorView({ files }: CodeEditorViewProps) {
   const { projectState, setProjectState } = useProject();
 
   // UI state
@@ -211,4 +211,37 @@ export function CodeEditorView({ files }: CodeEditorViewProps) {
       </div>
     </div>
   );
+};
+
+/**
+ * Custom comparator for CodeEditorView memoization.
+ * Deep compares files object to avoid re-render when file contents haven't changed.
+ */
+function areCodeEditorPropsEqual(
+  prevProps: Readonly<CodeEditorViewProps>,
+  nextProps: Readonly<CodeEditorViewProps>
+): boolean {
+  const prevFiles = prevProps.files;
+  const nextFiles = nextProps.files;
+
+  if (prevFiles === nextFiles) {
+    return true; // Same reference
+  }
+
+  // Compare file keys
+  const prevKeys = Object.keys(prevFiles);
+  const nextKeys = Object.keys(nextFiles);
+
+  if (prevKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  // Compare file contents
+  return prevKeys.every(key => prevFiles[key] === nextFiles[key]);
 }
+
+/**
+ * Memoized CodeEditorView - only re-renders when files actually change.
+ * Monaco is expensive to update, so this prevents unnecessary re-renders.
+ */
+export const CodeEditorView = memo(CodeEditorViewComponent, areCodeEditorPropsEqual);

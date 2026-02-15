@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { Search, X, FolderSearch, ArrowUpDown, FolderPlus, Sparkles } from 'lucide-react';
 import { ProjectCard } from './ProjectCard';
 import { ProjectCardSkeleton } from './ProjectCardSkeleton';
@@ -23,7 +23,7 @@ type SortOption = 'lastModified' | 'nameAsc' | 'oldestFirst';
  * Grid layout displaying saved projects as cards.
  * Shows projects sorted by most recently updated.
  */
-export function ProjectGallery({
+const ProjectGalleryComponent = function ProjectGallery({
   projects,
   onOpenProject,
   onRenameProject,
@@ -228,4 +228,59 @@ export function ProjectGallery({
       )}
     </section>
   );
+};
+
+/**
+ * Custom comparator for ProjectGallery memoization.
+ * Compares projects array by checking each project's id and updatedAt.
+ */
+function areProjectGalleryPropsEqual(
+  prevProps: Readonly<ProjectGalleryProps>,
+  nextProps: Readonly<ProjectGalleryProps>
+): boolean {
+  // Compare primitive props
+  if (prevProps.isLoading !== nextProps.isLoading) {
+    return false;
+  }
+
+  // Compare callbacks (reference equality for stable callbacks)
+  if (
+    prevProps.onOpenProject !== nextProps.onOpenProject ||
+    prevProps.onRenameProject !== nextProps.onRenameProject ||
+    prevProps.onDuplicateProject !== nextProps.onDuplicateProject ||
+    prevProps.onDeleteProject !== nextProps.onDeleteProject ||
+    prevProps.onCreateProject !== nextProps.onCreateProject
+  ) {
+    return false;
+  }
+
+  // Compare projects array
+  const prevProjects = prevProps.projects;
+  const nextProjects = nextProps.projects;
+
+  if (prevProjects.length !== nextProjects.length) {
+    return false;
+  }
+
+  // Compare each project by id and updatedAt (sufficient for detecting changes)
+  for (let i = 0; i < prevProjects.length; i++) {
+    const prevProject = prevProjects[i];
+    const nextProject = nextProjects[i];
+
+    if (
+      prevProject.id !== nextProject.id ||
+      prevProject.updatedAt !== nextProject.updatedAt ||
+      prevProject.name !== nextProject.name
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
+
+/**
+ * Memoized ProjectGallery - avoids re-rendering when projects haven't changed.
+ * Useful when the gallery is visible but parent components re-render.
+ */
+export const ProjectGallery = memo(ProjectGalleryComponent, areProjectGalleryPropsEqual);

@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useEffect } from 'react';
 import { usePreviewError } from './PreviewErrorContext.context';
-import { useGeneration } from './GenerationContext.context';
+import { useGenerationState, useGenerationActions } from './GenerationContext.context';
 import { useProject } from './ProjectContext.context';
 import { useChatMessages } from './ChatMessagesContext.context';
 import { AutoRepairContext, type AutoRepairContextValue } from './AutoRepairContext.context';
@@ -11,7 +11,8 @@ import { AutoRepairContext, type AutoRepairContextValue } from './AutoRepairCont
  */
 export function AutoRepairProvider({ children }: { children: React.ReactNode }) {
   const previewError = usePreviewError();
-  const generation = useGeneration();
+  const generationState = useGenerationState();
+  const generationActions = useGenerationActions();
   const project = useProject();
   const chatMessages = useChatMessages();
 
@@ -22,7 +23,7 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
     // Check if we should auto-repair
     if (
       previewError.repairPhase === 'repairing' &&
-      !generation.isAutoRepairing &&
+      !generationState.isAutoRepairing &&
       previewError.shouldAutoRepair()
     ) {
       // Start the repair
@@ -35,16 +36,16 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
 
       if (errorToRepair && project.projectState) {
         // Show repair attempt number
-        const attemptNumber = generation.autoRepairAttempt + 1;
+        const attemptNumber = generationState.autoRepairAttempt + 1;
         chatMessages.addAssistantMessage(
           `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
         );
 
-        generation.autoRepair(errorToRepair, project.projectState).then(success => {
+        generationActions.autoRepair(errorToRepair, project.projectState).then(success => {
           if (success) {
             // Repair succeeded
             previewError.completeAutoRepair(true);
-            generation.resetAutoRepair();
+            generationActions.resetAutoRepair();
 
             // Add assistant message
             chatMessages.addAssistantMessage(
@@ -63,10 +64,16 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
   }, [
     previewError.repairPhase,
     previewError.shouldAutoRepair,
-    generation.isAutoRepairing,
+    generationState.isAutoRepairing,
+    generationState.autoRepairAttempt,
+    generationActions.autoRepair,
+    generationActions.resetAutoRepair,
     previewError.currentError,
     previewError.aggregatedErrors,
     project.projectState,
+    chatMessages,
+    previewError.startAutoRepair,
+    previewError.completeAutoRepair,
   ]);
 
   /**
@@ -81,16 +88,16 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
     previewError.startAutoRepair();
 
     // Show repair attempt number
-    const attemptNumber = generation.autoRepairAttempt + 1;
+    const attemptNumber = generationState.autoRepairAttempt + 1;
     chatMessages.addAssistantMessage(
       `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
     );
 
-    const success = await generation.autoRepair(errorToRepair, project.projectState);
+    const success = await generationActions.autoRepair(errorToRepair, project.projectState);
 
     if (success) {
       previewError.completeAutoRepair(true);
-      generation.resetAutoRepair();
+      generationActions.resetAutoRepair();
       chatMessages.addAssistantMessage(
         `✅ Auto-repair successful: Fixed ${errorToRepair.type.toLowerCase().replace('_', ' ')} in ${errorToRepair.filePath || 'the application'}.`
       );
@@ -101,7 +108,9 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
     return success;
   }, [
     previewError,
-    generation,
+    generationState.autoRepairAttempt,
+    generationActions.autoRepair,
+    generationActions.resetAutoRepair,
     project.projectState,
     chatMessages,
   ]);

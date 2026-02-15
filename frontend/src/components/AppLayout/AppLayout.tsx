@@ -17,7 +17,7 @@ import { type RuntimeError } from '@/shared';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { Sparkles, ArrowLeft, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { createLogger } from '@/utils/logger';
-import { useProject, useChatMessages, useGeneration, usePreviewError } from '../../context';
+import { useProject, useChatMessages, useGenerationState, useGenerationActions, usePreviewError } from '../../context';
 import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
 
 const RESIZE_MIN_WIDTH = 300;
@@ -58,7 +58,8 @@ interface ChatPanelProps {
 
 function ChatPanel({ onFileClick }: ChatPanelProps) {
     const { messages, clearMessages } = useChatMessages();
-    const { isLoading, loadingPhase, error, clearError, streamingState, isStreaming, abortCurrentRequest } = useGeneration();
+    const { isLoading, loadingPhase, error, streamingState, isStreaming } = useGenerationState();
+    const { clearError, abortCurrentRequest } = useGenerationActions();
     const { projectState } = useProject();
     const { submitPrompt } = useSubmitPrompt();
     const [lastPrompt, setLastPrompt] = useState<string | null>(null);
@@ -71,17 +72,17 @@ function ChatPanel({ onFileClick }: ChatPanelProps) {
         return analyzeProjectForSuggestions(projectState.files);
     }, [projectState]);
 
-    const handleSubmit = async (prompt: string) => {
+    const handleSubmit = useCallback(async (prompt: string) => {
         setLastPrompt(prompt);
         await submitPrompt(prompt);
-    };
+    }, [submitPrompt]);
 
-    const handleRetry = () => {
+    const handleRetry = useCallback(() => {
         if (lastPrompt) {
             clearError();
             submitPrompt(lastPrompt);
         }
-    };
+    }, [lastPrompt, clearError, submitPrompt]);
 
     return (
         <ChatInterface
@@ -112,7 +113,8 @@ const appLayoutLogger = createLogger('AppLayout');
 
 function PreviewSection({ activePanel }: { activePanel: ActivePanel }) {
     const { projectState } = useProject();
-    const { isLoading, loadingPhase, autoRepair, isAutoRepairing, autoRepairAttempt, resetAutoRepair } = useGeneration();
+    const { isLoading, loadingPhase, isAutoRepairing, autoRepairAttempt } = useGenerationState();
+    const { autoRepair, resetAutoRepair } = useGenerationActions();
     const {
         reportError,
         reportAggregatedErrors,
@@ -240,7 +242,7 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
     const { undo, redo, submitPrompt } = useSubmitPrompt();
     const project = useProject();
     const { messages } = useChatMessages();
-    const { isLoading, loadingPhase } = useGeneration();
+    const { isLoading, loadingPhase } = useGenerationState();
     const { projectState, canUndo, canRedo, renameProject } = project;
 
     // Auto-save project state and messages
