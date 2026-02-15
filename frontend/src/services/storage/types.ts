@@ -30,6 +30,29 @@ export interface StoredProject {
 }
 
 /**
+ * Lightweight project metadata for gallery listings.
+ * Excludes files and chat messages for better performance.
+ */
+export interface ProjectMetadata {
+  /** Unique identifier */
+  id: string;
+  /** Human-readable project name */
+  name: string;
+  /** Project description */
+  description: string;
+  /** ID of the current version */
+  currentVersionId: string;
+  /** ISO timestamp when project was created */
+  createdAt: string;
+  /** ISO timestamp when project was last updated */
+  updatedAt: string;
+  /** Denormalized file count for gallery display */
+  fileCount: number;
+  /** First 3-5 filenames for gallery preview */
+  thumbnailFiles: string[];
+}
+
+/**
  * Serialized version of ChatMessage for storage.
  * Converts Date to ISO string.
  */
