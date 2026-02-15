@@ -87,25 +87,68 @@ export async function POST(request: NextRequest) {
         const cleanup = () => {
           if (heartbeatInterval) clearInterval(heartbeatInterval);
           if (streamTimeout) clearTimeout(streamTimeout);
+          heartbeatInterval = null;
+          streamTimeout = null;
           isComplete = true;
         };
+
+        // Safe enqueue — guards against writing to a closed/errored controller
+        const safeEnqueue = (data: Uint8Array) => {
+          if (isComplete) return;
+          try {
+            controller.enqueue(data);
+          } catch {
+            // Controller already closed (client disconnected)
+          }
+        };
+
+        // Safe close — guards against double-close
+        const safeClose = () => {
+          if (isComplete) return;
+          cleanup();
+          try {
+            controller.close();
+          } catch {
+            // Controller already closed
+          }
+        };
+
+        // Listen for client disconnect via request.signal
+        const onAbort = () => {
+          if (isComplete) return;
+          contextLogger.info('Client disconnected, aborting SSE stream');
+          cleanup();
+          try {
+            controller.close();
+          } catch {
+            // Controller already closed
+          }
+        };
+
+        if (request.signal) {
+          if (request.signal.aborted) {
+            // Already aborted before we started
+            onAbort();
+            return;
+          }
+          request.signal.addEventListener('abort', onAbort, { once: true });
+        }
 
         try {
           // Set up heartbeat to prevent proxy timeouts
           heartbeatInterval = setInterval(() => {
             if (!isComplete) {
-              controller.enqueue(encoder.heartbeat());
+              safeEnqueue(encoder.heartbeat());
             }
           }, HEARTBEAT_INTERVAL_MS);
 
           // Set up stream timeout
           streamTimeout = setTimeout(() => {
             if (!isComplete) {
-              cleanup();
-              controller.enqueue(encoder.encode('error', {
+              safeEnqueue(encoder.encode('error', {
                 error: 'Stream timeout after 120 seconds',
               }));
-              controller.close();
+              safeClose();
             }
           }, STREAM_TIMEOUT_MS);
 
@@ -113,16 +156,18 @@ export async function POST(request: NextRequest) {
           const generator = createStreamingProjectGenerator();
 
           const result = await generator.generateProjectStreaming(body.description, {
+            signal: request.signal,
+
             onStart: () => {
-              controller.enqueue(encoder.encode('start', { timestamp: Date.now() }));
+              safeEnqueue(encoder.encode('start', { timestamp: Date.now() }));
             },
 
             onProgress: (length: number) => {
-              controller.enqueue(encoder.encode('progress', { length }));
+              safeEnqueue(encoder.encode('progress', { length }));
             },
 
             onFile: (data) => {
-              controller.enqueue(encoder.encode('file', data));
+              safeEnqueue(encoder.encode('file', data));
             },
 
             onComplete: (data) => {
@@ -131,11 +176,11 @@ export async function POST(request: NextRequest) {
                 projectState: serializeProjectState(data.projectState),
                 version: serializeVersion(data.version),
               };
-              controller.enqueue(encoder.encode('complete', response));
+              safeEnqueue(encoder.encode('complete', response));
             },
 
             onError: (error, errorData) => {
-              controller.enqueue(encoder.encode('error', {
+              safeEnqueue(encoder.encode('error', {
                 error,
                 errorCode: errorData?.errorCode,
                 errorType: errorData?.errorType,
@@ -148,29 +193,42 @@ export async function POST(request: NextRequest) {
             },
           });
 
+          // If already aborted, skip final messages
+          if (isComplete) return;
+
           // If generation failed without calling onError
           if (!result.success && result.error) {
-            controller.enqueue(encoder.encode('error', {
+            safeEnqueue(encoder.encode('error', {
               error: result.error,
               validationErrors: result.validationErrors,
             }));
           }
 
-          cleanup();
-          controller.close();
+          safeClose();
 
           contextLogger.info('Streaming generation completed', {
             success: result.success,
           });
 
         } catch (error) {
+          // If already cleaned up (client disconnect), just log and return
+          if (isComplete) {
+            contextLogger.info('Stream already closed (client disconnected)');
+            return;
+          }
+
           cleanup();
 
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           contextLogger.error('Streaming generation error', { error: errorMessage });
 
-          controller.enqueue(encoder.encode('error', { error: errorMessage }));
-          controller.close();
+          safeEnqueue(encoder.encode('error', { error: errorMessage }));
+          safeClose();
+        } finally {
+          // Remove abort listener to prevent memory leak
+          if (request.signal) {
+            request.signal.removeEventListener('abort', onAbort);
+          }
         }
       },
     });

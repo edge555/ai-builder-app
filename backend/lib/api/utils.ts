@@ -170,3 +170,127 @@ export function handleOptions(): NextResponse {
 export function jsonResponse<T>(data: T, status = 200, request?: Request): NextResponse<T> {
   return NextResponse.json(data, { status, headers: getCorsHeaders(request) });
 }
+
+/**
+ * Timeout error thrown when a promise exceeds its time limit
+ */
+export class TimeoutError extends Error {
+  constructor(message: string, public readonly timeoutMs: number) {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
+
+/**
+ * Options for withTimeout
+ */
+export interface WithTimeoutOptions {
+  /** Timeout duration in milliseconds */
+  timeoutMs: number;
+  /** Optional cleanup function to call on timeout */
+  onTimeout?: () => void | Promise<void>;
+  /** Optional AbortSignal to abort the operation externally */
+  signal?: AbortSignal;
+  /** Operation name for error messages */
+  operationName?: string;
+}
+
+/**
+ * Wraps a promise with a timeout.
+ * Throws TimeoutError if the promise doesn't resolve within the specified time.
+ * Optionally accepts an AbortSignal for external cancellation.
+ *
+ * @param promise - The promise to wrap
+ * @param options - Timeout options
+ * @returns The promise result or throws TimeoutError
+ *
+ * @example
+ * ```ts
+ * const result = await withTimeout(
+ *   longRunningOperation(),
+ *   {
+ *     timeoutMs: 30000,
+ *     operationName: 'diff computation',
+ *     onTimeout: () => cleanup()
+ *   }
+ * );
+ * ```
+ */
+export async function withTimeout<T>(
+  promise: Promise<T>,
+  options: WithTimeoutOptions
+): Promise<T> {
+  const { timeoutMs, onTimeout, signal, operationName = 'operation' } = options;
+
+  // If external signal is already aborted, reject immediately
+  if (signal?.aborted) {
+    throw new Error(`${operationName} was aborted before starting`);
+  }
+
+  let timeoutId: NodeJS.Timeout | null = null;
+  let cleanupCalled = false;
+  let didTimeout = false;
+
+  const cleanup = async () => {
+    if (cleanupCalled) return;
+    cleanupCalled = true;
+
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+
+    // Only call onTimeout callback if we actually timed out or aborted
+    if (didTimeout && onTimeout) {
+      try {
+        await onTimeout();
+      } catch (error) {
+        logger.error('Error during timeout cleanup', {
+          operationName,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+  };
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      didTimeout = true;
+      const error = new TimeoutError(
+        `${operationName} timed out after ${timeoutMs}ms`,
+        timeoutMs
+      );
+      cleanup().then(() => reject(error));
+    }, timeoutMs);
+  });
+
+  // Handle external abort signal
+  const abortPromise = signal
+    ? new Promise<never>((_, reject) => {
+        if (signal.aborted) {
+          reject(new Error(`${operationName} was aborted`));
+          return;
+        }
+        signal.addEventListener('abort', () => {
+          didTimeout = true; // Treat abort like timeout for cleanup
+          cleanup().then(() => reject(new Error(`${operationName} was aborted`)));
+        });
+      })
+    : null;
+
+  try {
+    const promises = [promise, timeoutPromise];
+    if (abortPromise) promises.push(abortPromise);
+
+    const result = await Promise.race(promises);
+    // Clear timeout on success, but don't call onTimeout callback
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    return result as T;
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
+}

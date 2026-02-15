@@ -17,7 +17,6 @@ export function CodeEditorView({ files }: CodeEditorViewProps) {
   // UI state
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [activeFile, setActiveFile] = useState<string | null>(null);
-  const [externalUpdateKey, setExternalUpdateKey] = useState(0);
 
   // Refs for debouncing and AI sync
   const projectStateRef = useRef<SerializedProjectState | null>(projectState);
@@ -46,7 +45,7 @@ export function CodeEditorView({ files }: CodeEditorViewProps) {
     }
   }, [files, openFiles.length]);
 
-  // Detect AI/undo/redo changes and refresh editor
+  // Detect AI/undo/redo changes and clear pending edits
   useEffect(() => {
     if (!projectState) return;
 
@@ -57,14 +56,12 @@ export function CodeEditorView({ files }: CodeEditorViewProps) {
     if (currentUpdatedAt !== lastSavedAt && lastSavedAt !== null) {
       // External change detected (AI, undo, redo)
       // Clear any pending changes and debounce timer
+      // Monaco will update via content prop change
       pendingChangesRef.current.clear();
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
       }
-
-      // Increment key to force Monaco to refresh
-      setExternalUpdateKey((prev) => prev + 1);
     }
 
     // Update our tracking ref
@@ -208,7 +205,6 @@ export function CodeEditorView({ files }: CodeEditorViewProps) {
                   handleFileChange(activeFile, value);
                 }
               }}
-              externalUpdateKey={externalUpdateKey}
             />
           </Suspense>
         </div>

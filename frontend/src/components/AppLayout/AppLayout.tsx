@@ -279,7 +279,9 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
         return Number.isFinite(parsed) ? parsed : SIDEBAR_DEFAULT_WIDTH;
     });
     const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
+    const windowWidthRef = useRef(window.innerWidth); // Ref for resize callback (no re-render)
     const isResizing = useRef(false);
+    const rafId = useRef<number | null>(null); // For requestAnimationFrame throttling
 
     const maxSidePanelWidth = Math.max(
         RESIZE_MIN_WIDTH,
@@ -287,7 +289,11 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
     );
 
     useEffect(() => {
-        const onResize = () => setWindowWidth(window.innerWidth);
+        const onResize = () => {
+            const newWidth = window.innerWidth;
+            windowWidthRef.current = newWidth; // Update ref immediately
+            setWindowWidth(newWidth); // Update state for UI
+        };
         window.addEventListener('resize', onResize);
         return () => window.removeEventListener('resize', onResize);
     }, []);
@@ -336,18 +342,36 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
         isResizing.current = false;
         document.body.style.cursor = 'default';
         document.body.style.userSelect = 'auto';
+
+        // Cancel any pending RAF
+        if (rafId.current !== null) {
+            cancelAnimationFrame(rafId.current);
+            rafId.current = null;
+        }
     }, []);
 
     const resize = useCallback((e: MouseEvent) => {
         if (!isResizing.current) return;
 
-        // Constraints: min 300px, max 600px or some reasonable fraction of window width
-        const newWidth = Math.max(
-            RESIZE_MIN_WIDTH,
-            Math.min(e.clientX, windowWidth * RESIZE_MAX_FRACTION)
-        );
-        setSidePanelWidth(newWidth);
-    }, [windowWidth]);
+        // Cancel previous RAF if it exists
+        if (rafId.current !== null) {
+            cancelAnimationFrame(rafId.current);
+        }
+
+        // Throttle updates to 60fps using requestAnimationFrame
+        rafId.current = requestAnimationFrame(() => {
+            // Use ref to avoid re-creating this callback when windowWidth changes
+            const currentWindowWidth = windowWidthRef.current;
+
+            // Constraints: min 300px, max 600px or some reasonable fraction of window width
+            const newWidth = Math.max(
+                RESIZE_MIN_WIDTH,
+                Math.min(e.clientX, currentWindowWidth * RESIZE_MAX_FRACTION)
+            );
+            setSidePanelWidth(newWidth);
+            rafId.current = null;
+        });
+    }, []); // No dependencies! Event listeners won't re-register
 
     useEffect(() => {
         window.addEventListener('mousemove', resize);
