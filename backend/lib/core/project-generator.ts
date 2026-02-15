@@ -138,7 +138,16 @@ export class ProjectGenerator extends BaseProjectGenerator {
     }
 
     // Process files: sanitize paths, normalize newlines, format with Prettier
-    const prefixedFiles = await processFiles(files, { addFrontendPrefix: false });
+    const processResult = await processFiles(files, { addFrontendPrefix: false });
+    const prefixedFiles = processResult.files;
+
+    // Log warnings if any
+    if (processResult.warnings.length > 0) {
+      logger.warn('File processing warnings', {
+        count: processResult.warnings.length,
+        warnings: processResult.warnings,
+      });
+    }
 
     // Validate the output (syntax validation)
     logger.debug('Validating files', { files: Object.keys(prefixedFiles) });

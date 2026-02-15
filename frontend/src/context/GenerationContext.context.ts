@@ -1,8 +1,22 @@
-import { createContext, useContext } from 'react';
-import type { LoadingPhase } from '../components/ChatInterface';
 import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState } from '@ai-app-builder/shared/types';
+import { createContext, useContext } from 'react';
+
+import type { LoadingPhase } from '../components/ChatInterface';
 
 export type StreamingPhase = 'idle' | 'connecting' | 'generating' | 'processing' | 'complete' | 'error';
+
+export interface StreamingWarning {
+    path: string;
+    message: string;
+    type: 'formatting' | 'validation';
+}
+
+export interface StreamingSummary {
+    totalFiles: number;
+    successfulFiles: number;
+    failedFiles: number;
+    warnings: number;
+}
 
 export interface StreamingState {
     phase: StreamingPhase;
@@ -13,6 +27,8 @@ export interface StreamingState {
     textLength: number;
     error: string | null;
     lastHeartbeat: number | null;
+    warnings: StreamingWarning[];
+    summary: StreamingSummary | null;
 }
 
 /**

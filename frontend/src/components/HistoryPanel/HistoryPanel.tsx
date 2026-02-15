@@ -1,5 +1,5 @@
-import { useMemo, memo } from 'react';
 import type { SerializedVersion, FileDiff } from '@ai-app-builder/shared/types';
+import { useMemo, memo } from 'react';
 import './HistoryPanel.css';
 
 /**
@@ -26,7 +26,7 @@ export interface HistoryPanelProps {
 function computeVersionStats(diffs: FileDiff[]) {
   let linesAdded = 0;
   let linesDeleted = 0;
-  let filesChanged = diffs.length;
+  const filesChanged = diffs.length;
 
   for (const diff of diffs) {
     for (const hunk of diff.hunks) {

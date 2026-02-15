@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useEffect, useRef, type ReactNode } from 'react';
-import { usePreviewErrorState, usePreviewErrorActions } from './PreviewErrorContext.context';
-import { useGenerationState, useGenerationActions } from './GenerationContext.context';
-import { useProject } from './ProjectContext.context';
-import { useChatMessages } from './ChatMessagesContext.context';
+
 import { AutoRepairContext, type AutoRepairContextValue } from './AutoRepairContext.context';
+import { useChatMessages } from './ChatMessagesContext.context';
+import { useGenerationState, useGenerationActions } from './GenerationContext.context';
+import { usePreviewErrorState, usePreviewErrorActions } from './PreviewErrorContext.context';
+import { useProject } from './ProjectContext.context';
 
 /**
  * Provider for unified auto-repair coordination.

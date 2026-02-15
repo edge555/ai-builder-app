@@ -4,10 +4,11 @@
  * Integrates with the auto-repair system.
  */
 
-import { useEffect, useRef, useCallback } from 'react';
-import { useSandpack } from '@codesandbox/sandpack-react';
-import { useErrorMonitor } from '@/hooks/useErrorMonitor';
 import { shouldIgnoreError } from '@ai-app-builder/shared';
+import { useSandpack } from '@codesandbox/sandpack-react';
+import { useEffect, useRef, useCallback } from 'react';
+
+import { useErrorMonitor } from '@/hooks/useErrorMonitor';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 
 export interface SandpackErrorListenerProps {

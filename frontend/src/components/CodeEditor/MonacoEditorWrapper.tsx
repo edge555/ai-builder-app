@@ -1,6 +1,7 @@
-import { useRef, useEffect } from 'react';
 import { Editor } from '@monaco-editor/react';
 import type { editor as MonacoEditor } from 'monaco-editor';
+import { useRef, useEffect } from 'react';
+
 import { getLanguageFromPath } from './utils/getLanguageFromPath';
 
 interface MonacoEditorWrapperProps {

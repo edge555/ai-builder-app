@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
 import type { SerializedProjectState } from '@ai-app-builder/shared/types';
+import { useState, useCallback } from 'react';
 
 const MAX_STACK_SIZE = 20;
 

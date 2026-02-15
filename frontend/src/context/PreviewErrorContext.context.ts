@@ -1,5 +1,6 @@
-import { createContext, useContext } from 'react';
 import type { RuntimeError } from '@/shared';
+import { createContext, useContext } from 'react';
+
 import type { RepairPhase } from '@/components/RepairStatus';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 

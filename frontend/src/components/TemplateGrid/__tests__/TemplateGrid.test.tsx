@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TemplateGrid } from '../TemplateGrid';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import type { StarterTemplate } from '@/data/templates';
+
+import { TemplateGrid } from '../TemplateGrid';
+
 
 describe('TemplateGrid', () => {
     const mockTemplates: StarterTemplate[] = [

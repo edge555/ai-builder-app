@@ -1,11 +1,13 @@
-import { useState, useMemo, memo, useRef, useDeferredValue } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Search, X, FolderSearch, ArrowUpDown, FolderPlus, Sparkles, Loader2 } from 'lucide-react';
+import { useState, useMemo, memo, useRef, useDeferredValue } from 'react';
+
+import type { ProjectMetadata } from '@/services/storage';
+
 import { ProjectCard } from './ProjectCard';
 import { ProjectCardSkeleton } from './ProjectCardSkeleton';
 import { ProjectGalleryTabs } from './ProjectGalleryTabs';
 import { RecentProjects } from './RecentProjects';
-import type { ProjectMetadata } from '@/services/storage';
 import './ProjectGallery.css';
 
 export interface ProjectGalleryProps {

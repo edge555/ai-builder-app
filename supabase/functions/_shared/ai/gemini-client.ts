@@ -50,9 +50,11 @@ interface GeminiAPIResponse {
 }
 
 /**
- * Sanitizes a URL by replacing the API key with a placeholder.
+ * Sanitizes a URL for logging.
+ * Since keys are passed via headers, this is now a passthrough but preserved for compatibility.
  */
 function sanitizeUrl(url: string): string {
+    // Keep redaction logic as a safety fallback in case a key is accidentally passed in URL
     return url.replace(/key=[^&]+/, 'key=[REDACTED]');
 }
 
@@ -158,7 +160,7 @@ export class GeminiClient {
      */
     private async makeStreamingRequest(request: GeminiStreamingRequest): Promise<string> {
         // Use alt=sse for proper Server-Sent Events format
-        const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent?key=${this.apiKey}&alt=sse`;
+        const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent?alt=sse`;
 
         const body = {
             contents: [
@@ -191,6 +193,7 @@ export class GeminiClient {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'x-goog-api-key': this.apiKey,
                 },
                 body: JSON.stringify(body),
                 signal: controller.signal,
@@ -272,7 +275,7 @@ export class GeminiClient {
      * Makes a single request to the Gemini API.
      */
     private async makeRequest(request: GeminiRequest): Promise<string> {
-        const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
+        const url = `${this.baseUrl}/models/${this.model}:generateContent`;
 
         const body = {
             contents: [
@@ -305,6 +308,7 @@ export class GeminiClient {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'x-goog-api-key': this.apiKey,
                 },
                 body: JSON.stringify(body),
                 signal: controller.signal,

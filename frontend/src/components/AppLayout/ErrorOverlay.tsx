@@ -4,8 +4,8 @@
  * Subscribes only to error state to avoid unnecessary re-renders of preview.
  */
 
-import { usePreviewErrorState, usePreviewErrorActions } from '@/context';
 import { RepairStatus } from '@/components/RepairStatus';
+import { usePreviewErrorState, usePreviewErrorActions } from '@/context';
 
 /**
  * Overlay component that displays error/repair status.

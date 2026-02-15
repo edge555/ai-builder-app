@@ -1,8 +1,9 @@
-import { useCallback, useRef } from 'react';
-import { useProject, useChatMessages, useGenerationActions } from '../context';
 import type { RepairAttempt } from '@/shared';
-import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError } from '../utils/error-messages';
+import { useCallback, useRef } from 'react';
+
+import { useProject, useChatMessages, useGenerationActions } from '../context';
 import { storageService, toStoredProject } from '../services/storage';
+import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError } from '../utils/error-messages';
 import { createLogger } from '../utils/logger';
 
 const submitLogger = createLogger('SubmitPrompt');

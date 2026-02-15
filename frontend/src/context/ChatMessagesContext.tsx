@@ -1,6 +1,8 @@
-import { useState, useCallback, useMemo, type ReactNode } from 'react';
-import type { ChatMessage } from '../components/ChatInterface/ChatInterface';
 import type { ChangeSummary, FileDiff } from '@ai-app-builder/shared/types';
+import { useState, useCallback, useMemo, type ReactNode } from 'react';
+
+import type { ChatMessage } from '../components/ChatInterface/ChatInterface';
+
 import { ChatMessagesContext, type ChatMessagesContextValue } from './ChatMessagesContext.context';
 
 /**

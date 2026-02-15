@@ -231,7 +231,7 @@ export class GeminiCache {
             expired: existing ? true : false,
         });
 
-        const url = `${this.baseUrl}/cachedContents?key=${this.apiKey}`;
+        const url = `${this.baseUrl}/cachedContents`;
 
         const body = {
             // For cachedContents, the model field expects the full resource name
@@ -261,6 +261,7 @@ export class GeminiCache {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'x-goog-api-key': this.apiKey,
                 },
                 body: JSON.stringify(body),
                 signal: controller.signal,

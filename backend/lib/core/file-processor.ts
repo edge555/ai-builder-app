@@ -14,7 +14,9 @@ let workerPool: WorkerPool | null = null;
 
 function getWorkerPool(): WorkerPool {
     if (!workerPool) {
-        const workerScript = path.resolve(__dirname, '../workers/prettier-worker.js');
+        // In Next.js, __dirname can be unpredictable when bundled.
+        // We use process.cwd() to resolve from the project root instead.
+        const workerScript = path.resolve(process.cwd(), 'lib/workers/prettier-worker.js');
         workerPool = new WorkerPool(workerScript);
     }
     return workerPool;
@@ -23,6 +25,7 @@ function getWorkerPool(): WorkerPool {
 export interface ProcessedFile {
     path: string;
     content: string;
+    warning?: { message: string; type: 'formatting' };
 }
 
 export interface FileProcessorOptions {
@@ -95,6 +98,7 @@ export async function processFile(
     }
 
     // Format with Prettier (via Worker Pool)
+    let formattingWarning: { message: string; type: 'formatting' } | undefined;
     try {
         const pool = getWorkerPool();
         const formatted = await pool.runTask({ content: normalizedContent, filePath: path });
@@ -104,23 +108,38 @@ export async function processFile(
             normalizedContent = formatted;
         }
     } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Unknown error';
         logger.error('Failed to format file', {
             path,
-            error: e instanceof Error ? e.message : 'Unknown error'
+            error: errorMsg
         });
         // On error, we keep normalizedContent as is (graceful degradation)
+        formattingWarning = {
+            message: `Failed to format with Prettier: ${errorMsg}. Using original content.`,
+            type: 'formatting'
+        };
     }
 
-    return { path: sanitizedPath, content: normalizedContent };
+    return {
+        path: sanitizedPath,
+        content: normalizedContent,
+        warning: formattingWarning
+    };
+}
+
+export interface ProcessFilesResult {
+    files: Record<string, string>;
+    warnings: Array<{ path: string; message: string; type: 'formatting' }>;
 }
 
 /**
  * Process multiple files in parallel for better performance.
+ * Returns both processed files and any warnings encountered.
  */
 export async function processFiles(
     files: Array<{ path: string; content: string }>,
     options: FileProcessorOptions = {}
-): Promise<Record<string, string>> {
+): Promise<ProcessFilesResult> {
     const validFiles = files.filter(f => f.path && f.content);
 
     const processed = await Promise.all(
@@ -128,9 +147,14 @@ export async function processFiles(
     );
 
     const result: Record<string, string> = {};
-    for (const { path, content } of processed) {
+    const warnings: Array<{ path: string; message: string; type: 'formatting' }> = [];
+
+    for (const { path, content, warning } of processed) {
         result[path] = content;
+        if (warning) {
+            warnings.push({ path, ...warning });
+        }
     }
 
-    return result;
+    return { files: result, warnings };
 }

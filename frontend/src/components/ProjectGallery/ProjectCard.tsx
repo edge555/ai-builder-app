@@ -1,6 +1,8 @@
-import { type MouseEvent, type CSSProperties } from 'react';
 import { Copy, Trash2, Clock } from 'lucide-react';
+import { type MouseEvent, type CSSProperties } from 'react';
+
 import type { ProjectMetadata } from '@/services/storage';
+
 import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
 
 export interface ProjectCardProps {

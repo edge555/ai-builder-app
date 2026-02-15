@@ -1,6 +1,8 @@
 import { ArrowRight } from 'lucide-react';
-import { ProjectCard } from './ProjectCard';
+
 import type { ProjectMetadata } from '@/services/storage';
+
+import { ProjectCard } from './ProjectCard';
 import './RecentProjects.css';
 
 export interface RecentProjectsProps {

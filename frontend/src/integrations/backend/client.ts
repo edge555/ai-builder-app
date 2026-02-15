@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@/integrations/supabase/types';
 
 import { config } from '@/config';
+import type { Database } from '@/integrations/supabase/types';
 import { createLogger } from '@/utils/logger';
 
 const backendClientLogger = createLogger('Backend');

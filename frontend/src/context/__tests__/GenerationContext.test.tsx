@@ -1,9 +1,10 @@
+import { render, screen, act } from '@testing-library/react';
 import { useContext } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+
+import { ErrorAggregatorProvider } from '../../context/ErrorAggregatorContext';
 import { GenerationProvider } from '../GenerationContext';
 import { GenerationContext } from '../GenerationContext.context';
-import { ErrorAggregatorProvider } from '../../context/ErrorAggregatorContext';
 
 // Mock the SSE parser to avoid real network calls and complex stream mocking in this integration test
 vi.mock('@/utils/sse-parser', () => ({

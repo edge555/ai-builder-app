@@ -37,13 +37,15 @@ async function runVerification() {
     console.log(`Processing ${files.length} files...`);
 
     try {
-        const results = await processFiles(files);
+        const processResult = await processFiles(files);
+        const results = processResult.files;
         const duration = Date.now() - startTime;
 
         console.log('--- Results ---');
         console.log(`Duration: ${duration}ms`);
         console.log(`Max Event Loop Lag: ${maxLag}ms`);
         console.log(`Processed files: ${Object.keys(results).length}`);
+        console.log(`Warnings: ${processResult.warnings.length}`);
 
         // Check if formatting actually happened
         const firstFile = results['file_0.ts'];
@@ -57,6 +59,14 @@ async function runVerification() {
             console.log('SUCCESS: Malformed file returned original content (Graceful degradation).');
         } else {
             console.error('FAILURE: Malformed file was modified or lost:', malformedFile);
+        }
+
+        // Display warnings if any
+        if (processResult.warnings.length > 0) {
+            console.log('\n--- Warnings ---');
+            processResult.warnings.forEach(w => {
+                console.log(`[${w.type}] ${w.path}: ${w.message}`);
+            });
         }
 
         if (maxLag > 100) {

@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import './ConfirmDialog.css';
 
 export interface ConfirmDialogProps {

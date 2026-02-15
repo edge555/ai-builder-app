@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import { storageService } from '../StorageService';
 import type { StoredProject, SerializedChatMessage } from '../types';
 

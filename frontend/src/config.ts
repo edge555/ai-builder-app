@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 import { createLogger } from './utils/logger';
 
 const configLogger = createLogger('Config');

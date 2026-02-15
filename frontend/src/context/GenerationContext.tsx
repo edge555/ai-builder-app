@@ -1,11 +1,17 @@
-import { useState, useCallback, useMemo, useRef, useEffect, type ReactNode } from 'react';
-import type { LoadingPhase } from '../components/ChatInterface/ChatInterface';
 import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState, RepairAttempt } from '@ai-app-builder/shared/types';
-import { config as appConfig } from '../config';
+import { useState, useCallback, useMemo, useRef, useEffect, type ReactNode } from 'react';
+
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
-import { parseSSEStream } from '@/utils/sse-parser';
-import { buildRepairPrompt } from '@/utils/repair-prompt';
 import { getUserFriendlyErrorMessage } from '@/utils/error-messages';
+import { createLogger } from '@/utils/logger';
+import { buildRepairPrompt } from '@/utils/repair-prompt';
+import { parseSSEStream } from '@/utils/sse-parser';
+
+import type { LoadingPhase } from '../components/ChatInterface/ChatInterface';
+import { config as appConfig } from '../config';
+
+
+import { useErrorAggregator } from './ErrorAggregatorContext';
 import {
   GenerationContext,
   GenerationStateContext,
@@ -15,8 +21,7 @@ import {
   type GenerationActionsValue,
   type StreamingState
 } from './GenerationContext.context';
-import { useErrorAggregator } from './ErrorAggregatorContext';
-import { createLogger } from '@/utils/logger';
+
 
 const genLogger = createLogger('Generation');
 
@@ -118,6 +123,8 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       textLength: 0,
       error: null,
       lastHeartbeat: Date.now(),
+      warnings: [],
+      summary: null,
     });
 
     try {
@@ -155,6 +162,20 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
             currentFile: data.path,
             filesReceived: data.index + 1,
             totalFiles: data.total,
+            lastHeartbeat: Date.now(),
+          } : null);
+        },
+        onWarning: (warning) => {
+          setStreamingState(prev => prev ? {
+            ...prev,
+            warnings: [...prev.warnings, warning],
+            lastHeartbeat: Date.now(),
+          } : null);
+        },
+        onStreamEnd: (summary) => {
+          setStreamingState(prev => prev ? {
+            ...prev,
+            summary,
             lastHeartbeat: Date.now(),
           } : null);
         },

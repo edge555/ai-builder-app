@@ -1,4 +1,3 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
 import type {
   SerializedVersion,
   SerializedProjectState,
@@ -6,6 +5,8 @@ import type {
   RevertVersionResponse,
   FileDiff
 } from '@ai-app-builder/shared/types';
+import { useState, useCallback, useMemo, useRef } from 'react';
+
 import { backend } from '@/integrations/backend/client';
 
 import { VersionContext, type VersionProviderProps, type VersionContextValue } from './VersionContext.context';

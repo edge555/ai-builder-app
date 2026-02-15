@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+
 import type { ChatMessage } from './ChatInterface';
 import './CollapsibleMessage.css';
 

@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
+
 import type { StarterTemplate } from '@/data/templates';
 import './TemplateGrid.css';
 

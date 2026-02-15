@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
 import type { FileDiff, DiffHunk, DiffChange } from '@/shared';
+import React, { useState, useMemo } from 'react';
 import './DiffViewer.css';
 
 /**
