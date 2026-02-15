@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { parseSSEStream } from '../sse-parser';
 
 describe('parseSSEStream', () => {

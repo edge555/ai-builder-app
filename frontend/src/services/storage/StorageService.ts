@@ -1,5 +1,6 @@
-import type { StoredProject, ProjectMetadata, SerializedChatMessage } from './types';
 import { createLogger } from '@/utils/logger';
+
+import type { StoredProject, ProjectMetadata, SerializedChatMessage } from './types';
 
 const storageLogger = createLogger('Storage');
 

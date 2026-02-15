@@ -1,7 +1,8 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useSubmitPrompt } from '../useSubmitPrompt';
+
 import { useProject, useChatMessages, useGenerationActions } from '../../context';
+import { useSubmitPrompt } from '../useSubmitPrompt';
 
 // Mock context hooks
 vi.mock('../../context', () => ({

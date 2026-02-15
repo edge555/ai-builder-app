@@ -1,9 +1,14 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import { useAutoSave } from '../useAutoSave';
-import { storageService } from '@/services/storage';
 import type { SerializedProjectState } from '@ai-app-builder/shared/types';
+import { renderHook, act } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+
 import type { ChatMessage } from '@/components/ChatInterface/ChatInterface';
+import { storageService } from '@/services/storage';
+
+import { useAutoSave } from '../useAutoSave';
+
+
+
 
 // Mock storage service
 vi.mock('@/services/storage', () => ({

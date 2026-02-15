@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock sub-components with CORRECT paths relative to THIS test file
 vi.mock('@codesandbox/sandpack-react', () => ({

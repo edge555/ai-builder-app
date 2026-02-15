@@ -1,6 +1,11 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import type { RuntimeError } from '@/shared';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+
 import type { RepairPhase } from '@/components/RepairStatus';
+import type { AggregatedErrors } from '@/services/ErrorAggregator';
+import { createLogger } from '@/utils/logger';
+
+import { useErrorAggregator } from './ErrorAggregatorContext';
 import {
   PreviewErrorContext,
   PreviewErrorStateContext,
@@ -9,9 +14,6 @@ import {
   type PreviewErrorState,
   type PreviewErrorActions
 } from './PreviewErrorContext.context';
-import { useErrorAggregator } from './ErrorAggregatorContext';
-import type { AggregatedErrors } from '@/services/ErrorAggregator';
-import { createLogger } from '@/utils/logger';
 
 const previewErrorLogger = createLogger('PreviewError');
 

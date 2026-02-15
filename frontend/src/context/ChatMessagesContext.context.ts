@@ -1,6 +1,7 @@
-import { createContext, useContext } from 'react';
-import type { ChatMessage } from '../components/ChatInterface';
 import type { ChangeSummary, FileDiff } from '@ai-app-builder/shared/types';
+import { createContext, useContext } from 'react';
+
+import type { ChatMessage } from '../components/ChatInterface';
 
 /**
  * Chat messages context value.

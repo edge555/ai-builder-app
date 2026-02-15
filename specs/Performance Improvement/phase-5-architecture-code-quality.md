@@ -5,7 +5,7 @@
 
 ---
 
-## [ ] Task 5.1: Move Prettier Formatting to Worker Pool
+## [x] Task 5.1: Move Prettier Formatting to Worker Pool
 
 **Files:**
 - `backend/lib/core/file-processor.ts` (lines 50-100)
@@ -28,7 +28,7 @@
 
 ---
 
-## [ ] Task 5.2: Optimize Incremental JSON Parser (O(n^2) -> O(n))
+## [x] Task 5.2: Optimize Incremental JSON Parser (O(n^2) -> O(n))
 
 **Files:**
 - `backend/lib/utils/incremental-json-parser.ts` (lines 20-99)
@@ -49,7 +49,7 @@
 
 ---
 
-## [ ] Task 5.3: Cache Dependency Graph Between Calls
+## [x] Task 5.3: Cache Dependency Graph Between Calls
 
 **Files:**
 - `backend/lib/analysis/dependency-graph.ts` (lines 29-58)
@@ -70,7 +70,7 @@
 
 ---
 
-## [ ] Task 5.4: Split Large Frontend Components
+## [x] Task 5.4: Split Large Frontend Components
 
 **Files:**
 - `frontend/src/components/AppLayout/AppLayout.tsx` (510 lines)
@@ -140,7 +140,7 @@ While basic Zod validation exists, there are no limits on:
 
 ---
 
-## [ ] Task 5.6: Use Request Headers for Gemini API Key
+## [x] Task 5.6: Use Request Headers for Gemini API Key
 
 **Files:**
 - `backend/lib/ai/gemini-client.ts` (line 194)
@@ -165,7 +165,7 @@ API key is passed in URL query parameter: `?key=${this.apiKey}`. This appears in
 
 ---
 
-## [ ] Task 5.7: Add Comprehensive ESLint Rules
+## [x] Task 5.7: Add Comprehensive ESLint Rules
 
 **Files:**
 - `frontend/eslint.config.js`

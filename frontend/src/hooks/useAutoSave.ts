@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
 import type { SerializedProjectState } from '@/shared';
+import { useEffect, useState, useRef } from 'react';
+
 import type { ChatMessage } from '@/components';
 import { storageService, toStoredProject } from '@/services/storage';
 import { createLogger } from '@/utils/logger';

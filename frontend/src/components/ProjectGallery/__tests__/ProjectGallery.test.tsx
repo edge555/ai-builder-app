@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import { ProjectGallery } from '../ProjectGallery';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import type { StoredProject } from '@/services/storage';
+
+import { ProjectGallery } from '../ProjectGallery';
+
 
 describe('ProjectGallery', () => {
     const mockProjects: StoredProject[] = [

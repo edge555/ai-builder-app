@@ -1,12 +1,17 @@
-import { useState, useEffect, useRef, useCallback, lazy, Suspense, memo } from 'react';
 import type { SerializedProjectState } from '@/shared';
-import { useProject } from '@/context/ProjectContext.context';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense, memo } from 'react';
+
+
 import { ComponentErrorBoundary } from '@/components/ComponentErrorBoundary';
+import { useProject } from '@/context/ProjectContext.context';
+
+import { CodeEditorSkeleton } from './CodeEditorSkeleton';
 import { FileTreeSidebar } from './FileTreeSidebar';
 import { TabBar } from './TabBar';
-const MonacoEditorWrapper = lazy(() => import('./MonacoEditorWrapper').then(m => ({ default: m.MonacoEditorWrapper })));
-import { CodeEditorSkeleton } from './CodeEditorSkeleton';
+
 import './CodeEditorView.css';
+
+const MonacoEditorWrapper = lazy(() => import('./MonacoEditorWrapper').then(m => ({ default: m.MonacoEditorWrapper })));
 
 interface CodeEditorViewProps {
   files: Record<string, string>;

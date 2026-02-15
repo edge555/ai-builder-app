@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import { ChatMessagesProvider } from '../ChatMessagesContext';
 import { useChatMessages } from '../ChatMessagesContext.context';
 

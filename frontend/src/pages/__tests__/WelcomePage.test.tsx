@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { WelcomePage } from '../WelcomePage';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import type { StoredProject } from '@/services/storage';
+
+import { WelcomePage } from '../WelcomePage';
+
 
 // Mock child components
 vi.mock('@/components/TemplateGrid/TemplateGrid', () => ({

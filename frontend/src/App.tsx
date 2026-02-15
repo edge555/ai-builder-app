@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
-import { WelcomePage, BuilderPage } from './pages';
+
 import { storageService, type ProjectMetadata } from '@/services/storage';
 import { createLogger } from '@/utils/logger';
+
+import { WelcomePage, BuilderPage } from './pages';
 import './App.css';
 
 const appLogger = createLogger('App');

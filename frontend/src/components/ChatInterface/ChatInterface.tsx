@@ -1,17 +1,22 @@
-import { useState, useRef, useEffect, forwardRef, memo } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ChangeSummary, FileDiff } from '@ai-app-builder/shared/types';
-import { ErrorMessage, classifyError } from '../ErrorMessage';
-import { PromptSuggestions } from '../PromptSuggestions';
-import { StreamingIndicator } from '../StreamingIndicator';
-import { MarkdownRenderer } from '../MarkdownRenderer/MarkdownRenderer';
-import { FileChangeSummary } from '../FileChangeSummary/FileChangeSummary';
-import { QuickActions } from '../QuickActions/QuickActions';
-import { CollapsibleMessage } from './CollapsibleMessage';
-import { CollapseAllButton } from './CollapseAllButton';
-import { useCollapsibleMessages } from '@/hooks/useCollapsibleMessages';
-import type { PromptSuggestion } from '@/data/prompt-suggestions';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { useState, useRef, useEffect, forwardRef, memo } from 'react';
+
 import type { StreamingState } from '@/context';
+import type { PromptSuggestion } from '@/data/prompt-suggestions';
+import { useCollapsibleMessages } from '@/hooks/useCollapsibleMessages';
+
+import { ErrorMessage, classifyError } from '../ErrorMessage';
+import { FileChangeSummary } from '../FileChangeSummary/FileChangeSummary';
+import { MarkdownRenderer } from '../MarkdownRenderer/MarkdownRenderer';
+import { PromptSuggestions } from '../PromptSuggestions';
+import { QuickActions } from '../QuickActions/QuickActions';
+import { StreamingIndicator } from '../StreamingIndicator';
+
+import { ChatInput } from './ChatInput';
+import { CollapseAllButton } from './CollapseAllButton';
+import { CollapsibleMessage } from './CollapsibleMessage';
+import { LoadingIndicator, type LoadingPhase } from './LoadingIndicator';
 import './ChatInterface.css';
 
 /**
@@ -26,11 +31,6 @@ export interface ChatMessage {
   diffs?: FileDiff[];
   isError?: boolean;
 }
-
-/**
- * Loading phase for progress indication.
- */
-export type LoadingPhase = 'idle' | 'generating' | 'modifying' | 'validating' | 'processing';
 
 /**
  * Threshold for enabling message virtualization.
@@ -94,11 +94,9 @@ const ChatInterfaceComponent = function ChatInterface({
   onAbort,
   onFileClick,
 }: ChatInterfaceProps) {
-  const [inputValue, setInputValue] = useState('');
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Determine if we should use virtualization
   const shouldVirtualize = messages.length > VIRTUALIZATION_THRESHOLD;
@@ -140,19 +138,9 @@ const ChatInterfaceComponent = function ChatInterface({
     }
   }, [messages, shouldVirtualize, virtualizer]);
 
-  // Focus input on mount
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmedInput = inputValue.trim();
-    if (!trimmedInput || isLoading) return;
-
-    setLastPrompt(trimmedInput);
-    setInputValue('');
-    await onSubmitPrompt(trimmedInput);
+  const handleSubmit = async (prompt: string) => {
+    setLastPrompt(prompt);
+    await onSubmitPrompt(prompt);
   };
 
   const handleRetry = () => {
@@ -163,18 +151,9 @@ const ChatInterfaceComponent = function ChatInterface({
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Submit on Ctrl+Enter (Windows/Linux) or Meta+Enter (Mac)
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
-  };
-
   const handleSuggestionSelect = (prompt: string) => {
-    setInputValue(prompt);
-    // Focus the input so user can modify if needed
-    inputRef.current?.focus();
+    // Directly submit the suggestion
+    handleSubmit(prompt);
   };
 
   return (
@@ -285,57 +264,21 @@ const ChatInterfaceComponent = function ChatInterface({
       {messages.length > 0 && !isLoading && (
         <QuickActions
           suggestions={suggestions}
-          onSelect={handleSuggestionSelect}
+          onSelect={(prompt) => {
+            // QuickActions will be used directly with ChatInput
+            handleSubmit(prompt);
+          }}
           disabled={isLoading}
           error={error}
         />
       )}
 
-      <form className="chat-input-form" onSubmit={handleSubmit}>
-        <textarea
-          ref={inputRef}
-          className="chat-input ui-textarea"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Describe your app or request a modification..."
-          disabled={isLoading}
-          rows={3}
-          aria-label="Chat input"
-        />
-        <button
-          type="submit"
-          className="chat-submit-button ui-button"
-          data-variant="primary"
-          disabled={isLoading || !inputValue.trim()}
-          aria-label="Send message"
-        >
-          {isLoading ? (
-            <span className="export-button-spinner"></span>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-            </svg>
-          )}
-        </button>
-        {isLoading && onAbort && (
-          <button
-            type="button"
-            className="chat-abort-button ui-button"
-            data-variant="secondary"
-            onClick={onAbort}
-            aria-label="Cancel request"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="15" y1="9" x2="9" y2="15"></line>
-              <line x1="9" y1="9" x2="15" y2="15"></line>
-            </svg>
-            Cancel
-          </button>
-        )}
-      </form>
+      <ChatInput
+        onSubmit={handleSubmit}
+        disabled={isLoading}
+        showAbort={isLoading && Boolean(onAbort)}
+        onAbort={onAbort}
+      />
     </div>
   );
 };
@@ -470,102 +413,5 @@ const MessageItemWithRef = memo(
 
 MessageItemWithRef.displayName = 'MessageItem';
 
-
-/**
- * detailed loading steps for different phases to simulate complex processing.
- */
-const LOADING_STEPS: Record<LoadingPhase, string[]> = {
-  idle: ['Ready'],
-  generating: [
-    'Analyzing requirements...',
-    'Designing application architecture...',
-    'Scaffolding component tree...',
-    'Generating data models...',
-    'Constructing API routes...',
-    'Writing business logic...',
-    'Optimizing build configuration...',
-    'Finalizing project structure...',
-  ],
-  modifying: [
-    'Analyzing current project state...',
-    'Reading source files...',
-    'Calculating dependency graph...',
-    'Designing requested changes...',
-    'Applying code transformations...',
-    'Updating type definitions...',
-    'Verifying integrity...',
-    'Rebuilding affected modules...',
-  ],
-  validating: [
-    'Running static analysis...',
-    'Checking type safety...',
-    'Verifying imports...',
-    'Ensuring compilation success...',
-  ],
-  processing: ['Processing...'],
-};
-
-/**
- * Props for the LoadingIndicator component.
- */
-interface LoadingIndicatorProps {
-  phase?: LoadingPhase;
-}
-
-/**
- * Loading indicator shown during API calls.
- * Shows cycling messages to simulate complex background processing.
- * 
- * Requirements: 8.2
- */
-const LoadingIndicator = forwardRef<HTMLDivElement, LoadingIndicatorProps>(function LoadingIndicator(
-  { phase = 'processing' },
-  ref
-) {
-  const [messageIndex, setMessageIndex] = useState(0);
-
-  // Reset index when phase changes
-  useEffect(() => {
-    setMessageIndex(0);
-  }, [phase]);
-
-  // Cycle through messages
-  useEffect(() => {
-    const steps = LOADING_STEPS[phase];
-    if (!steps || steps.length <= 1) return;
-
-    const interval = setInterval(() => {
-      setMessageIndex((prev) => (prev + 1) % steps.length);
-    }, 2000); // Change message every 2 seconds
-
-    return () => clearInterval(interval);
-  }, [phase]);
-
-  const steps = LOADING_STEPS[phase] || ['Processing...'];
-  const currentMessage = steps[messageIndex % steps.length];
-
-  return (
-    <div ref={ref} className="chat-loading" role="status" aria-label={currentMessage}>
-      <div className="chat-loading-content">
-        <div className="chat-loading-spinner">
-          <div className="chat-loading-spinner-ring"></div>
-        </div>
-        <div className="chat-loading-info">
-          <span className="chat-loading-text">{currentMessage}</span>
-        </div>
-      </div>
-      <div className="chat-loading-progress">
-        <div
-          className="chat-loading-progress-bar"
-          style={{
-            animationDuration: `${Math.max(2, steps.length * 2)}s`
-          }}
-        ></div>
-      </div>
-    </div>
-  );
-});
-
-LoadingIndicator.displayName = 'LoadingIndicator';
 
 export default ChatInterface;

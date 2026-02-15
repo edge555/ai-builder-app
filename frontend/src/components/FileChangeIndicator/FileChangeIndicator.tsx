@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
 import type { ChangeSummary } from '@/shared';
 import { FileText, FilePlus, FileEdit, FileX } from 'lucide-react';
+import React, { useState } from 'react';
 import './FileChangeIndicator.css';
 
 export interface FileChangeIndicatorProps {

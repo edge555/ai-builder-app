@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
 import { ArrowRight, Sparkles, Plus, Eye, Zap, Download, Code } from 'lucide-react';
-import { starterTemplates } from '@/data/templates';
-import { TemplateGrid } from '@/components/TemplateGrid/TemplateGrid';
-import { ProjectGallery } from '@/components/ProjectGallery/ProjectGallery';
-import { ThemeToggle } from '@/components/ThemeToggle/ThemeToggle';
+import { useState, useEffect, useRef } from 'react';
+
 import { ConfirmDialog } from '@/components/ConfirmDialog/ConfirmDialog';
+import { ProjectGallery } from '@/components/ProjectGallery/ProjectGallery';
+import { TemplateGrid } from '@/components/TemplateGrid/TemplateGrid';
+import { ThemeToggle } from '@/components/ThemeToggle/ThemeToggle';
+import { starterTemplates } from '@/data/templates';
 import type { ProjectMetadata } from '@/services/storage';
 import './WelcomePage.css';
 
@@ -90,13 +91,14 @@ export function WelcomePage({
       }
     );
 
-    if (heroRef.current) {
-      observer.observe(heroRef.current);
+    const currentHeroRef = heroRef.current;
+    if (currentHeroRef) {
+      observer.observe(currentHeroRef);
     }
 
     return () => {
-      if (heroRef.current) {
-        observer.unobserve(heroRef.current);
+      if (currentHeroRef) {
+        observer.unobserve(currentHeroRef);
       }
     };
   }, []);

@@ -13,6 +13,12 @@ const nextConfig = {
     maxInactiveAge: 15000, // Dispose inactive pages after 15 seconds
     pagesBufferLength: 2, // Keep only 2 pages in memory
   },
+
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
+  },
 };
 
 module.exports = nextConfig;

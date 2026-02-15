@@ -1,25 +1,23 @@
-import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+import { Sparkles, ArrowLeft, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
-import { ChatInterface } from '../../components';
-import { PreviewSkeleton } from '../PreviewPanel/PreviewSkeleton';
-const PreviewPanel = lazy(() => import('../PreviewPanel/PreviewPanel'));
-import { PreviewErrorBoundary } from '../PreviewPanel/PreviewErrorBoundary';
+import { useAutoSave } from '@/hooks/useAutoSave';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+
+import { useProject, useChatMessages, useGenerationState } from '../../context';
+import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
+import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
 import { ExportButton } from '../ExportButton';
 import { PanelToggle, type ActivePanel } from '../PanelToggle';
-import { UndoRedoButtons } from '../UndoRedoButtons';
 import { StatusIndicator } from '../StatusIndicator';
-import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
-import { ErrorOverlay } from './ErrorOverlay';
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-import { useAutoSave } from '@/hooks/useAutoSave';
-import { usePreviewErrorHandlers } from '@/hooks/usePreviewErrorHandlers';
-import { initialSuggestions, analyzeProjectForSuggestions } from '@/data/prompt-suggestions';
-import { type RuntimeError } from '@/shared';
-import type { AggregatedErrors } from '@/services/ErrorAggregator';
-import { Sparkles, ArrowLeft, PanelLeftClose, PanelLeft } from 'lucide-react';
-import { createLogger } from '@/utils/logger';
-import { useProject, useChatMessages, useGenerationState, useGenerationActions } from '../../context';
-import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
+import { UndoRedoButtons } from '../UndoRedoButtons';
+
+import { ChatPanel } from './ChatPanel';
+import { PreviewSection } from './PreviewSection';
+import { ResizablePanel } from './ResizablePanel';
+
+
+
 
 const RESIZE_MIN_WIDTH = 300;
 const RESIZE_MAX_FRACTION = 0.6;
@@ -50,173 +48,6 @@ function formatTimestamp(date: Date): string {
     return date.toLocaleDateString();
 }
 
-/**
- * Main chat panel component that uses the chat context.
- */
-interface ChatPanelProps {
-    onFileClick?: (filePath: string) => void;
-}
-
-function ChatPanel({ onFileClick }: ChatPanelProps) {
-    const { messages } = useChatMessages();
-    const { isLoading, loadingPhase, error, streamingState, isStreaming } = useGenerationState();
-    const { clearError, abortCurrentRequest } = useGenerationActions();
-    const { projectState } = useProject();
-    const { submitPrompt } = useSubmitPrompt();
-    const [lastPrompt, setLastPrompt] = useState<string | null>(null);
-
-    // Generate context-aware suggestions
-    const suggestions = useMemo(() => {
-        if (!projectState) {
-            return initialSuggestions;
-        }
-        return analyzeProjectForSuggestions(projectState.files);
-    }, [projectState]);
-
-    const handleSubmit = useCallback(async (prompt: string) => {
-        setLastPrompt(prompt);
-        await submitPrompt(prompt);
-    }, [submitPrompt]);
-
-    const handleRetry = useCallback(() => {
-        if (lastPrompt) {
-            clearError();
-            submitPrompt(lastPrompt);
-        }
-    }, [lastPrompt, clearError, submitPrompt]);
-
-    return (
-        <ChatInterface
-            messages={messages}
-            isLoading={isLoading}
-            loadingPhase={loadingPhase}
-            onSubmitPrompt={handleSubmit}
-            error={error}
-            onClearError={clearError}
-            onRetry={handleRetry}
-            suggestions={suggestions}
-            streamingState={streamingState}
-            isStreaming={isStreaming}
-            onAbort={abortCurrentRequest}
-            onFileClick={onFileClick}
-        />
-    );
-}
-
-/**
- * Preview panel component that uses the chat context for project state.
- * Updates automatically when ProjectState changes.
- * Wrapped with PreviewErrorBoundary for auto-repair functionality.
- * 
- * Requirements: 9.2, 9.3
- */
-const appLayoutLogger = createLogger('AppLayout');
-
-function PreviewSection({ activePanel }: { activePanel: ActivePanel }) {
-    const { projectState } = useProject();
-    const { isLoading, loadingPhase, isAutoRepairing } = useGenerationState();
-    const { autoRepair, resetAutoRepair } = useGenerationActions();
-
-    // Use the new handler hook that doesn't cause re-renders on state changes
-    const errorHandlers = usePreviewErrorHandlers();
-
-    // Store project state in ref for use in callbacks
-    const projectStateRef = useRef(projectState);
-    useEffect(() => {
-        projectStateRef.current = projectState;
-    }, [projectState]);
-
-    // Reset auto-repair attempts when project state changes successfully
-    useEffect(() => {
-        const repairPhase = errorHandlers.getRepairPhase();
-        if (repairPhase === 'idle' || repairPhase === 'success') {
-            resetAutoRepair();
-        }
-    }, [projectState?.currentVersionId, errorHandlers, resetAutoRepair]);
-
-    const handlePreviewError = useCallback((runtimeError: RuntimeError) => {
-        appLayoutLogger.error('Preview error captured', {
-            type: runtimeError.type,
-            message: runtimeError.message
-        });
-        errorHandlers.reportError(runtimeError);
-    }, [errorHandlers]);
-
-    const handleErrorsReady = useCallback((errors: AggregatedErrors) => {
-        appLayoutLogger.info('Errors ready for repair', { totalCount: errors.totalCount });
-        errorHandlers.reportAggregatedErrors(errors);
-    }, [errorHandlers]);
-
-    const handleAutoRepair = useCallback(async (runtimeError: RuntimeError) => {
-        if (!errorHandlers.shouldAutoRepair()) {
-            return;
-        }
-
-        errorHandlers.startAutoRepair();
-
-        try {
-            const success = await autoRepair(runtimeError, projectStateRef.current);
-            errorHandlers.completeAutoRepair(success);
-        } catch (err) {
-            appLayoutLogger.error('Auto-repair failed', { err });
-            errorHandlers.completeAutoRepair(false);
-        }
-    }, [autoRepair, errorHandlers]);
-
-    const handleBundlerIdle = useCallback(() => {
-        // Bundler recovered, clear errors
-        const repairPhase = errorHandlers.getRepairPhase();
-        if (repairPhase !== 'repairing') {
-            errorHandlers.clearAllErrors();
-            errorHandlers.setRepairPhase('idle');
-        }
-    }, [errorHandlers]);
-
-    // Auto-trigger repair when errors are ready and repair phase is 'repairing'
-    useEffect(() => {
-        const repairPhase = errorHandlers.getRepairPhase();
-        const aggregatedErrors = errorHandlers.getAggregatedErrors();
-        const isAutoRepairingCurrent = errorHandlers.getIsAutoRepairing();
-
-        if (repairPhase === 'repairing' && aggregatedErrors && aggregatedErrors.totalCount > 0 && !isAutoRepairingCurrent) {
-            const firstError = aggregatedErrors.errors[0];
-            if (firstError) {
-                handleAutoRepair(firstError);
-            }
-        }
-    }, [errorHandlers, handleAutoRepair]);
-
-    // Determine if auto-repair button should be available
-    // Note: This is the only place we actually need to subscribe to state for rendering
-    // We'll keep this minimal and accept the re-render since it's needed for the UI
-    const canAutoRepair = projectState !== null;
-
-    return (
-        <>
-            <PreviewErrorBoundary
-                onError={handlePreviewError}
-                onAutoRepair={handleAutoRepair}
-                canAutoRepair={canAutoRepair}
-                isAutoRepairing={isAutoRepairing}
-            >
-                <Suspense fallback={loadingPhase !== 'idle' ? <PreviewSkeleton phase={loadingPhase} /> : null}>
-                    <PreviewPanel
-                        projectState={projectState}
-                        isLoading={isLoading}
-                        loadingPhase={loadingPhase}
-                        onErrorsReady={handleErrorsReady}
-                        errorMonitoringEnabled={!isLoading && projectState !== null}
-                        onBundlerIdle={handleBundlerIdle}
-                        forceCodeView={activePanel === 'code'}
-                    />
-                </Suspense>
-            </PreviewErrorBoundary>
-
-            {/* Error overlay displays repair status independently */}
-            <ErrorOverlay />
-        </>
-    );
-}
 
 export interface AppLayoutProps {
     /** Optional initial prompt to submit on mount */
@@ -275,9 +106,6 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
         return Number.isFinite(parsed) ? parsed : SIDEBAR_DEFAULT_WIDTH;
     });
     const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
-    const windowWidthRef = useRef(window.innerWidth); // Ref for resize callback (no re-render)
-    const isResizing = useRef(false);
-    const rafId = useRef<number | null>(null); // For requestAnimationFrame throttling
 
     const maxSidePanelWidth = Math.max(
         RESIZE_MIN_WIDTH,
@@ -286,9 +114,7 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
 
     useEffect(() => {
         const onResize = () => {
-            const newWidth = window.innerWidth;
-            windowWidthRef.current = newWidth; // Update ref immediately
-            setWindowWidth(newWidth); // Update state for UI
+            setWindowWidth(window.innerWidth);
         };
         window.addEventListener('resize', onResize);
         return () => window.removeEventListener('resize', onResize);
@@ -327,56 +153,6 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
         onRedo: redo,
         onToggleSidebar: toggleSidebar,
     });
-
-    const startResizing = useCallback(() => {
-        isResizing.current = true;
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-    }, []);
-
-    const stopResizing = useCallback(() => {
-        isResizing.current = false;
-        document.body.style.cursor = 'default';
-        document.body.style.userSelect = 'auto';
-
-        // Cancel any pending RAF
-        if (rafId.current !== null) {
-            cancelAnimationFrame(rafId.current);
-            rafId.current = null;
-        }
-    }, []);
-
-    const resize = useCallback((e: MouseEvent) => {
-        if (!isResizing.current) return;
-
-        // Cancel previous RAF if it exists
-        if (rafId.current !== null) {
-            cancelAnimationFrame(rafId.current);
-        }
-
-        // Throttle updates to 60fps using requestAnimationFrame
-        rafId.current = requestAnimationFrame(() => {
-            // Use ref to avoid re-creating this callback when windowWidth changes
-            const currentWindowWidth = windowWidthRef.current;
-
-            // Constraints: min 300px, max 600px or some reasonable fraction of window width
-            const newWidth = Math.max(
-                RESIZE_MIN_WIDTH,
-                Math.min(e.clientX, currentWindowWidth * RESIZE_MAX_FRACTION)
-            );
-            setSidePanelWidth(newWidth);
-            rafId.current = null;
-        });
-    }, []); // No dependencies! Event listeners won't re-register
-
-    useEffect(() => {
-        window.addEventListener('mousemove', resize);
-        window.addEventListener('mouseup', stopResizing);
-        return () => {
-            window.removeEventListener('mousemove', resize);
-            window.removeEventListener('mouseup', stopResizing);
-        };
-    }, [resize, stopResizing]);
 
     // Format save indicator text
     const saveIndicatorText = isSaving
@@ -451,7 +227,11 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                     <div className="sidebar-backdrop" onClick={handleBackdropClick} />
                 )}
 
-                <section
+                <ResizablePanel
+                    width={sidePanelWidth}
+                    onWidthChange={setSidePanelWidth}
+                    minWidth={RESIZE_MIN_WIDTH}
+                    maxWidth={maxSidePanelWidth}
                     className={`chat-panel ${activePanel === 'chat' ? 'active' : ''} ${isSidebarCollapsed ? 'collapsed' : ''}`}
                     style={{
                         flexBasis: windowWidth > DESKTOP_BREAKPOINT
@@ -480,46 +260,7 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                             </button>
                         </div>
                     )}
-                </section>
-
-                <div
-                    className="resizer"
-                    onMouseDown={startResizing}
-                    role="separator"
-                    aria-orientation="vertical"
-                    aria-label="Resize panels"
-                    tabIndex={0}
-                    aria-valuemin={RESIZE_MIN_WIDTH}
-                    aria-valuemax={maxSidePanelWidth}
-                    aria-valuenow={sidePanelWidth}
-                    onKeyDown={(e) => {
-                        const step = e.shiftKey ? 72 : 24;
-
-                        if (e.key === 'ArrowLeft') {
-                            e.preventDefault();
-                            setSidePanelWidth((w) => Math.max(RESIZE_MIN_WIDTH, w - step));
-                            return;
-                        }
-
-                        if (e.key === 'ArrowRight') {
-                            e.preventDefault();
-                            setSidePanelWidth((w) => Math.min(maxSidePanelWidth, w + step));
-                            return;
-                        }
-
-                        if (e.key === 'Home') {
-                            e.preventDefault();
-                            setSidePanelWidth(RESIZE_MIN_WIDTH);
-                            return;
-                        }
-
-                        if (e.key === 'End') {
-                            e.preventDefault();
-                            setSidePanelWidth(maxSidePanelWidth);
-                            return;
-                        }
-                    }}
-                />
+                </ResizablePanel>
 
                 <section className={`preview-section ${activePanel === 'preview' || activePanel === 'code' ? 'active' : ''}`} data-view={activePanel === 'code' ? 'code' : 'preview'}>
                     <PreviewSection activePanel={activePanel} />

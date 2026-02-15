@@ -1,7 +1,8 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { buildFileTree, TreeNode } from './utils/buildFileTree';
+import { useMemo, useState, useEffect, useRef } from 'react';
+
 import { FileTreeNode } from './FileTreeNode';
+import { buildFileTree, TreeNode } from './utils/buildFileTree';
 
 /**
  * Threshold for enabling file tree virtualization.

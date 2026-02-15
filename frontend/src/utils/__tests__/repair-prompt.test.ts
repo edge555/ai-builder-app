@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { buildRepairPrompt, getRepairHints } from '../repair-prompt';
 
 describe('repair-prompt', () => {

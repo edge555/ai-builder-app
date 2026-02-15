@@ -1,4 +1,5 @@
 import type { SerializedProjectState, ChangeSummary, FileDiff } from '@ai-app-builder/shared/types';
+
 import type { ChatMessage } from '@/components/ChatInterface/ChatInterface';
 
 /**

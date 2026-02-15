@@ -3,9 +3,10 @@
  * Uses refs internally to avoid re-renders when error state changes.
  */
 
-import { useCallback, useRef, useEffect } from 'react';
-import { usePreviewErrorState, usePreviewErrorActions } from '@/context';
 import type { RuntimeError } from '@/shared';
+import { useCallback, useRef, useEffect } from 'react';
+
+import { usePreviewErrorState, usePreviewErrorActions } from '@/context';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 
 /**
@@ -27,31 +28,31 @@ export function usePreviewErrorHandlers() {
   // Stable callbacks that use refs
   const reportError = useCallback((error: RuntimeError) => {
     actions.reportError(error);
-  }, [actions.reportError]);
+  }, [actions]);
 
   const reportAggregatedErrors = useCallback((errors: AggregatedErrors) => {
     actions.reportAggregatedErrors(errors);
-  }, [actions.reportAggregatedErrors]);
+  }, [actions]);
 
   const clearAllErrors = useCallback(() => {
     actions.clearAllErrors();
-  }, [actions.clearAllErrors]);
+  }, [actions]);
 
   const setRepairPhase = useCallback((phase: Parameters<typeof actions.setRepairPhase>[0]) => {
     actions.setRepairPhase(phase);
-  }, [actions.setRepairPhase]);
+  }, [actions]);
 
   const startAutoRepair = useCallback(() => {
     actions.startAutoRepair();
-  }, [actions.startAutoRepair]);
+  }, [actions]);
 
   const completeAutoRepair = useCallback((success: boolean) => {
     actions.completeAutoRepair(success);
-  }, [actions.completeAutoRepair]);
+  }, [actions]);
 
   const shouldAutoRepair = useCallback(() => {
     return actions.shouldAutoRepair();
-  }, [actions.shouldAutoRepair]);
+  }, [actions]);
 
   // Getter functions for state values (using refs)
   const getRepairPhase = useCallback(() => {

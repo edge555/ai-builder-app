@@ -8,7 +8,11 @@
 
 import { NextRequest } from 'next/server';
 import type { GenerateProjectRequest } from '@ai-app-builder/shared';
-import { serializeProjectState, serializeVersion } from '@ai-app-builder/shared';
+import {
+  serializeProjectState,
+  serializeVersion,
+  GenerateProjectRequestSchema
+} from '@ai-app-builder/shared';
 import { createStreamingProjectGenerator } from '../../../lib/core/streaming-generator';
 import { handleOptions, getCorsHeaders } from '../../../lib/api';
 import { createLogger } from '../../../lib/logger';
@@ -87,20 +91,22 @@ export async function POST(request: NextRequest) {
 
   try {
     // Parse request body
-    let body: GenerateProjectRequest;
+    // Parse request body
+    let rawBody;
     try {
-      body = await request.json();
+      rawBody = await request.json();
     } catch {
       return new Response('Invalid JSON in request body', { status: 400 });
     }
 
-    // Validate request
-    if (!body.description || typeof body.description !== 'string') {
-      return new Response('Project description is required', { status: 400 });
-    }
-
-    if (body.description.trim().length === 0) {
-      return new Response('Project description cannot be empty', { status: 400 });
+    // Validate request using strict schema
+    let body: GenerateProjectRequest;
+    try {
+      body = GenerateProjectRequestSchema.parse(rawBody);
+    } catch (error: any) {
+      // Simple error formatting for Zod errors
+      const message = error.errors ? error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ') : 'Validation failed';
+      return new Response(`Invalid request: ${message}`, { status: 400 });
     }
 
     contextLogger.info('Starting streaming generation', {
@@ -232,6 +238,26 @@ export async function POST(request: NextRequest) {
                 controller,
                 'file',
                 data,
+                EventPriority.CRITICAL
+              );
+            },
+
+            onWarning: (data) => {
+              // Warning events have normal priority
+              encoder.enqueueEvent(
+                controller,
+                'warning',
+                data,
+                EventPriority.NORMAL
+              );
+            },
+
+            onStreamEnd: (summary) => {
+              // Stream-end event is critical
+              encoder.enqueueEvent(
+                controller,
+                'stream-end',
+                summary,
                 EventPriority.CRITICAL
               );
             },

@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
 import type { ChangeSummary, FileDiff } from '@ai-app-builder/shared/types';
 import { FileText, FilePlus, FileEdit, FileX, ChevronDown, ChevronRight } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import './FileChangeSummary.css';
 
 export interface FileChangeSummaryProps {
@@ -51,9 +51,9 @@ export function FileChangeSummary({
                 changes.push({ path, type: diff.status });
             } else {
                 // Fallback heuristic if no diff available
-                let addedCount = changes.filter(c => c.type === 'added').length;
-                let modifiedCount = changes.filter(c => c.type === 'modified').length;
-                let deletedCount = changes.filter(c => c.type === 'deleted').length;
+                const addedCount = changes.filter(c => c.type === 'added').length;
+                const modifiedCount = changes.filter(c => c.type === 'modified').length;
+                const deletedCount = changes.filter(c => c.type === 'deleted').length;
 
                 if (addedCount < filesAdded) {
                     changes.push({ path, type: 'added' });

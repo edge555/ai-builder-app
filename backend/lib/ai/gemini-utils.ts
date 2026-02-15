@@ -9,10 +9,11 @@ import { sanitizeError } from '@ai-app-builder/shared';
 const MAX_LOG_PAYLOAD_LENGTH = 500;
 
 /**
- * Sanitizes a URL by replacing the API key with a placeholder.
- * Ensures API keys are never exposed in logs.
+ * Sanitizes a URL for logging.
+ * Since keys are passed via headers, this is now a passthrough but preserved for API compatibility.
  */
 export function sanitizeUrl(url: string): string {
+    // Keep redaction logic as a safety fallback in case a key is accidentally passed in URL
     return url.replace(/key=[^&]+/, 'key=[REDACTED]');
 }
 

@@ -191,7 +191,7 @@ export class GeminiClient {
    * Makes a streaming request to the Gemini API.
    */
   private async makeStreamingRequest(request: GeminiStreamingRequest): Promise<{ content: string; usage?: GeminiResponse['usage']; partialContent?: string }> {
-    const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent?key=${this.apiKey}`;
+    const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent`;
     // Determine cached content and dynamic system instruction
     let cachedContentName: string | undefined;
     let systemInstructionText: string | undefined = request.systemInstruction;
@@ -249,6 +249,7 @@ export class GeminiClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
         },
         body: JSON.stringify(body),
         signal,
@@ -334,7 +335,7 @@ export class GeminiClient {
    * Makes a single request to the Gemini API.
    */
   private async makeRequest(request: GeminiRequest): Promise<{ content: string; usage?: GeminiResponse['usage'] }> {
-    const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
+    const url = `${this.baseUrl}/models/${this.model}:generateContent`;
     // Determine cached content and dynamic system instruction
     let cachedContentName: string | undefined;
     let systemInstructionText: string | undefined = request.systemInstruction;
@@ -394,6 +395,7 @@ export class GeminiClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
         },
         body: JSON.stringify(body),
         signal,

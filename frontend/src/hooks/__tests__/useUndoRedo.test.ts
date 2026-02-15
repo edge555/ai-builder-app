@@ -1,5 +1,6 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
+
 import { useUndoRedo } from '../useUndoRedo';
 
 describe('useUndoRedo', () => {
