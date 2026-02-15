@@ -1,13 +1,14 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+import { useProject, useChatMessages, useGenerationActions } from '../../context';
 import { useSubmitPrompt } from '../useSubmitPrompt';
-import { useProject, useChatMessages, useGeneration } from '../../context';
 
 // Mock context hooks
 vi.mock('../../context', () => ({
     useProject: vi.fn(),
     useChatMessages: vi.fn(),
-    useGeneration: vi.fn(),
+    useGenerationActions: vi.fn(),
 }));
 
 describe('useSubmitPrompt', () => {
@@ -41,7 +42,7 @@ describe('useSubmitPrompt', () => {
 
         vi.mocked(useProject).mockReturnValue(mockProject);
         vi.mocked(useChatMessages).mockReturnValue(mockChatMessages);
-        vi.mocked(useGeneration).mockReturnValue(mockGeneration);
+        vi.mocked(useGenerationActions).mockReturnValue(mockGeneration);
     });
 
     it('should submit generation prompt and update state on success', async () => {

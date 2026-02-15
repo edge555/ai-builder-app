@@ -1,12 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react';
 import type {
   SerializedVersion,
   SerializedProjectState,
   GetVersionsResponse,
   RevertVersionResponse,
   FileDiff
-} from '@/shared';
-import { config as appConfig } from '../config';
+} from '@ai-app-builder/shared/types';
+import { useState, useCallback, useMemo, useRef } from 'react';
+
 import { backend } from '@/integrations/backend/client';
 
 import { VersionContext, type VersionProviderProps, type VersionContextValue } from './VersionContext.context';
@@ -19,11 +19,7 @@ import { VersionContext, type VersionProviderProps, type VersionContextValue } f
  * 
  * Requirements: 6.3
  */
-export function VersionProvider({ children, apiConfig }: VersionProviderProps) {
-  const config = useMemo(() => ({
-    baseUrl: appConfig.api.baseUrl,
-    ...apiConfig
-  }), [apiConfig]);
+export function VersionProvider({ children }: VersionProviderProps) {
 
   const [versions, setVersions] = useState<SerializedVersion[]>([]);
   const [currentVersionId, setCurrentVersionId] = useState<string | null>(null);

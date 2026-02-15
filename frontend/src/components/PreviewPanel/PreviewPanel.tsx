@@ -1,19 +1,26 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import type { SerializedProjectState } from '@ai-app-builder/shared/types';
 import {
   SandpackProvider,
   SandpackLayout,
   SandpackPreview,
 } from '@codesandbox/sandpack-react';
-import { Code, Monitor } from 'lucide-react';
-import type { SerializedProjectState } from '@/shared';
-import type { LoadingPhase } from '../ChatInterface';
-import { PreviewToolbar, type DeviceMode } from './PreviewToolbar';
-import { PreviewSkeleton } from './PreviewSkeleton';
-import { SandpackErrorListener } from './SandpackErrorListener';
+import { useState, useCallback, useMemo, memo, useRef } from 'react';
+
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
+
+import type { LoadingPhase } from '../ChatInterface/LoadingIndicator';
 import { CodeEditorView } from '../CodeEditor';
-import { TabBar } from '../TabBar/TabBar';
-import { BrowserChrome } from '../BrowserChrome/BrowserChrome';
+
+import { PreviewHeader } from './PreviewHeader';
+import { PreviewSkeleton } from './PreviewSkeleton';
+import { type DeviceMode } from './PreviewToolbar';
+import {
+  transformFilesForSandpack,
+  hasRequiredFiles,
+  DEFAULT_FILES,
+  getEntryFile,
+} from './previewUtils';
+import { SandpackErrorListener } from './SandpackErrorListener';
 import './PreviewPanel.css';
 
 /**
@@ -37,70 +44,12 @@ export interface PreviewPanelProps {
 }
 
 /**
- * Transforms project files to Sandpack-compatible format.
- * Sandpack expects files with leading slashes and without folder prefixes like 'frontend/'.
- */
-function transformFilesForSandpack(
-  files: Record<string, string>
-): Record<string, string> {
-  const sandpackFiles: Record<string, string> = {};
-
-  for (const [path, content] of Object.entries(files)) {
-    // Remove 'frontend/' prefix if present (generated projects have frontend/backend structure)
-    let cleanPath = path.replace(/^frontend\//, '');
-
-    // Ensure paths start with /
-    const sandpackPath = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
-    sandpackFiles[sandpackPath] = content;
-  }
-
-  return sandpackFiles;
-}
-
-/**
- * Checks if the project has the minimum required files for React preview.
- */
-function hasRequiredFiles(files: Record<string, string>): boolean {
-  const paths = Object.keys(files);
-  const hasAppOrIndex = paths.some(
-    (p) => p.includes('App.tsx') || p.includes('App.jsx') ||
-      p.includes('index.tsx') || p.includes('index.jsx') ||
-      p.includes('main.tsx') || p.includes('main.jsx')
-  );
-  return hasAppOrIndex;
-}
-
-/**
- * Default files for an empty preview state.
- */
-const DEFAULT_FILES = {
-  '/App.tsx': `export default function App() {
-  return (
-    <div style={{ padding: '20px', fontFamily: 'system-ui' }}>
-      <h1>Welcome to AI App Builder</h1>
-      <p>Describe your application in the chat to get started.</p>
-    </div>
-  );
-}`,
-  '/index.tsx': `import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import App from './App';
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-);`,
-};
-
-
-/**
  * PreviewPanel component that renders a live preview of the generated project.
  * Uses Sandpack to provide an isolated sandbox environment for React projects.
- * 
+ *
  * Requirements: 9.1, 9.2, 9.3
  */
-export function PreviewPanel({
+const PreviewPanelComponent = function PreviewPanel({
   projectState,
   isLoading = false,
   loadingPhase = 'idle',
@@ -127,118 +76,64 @@ export function PreviewPanel({
     setTimeout(() => setIsRefreshing(false), REFRESH_ANIMATION_MS);
   }, []);
 
+  // Track previous files for deep equality check
+  const prevFilesRef = useRef<Record<string, string> | null>(null);
+  const cachedSandpackFilesRef = useRef<Record<string, string>>(DEFAULT_FILES);
+
   // Transform project files for Sandpack
+  // Only recompute if files actually changed (deep equality)
   const sandpackFiles = useMemo(() => {
-    if (!projectState || Object.keys(projectState.files).length === 0) {
+    const currentFiles = projectState?.files;
+
+    if (!currentFiles || Object.keys(currentFiles).length === 0) {
+      prevFilesRef.current = null;
+      cachedSandpackFilesRef.current = DEFAULT_FILES;
       return DEFAULT_FILES;
     }
 
-    const transformed = transformFilesForSandpack(projectState.files);
+    // Deep equality check: only recompute if files changed
+    const filesChanged = !prevFilesRef.current ||
+      Object.keys(currentFiles).length !== Object.keys(prevFilesRef.current).length ||
+      Object.keys(currentFiles).some(key => currentFiles[key] !== prevFilesRef.current![key]);
+
+    if (!filesChanged) {
+      return cachedSandpackFilesRef.current;
+    }
+
+    // Files changed, recompute
+    prevFilesRef.current = currentFiles;
+    const transformed = transformFilesForSandpack(currentFiles);
 
     // If project doesn't have required entry files, use defaults
     if (!hasRequiredFiles(transformed)) {
-      return { ...DEFAULT_FILES, ...transformed };
+      cachedSandpackFilesRef.current = { ...DEFAULT_FILES, ...transformed };
+      return cachedSandpackFilesRef.current;
     }
 
+    cachedSandpackFilesRef.current = transformed;
     return transformed;
-  }, [projectState]);
+  }, [projectState?.files]);
 
   // Determine the entry file
-  const entryFile = useMemo(() => {
-    const paths = Object.keys(sandpackFiles);
-
-    // Look for common entry points
-    const entryPoints = ['/src/main.tsx', '/src/index.tsx', '/main.tsx', '/index.tsx'];
-    for (const entry of entryPoints) {
-      if (paths.includes(entry)) {
-        return entry;
-      }
-    }
-
-    // Fallback to App.tsx
-    const appFile = paths.find(p => p.includes('App.tsx') || p.includes('App.jsx'));
-    return appFile || '/App.tsx';
-  }, [sandpackFiles]);
+  const entryFile = useMemo(() => getEntryFile(sandpackFiles), [sandpackFiles]);
 
   return (
     <div className="preview-panel">
-      {/* Unified Header - combines tabs, browser controls, and device toolbar */}
-      <div className="preview-unified-header">
-        <TabBar
-          tabs={[
-            { id: 'preview', label: 'Preview', icon: <Monitor size={16} /> },
-            { id: 'code', label: 'Code', icon: <Code size={16} /> },
-          ]}
-          activeTab={effectiveShowCode ? 'code' : 'preview'}
-          onTabChange={(tabId) => setShowCode(tabId === 'code')}
-        />
-
-        {/* Browser controls and device toolbar - only shown in preview mode */}
-        {!effectiveShowCode && (
-          <>
-            {/* Browser Chrome Controls */}
-            {!isLoading && projectState && (
-              <div className="preview-browser-controls">
-                <button
-                  className="preview-refresh-btn"
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  aria-label="Refresh preview"
-                  title="Refresh preview"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={isRefreshing ? 'spin' : ''}
-                  >
-                    <polyline points="23 4 23 10 17 10"></polyline>
-                    <polyline points="1 20 1 14 7 14"></polyline>
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                  </svg>
-                </button>
-
-                <div className="preview-url-bar">
-                  <svg
-                    className="preview-url-lock"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                  </svg>
-                  <span className="preview-url-protocol">https://</span>
-                  <span className="preview-url-text">{projectState.name || 'preview'}.app/</span>
-                </div>
-              </div>
-            )}
-
-            {/* Device Toolbar */}
-            <div className="preview-device-toolbar">
-              <PreviewToolbar
-                currentMode={deviceMode}
-                isRotated={isRotated}
-                onModeChange={(mode) => {
-                  setDeviceMode(mode);
-                  setIsRotated(false); // Reset rotation on mode change
-                }}
-                onRotate={() => setIsRotated(!isRotated)}
-              />
-            </div>
-          </>
-        )}
-      </div>
+      <PreviewHeader
+        showCode={effectiveShowCode}
+        onViewChange={setShowCode}
+        deviceMode={deviceMode}
+        isRotated={isRotated}
+        onModeChange={(mode) => {
+          setDeviceMode(mode);
+          setIsRotated(false); // Reset rotation on mode change
+        }}
+        onRotate={() => setIsRotated(!isRotated)}
+        isLoading={isLoading}
+        projectState={projectState}
+        isRefreshing={isRefreshing}
+        onRefresh={handleRefresh}
+      />
 
       {/* Show skeleton during loading */}
       {isLoading && loadingPhase !== 'idle' ? (
@@ -310,7 +205,63 @@ export function PreviewPanel({
       )}
     </div>
   );
+};
+
+/**
+ * Custom comparator for PreviewPanel memoization.
+ * Only re-render when relevant props actually change.
+ */
+function arePropsEqual(
+  prevProps: Readonly<PreviewPanelProps>,
+  nextProps: Readonly<PreviewPanelProps>
+): boolean {
+  // Compare primitive props
+  if (
+    prevProps.isLoading !== nextProps.isLoading ||
+    prevProps.loadingPhase !== nextProps.loadingPhase ||
+    prevProps.errorMonitoringEnabled !== nextProps.errorMonitoringEnabled ||
+    prevProps.forceCodeView !== nextProps.forceCodeView
+  ) {
+    return false;
+  }
+
+  // Compare callbacks (reference equality is fine for stable callbacks)
+  if (
+    prevProps.onErrorsReady !== nextProps.onErrorsReady ||
+    prevProps.onBundlerIdle !== nextProps.onBundlerIdle
+  ) {
+    return false;
+  }
+
+  // Deep compare project files (not entire projectState)
+  const prevFiles = prevProps.projectState?.files;
+  const nextFiles = nextProps.projectState?.files;
+
+  if (prevFiles === nextFiles) {
+    return true; // Same reference
+  }
+
+  if (!prevFiles || !nextFiles) {
+    return prevFiles === nextFiles; // Both null/undefined
+  }
+
+  // Compare file keys and contents
+  const prevKeys = Object.keys(prevFiles);
+  const nextKeys = Object.keys(nextFiles);
+
+  if (prevKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  // Check if all files are the same
+  return prevKeys.every(key => prevFiles[key] === nextFiles[key]);
 }
+
+/**
+ * Memoized PreviewPanel - only re-renders when files or relevant props change.
+ * Sandpack is expensive to reinitialize, so this prevents unnecessary updates.
+ */
+export const PreviewPanel = memo(PreviewPanelComponent, arePropsEqual);
 
 export default PreviewPanel;
 

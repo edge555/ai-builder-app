@@ -1,6 +1,55 @@
 {
   "extends": [
-    "next/core-web-vitals",
-    "next/typescript"
-  ]
+    "next/core-web-vitals"
+  ],
+  "plugins": [
+    "security",
+    "import",
+    "@typescript-eslint"
+  ],
+  "rules": {
+    "no-console": [
+      "warn",
+      {
+        "allow": [
+          "warn",
+          "error"
+        ]
+      }
+    ],
+    "prefer-const": "warn",
+    "eqeqeq": [
+      "warn",
+      "always"
+    ],
+    "@typescript-eslint/no-unused-vars": [
+      "warn",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
+      }
+    ],
+    "import/order": [
+      "warn",
+      {
+        "groups": [
+          "builtin",
+          "external",
+          "internal",
+          "parent",
+          "sibling",
+          "index"
+        ],
+        "newlines-between": "always",
+        "alphabetize": {
+          "order": "asc",
+          "caseInsensitive": true
+        }
+      }
+    ],
+    "security/detect-object-injection": "off",
+    "security/detect-non-literal-require": "warn",
+    "security/detect-non-literal-fs-filename": "warn",
+    "security/detect-eval-with-expression": "error"
+  }
 }

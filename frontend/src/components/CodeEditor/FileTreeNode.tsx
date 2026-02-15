@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { TreeNode } from './utils/buildFileTree';
 
 interface FileTreeNodeProps {

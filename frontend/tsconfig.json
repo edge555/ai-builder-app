@@ -19,27 +19,21 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
-    "strict": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitAny": false,
-    "noFallthroughCasesInSwitch": false,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitAny": true,
+    "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
       ],
       "@/shared": [
-        "../shared/src"
+        "../shared/dist"
       ],
       "@/shared/*": [
-        "../shared/src/*"
-      ],
-      "@ai-app-builder/shared": [
-        "../shared/src"
-      ],
-      "@ai-app-builder/shared/*": [
-        "../shared/src/*"
+        "../shared/dist/*"
       ]
     }
   },

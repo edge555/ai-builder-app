@@ -1,8 +1,9 @@
-import { useCallback, useRef } from 'react';
-import { useProject, useChatMessages, useGeneration } from '../context';
 import type { RepairAttempt } from '@/shared';
-import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError } from '../utils/error-messages';
+import { useCallback, useRef } from 'react';
+
+import { useProject, useChatMessages, useGenerationActions } from '../context';
 import { storageService, toStoredProject } from '../services/storage';
+import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError } from '../utils/error-messages';
 import { createLogger } from '../utils/logger';
 
 const submitLogger = createLogger('SubmitPrompt');
@@ -17,7 +18,7 @@ const MAX_API_RETRIES = 3;
 export function useSubmitPrompt() {
     const project = useProject();
     const chatMessages = useChatMessages();
-    const generation = useGeneration();
+    const generation = useGenerationActions();
 
     const isSubmittingRef = useRef(false);
     const apiRetryHistoryRef = useRef<RepairAttempt[]>([]);

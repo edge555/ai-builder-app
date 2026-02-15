@@ -1,6 +1,20 @@
-import { useMemo, useState, useEffect } from 'react';
-import { buildFileTree, TreeNode } from './utils/buildFileTree';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { useMemo, useState, useEffect, useRef } from 'react';
+
 import { FileTreeNode } from './FileTreeNode';
+import { buildFileTree, TreeNode } from './utils/buildFileTree';
+
+/**
+ * Threshold for enabling file tree virtualization.
+ * File trees with more nodes than this will use virtual scrolling.
+ */
+const VIRTUALIZATION_THRESHOLD = 50;
+
+/**
+ * Estimated height of a file tree node (in pixels).
+ * Used for virtual scrolling calculations.
+ */
+const ESTIMATED_NODE_HEIGHT = 28;
 
 interface FileTreeSidebarProps {
   files: Record<string, string>;
@@ -15,6 +29,7 @@ export function FileTreeSidebar({
 }: FileTreeSidebarProps) {
   const tree = useMemo(() => buildFileTree(files), [files]);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Function to get all directory paths from the tree
   const getAllDirPaths = (nodes: TreeNode[]): string[] => {
@@ -82,6 +97,18 @@ export function FileTreeSidebar({
     traverse(tree);
     return list;
   }, [tree, expandedDirs]);
+
+  // Determine if we should use virtualization
+  const shouldVirtualize = flatNodes.length > VIRTUALIZATION_THRESHOLD;
+
+  // Setup virtualizer for large file trees
+  const virtualizer = useVirtualizer({
+    count: flatNodes.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => ESTIMATED_NODE_HEIGHT,
+    overscan: 10,
+    enabled: shouldVirtualize,
+  });
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (flatNodes.length === 0) return;
@@ -190,6 +217,7 @@ export function FileTreeSidebar({
       </div>
 
       <div
+        ref={scrollContainerRef}
         role="tree"
         aria-label="File explorer"
         tabIndex={0}
@@ -216,6 +244,44 @@ export function FileTreeSidebar({
             }}
           >
             No files
+          </div>
+        ) : shouldVirtualize ? (
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const node = flatNodes[virtualItem.index];
+              // Calculate depth from the node's path
+              const depth = node.path.split('/').length - 1;
+              return (
+                <div
+                  key={node.path}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                >
+                  <FileTreeNode
+                    node={node}
+                    depth={depth}
+                    activeFile={activeFile}
+                    focusedId={focusedId}
+                    expandedDirs={expandedDirs}
+                    onFileSelect={onFileSelect}
+                    onToggleDir={handleToggleDir}
+                  />
+                </div>
+              );
+            })}
           </div>
         ) : (
           tree.map((node) => (

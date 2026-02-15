@@ -1,8 +1,9 @@
+import type { SerializedProjectState } from '@/shared';
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import type { SerializedProjectState } from '@/shared';
+
 import type { ChatMessage } from '@/components';
-import { createLogger } from '@/utils/logger';
+import { ErrorBoundary, AppLayout } from '@/components';
 import {
   ProjectProvider,
   ChatMessagesProvider,
@@ -12,12 +13,12 @@ import {
   ErrorAggregatorProvider,
   useProject,
 } from '@/context';
-import { ErrorBoundary, AppLayout } from '@/components';
 import {
   storageService,
   toSerializedProjectState,
   deserializeChatMessages,
 } from '@/services/storage';
+import { createLogger } from '@/utils/logger';
 
 /**
  * URL sync component that updates the URL when a new project gets an ID.

@@ -1,4 +1,3 @@
-import React from 'react';
 import './CollapseAllButton.css';
 
 interface CollapseAllButtonProps {

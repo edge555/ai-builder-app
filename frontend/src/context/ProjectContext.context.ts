@@ -1,5 +1,5 @@
-import { createContext, useContext, type ReactNode } from 'react';
-import type { SerializedProjectState, SerializedVersion, FileDiff } from '@/shared';
+import type { SerializedProjectState, SerializedVersion, FileDiff } from '@ai-app-builder/shared/types';
+import { createContext, useContext } from 'react';
 
 /**
  * Callbacks for version integration.

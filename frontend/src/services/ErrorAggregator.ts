@@ -3,12 +3,12 @@
  * Provides a single point for error aggregation before repair.
  */
 
+import type { RuntimeError } from '@ai-app-builder/shared/types';
 import {
-  type RuntimeError,
   ERROR_PRIORITY_ORDER,
   getErrorKey,
   ERROR_REPAIR_DELAY
-} from '@ai-app-builder/shared';
+} from '@ai-app-builder/shared/utils';
 
 export interface AggregatedErrors {
   /** All unique errors, sorted by priority */

@@ -1,9 +1,12 @@
-import { Copy, Trash2, File, Clock } from 'lucide-react';
-import type { StoredProject } from '@/services/storage';
+import { Copy, Trash2, Clock } from 'lucide-react';
+import { type MouseEvent, type CSSProperties } from 'react';
+
+import type { ProjectMetadata } from '@/services/storage';
+
 import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
 
 export interface ProjectCardProps {
-  project: StoredProject;
+  project: ProjectMetadata;
   onOpen: (projectId: string) => void;
   onRename: (projectId: string, newName: string) => void;
   onDuplicate: (projectId: string) => void;
@@ -68,7 +71,7 @@ export function ProjectCard({
   onDuplicate,
   onDelete,
 }: ProjectCardProps) {
-  const handleCardClick = (e: React.MouseEvent) => {
+  const handleCardClick = (e: MouseEvent) => {
     // Don't trigger open if clicking on action buttons or editable name
     if (
       (e.target as HTMLElement).closest('.project-card-action') ||
@@ -80,12 +83,12 @@ export function ProjectCard({
     onOpen(project.id);
   };
 
-  const handleDuplicate = (e: React.MouseEvent) => {
+  const handleDuplicate = (e: MouseEvent) => {
     e.stopPropagation();
     onDuplicate(project.id);
   };
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDelete = (e: MouseEvent) => {
     e.stopPropagation();
     onDelete(project.id);
   };
@@ -108,7 +111,7 @@ export function ProjectCard({
         }
       }}
       aria-label={`Open project: ${project.name}`}
-      style={{ '--accent-color': accentColor } as React.CSSProperties}
+      style={{ '--accent-color': accentColor } as CSSProperties}
     >
       <div className="project-card-accent-strip" />
 

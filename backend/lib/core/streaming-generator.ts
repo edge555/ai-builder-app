@@ -4,7 +4,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared';
+import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared/types';
 import { GeminiClient } from '../ai';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
 import { buildFixPrompt } from './prompts/build-fix-prompt';
@@ -23,10 +23,14 @@ const logger = createLogger('StreamingGenerator');
 export interface StreamingCallbacks {
   onStart?: () => void;
   onProgress?: (length: number) => void;
-  onFile?: (data: { path: string; content: string; index: number; total: number }) => void;
+  onFile?: (data: { path: string; content: string; index: number; total: number; status: 'complete' | 'partial' }) => void;
+  onWarning?: (data: { path: string; message: string; type: 'formatting' | 'validation' }) => void;
+  onStreamEnd?: (summary: { totalFiles: number; successfulFiles: number; failedFiles: number; warnings: number }) => void;
   onComplete?: (result: { projectState: ProjectState; version: Version }) => void;
   onError?: (error: string, errorData?: { errorCode?: string; errorType?: string; partialContent?: string }) => void;
   onHeartbeat?: () => void;
+  /** Optional abort signal to cancel generation on client disconnect */
+  signal?: AbortSignal;
 }
 
 /**
@@ -76,6 +80,8 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     let lastParsedIndex = 0;
     let accumulatedText = '';
     const emittedFiles = new Set<string>();
+    let streamAborted = false;
+    let warningCount = 0;
 
     // Call Gemini API with structured output and streaming
     const response = await this.geminiClient.generateStreaming({
@@ -84,6 +90,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       temperature: 0.7,
       maxOutputTokens: MAX_OUTPUT_TOKENS_GENERATION,
       responseSchema: PROJECT_OUTPUT_SCHEMA,
+      signal: callbacks.signal,
       onChunk: (chunk: string, accumulatedLength: number) => {
         accumulatedText += chunk;
         callbacks.onProgress?.(accumulatedLength);
@@ -94,7 +101,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
         if (parseResult.files.length > 0) {
           const totalEstimate = estimateTotalFiles(accumulatedText);
 
-          // Emit newly parsed files
+          // Emit newly parsed files with 'partial' status during streaming
           for (const file of parseResult.files) {
             if (!emittedFiles.has(file.path)) {
               emittedFiles.add(file.path);
@@ -103,6 +110,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
                 content: file.content,
                 index: emittedFiles.size - 1,
                 total: totalEstimate,
+                status: 'partial', // Mark as partial during streaming
               });
             }
           }
@@ -118,6 +126,13 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
         errorCode: response.errorCode,
         errorType: response.errorType,
         partialContent: response.partialContent,
+      });
+      // Emit stream-end even on error to indicate partial files
+      callbacks.onStreamEnd?.({
+        totalFiles: emittedFiles.size,
+        successfulFiles: 0,
+        failedFiles: emittedFiles.size,
+        warnings: warningCount,
       });
       return {
         success: false,
@@ -153,7 +168,18 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     const files = parsedOutput.files;
 
     // Process files: sanitize paths, normalize newlines, format with Prettier
-    const prefixedFiles = await processFiles(files, { addFrontendPrefix: false });
+    const processResult = await processFiles(files, { addFrontendPrefix: false });
+    const prefixedFiles = processResult.files;
+
+    // Emit warnings for formatting failures
+    for (const warning of processResult.warnings) {
+      callbacks.onWarning?.({
+        path: warning.path,
+        message: warning.message,
+        type: warning.type,
+      });
+      warningCount++;
+    }
 
     // Validate the output (syntax validation)
     logger.debug('Validating files', { files: Object.keys(prefixedFiles) });
@@ -171,12 +197,30 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     }
 
 
+    // If aborted, skip build-fix and downstream work
+    if (callbacks.signal?.aborted) {
+      logger.info('Generation aborted by client before build-fix loop');
+      return {
+        success: false,
+        error: 'Generation cancelled by client',
+      };
+    }
+
     // Build validation with auto-retry using universal retry loop
     const finalFiles = await this.runBuildFixLoop(
       validationResult.sanitizedOutput!,
       'generation',
       description
     );
+
+    // If aborted after build-fix, skip file emission
+    if (callbacks.signal?.aborted) {
+      logger.info('Generation aborted by client after build-fix loop');
+      return {
+        success: false,
+        error: 'Generation cancelled by client',
+      };
+    }
 
     // Create project state
 
@@ -204,7 +248,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       parentVersionId: null,
     };
 
-    // Emit files one by one
+    // Emit files one by one with 'complete' status
     const fileEntries = Object.entries(finalFiles);
     for (let i = 0; i < fileEntries.length; i++) {
       const [path, content] = fileEntries[i];
@@ -213,10 +257,19 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
         content,
         index: i,
         total: fileEntries.length,
+        status: 'complete', // Mark as complete after processing
       });
     }
 
     callbacks.onComplete?.({ projectState, version });
+
+    // Emit stream-end summary
+    callbacks.onStreamEnd?.({
+      totalFiles: fileEntries.length,
+      successfulFiles: fileEntries.length,
+      failedFiles: 0,
+      warnings: warningCount,
+    });
 
     return {
       success: true,

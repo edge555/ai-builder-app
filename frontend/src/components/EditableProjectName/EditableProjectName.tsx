@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
 import { Pencil } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import './EditableProjectName.css';
 
 export interface EditableProjectNameProps {

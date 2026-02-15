@@ -1,14 +1,27 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import type { LoadingPhase } from '../components/ChatInterface';
-import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState, RepairAttempt } from '@/shared';
-import { config as appConfig } from '../config';
+import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState, RepairAttempt } from '@ai-app-builder/shared/types';
+import { useState, useCallback, useMemo, useRef, useEffect, type ReactNode } from 'react';
+
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
-import { parseSSEStream } from '@/utils/sse-parser';
-import { buildRepairPrompt } from '@/utils/repair-prompt';
 import { getUserFriendlyErrorMessage } from '@/utils/error-messages';
-import { GenerationContext, type GenerationContextValue, type StreamingState } from './GenerationContext.context';
-import { useErrorAggregator } from './ErrorAggregatorContext';
 import { createLogger } from '@/utils/logger';
+import { buildRepairPrompt } from '@/utils/repair-prompt';
+import { parseSSEStream } from '@/utils/sse-parser';
+
+import type { LoadingPhase } from '../components/ChatInterface/ChatInterface';
+import { config as appConfig } from '../config';
+
+
+import { useErrorAggregator } from './ErrorAggregatorContext';
+import {
+  GenerationContext,
+  GenerationStateContext,
+  GenerationActionsContext,
+  type GenerationContextValue,
+  type GenerationStateValue,
+  type GenerationActionsValue,
+  type StreamingState
+} from './GenerationContext.context';
+
 
 const genLogger = createLogger('Generation');
 
@@ -19,7 +32,7 @@ const STREAMING_TIMEOUT_MS = 120000; // 120 seconds
  * Provider for generation and modification operations.
  * Manages loading states, streaming, and auto-repair.
  */
-export function GenerationProvider({ children }: { children: React.ReactNode }) {
+export function GenerationProvider({ children }: { children: ReactNode }) {
   const errorAggregator = useErrorAggregator();
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
@@ -110,6 +123,8 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
       textLength: 0,
       error: null,
       lastHeartbeat: Date.now(),
+      warnings: [],
+      summary: null,
     });
 
     try {
@@ -147,6 +162,20 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
             currentFile: data.path,
             filesReceived: data.index + 1,
             totalFiles: data.total,
+            lastHeartbeat: Date.now(),
+          } : null);
+        },
+        onWarning: (warning) => {
+          setStreamingState(prev => prev ? {
+            ...prev,
+            warnings: [...prev.warnings, warning],
+            lastHeartbeat: Date.now(),
+          } : null);
+        },
+        onStreamEnd: (summary) => {
+          setStreamingState(prev => prev ? {
+            ...prev,
+            summary,
             lastHeartbeat: Date.now(),
           } : null);
         },
@@ -369,7 +398,8 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     }
   }, [isAutoRepairing, modifyProject, errorAggregator]);
 
-  const value = useMemo<GenerationContextValue>(() => ({
+  // Split context into state and actions to reduce re-renders
+  const stateValue = useMemo<GenerationStateValue>(() => ({
     isLoading,
     loadingPhase,
     error,
@@ -377,6 +407,19 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     autoRepairAttempt,
     streamingState,
     isStreaming,
+  }), [
+    isLoading,
+    loadingPhase,
+    error,
+    isAutoRepairing,
+    autoRepairAttempt,
+    streamingState,
+    isStreaming,
+  ]);
+
+  // Actions are stable (all callbacks wrapped in useCallback)
+  // This value rarely changes, preventing re-renders in action-only consumers
+  const actionsValue = useMemo<GenerationActionsValue>(() => ({
     generateProject,
     generateProjectStreaming,
     modifyProject,
@@ -387,13 +430,6 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     clearError,
     abortCurrentRequest,
   }), [
-    isLoading,
-    loadingPhase,
-    error,
-    isAutoRepairing,
-    autoRepairAttempt,
-    streamingState,
-    isStreaming,
     generateProject,
     generateProjectStreaming,
     modifyProject,
@@ -403,9 +439,19 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     abortCurrentRequest,
   ]);
 
+  // Combined value for backward compatibility
+  const value = useMemo<GenerationContextValue>(() => ({
+    ...stateValue,
+    ...actionsValue,
+  }), [stateValue, actionsValue]);
+
   return (
-    <GenerationContext.Provider value={value}>
-      {children}
-    </GenerationContext.Provider>
+    <GenerationStateContext.Provider value={stateValue}>
+      <GenerationActionsContext.Provider value={actionsValue}>
+        <GenerationContext.Provider value={value}>
+          {children}
+        </GenerationContext.Provider>
+      </GenerationActionsContext.Provider>
+    </GenerationStateContext.Provider>
   );
 }

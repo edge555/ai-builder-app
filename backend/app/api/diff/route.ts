@@ -7,11 +7,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { ComputeDiffResponse, ErrorResponse } from '@ai-app-builder/shared';
-import { ComputeDiffRequestSchema } from '@ai-app-builder/shared';
+import type { ComputeDiffResponse, ErrorResponse, ComputeDiffRequest } from '@ai-app-builder/shared/types';
+import { ComputeDiffRequestSchema } from '@ai-app-builder/shared/schemas';
 import { getVersionManager } from '../../../lib/core';
 import { getDiffEngine } from '../../../lib/diff';
-import { getCorsHeaders, handleOptions, handleError, AppError } from '../../../lib/api';
+import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError } from '../../../lib/api';
+import { createLogger } from '../../../lib/logger';
+
+const logger = createLogger('api/diff');
+
+// Timeout for diff operations (30 seconds)
+const DIFF_TIMEOUT_MS = 30_000;
 
 /**
  * Handle OPTIONS preflight request
@@ -85,8 +91,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<ComputeDi
       );
     }
 
-    // Compute diffs between the two versions
-    const diffs = getDiffEngine().computeDiffsFromFiles(fromVersion.files, toVersion.files);
+    // Compute diffs between the two versions with timeout
+    const diffs = await withTimeout(
+      Promise.resolve(getDiffEngine().computeDiffsFromFiles(fromVersion.files, toVersion.files)),
+      {
+        timeoutMs: DIFF_TIMEOUT_MS,
+        operationName: 'diff computation',
+        signal: request.signal,
+      }
+    );
 
     // Return successful response
     const response: ComputeDiffResponse = {
@@ -97,6 +110,20 @@ export async function POST(request: NextRequest): Promise<NextResponse<ComputeDi
     return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
 
   } catch (error) {
+    // Handle timeout errors specifically
+    if (error instanceof TimeoutError) {
+      logger.error('Diff computation timed out', {
+        timeoutMs: error.timeoutMs,
+      });
+      const timeoutError = AppError.network(
+        'OPERATION_TIMEOUT',
+        `Diff computation timed out after ${error.timeoutMs / 1000} seconds`,
+        { timeoutMs: error.timeoutMs },
+        504
+      );
+      return handleError(timeoutError, 'api/diff', request);
+    }
+
     return handleError(error, 'api/diff', request);
   }
 }

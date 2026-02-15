@@ -58,7 +58,6 @@ export function backtrackDiff(
     oldLines: string[],
     newLines: string[]
 ): DiffLine[] {
-    const result: DiffLine[] = [];
     let i = oldLines.length;
     let j = newLines.length;
     let oldLineNum = oldLines.length;

@@ -3,14 +3,14 @@
  * Captures console errors and bundler status to trigger auto-repair.
  */
 
-import { useCallback, useRef, useEffect } from 'react';
+import type { RuntimeError, ErrorSource } from '@ai-app-builder/shared/types';
 import {
   createRuntimeError,
   shouldIgnoreError,
   parseBundlerError,
-  type RuntimeError,
-  type ErrorSource
-} from '@ai-app-builder/shared';
+} from '@ai-app-builder/shared/utils';
+import { useCallback, useRef, useEffect } from 'react';
+
 import { useErrorAggregator } from '@/context/ErrorAggregatorContext';
 import { type AggregatedErrors } from '@/services/ErrorAggregator';
 

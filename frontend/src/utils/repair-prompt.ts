@@ -1,4 +1,5 @@
 import type { RuntimeError, RepairAttempt } from '@/shared';
+
 import type { ErrorAggregator } from '@/services/ErrorAggregator';
 
 /**

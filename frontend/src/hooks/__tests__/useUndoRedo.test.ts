@@ -1,5 +1,6 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
+
 import { useUndoRedo } from '../useUndoRedo';
 
 describe('useUndoRedo', () => {
@@ -7,7 +8,6 @@ describe('useUndoRedo', () => {
     const mockState2 = { id: '2', name: 'state2', files: {} } as any;
 
     beforeEach(() => {
-        sessionStorage.clear();
         vi.clearAllMocks();
     });
 

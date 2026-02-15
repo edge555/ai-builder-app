@@ -1,5 +1,6 @@
-import React, { useRef, useEffect } from 'react';
 import { Bug, Moon, Smartphone, Sparkles, Wand2 } from 'lucide-react';
+import { useRef, useEffect } from 'react';
+
 import type { PromptSuggestion } from '@/data/prompt-suggestions';
 import './QuickActions.css';
 

@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { WelcomePage } from '../WelcomePage';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import type { StoredProject } from '@/services/storage';
+
+import { WelcomePage } from '../WelcomePage';
+
 
 // Mock child components
 vi.mock('@/components/TemplateGrid/TemplateGrid', () => ({
@@ -45,9 +48,14 @@ describe('WelcomePage', () => {
         {
             id: '1',
             name: 'Test Project',
-            projectState: { name: 'Test Project', files: {} },
+            description: 'Test description',
+            files: { 'index.html': '<html></html>' },
+            currentVersionId: 'v1',
             createdAt: '2024-01-01T10:00:00Z',
             updatedAt: '2024-01-01T10:00:00Z',
+            chatMessages: [],
+            fileCount: 1,
+            thumbnailFiles: ['index.html'],
         },
     ];
 

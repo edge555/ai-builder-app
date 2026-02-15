@@ -191,7 +191,7 @@ export class GeminiClient {
    * Makes a streaming request to the Gemini API.
    */
   private async makeStreamingRequest(request: GeminiStreamingRequest): Promise<{ content: string; usage?: GeminiResponse['usage']; partialContent?: string }> {
-    const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent?key=${this.apiKey}`;
+    const url = `${this.baseUrl}/models/${this.model}:streamGenerateContent`;
     // Determine cached content and dynamic system instruction
     let cachedContentName: string | undefined;
     let systemInstructionText: string | undefined = request.systemInstruction;
@@ -239,16 +239,17 @@ export class GeminiClient {
     const timeoutController = new AbortController();
     const timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
 
-    // Combine external signal (if provided) with timeout signal
     const signal = request.signal
       ? AbortSignal.any([request.signal, timeoutController.signal])
       : timeoutController.signal;
 
+    let accumulated = '';
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
         },
         body: JSON.stringify(body),
         signal,
@@ -271,7 +272,6 @@ export class GeminiClient {
       }
 
       const decoder = new TextDecoder();
-      let accumulated = '';
       const parserState = createParserState();
 
       while (true) {
@@ -335,7 +335,7 @@ export class GeminiClient {
    * Makes a single request to the Gemini API.
    */
   private async makeRequest(request: GeminiRequest): Promise<{ content: string; usage?: GeminiResponse['usage'] }> {
-    const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
+    const url = `${this.baseUrl}/models/${this.model}:generateContent`;
     // Determine cached content and dynamic system instruction
     let cachedContentName: string | undefined;
     let systemInstructionText: string | undefined = request.systemInstruction;
@@ -395,6 +395,7 @@ export class GeminiClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
         },
         body: JSON.stringify(body),
         signal,
@@ -447,10 +448,10 @@ export class GeminiClient {
       // Extract token usage if available
       const usage = data.usageMetadata
         ? {
-            inputTokens: data.usageMetadata.promptTokenCount,
-            outputTokens: data.usageMetadata.candidatesTokenCount,
-            totalTokens: data.usageMetadata.totalTokenCount,
-          }
+          inputTokens: data.usageMetadata.promptTokenCount,
+          outputTokens: data.usageMetadata.candidatesTokenCount,
+          totalTokens: data.usageMetadata.totalTokenCount,
+        }
         : undefined;
 
       logger.info('Gemini request completed successfully', {

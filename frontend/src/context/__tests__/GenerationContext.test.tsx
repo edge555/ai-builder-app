@@ -1,9 +1,10 @@
-import React from 'react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
+import { useContext } from 'react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+
+import { ErrorAggregatorProvider } from '../../context/ErrorAggregatorContext';
 import { GenerationProvider } from '../GenerationContext';
 import { GenerationContext } from '../GenerationContext.context';
-import { ErrorAggregatorProvider } from '../../context/ErrorAggregatorContext';
 
 // Mock the SSE parser to avoid real network calls and complex stream mocking in this integration test
 vi.mock('@/utils/sse-parser', () => ({
@@ -23,7 +24,8 @@ describe('GenerationContext Integration', () => {
     });
 
     const TestComponent = () => {
-        const context = React.useContext(GenerationContext);
+        const context = useContext(GenerationContext);
+        if (!context) return null;
         return (
             <div>
                 <div data-testid="is-streaming">{context.isStreaming.toString()}</div>
@@ -41,7 +43,7 @@ describe('GenerationContext Integration', () => {
             body: { getReader: () => ({}) },
         });
 
-        (parseSSEStream as any).mockImplementation(async (reader, handlers) => {
+        (parseSSEStream as any).mockImplementation(async (_reader: any, handlers: any) => {
             act(() => {
                 handlers.onStart();
                 handlers.onProgress(100);

@@ -1,5 +1,7 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { createRuntimeError, type RuntimeError, type ErrorSource } from '@/shared';
+import type { RuntimeError, ErrorSource } from '@ai-app-builder/shared/types';
+import { createRuntimeError } from '@ai-app-builder/shared/utils';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
+
 import { createLogger } from '@/utils/logger';
 import './PreviewErrorBoundary.css';
 

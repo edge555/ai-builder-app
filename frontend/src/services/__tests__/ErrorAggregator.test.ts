@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
 import { ErrorAggregator } from '../ErrorAggregator';
+
 import type { RuntimeError } from '@/shared/types/runtime-error';
 
 describe('ErrorAggregator', () => {

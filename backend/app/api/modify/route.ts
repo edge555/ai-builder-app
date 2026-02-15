@@ -18,11 +18,14 @@ import {
   ModifyProjectRequestSchema,
 } from '@ai-app-builder/shared';
 import { createModificationEngine } from '../../../lib/diff';
-import { getCorsHeaders, handleOptions, handleError, AppError } from '../../../lib/api';
+import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
 
 const logger = createLogger('api/modify');
+
+// Timeout for modify operations (120 seconds for AI generation)
+const MODIFY_TIMEOUT_MS = 120_000;
 
 /**
  * Handle OPTIONS preflight request
@@ -56,10 +59,17 @@ export async function POST(
     // Extract skipPlanning option from request
     const { skipPlanning } = validatedRequest;
 
-    // Modify project
+    // Modify project with timeout
     const engine = createModificationEngine();
     // TODO: Pass requestId to engine when it supports it
-    const result = await engine.modifyProject(projectState, validatedRequest.prompt, { skipPlanning });
+    const result = await withTimeout(
+      engine.modifyProject(projectState, validatedRequest.prompt, { skipPlanning }),
+      {
+        timeoutMs: MODIFY_TIMEOUT_MS,
+        operationName: 'project modification',
+        signal: request.signal,
+      }
+    );
 
     if (!result.success) {
       if (result.validationErrors) {
@@ -86,6 +96,20 @@ export async function POST(
 
     return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
   } catch (error) {
+    // Handle timeout errors specifically
+    if (error instanceof TimeoutError) {
+      contextLogger.error('Project modification timed out', {
+        timeoutMs: error.timeoutMs,
+      });
+      const timeoutError = AppError.network(
+        'OPERATION_TIMEOUT',
+        `Project modification timed out after ${error.timeoutMs / 1000} seconds`,
+        { timeoutMs: error.timeoutMs },
+        504
+      );
+      return handleError(timeoutError, 'api/modify', request);
+    }
+
     contextLogger.error('Project modification failed', {
       error: error instanceof Error ? error.message : String(error),
     });

@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
 import type { SerializedProjectState } from '@/shared';
+import { useEffect, useState, useRef } from 'react';
+
 import type { ChatMessage } from '@/components';
 import { storageService, toStoredProject } from '@/services/storage';
 import { createLogger } from '@/utils/logger';
@@ -36,6 +37,15 @@ export function useAutoSave(
   const [saveError, setSaveError] = useState<Error | null>(null);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
+
+  // Track mounted state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     // Don't save if no project state
@@ -50,6 +60,11 @@ export function useAutoSave(
 
     // Schedule new save after debounce delay
     debounceTimerRef.current = setTimeout(async () => {
+      // Guard against unmounted component
+      if (!isMountedRef.current) {
+        return;
+      }
+
       setIsSaving(true);
       setSaveError(null);
 
@@ -63,13 +78,21 @@ export function useAutoSave(
         // Save last opened project ID to metadata
         await storageService.setMetadata('lastOpenedProjectId', projectState.id);
 
-        // Update last saved timestamp
-        setLastSavedAt(new Date());
+        // Update last saved timestamp (guard against unmount during async operation)
+        if (isMountedRef.current) {
+          setLastSavedAt(new Date());
+        }
       } catch (error) {
         autoSaveLogger.error('Auto-save failed', { error });
-        setSaveError(error instanceof Error ? error : new Error('Unknown save error'));
+        // Guard against unmount during async operation
+        if (isMountedRef.current) {
+          setSaveError(error instanceof Error ? error : new Error('Unknown save error'));
+        }
       } finally {
-        setIsSaving(false);
+        // Guard against unmount during async operation
+        if (isMountedRef.current) {
+          setIsSaving(false);
+        }
       }
     }, debounceMs);
 

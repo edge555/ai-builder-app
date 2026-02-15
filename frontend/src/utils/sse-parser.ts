@@ -10,12 +10,27 @@ export interface StreamErrorData {
     partialContent?: string;
 }
 
+export interface StreamWarningData {
+    path: string;
+    message: string;
+    type: 'formatting' | 'validation';
+}
+
+export interface StreamEndData {
+    totalFiles: number;
+    successfulFiles: number;
+    failedFiles: number;
+    warnings: number;
+}
+
 export async function parseSSEStream(
     reader: ReadableStreamDefaultReader<Uint8Array>,
     handlers: {
         onStart?: () => void;
         onProgress?: (length: number) => void;
         onFile?: (data: any, files: Record<string, string>) => void;
+        onWarning?: (warning: StreamWarningData) => void;
+        onStreamEnd?: (summary: StreamEndData) => void;
         onComplete?: (data: any, files: Record<string, string>) => void;
         onError?: (errorData: StreamErrorData) => void;
         onHeartbeat?: () => void;
@@ -67,6 +82,25 @@ export async function parseSSEStream(
                         case 'file':
                             files[data.path] = data.content;
                             handlers.onFile?.(data, files);
+                            break;
+
+                        case 'warning':
+                            const warningData: StreamWarningData = {
+                                path: data.path,
+                                message: data.message,
+                                type: data.type,
+                            };
+                            handlers.onWarning?.(warningData);
+                            break;
+
+                        case 'stream-end':
+                            const streamEndData: StreamEndData = {
+                                totalFiles: data.totalFiles,
+                                successfulFiles: data.successfulFiles,
+                                failedFiles: data.failedFiles,
+                                warnings: data.warnings,
+                            };
+                            handlers.onStreamEnd?.(streamEndData);
                             break;
 
                         case 'complete':

@@ -1,23 +1,28 @@
-import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import type { SerializedProjectState } from '@/shared';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense, memo } from 'react';
+
+
+import { ComponentErrorBoundary } from '@/components/ComponentErrorBoundary';
 import { useProject } from '@/context/ProjectContext.context';
+
+import { CodeEditorSkeleton } from './CodeEditorSkeleton';
 import { FileTreeSidebar } from './FileTreeSidebar';
 import { TabBar } from './TabBar';
-const MonacoEditorWrapper = lazy(() => import('./MonacoEditorWrapper').then(m => ({ default: m.MonacoEditorWrapper })));
-import { CodeEditorSkeleton } from './CodeEditorSkeleton';
+
 import './CodeEditorView.css';
+
+const MonacoEditorWrapper = lazy(() => import('./MonacoEditorWrapper').then(m => ({ default: m.MonacoEditorWrapper })));
 
 interface CodeEditorViewProps {
   files: Record<string, string>;
 }
 
-export function CodeEditorView({ files }: CodeEditorViewProps) {
+const CodeEditorViewComponent = function CodeEditorView({ files }: CodeEditorViewProps) {
   const { projectState, setProjectState } = useProject();
 
   // UI state
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [activeFile, setActiveFile] = useState<string | null>(null);
-  const [externalUpdateKey, setExternalUpdateKey] = useState(0);
 
   // Refs for debouncing and AI sync
   const projectStateRef = useRef<SerializedProjectState | null>(projectState);
@@ -46,7 +51,7 @@ export function CodeEditorView({ files }: CodeEditorViewProps) {
     }
   }, [files, openFiles.length]);
 
-  // Detect AI/undo/redo changes and refresh editor
+  // Detect AI/undo/redo changes and clear pending edits
   useEffect(() => {
     if (!projectState) return;
 
@@ -57,14 +62,12 @@ export function CodeEditorView({ files }: CodeEditorViewProps) {
     if (currentUpdatedAt !== lastSavedAt && lastSavedAt !== null) {
       // External change detected (AI, undo, redo)
       // Clear any pending changes and debounce timer
+      // Monaco will update via content prop change
       pendingChangesRef.current.clear();
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
       }
-
-      // Increment key to force Monaco to refresh
-      setExternalUpdateKey((prev) => prev + 1);
     }
 
     // Update our tracking ref
@@ -199,20 +202,54 @@ export function CodeEditorView({ files }: CodeEditorViewProps) {
 
         {/* Monaco Editor */}
         <div className="code-editor-content">
-          <Suspense fallback={<CodeEditorSkeleton />}>
-            <MonacoEditorWrapper
-              filePath={activeFile}
-              content={getActiveFileContent()}
-              onChange={(value) => {
-                if (activeFile) {
-                  handleFileChange(activeFile, value);
-                }
-              }}
-              externalUpdateKey={externalUpdateKey}
-            />
-          </Suspense>
+          <ComponentErrorBoundary componentName="Code Editor">
+            <Suspense fallback={<CodeEditorSkeleton />}>
+              <MonacoEditorWrapper
+                filePath={activeFile}
+                content={getActiveFileContent()}
+                onChange={(value) => {
+                  if (activeFile) {
+                    handleFileChange(activeFile, value);
+                  }
+                }}
+              />
+            </Suspense>
+          </ComponentErrorBoundary>
         </div>
       </div>
     </div>
   );
+};
+
+/**
+ * Custom comparator for CodeEditorView memoization.
+ * Deep compares files object to avoid re-render when file contents haven't changed.
+ */
+function areCodeEditorPropsEqual(
+  prevProps: Readonly<CodeEditorViewProps>,
+  nextProps: Readonly<CodeEditorViewProps>
+): boolean {
+  const prevFiles = prevProps.files;
+  const nextFiles = nextProps.files;
+
+  if (prevFiles === nextFiles) {
+    return true; // Same reference
+  }
+
+  // Compare file keys
+  const prevKeys = Object.keys(prevFiles);
+  const nextKeys = Object.keys(nextFiles);
+
+  if (prevKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  // Compare file contents
+  return prevKeys.every(key => prevFiles[key] === nextFiles[key]);
 }
+
+/**
+ * Memoized CodeEditorView - only re-renders when files actually change.
+ * Monaco is expensive to update, so this prevents unnecessary re-renders.
+ */
+export const CodeEditorView = memo(CodeEditorViewComponent, areCodeEditorPropsEqual);

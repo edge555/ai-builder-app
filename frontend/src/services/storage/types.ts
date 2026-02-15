@@ -1,6 +1,6 @@
-import type { SerializedProjectState } from '@/shared';
-import type { ChatMessage } from '@/components';
-import type { ChangeSummary, FileDiff } from '@/shared';
+import type { SerializedProjectState, ChangeSummary, FileDiff } from '@ai-app-builder/shared/types';
+
+import type { ChatMessage } from '@/components/ChatInterface/ChatInterface';
 
 /**
  * Represents a stored project in IndexedDB.
@@ -23,6 +23,29 @@ export interface StoredProject {
   updatedAt: string;
   /** Chat message history (serialized) */
   chatMessages: SerializedChatMessage[];
+  /** Denormalized file count for gallery display */
+  fileCount: number;
+  /** First 3-5 filenames for gallery preview */
+  thumbnailFiles: string[];
+}
+
+/**
+ * Lightweight project metadata for gallery listings.
+ * Excludes files and chat messages for better performance.
+ */
+export interface ProjectMetadata {
+  /** Unique identifier */
+  id: string;
+  /** Human-readable project name */
+  name: string;
+  /** Project description */
+  description: string;
+  /** ID of the current version */
+  currentVersionId: string;
+  /** ISO timestamp when project was created */
+  createdAt: string;
+  /** ISO timestamp when project was last updated */
+  updatedAt: string;
   /** Denormalized file count for gallery display */
   fileCount: number;
   /** First 3-5 filenames for gallery preview */

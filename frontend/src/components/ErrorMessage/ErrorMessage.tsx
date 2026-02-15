@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import { forwardRef } from 'react';
 import './ErrorMessage.css';
 
 /**
@@ -51,30 +51,30 @@ const ERROR_SUGGESTIONS: Record<ErrorType, string> = {
  */
 export function classifyError(message: string): ErrorType {
   const lowerMessage = message.toLowerCase();
-  
-  if (lowerMessage.includes('network') || 
-      lowerMessage.includes('fetch') || 
-      lowerMessage.includes('connection') ||
-      lowerMessage.includes('api error')) {
+
+  if (lowerMessage.includes('network') ||
+    lowerMessage.includes('fetch') ||
+    lowerMessage.includes('connection') ||
+    lowerMessage.includes('api error')) {
     return 'network';
   }
-  
-  if (lowerMessage.includes('validation') || 
-      lowerMessage.includes('invalid')) {
+
+  if (lowerMessage.includes('validation') ||
+    lowerMessage.includes('invalid')) {
     return 'validation';
   }
-  
-  if (lowerMessage.includes('ai') || 
-      lowerMessage.includes('generation') ||
-      lowerMessage.includes('malformed')) {
+
+  if (lowerMessage.includes('ai') ||
+    lowerMessage.includes('generation') ||
+    lowerMessage.includes('malformed')) {
     return 'ai_output';
   }
-  
-  if (lowerMessage.includes('timeout') || 
-      lowerMessage.includes('timed out')) {
+
+  if (lowerMessage.includes('timeout') ||
+    lowerMessage.includes('timed out')) {
     return 'timeout';
   }
-  
+
   return 'unknown';
 }
 
@@ -94,7 +94,7 @@ export const ErrorMessage = forwardRef<HTMLDivElement, ErrorMessageProps>(functi
     className = '',
   },
   ref
-): JSX.Element {
+) {
   const errorType = type || classifyError(message);
   const title = ERROR_TITLES[errorType];
   const suggestion = ERROR_SUGGESTIONS[errorType];

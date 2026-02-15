@@ -17,7 +17,13 @@ import {
   RevertVersionRequestSchema,
 } from '@ai-app-builder/shared';
 import { getVersionManager } from '../../../lib/core';
-import { getCorsHeaders, handleOptions, handleError, AppError } from '../../../lib/api';
+import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError } from '../../../lib/api';
+import { createLogger } from '../../../lib/logger';
+
+const logger = createLogger('api/revert');
+
+// Timeout for revert operations (30 seconds)
+const REVERT_TIMEOUT_MS = 30_000;
 
 /**
  * Handle OPTIONS preflight request
@@ -36,9 +42,16 @@ export async function POST(
     // Validate request
     const validatedRequest = RevertVersionRequestSchema.parse(body);
 
-    // Perform revert operation
+    // Perform revert operation with timeout
     const versionManager = getVersionManager();
-    const result = versionManager.revertToVersion(validatedRequest.projectId, validatedRequest.versionId);
+    const result = await withTimeout(
+      Promise.resolve(versionManager.revertToVersion(validatedRequest.projectId, validatedRequest.versionId)),
+      {
+        timeoutMs: REVERT_TIMEOUT_MS,
+        operationName: 'version revert',
+        signal: request.signal,
+      }
+    );
 
     if (!result.success) {
       throw AppError.state('REVERT_FAILED', result.error ?? 'Failed to revert to version', undefined, 404);
@@ -53,6 +66,20 @@ export async function POST(
 
     return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
   } catch (error) {
+    // Handle timeout errors specifically
+    if (error instanceof TimeoutError) {
+      logger.error('Revert operation timed out', {
+        timeoutMs: error.timeoutMs,
+      });
+      const timeoutError = AppError.network(
+        'OPERATION_TIMEOUT',
+        `Version revert timed out after ${error.timeoutMs / 1000} seconds`,
+        { timeoutMs: error.timeoutMs },
+        504
+      );
+      return handleError(timeoutError, 'api/revert', request);
+    }
+
     return handleError(error, 'api/revert', request);
   }
 }

@@ -1,17 +1,16 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { AutoRepairProvider, useAutoRepair } from '../AutoRepairContext';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+import { AutoRepairProvider } from '../AutoRepairContext';
+import { useAutoRepair } from '../AutoRepairContext.context';
 
 // Test component
 function TestComponent() {
-    const { isAutoRepairEnabled, toggleAutoRepair } = useAutoRepair();
+    const { triggerAutoRepair } = useAutoRepair();
 
     return (
         <div>
-            <div data-testid="auto-repair-status">
-                {isAutoRepairEnabled ? 'enabled' : 'disabled'}
-            </div>
-            <button onClick={toggleAutoRepair}>Toggle</button>
+            <button onClick={() => triggerAutoRepair()}>Trigger</button>
         </div>
     );
 }
@@ -21,13 +20,13 @@ describe('AutoRepairContext', () => {
         vi.clearAllMocks();
     });
 
-    it('should provide auto-repair state', () => {
+    it('should provide auto-repair actions', () => {
         render(
             <AutoRepairProvider>
                 <TestComponent />
             </AutoRepairProvider>
         );
 
-        expect(screen.getByTestId('auto-repair-status')).toBeInTheDocument();
+        expect(screen.getByText('Trigger')).toBeInTheDocument();
     });
 });

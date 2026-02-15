@@ -1,12 +1,20 @@
-export { ChatInterface, type ChatInterfaceProps, type ChatMessage, type LoadingPhase } from './ChatInterface';
+export { ChatInterface, type ChatInterfaceProps, type ChatMessage } from './ChatInterface';
+export { LoadingIndicator, type LoadingPhase } from './ChatInterface/LoadingIndicator';
+export { ChatInput, type ChatInputProps } from './ChatInterface/ChatInput';
 // PreviewPanel is lazy-loaded in AppLayout - not exported to enable code-splitting
 // export { PreviewPanel, type PreviewPanelProps } from './PreviewPanel';
+export { PreviewHeader, type PreviewHeaderProps } from './PreviewPanel/PreviewHeader';
+export { transformFilesForSandpack, hasRequiredFiles, getEntryFile, DEFAULT_FILES } from './PreviewPanel/previewUtils';
 // DiffViewer is lazy-loaded in ChatInterface - not exported to enable code-splitting
 // export { DiffViewer, type DiffViewerProps } from './DiffViewer';
 export { HistoryPanel, type HistoryPanelProps } from './HistoryPanel';
 export { ErrorBoundary, type ErrorBoundaryProps } from './ErrorBoundary';
+export { ComponentErrorBoundary, type ComponentErrorBoundaryProps } from './ComponentErrorBoundary';
 export { ErrorMessage, classifyError, type ErrorMessageProps, type ErrorType } from './ErrorMessage';
 export { AppLayout } from './AppLayout';
+export { ChatPanel, type ChatPanelProps } from './AppLayout/ChatPanel';
+export { PreviewSection, type PreviewSectionProps } from './AppLayout/PreviewSection';
+export { ResizablePanel, type ResizablePanelProps } from './AppLayout/ResizablePanel';
 export { ExportButton } from './ExportButton';
 export { PanelToggle, type ActivePanel } from './PanelToggle';
 export { PromptSuggestions, type PromptSuggestionsProps } from './PromptSuggestions';

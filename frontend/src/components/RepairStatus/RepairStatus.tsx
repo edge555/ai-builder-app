@@ -3,8 +3,8 @@
  * Displays visual feedback during the auto-repair process.
  */
 
-import { useEffect, useState } from 'react';
 import { Wrench, CheckCircle, AlertCircle, Loader2, X } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
 import './RepairStatus.css';
 
 export type RepairPhase = 'idle' | 'detecting' | 'repairing' | 'success' | 'failed';
@@ -47,6 +47,14 @@ export function RepairStatus({
   const [isVisible, setIsVisible] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
 
+  const handleExit = useCallback(() => {
+    setIsExiting(true);
+    setTimeout(() => {
+      setIsVisible(false);
+      onDismiss?.();
+    }, 300); // Match CSS transition
+  }, [onDismiss]);
+
   // Handle visibility transitions
   useEffect(() => {
     if (phase !== 'idle') {
@@ -55,7 +63,7 @@ export function RepairStatus({
     } else {
       handleExit();
     }
-  }, [phase]);
+  }, [phase, handleExit]);
 
   // Auto-dismiss on success
   useEffect(() => {
@@ -65,15 +73,7 @@ export function RepairStatus({
       }, autoDismissMs);
       return () => clearTimeout(timer);
     }
-  }, [phase, autoDismissMs]);
-
-  const handleExit = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      setIsVisible(false);
-      onDismiss?.();
-    }, 300); // Match CSS transition
-  };
+  }, [phase, autoDismissMs, handleExit]);
 
   const handleDismiss = () => {
     handleExit();
@@ -132,7 +132,7 @@ export function RepairStatus({
   };
 
   return (
-    <div 
+    <div
       className={`repair-status ${getPhaseClass()} ${isExiting ? 'exiting' : ''}`}
       role="status"
       aria-live="polite"
@@ -140,9 +140,9 @@ export function RepairStatus({
       <div className="repair-status-content">
         {getIcon()}
         <span className="repair-status-message">{getMessage()}</span>
-        
+
         {phase === 'failed' && onViewDetails && (
-          <button 
+          <button
             className="repair-status-action"
             onClick={onViewDetails}
             aria-label="View error details"
@@ -150,7 +150,7 @@ export function RepairStatus({
             View Details
           </button>
         )}
-        
+
         {(phase === 'success' || phase === 'failed') && (
           <button
             className="repair-status-dismiss"
@@ -161,13 +161,13 @@ export function RepairStatus({
           </button>
         )}
       </div>
-      
+
       {phase === 'repairing' && (
         <div className="repair-status-progress">
-          <div 
-            className="repair-status-progress-bar" 
-            style={{ 
-              '--progress': `${(attempt / maxAttempts) * 100}%` 
+          <div
+            className="repair-status-progress-bar"
+            style={{
+              '--progress': `${(attempt / maxAttempts) * 100}%`
             } as React.CSSProperties}
           />
         </div>

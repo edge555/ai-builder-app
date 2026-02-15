@@ -180,7 +180,8 @@ export abstract class BaseProjectGenerator {
 
                 const fixedOutput = zodResult.data;
                 // Process fixed files
-                const fixedFiles = await processFiles(fixedOutput.files || [], { addFrontendPrefix: false });
+                const processResult = await processFiles(fixedOutput.files || [], { addFrontendPrefix: false });
+                const fixedFiles = processResult.files;
 
                 // Re-validate syntax
                 const revalidation = this.validationPipeline.validate(fixedFiles);

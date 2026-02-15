@@ -2,8 +2,8 @@ export interface PromptSuggestion {
   id: string;
   label: string;
   prompt: string;
-  category: 'ui' | 'feature' | 'styling' | 'data' | 'improvement';
-  icon: string;
+  category: 'ui' | 'feature' | 'styling' | 'data' | 'improvement' | 'utility' | 'logic';
+  icon: React.ReactNode;
 }
 
 /**
@@ -195,24 +195,24 @@ export function analyzeProjectForSuggestions(files: Record<string, string>): Pro
   const fileNames = Object.keys(files).map(f => f.toLowerCase());
 
   // Detect app type for context-specific suggestions
-  const isDashboard = allContent.includes('dashboard') || 
-                      allContent.includes('analytics') ||
-                      allContent.includes('chart') ||
-                      allContent.includes('stats');
-  
-  const isEcommerce = allContent.includes('cart') || 
-                      allContent.includes('product') ||
-                      allContent.includes('shop') ||
-                      allContent.includes('price');
-  
-  const isTaskApp = allContent.includes('todo') || 
-                    allContent.includes('task') ||
-                    allContent.includes('checklist') ||
-                    fileNames.some(f => f.includes('todo') || f.includes('task'));
+  const isDashboard = allContent.includes('dashboard') ||
+    allContent.includes('analytics') ||
+    allContent.includes('chart') ||
+    allContent.includes('stats');
 
-  const hasForms = allContent.includes('<form') || 
-                   allContent.includes('onsubmit') ||
-                   allContent.includes('handlesubmit');
+  const isEcommerce = allContent.includes('cart') ||
+    allContent.includes('product') ||
+    allContent.includes('shop') ||
+    allContent.includes('price');
+
+  const isTaskApp = allContent.includes('todo') ||
+    allContent.includes('task') ||
+    allContent.includes('checklist') ||
+    fileNames.some(f => f.includes('todo') || f.includes('task'));
+
+  const hasForms = allContent.includes('<form') ||
+    allContent.includes('onsubmit') ||
+    allContent.includes('handlesubmit');
 
   // Add type-specific suggestions first (most relevant)
   if (isDashboard) {
@@ -229,26 +229,26 @@ export function analyzeProjectForSuggestions(files: Record<string, string>): Pro
   }
 
   // Check for missing common features
-  const hasAuth = allContent.includes('login') || 
-                  allContent.includes('signin') || 
-                  allContent.includes('authentication') ||
-                  fileNames.some(f => f.includes('auth') || f.includes('login'));
+  const hasAuth = allContent.includes('login') ||
+    allContent.includes('signin') ||
+    allContent.includes('authentication') ||
+    fileNames.some(f => f.includes('auth') || f.includes('login'));
   if (!hasAuth && suggestions.length < 4) {
     suggestions.push(...contextualSuggestions.noAuth);
   }
 
-  const hasNav = allContent.includes('navbar') || 
-                 allContent.includes('navigation') ||
-                 allContent.includes('<nav') ||
-                 fileNames.some(f => f.includes('nav') || f.includes('header'));
+  const hasNav = allContent.includes('navbar') ||
+    allContent.includes('navigation') ||
+    allContent.includes('<nav') ||
+    fileNames.some(f => f.includes('nav') || f.includes('header'));
   if (!hasNav && suggestions.length < 4) {
     suggestions.push(...contextualSuggestions.noNav);
   }
 
-  const hasDarkMode = allContent.includes('dark-mode') || 
-                      allContent.includes('darkmode') ||
-                      allContent.includes('theme-toggle') ||
-                      allContent.includes('prefers-color-scheme');
+  const hasDarkMode = allContent.includes('dark-mode') ||
+    allContent.includes('darkmode') ||
+    allContent.includes('theme-toggle') ||
+    allContent.includes('prefers-color-scheme');
   if (!hasDarkMode && suggestions.length < 4) {
     suggestions.push(...contextualSuggestions.noDarkMode);
   }

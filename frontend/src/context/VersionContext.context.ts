@@ -1,9 +1,9 @@
-import { createContext, useContext, type ReactNode } from 'react';
 import type {
     SerializedVersion,
     SerializedProjectState,
     FileDiff
-} from '@/shared';
+} from '@ai-app-builder/shared/types';
+import { createContext, useContext, type ReactNode } from 'react';
 
 /**
  * API configuration for the version context.
@@ -62,7 +62,6 @@ export const VersionContext = createContext<VersionContextValue | null>(null);
  */
 export interface VersionProviderProps {
     children: ReactNode;
-    apiConfig?: Partial<ApiConfig>;
 }
 
 /**

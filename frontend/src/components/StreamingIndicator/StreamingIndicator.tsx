@@ -1,5 +1,7 @@
-import React from 'react';
+import { useState } from 'react';
+
 import type { StreamingState } from '@/context';
+
 import './StreamingIndicator.css';
 
 export interface StreamingIndicatorProps {
@@ -11,7 +13,8 @@ export interface StreamingIndicatorProps {
  * Displays file names as they're generated with heartbeat status.
  */
 export function StreamingIndicator({ state }: StreamingIndicatorProps) {
-  const { phase, currentFile, filesReceived, totalFiles, textLength, lastHeartbeat } = state;
+  const { phase, currentFile, filesReceived, totalFiles, textLength, lastHeartbeat, warnings, summary } = state;
+  const [showWarnings, setShowWarnings] = useState(false);
 
   if (phase === 'idle') return null;
 
@@ -57,6 +60,41 @@ export function StreamingIndicator({ state }: StreamingIndicatorProps) {
           {!isConnectionHealthy && phase !== 'complete' && phase !== 'error' && (
             <div className="streaming-indicator-warning">
               Connection may be slow...
+            </div>
+          )}
+
+          {warnings.length > 0 && (
+            <>
+              <button
+                className="streaming-indicator-warnings"
+                onClick={() => setShowWarnings(!showWarnings)}
+                type="button"
+                aria-expanded={showWarnings}
+              >
+                <span className="streaming-indicator-warning-icon">⚠️</span>
+                <span>{warnings.length} warning{warnings.length > 1 ? 's' : ''}</span>
+                <span className="streaming-indicator-expand-icon">{showWarnings ? '▼' : '▶'}</span>
+              </button>
+              {showWarnings && (
+                <div className="streaming-indicator-warning-list">
+                  {warnings.map((warning, index) => (
+                    <div key={index} className="streaming-indicator-warning-item">
+                      <div className="streaming-indicator-warning-path">{warning.path}</div>
+                      <div className="streaming-indicator-warning-message">{warning.message}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {summary && (
+            <div className="streaming-indicator-summary">
+              {summary.failedFiles > 0 && (
+                <span className="streaming-indicator-failed">
+                  {summary.failedFiles} file{summary.failedFiles > 1 ? 's' : ''} incomplete
+                </span>
+              )}
             </div>
           )}
         </div>

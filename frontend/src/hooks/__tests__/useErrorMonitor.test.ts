@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useErrorMonitor } from '../useErrorMonitor';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import { useErrorAggregator } from '@/context/ErrorAggregatorContext';
+
+import { useErrorMonitor } from '../useErrorMonitor';
+
 
 // Mock the error aggregator context
 vi.mock('@/context/ErrorAggregatorContext', () => ({

@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
-import { ProjectProvider, useProject } from '../ProjectContext';
-import type { SerializedProjectState } from '@/shared';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+import { ProjectProvider } from '../ProjectContext';
+import { useProject } from '../ProjectContext.context';
 
 // Test component to access context
 function TestComponent() {
@@ -16,7 +17,11 @@ function TestComponent() {
                         {
                             id: 'test-1',
                             name: 'Test Project',
+                            description: 'Test description',
                             files: {},
+                            currentVersionId: 'v1',
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
                         },
                         false
                     )
