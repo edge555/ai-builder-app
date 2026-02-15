@@ -16,6 +16,8 @@ export interface ParsedFile {
 /**
  * Attempts to extract complete file objects from accumulated JSON text.
  * Returns an array of parsed files and the index where parsing stopped.
+ *
+ * Optimized for O(n) complexity - processes each character once in a single pass.
  */
 export function parseIncrementalFiles(text: string, startFrom: number = 0): {
   files: ParsedFile[];
@@ -24,21 +26,31 @@ export function parseIncrementalFiles(text: string, startFrom: number = 0): {
   const files: ParsedFile[] = [];
   let currentIndex = startFrom;
 
-  // Look for file objects in the "files" array
-  // Expected format: { "files": [ { "path": "...", "content": "..." }, ... ] }
-  
-  while (currentIndex < text.length) {
-    // Find the start of a file object
-    const fileObjStart = text.indexOf('{"path":', currentIndex);
-    if (fileObjStart === -1) break;
+  // Single-pass algorithm: scan character-by-character without indexOf
+  // Expected format: { "path": "...", "content": "..." }{ "path": "...", ... }
 
-    // Try to find the matching closing brace
+  while (currentIndex < text.length) {
+    // Skip whitespace and commas between objects
+    while (currentIndex < text.length && /[\s,]/.test(text[currentIndex])) {
+      currentIndex++;
+    }
+
+    if (currentIndex >= text.length) break;
+
+    // We expect file objects to start with '{'
+    if (text[currentIndex] !== '{') {
+      currentIndex++;
+      continue;
+    }
+
+    // Try to find the matching closing brace for this object
+    const startPos = currentIndex;
     let braceCount = 0;
     let inString = false;
     let escapeNext = false;
-    let fileObjEnd = -1;
+    let endPos = -1;
 
-    for (let i = fileObjStart; i < text.length; i++) {
+    for (let i = startPos; i < text.length; i++) {
       const char = text[i];
 
       if (escapeNext) {
@@ -62,7 +74,7 @@ export function parseIncrementalFiles(text: string, startFrom: number = 0): {
         } else if (char === '}') {
           braceCount--;
           if (braceCount === 0) {
-            fileObjEnd = i + 1;
+            endPos = i + 1;
             break;
           }
         }
@@ -70,24 +82,25 @@ export function parseIncrementalFiles(text: string, startFrom: number = 0): {
     }
 
     // If we found a complete object, try to parse it
-    if (fileObjEnd !== -1) {
-      const fileObjText = text.substring(fileObjStart, fileObjEnd);
+    if (endPos !== -1) {
+      const objText = text.substring(startPos, endPos);
       try {
-        const fileObj = JSON.parse(fileObjText);
-        if (fileObj.path && typeof fileObj.content === 'string') {
+        const obj = JSON.parse(objText);
+        // Only accept objects with required file fields
+        if (obj.path && typeof obj.content === 'string') {
           files.push({
-            path: fileObj.path,
-            content: fileObj.content,
-            startIndex: fileObjStart,
-            endIndex: fileObjEnd,
+            path: obj.path,
+            content: obj.content,
+            startIndex: startPos,
+            endIndex: endPos,
           });
         }
       } catch {
         // Invalid JSON, skip this object
       }
-      currentIndex = fileObjEnd;
+      currentIndex = endPos;
     } else {
-      // No complete object found, stop parsing
+      // Incomplete object found, stop parsing here
       break;
     }
   }

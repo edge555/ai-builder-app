@@ -3,10 +3,22 @@
  * Handles sanitization, normalization, and formatting of AI-generated files.
  */
 
-import { formatCode } from '../prettier-config';
+import * as path from 'path';
+import { WorkerPool } from './worker-pool';
 import { createLogger } from '../logger';
 
 const logger = createLogger('file-processor');
+
+// Lazy initialization of worker pool
+let workerPool: WorkerPool | null = null;
+
+function getWorkerPool(): WorkerPool {
+    if (!workerPool) {
+        const workerScript = path.resolve(__dirname, '../workers/prettier-worker.js');
+        workerPool = new WorkerPool(workerScript);
+    }
+    return workerPool;
+}
 
 export interface ProcessedFile {
     path: string;
@@ -82,11 +94,13 @@ export async function processFile(
         normalizedContent = normalizedContent.replace(/\\\\t/g, '\\t');
     }
 
-    // Format with Prettier
+    // Format with Prettier (via Worker Pool)
     try {
-        const formatted = await formatCode(normalizedContent, path);
+        const pool = getWorkerPool();
+        const formatted = await pool.runTask({ content: normalizedContent, filePath: path });
+
         if (formatted !== normalizedContent) {
-            logger.debug('File formatted successfully', { path });
+            logger.debug('File formatted successfully (worker)', { path });
             normalizedContent = formatted;
         }
     } catch (e) {
@@ -94,6 +108,7 @@ export async function processFile(
             path,
             error: e instanceof Error ? e.message : 'Unknown error'
         });
+        // On error, we keep normalizedContent as is (graceful degradation)
     }
 
     return { path: sanitizedPath, content: normalizedContent };

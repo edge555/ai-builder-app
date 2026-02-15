@@ -5,7 +5,7 @@
 
 ---
 
-## [ ] Task 5.1: Move Prettier Formatting to Worker Pool
+## [x] Task 5.1: Move Prettier Formatting to Worker Pool
 
 **Files:**
 - `backend/lib/core/file-processor.ts` (lines 50-100)
@@ -28,7 +28,7 @@
 
 ---
 
-## [ ] Task 5.2: Optimize Incremental JSON Parser (O(n^2) -> O(n))
+## [x] Task 5.2: Optimize Incremental JSON Parser (O(n^2) -> O(n))
 
 **Files:**
 - `backend/lib/utils/incremental-json-parser.ts` (lines 20-99)
@@ -49,7 +49,7 @@
 
 ---
 
-## [ ] Task 5.3: Cache Dependency Graph Between Calls
+## [x] Task 5.3: Cache Dependency Graph Between Calls
 
 **Files:**
 - `backend/lib/analysis/dependency-graph.ts` (lines 29-58)
