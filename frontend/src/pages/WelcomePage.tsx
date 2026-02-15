@@ -5,7 +5,7 @@ import { TemplateGrid } from '@/components/TemplateGrid/TemplateGrid';
 import { ProjectGallery } from '@/components/ProjectGallery/ProjectGallery';
 import { ThemeToggle } from '@/components/ThemeToggle/ThemeToggle';
 import { ConfirmDialog } from '@/components/ConfirmDialog/ConfirmDialog';
-import type { StoredProject } from '@/services/storage';
+import type { ProjectMetadata } from '@/services/storage';
 import './WelcomePage.css';
 
 interface WelcomePageProps {
@@ -14,7 +14,7 @@ interface WelcomePageProps {
   onDeleteProject: (projectId: string) => void;
   onRenameProject: (projectId: string, newName: string) => void;
   onDuplicateProject: (projectId: string) => void;
-  savedProjects: StoredProject[];
+  savedProjects: ProjectMetadata[];
   isLoadingProjects?: boolean;
 }
 

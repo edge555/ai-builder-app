@@ -4,11 +4,11 @@ import { ProjectCard } from './ProjectCard';
 import { ProjectCardSkeleton } from './ProjectCardSkeleton';
 import { ProjectGalleryTabs } from './ProjectGalleryTabs';
 import { RecentProjects } from './RecentProjects';
-import type { StoredProject } from '@/services/storage';
+import type { ProjectMetadata } from '@/services/storage';
 import './ProjectGallery.css';
 
 export interface ProjectGalleryProps {
-  projects: StoredProject[];
+  projects: ProjectMetadata[];
   onOpenProject: (projectId: string) => void;
   onRenameProject: (projectId: string, newName: string) => void;
   onDuplicateProject: (projectId: string) => void;

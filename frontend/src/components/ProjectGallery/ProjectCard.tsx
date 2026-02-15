@@ -1,9 +1,9 @@
 import { Copy, Trash2, File, Clock } from 'lucide-react';
-import type { StoredProject } from '@/services/storage';
+import type { ProjectMetadata } from '@/services/storage';
 import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
 
 export interface ProjectCardProps {
-  project: StoredProject;
+  project: ProjectMetadata;
   onOpen: (projectId: string) => void;
   onRename: (projectId: string, newName: string) => void;
   onDuplicate: (projectId: string) => void;

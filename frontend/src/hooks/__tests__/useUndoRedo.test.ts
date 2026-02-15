@@ -7,7 +7,6 @@ describe('useUndoRedo', () => {
     const mockState2 = { id: '2', name: 'state2', files: {} } as any;
 
     beforeEach(() => {
-        sessionStorage.clear();
         vi.clearAllMocks();
     });
 

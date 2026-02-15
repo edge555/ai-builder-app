@@ -13,6 +13,10 @@ import { createStreamingProjectGenerator } from '../../../lib/core/streaming-gen
 import { handleOptions, getCorsHeaders } from '../../../lib/api';
 import { createLogger } from '../../../lib/logger';
 import { generateRequestId } from '../../../lib/request-id';
+import {
+  BackpressureController,
+  EventPriority,
+} from '../../../lib/streaming';
 
 const logger = createLogger('api/generate-stream');
 
@@ -27,10 +31,15 @@ export async function OPTIONS() {
 }
 
 /**
- * Server-Sent Events (SSE) encoder
+ * Server-Sent Events (SSE) encoder with backpressure support
  */
 class SSEEncoder {
   private encoder = new TextEncoder();
+  private backpressure: BackpressureController;
+
+  constructor(backpressure: BackpressureController) {
+    this.backpressure = backpressure;
+  }
 
   /**
    * Encodes an SSE event
@@ -45,6 +54,29 @@ class SSEEncoder {
    */
   heartbeat(): Uint8Array {
     return this.encoder.encode(': heartbeat\n\n');
+  }
+
+  /**
+   * Enqueue an event with backpressure handling
+   */
+  enqueueEvent(
+    controller: ReadableStreamDefaultController<Uint8Array>,
+    event: string,
+    data: any,
+    priority: EventPriority = EventPriority.NORMAL
+  ): boolean {
+    const encoded = this.encode(event, data);
+    return this.backpressure.enqueue(controller, encoded, priority);
+  }
+
+  /**
+   * Enqueue a heartbeat with low priority (can be dropped)
+   */
+  enqueueHeartbeat(
+    controller: ReadableStreamDefaultController<Uint8Array>
+  ): boolean {
+    const encoded = this.heartbeat();
+    return this.backpressure.enqueue(controller, encoded, EventPriority.LOW);
   }
 }
 
@@ -75,10 +107,17 @@ export async function POST(request: NextRequest) {
       descriptionLength: body.description.length,
     });
 
-    // Create streaming response
+    // Create backpressure controller
+    const backpressure = new BackpressureController({
+      maxBufferSize: 1024 * 1024, // 1MB
+      highWaterMark: 16 * 1024, // 16KB
+      debug: false, // Enable for debugging
+    });
+
+    // Create streaming response with highWaterMark for backpressure signaling
     const stream = new ReadableStream({
       async start(controller) {
-        const encoder = new SSEEncoder();
+        const encoder = new SSEEncoder(backpressure);
         let heartbeatInterval: NodeJS.Timeout | null = null;
         let streamTimeout: NodeJS.Timeout | null = null;
         let isComplete = false;
@@ -88,13 +127,17 @@ export async function POST(request: NextRequest) {
           if (heartbeatInterval) clearInterval(heartbeatInterval);
           if (streamTimeout) clearTimeout(streamTimeout);
           isComplete = true;
+
+          // Log backpressure statistics
+          backpressure.logStats();
         };
 
         try {
           // Set up heartbeat to prevent proxy timeouts
           heartbeatInterval = setInterval(() => {
             if (!isComplete) {
-              controller.enqueue(encoder.heartbeat());
+              // Heartbeat has low priority and can be dropped under backpressure
+              encoder.enqueueHeartbeat(controller);
             }
           }, HEARTBEAT_INTERVAL_MS);
 
@@ -102,9 +145,13 @@ export async function POST(request: NextRequest) {
           streamTimeout = setTimeout(() => {
             if (!isComplete) {
               cleanup();
-              controller.enqueue(encoder.encode('error', {
-                error: 'Stream timeout after 120 seconds',
-              }));
+              // Error events are critical
+              encoder.enqueueEvent(
+                controller,
+                'error',
+                { error: 'Stream timeout after 120 seconds' },
+                EventPriority.CRITICAL
+              );
               controller.close();
             }
           }, STREAM_TIMEOUT_MS);
@@ -114,15 +161,33 @@ export async function POST(request: NextRequest) {
 
           const result = await generator.generateProjectStreaming(body.description, {
             onStart: () => {
-              controller.enqueue(encoder.encode('start', { timestamp: Date.now() }));
+              // Start event has normal priority
+              encoder.enqueueEvent(
+                controller,
+                'start',
+                { timestamp: Date.now() },
+                EventPriority.NORMAL
+              );
             },
 
             onProgress: (length: number) => {
-              controller.enqueue(encoder.encode('progress', { length }));
+              // Progress events have normal priority
+              encoder.enqueueEvent(
+                controller,
+                'progress',
+                { length },
+                EventPriority.NORMAL
+              );
             },
 
             onFile: (data) => {
-              controller.enqueue(encoder.encode('file', data));
+              // File events are critical and must not be dropped
+              encoder.enqueueEvent(
+                controller,
+                'file',
+                data,
+                EventPriority.CRITICAL
+              );
             },
 
             onComplete: (data) => {
@@ -131,29 +196,47 @@ export async function POST(request: NextRequest) {
                 projectState: serializeProjectState(data.projectState),
                 version: serializeVersion(data.version),
               };
-              controller.enqueue(encoder.encode('complete', response));
+              // Complete event is critical
+              encoder.enqueueEvent(
+                controller,
+                'complete',
+                response,
+                EventPriority.CRITICAL
+              );
             },
 
             onError: (error, errorData) => {
-              controller.enqueue(encoder.encode('error', {
-                error,
-                errorCode: errorData?.errorCode,
-                errorType: errorData?.errorType,
-                partialContent: errorData?.partialContent,
-              }));
+              // Error events are critical
+              encoder.enqueueEvent(
+                controller,
+                'error',
+                {
+                  error,
+                  errorCode: errorData?.errorCode,
+                  errorType: errorData?.errorType,
+                  partialContent: errorData?.partialContent,
+                },
+                EventPriority.CRITICAL
+              );
             },
 
             onHeartbeat: () => {
               // Additional heartbeat callback if needed
+              encoder.enqueueHeartbeat(controller);
             },
           });
 
           // If generation failed without calling onError
           if (!result.success && result.error) {
-            controller.enqueue(encoder.encode('error', {
-              error: result.error,
-              validationErrors: result.validationErrors,
-            }));
+            encoder.enqueueEvent(
+              controller,
+              'error',
+              {
+                error: result.error,
+                validationErrors: result.validationErrors,
+              },
+              EventPriority.CRITICAL
+            );
           }
 
           cleanup();
@@ -169,10 +252,19 @@ export async function POST(request: NextRequest) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           contextLogger.error('Streaming generation error', { error: errorMessage });
 
-          controller.enqueue(encoder.encode('error', { error: errorMessage }));
+          // Error events are critical
+          encoder.enqueueEvent(
+            controller,
+            'error',
+            { error: errorMessage },
+            EventPriority.CRITICAL
+          );
           controller.close();
         }
       },
+    }, {
+      // Set high water mark for proper backpressure signaling
+      highWaterMark: backpressure.getHighWaterMark(),
     });
 
     // Return SSE response

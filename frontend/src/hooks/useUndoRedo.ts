@@ -1,8 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import type { SerializedProjectState } from '@/shared';
 
 const MAX_STACK_SIZE = 20;
-const STORAGE_KEY = 'ai_app_builder:undo_stack';
 
 export interface UndoRedoState {
   undoStack: SerializedProjectState[];
@@ -19,28 +18,15 @@ export interface UndoRedoActions {
 }
 
 /**
- * Hook for managing undo/redo state with local persistence.
- * Stores project states in a stack for instant restoration.
+ * Hook for managing undo/redo state in memory.
+ * Stores project states in a stack for instant restoration during the current session.
+ *
+ * Note: Undo/redo stacks are ephemeral and not persisted across page reloads.
+ * For persistent state restoration, use the version history system (VersionContext).
  */
 export function useUndoRedo(currentState: SerializedProjectState | null): UndoRedoState & UndoRedoActions {
-  const [undoStack, setUndoStack] = useState<SerializedProjectState[]>(() => {
-    try {
-      const stored = sessionStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [undoStack, setUndoStack] = useState<SerializedProjectState[]>([]);
   const [redoStack, setRedoStack] = useState<SerializedProjectState[]>([]);
-
-  // Persist undo stack to session storage
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(undoStack.slice(-MAX_STACK_SIZE)));
-    } catch {
-      // Session storage might be full or unavailable
-    }
-  }, [undoStack]);
 
   const pushState = useCallback((state: SerializedProjectState) => {
     setUndoStack((prev) => {
@@ -86,7 +72,6 @@ export function useUndoRedo(currentState: SerializedProjectState | null): UndoRe
   const clear = useCallback(() => {
     setUndoStack([]);
     setRedoStack([]);
-    sessionStorage.removeItem(STORAGE_KEY);
   }, []);
 
   return {

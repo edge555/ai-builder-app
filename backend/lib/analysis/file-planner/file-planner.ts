@@ -39,13 +39,19 @@ export class FilePlanner {
   private fallbackSelector: FallbackSelector;
   private tokenBudgetManager: TokenBudgetManager;
   private chunkIndexBuilder: ChunkIndexBuilder;
-  
-  // Cache for chunk index to avoid rebuilding on retries
-  private chunkIndexCache: Map<string, { index: ChunkIndex; timestamp: number }>;
-  private readonly CACHE_TTL_MS = 60000; // 1 minute TTL
 
-  // Optimized symbol lookup map
+  // Cache for chunk index to avoid rebuilding on retries
+  private chunkIndexCache: Map<string, { index: ChunkIndex; timestamp: number; estimatedSize: number }>;
+  private readonly CACHE_TTL_MS = 60000; // 1 minute TTL
+  private readonly MAX_CACHE_ENTRIES = 3; // Reduced from 5 to 3
+  private readonly MAX_CACHE_MEMORY_BYTES = 50 * 1024 * 1024; // 50MB limit
+  private currentCacheMemoryUsage = 0;
+
+  // Optimized symbol lookup map (uses same key as chunkIndexCache)
   private symbolLookupCache: Map<string, Map<string, { filePath: string; signature: string; symbolName: string }>>;
+
+  // Current cache key for the active chunk index (ensures consistency)
+  private currentCacheKey: string | null = null;
 
   constructor(geminiClient?: GeminiClient) {
     this.geminiClient = geminiClient ?? null;
@@ -395,19 +401,21 @@ export class FilePlanner {
   /**
    * Find a chunk by symbol name using optimized lookup.
    * Uses a Map for O(1) lookup instead of O(n) iteration.
+   * Uses currentCacheKey to ensure consistency with chunkIndexCache.
    */
   private findChunkBySymbol(
     symbolName: string,
     chunkIndex: ChunkIndex
   ): { filePath: string; signature: string; symbolName: string } | null {
-    // Get or build symbol lookup map for this chunk index
-    const cacheKey = this.getChunkIndexCacheKey(chunkIndex);
-    let symbolMap = this.symbolLookupCache.get(cacheKey);
+    // Use currentCacheKey to ensure consistency with chunkIndexCache
+    // This prevents orphaned entries in symbolLookupCache
+    const cacheKey = this.currentCacheKey;
 
-    if (!symbolMap) {
-      // Build the symbol lookup map
-      symbolMap = new Map();
-      for (const [, chunk] of chunkIndex.chunks) {
+    if (!cacheKey) {
+      // Fallback if currentCacheKey is not set (shouldn't happen in normal flow)
+      logger.warn('currentCacheKey not set, building symbol map without caching');
+      const symbolMap = new Map<string, { filePath: string; signature: string; symbolName: string }>();
+      chunkIndex.chunks.forEach((chunk) => {
         if (chunk.isExported) {
           symbolMap.set(chunk.symbolName, {
             filePath: chunk.filePath,
@@ -415,54 +423,185 @@ export class FilePlanner {
             symbolName: chunk.symbolName,
           });
         }
-      }
-      this.symbolLookupCache.set(cacheKey, symbolMap);
-      logger.debug('Built symbol lookup map', { symbolCount: symbolMap.size });
+      });
+      return symbolMap.get(symbolName) ?? null;
     }
 
-    return symbolMap.get(symbolName) ?? null;
+    let symbolMap = this.symbolLookupCache.get(cacheKey);
+
+    if (!symbolMap) {
+      // Build the symbol lookup map
+      symbolMap = new Map();
+      chunkIndex.chunks.forEach((chunk) => {
+        if (chunk.isExported) {
+          symbolMap!.set(chunk.symbolName, {
+            filePath: chunk.filePath,
+            signature: chunk.signature,
+            symbolName: chunk.symbolName,
+          });
+        }
+      });
+      this.symbolLookupCache.set(cacheKey, symbolMap);
+      logger.debug('Built symbol lookup map', { cacheKey, symbolCount: symbolMap.size });
+    }
+
+    return symbolMap!.get(symbolName) ?? null;
+  }
+
+  /**
+   * Estimate the memory size of a ChunkIndex in bytes.
+   * This is a rough approximation based on the data structures.
+   */
+  private estimateChunkIndexSize(index: ChunkIndex): number {
+    let totalSize = 0;
+
+    // Estimate chunks Map size
+    index.chunks.forEach((chunk) => {
+      totalSize += chunk.content.length * 2; // UTF-16 characters
+      totalSize += chunk.filePath.length * 2;
+      totalSize += chunk.id.length * 2;
+      totalSize += chunk.signature.length * 2;
+      totalSize += chunk.symbolName.length * 2;
+      totalSize += chunk.dependencies.reduce((sum: number, dep: string) => sum + dep.length * 2, 0);
+      totalSize += 200; // Overhead for object structure and other fields
+    });
+
+    // Estimate fileMetadata Map size
+    index.fileMetadata.forEach((metadata) => {
+      totalSize += metadata.filePath.length * 2;
+      totalSize += metadata.exports.reduce((sum: number, exp) => sum + exp.name.length * 2, 0);
+      totalSize += 100; // Overhead for object structure
+    });
+
+    return totalSize;
+  }
+
+  /**
+   * Clear both caches. Useful for testing and manual cleanup.
+   */
+  clear(): void {
+    this.chunkIndexCache.clear();
+    this.symbolLookupCache.clear();
+    this.currentCacheMemoryUsage = 0;
+    logger.info('Cache cleared');
   }
 
   /**
    * Get or build cached chunk index for a project state.
    * Caches based on file count and total content length to detect changes.
+   * Implements memory-based eviction to prevent unbounded growth.
    */
   private getCachedChunkIndex(projectState: ProjectState): ChunkIndex {
     const cacheKey = this.getProjectStateCacheKey(projectState);
+
+    // Set current cache key for consistent usage across methods
+    this.currentCacheKey = cacheKey;
+
     const cached = this.chunkIndexCache.get(cacheKey);
     const now = Date.now();
 
     if (cached && (now - cached.timestamp) < this.CACHE_TTL_MS) {
-      logger.debug('Using cached chunk index', { cacheKey });
+      logger.debug('Using cached chunk index', {
+        cacheKey,
+        estimatedSize: `${(cached.estimatedSize / 1024 / 1024).toFixed(2)}MB`,
+      });
       return cached.index;
     }
 
     // Build new index
     logger.debug('Building new chunk index', { cacheKey });
     const index = this.chunkIndexBuilder.build(projectState);
-    
+
+    // Estimate size
+    const estimatedSize = this.estimateChunkIndexSize(index);
+
     // Cache it
-    this.chunkIndexCache.set(cacheKey, { index, timestamp: now });
-    
-    // Clean up old cache entries (keep only last 5)
-    if (this.chunkIndexCache.size > 5) {
-      const entries = Array.from(this.chunkIndexCache.entries());
-      entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
-      const toKeep = entries.slice(0, 5);
-      this.chunkIndexCache.clear();
-      for (const [key, value] of toKeep) {
-        this.chunkIndexCache.set(key, value);
-      }
-      // Also clean up corresponding symbol lookup caches
-      const keysToKeep = new Set(toKeep.map(([key]) => key));
-      for (const key of this.symbolLookupCache.keys()) {
-        if (!keysToKeep.has(key)) {
-          this.symbolLookupCache.delete(key);
-        }
+    this.chunkIndexCache.set(cacheKey, { index, timestamp: now, estimatedSize });
+    this.currentCacheMemoryUsage += estimatedSize;
+
+    logger.debug('Cached chunk index', {
+      cacheKey,
+      estimatedSize: `${(estimatedSize / 1024 / 1024).toFixed(2)}MB`,
+      totalCacheMemory: `${(this.currentCacheMemoryUsage / 1024 / 1024).toFixed(2)}MB`,
+    });
+
+    // Evict based on both count and memory limits
+    this.evictCacheIfNeeded();
+
+    return index;
+  }
+
+  /**
+   * Evict cache entries if count or memory limits exceeded.
+   * Uses LRU (Least Recently Used) eviction strategy.
+   */
+  private evictCacheIfNeeded(): void {
+    // Check if eviction is needed
+    const needsEviction =
+      this.chunkIndexCache.size > this.MAX_CACHE_ENTRIES ||
+      this.currentCacheMemoryUsage > this.MAX_CACHE_MEMORY_BYTES;
+
+    if (!needsEviction) {
+      return;
+    }
+
+    // Convert to array and sort by timestamp (oldest first)
+    const entries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]> = [];
+    this.chunkIndexCache.forEach((value, key) => {
+      entries.push([key, value]);
+    });
+    entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+
+    // Determine how many to keep
+    const toKeep = entries.slice(0, this.MAX_CACHE_ENTRIES);
+
+    // Calculate new memory usage
+    let newMemoryUsage = 0;
+    const keysToKeep = new Set<string>();
+    const finalEntries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]> = [];
+
+    for (const [key, value] of toKeep) {
+      if (newMemoryUsage + value.estimatedSize <= this.MAX_CACHE_MEMORY_BYTES) {
+        finalEntries.push([key, value]);
+        keysToKeep.add(key);
+        newMemoryUsage += value.estimatedSize;
+      } else {
+        // Stop adding if it would exceed memory limit
+        break;
       }
     }
 
-    return index;
+    // Clear and rebuild cache
+    const evictedCount = this.chunkIndexCache.size - finalEntries.length;
+    this.chunkIndexCache.clear();
+    this.currentCacheMemoryUsage = 0;
+
+    for (const [key, value] of finalEntries) {
+      this.chunkIndexCache.set(key, value);
+      this.currentCacheMemoryUsage += value.estimatedSize;
+    }
+
+    // Clean up corresponding symbol lookup caches
+    // IMPORTANT: Use the same key for symbolLookupCache
+    const symbolKeysToRemove: string[] = [];
+    this.symbolLookupCache.forEach((_, key) => {
+      if (!keysToKeep.has(key)) {
+        symbolKeysToRemove.push(key);
+      }
+    });
+
+    symbolKeysToRemove.forEach(key => {
+      this.symbolLookupCache.delete(key);
+    });
+
+    if (evictedCount > 0) {
+      logger.info('Evicted cache entries', {
+        evictedCount,
+        remainingEntries: this.chunkIndexCache.size,
+        totalMemory: `${(this.currentCacheMemoryUsage / 1024 / 1024).toFixed(2)}MB`,
+        maxMemory: `${(this.MAX_CACHE_MEMORY_BYTES / 1024 / 1024).toFixed(2)}MB`,
+      });
+    }
   }
 
   /**
@@ -482,13 +621,6 @@ export class FilePlanner {
     const fileCount = Object.keys(projectState.files).length;
     const totalLength = Object.values(projectState.files).reduce((sum, content) => sum + content.length, 0);
     return `${projectState.id}_${fileCount}_${totalLength}`;
-  }
-
-  /**
-   * Generate a cache key for a chunk index.
-   */
-  private getChunkIndexCacheKey(chunkIndex: ChunkIndex): string {
-    return `chunks_${chunkIndex.chunks.size}_${chunkIndex.fileMetadata.size}`;
   }
 
   /**

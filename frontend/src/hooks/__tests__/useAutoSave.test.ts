@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { useAutoSave } from '../useAutoSave';
 import { storageService } from '@/services/storage';
 import type { SerializedProjectState } from '@/shared';
@@ -66,6 +66,9 @@ describe('useAutoSave', () => {
     });
 
     it('should debounce save operations', async () => {
+        (storageService.saveProject as any).mockResolvedValue(undefined);
+        (storageService.setMetadata as any).mockResolvedValue(undefined);
+
         const { rerender } = renderHook(
             ({ projectState, messages }) => useAutoSave(projectState, messages),
             {
@@ -85,13 +88,11 @@ describe('useAutoSave', () => {
         // Should not have saved yet
         expect(storageService.saveProject).not.toHaveBeenCalled();
 
-        // Advance past debounce delay
-        vi.advanceTimersByTime(1500);
+        // Advance past debounce delay and run all timers/promises
+        await vi.runAllTimersAsync();
 
         // Should have saved only once
-        await waitFor(() => {
-            expect(storageService.saveProject).toHaveBeenCalledTimes(1);
-        });
+        expect(storageService.saveProject).toHaveBeenCalledTimes(1);
     });
 
     it('should save to IndexedDB after debounce delay', async () => {
@@ -100,34 +101,39 @@ describe('useAutoSave', () => {
 
         renderHook(() => useAutoSave(mockProjectState, mockMessages));
 
-        vi.advanceTimersByTime(1500);
+        await vi.runAllTimersAsync();
 
-        await waitFor(() => {
-            expect(storageService.saveProject).toHaveBeenCalledTimes(1);
-            expect(storageService.setMetadata).toHaveBeenCalledWith('lastOpenedProjectId', 'test-project-id');
-        });
+        expect(storageService.saveProject).toHaveBeenCalledTimes(1);
+        expect(storageService.setMetadata).toHaveBeenCalledWith('lastOpenedProjectId', 'test-project-id');
     });
 
     it('should set isSaving to true during save operation', async () => {
-        (storageService.saveProject as any).mockImplementation(
-            () => new Promise((resolve) => setTimeout(resolve, 100))
-        );
+        let resolveSave: () => void;
+        const savePromise = new Promise<void>((resolve) => {
+            resolveSave = resolve;
+        });
+        (storageService.saveProject as any).mockReturnValue(savePromise);
+        (storageService.setMetadata as any).mockResolvedValue(undefined);
 
         const { result } = renderHook(() => useAutoSave(mockProjectState, mockMessages));
 
         expect(result.current.isSaving).toBe(false);
 
-        vi.advanceTimersByTime(1500);
-
-        await waitFor(() => {
-            expect(result.current.isSaving).toBe(true);
+        // Advance past debounce delay and wait for state updates
+        await act(async () => {
+            vi.advanceTimersByTime(1500);
+            await Promise.resolve(); // Let microtasks flush
         });
 
-        vi.advanceTimersByTime(100);
+        expect(result.current.isSaving).toBe(true);
 
-        await waitFor(() => {
-            expect(result.current.isSaving).toBe(false);
+        // Complete the save
+        await act(async () => {
+            resolveSave!();
+            await Promise.resolve(); // Let microtasks flush
         });
+
+        expect(result.current.isSaving).toBe(false);
     });
 
     it('should update lastSavedAt on successful save', async () => {
@@ -138,11 +144,9 @@ describe('useAutoSave', () => {
 
         expect(result.current.lastSavedAt).toBeNull();
 
-        vi.advanceTimersByTime(1500);
+        await vi.runAllTimersAsync();
 
-        await waitFor(() => {
-            expect(result.current.lastSavedAt).toBeInstanceOf(Date);
-        });
+        expect(result.current.lastSavedAt).toBeInstanceOf(Date);
     });
 
     it('should handle save errors gracefully', async () => {
@@ -151,12 +155,10 @@ describe('useAutoSave', () => {
 
         const { result } = renderHook(() => useAutoSave(mockProjectState, mockMessages));
 
-        vi.advanceTimersByTime(1500);
+        await vi.runAllTimersAsync();
 
-        await waitFor(() => {
-            expect(result.current.saveError).toEqual(saveError);
-            expect(result.current.isSaving).toBe(false);
-        });
+        expect(result.current.saveError).toEqual(saveError);
+        expect(result.current.isSaving).toBe(false);
     });
 
     it('should clear saveError on next successful save', async () => {
@@ -170,22 +172,18 @@ describe('useAutoSave', () => {
             }
         );
 
-        vi.advanceTimersByTime(1500);
+        await vi.runAllTimersAsync();
 
-        await waitFor(() => {
-            expect(result.current.saveError).toBeTruthy();
-        });
+        expect(result.current.saveError).toBeTruthy();
 
         // Second save succeeds
         (storageService.saveProject as any).mockResolvedValue(undefined);
         (storageService.setMetadata as any).mockResolvedValue(undefined);
 
         rerender({ projectState: { ...mockProjectState, name: 'Updated' }, messages: mockMessages });
-        vi.advanceTimersByTime(1500);
+        await vi.runAllTimersAsync();
 
-        await waitFor(() => {
-            expect(result.current.saveError).toBeNull();
-        });
+        expect(result.current.saveError).toBeNull();
     });
 
     it('should use custom debounce delay', async () => {
@@ -197,11 +195,9 @@ describe('useAutoSave', () => {
         vi.advanceTimersByTime(400);
         expect(storageService.saveProject).not.toHaveBeenCalled();
 
-        vi.advanceTimersByTime(100);
+        await vi.runAllTimersAsync();
 
-        await waitFor(() => {
-            expect(storageService.saveProject).toHaveBeenCalledTimes(1);
-        });
+        expect(storageService.saveProject).toHaveBeenCalledTimes(1);
     });
 
     it('should cleanup timer on unmount', () => {
@@ -225,14 +221,93 @@ describe('useAutoSave', () => {
 
         renderHook(() => useAutoSave(mockProjectState, updatedMessages));
 
-        vi.advanceTimersByTime(1500);
+        await vi.runAllTimersAsync();
 
-        await waitFor(() => {
-            expect(storageService.saveProject).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    messages: updatedMessages,
-                })
-            );
+        expect(storageService.saveProject).toHaveBeenCalledWith(
+            expect.objectContaining({
+                messages: updatedMessages,
+            })
+        );
+    });
+
+    it('should not update state if unmounted during async save (StrictMode fix)', async () => {
+        // Mock a slow save operation
+        let resolveSave: () => void;
+        const savePromise = new Promise<void>((resolve) => {
+            resolveSave = resolve;
         });
+        (storageService.saveProject as any).mockReturnValue(savePromise);
+        (storageService.setMetadata as any).mockResolvedValue(undefined);
+
+        const { result, unmount } = renderHook(() => useAutoSave(mockProjectState, mockMessages));
+
+        // Start the save operation
+        await act(async () => {
+            vi.advanceTimersByTime(1500);
+            await Promise.resolve(); // Let microtasks flush
+        });
+
+        // isSaving should be true
+        expect(result.current.isSaving).toBe(true);
+
+        // Unmount while save is in progress
+        unmount();
+
+        // Complete the save operation (should not trigger state updates)
+        resolveSave!();
+        await Promise.resolve(); // Let microtasks flush
+
+        expect(storageService.saveProject).toHaveBeenCalledTimes(1);
+
+        // If we get here without React warnings, the fix is working
+        // (state updates on unmounted components would cause warnings/errors in tests)
+    });
+
+    it('should not update state if unmounted during async save error (StrictMode fix)', async () => {
+        // Mock a slow save operation that fails
+        let rejectSave: (error: Error) => void;
+        const savePromise = new Promise<void>((_, reject) => {
+            rejectSave = reject;
+        });
+        (storageService.saveProject as any).mockReturnValue(savePromise);
+
+        const { result, unmount } = renderHook(() => useAutoSave(mockProjectState, mockMessages));
+
+        // Start the save operation
+        await act(async () => {
+            vi.advanceTimersByTime(1500);
+            await Promise.resolve(); // Let microtasks flush
+        });
+
+        // isSaving should be true
+        expect(result.current.isSaving).toBe(true);
+
+        // Unmount while save is in progress
+        unmount();
+
+        // Reject the save operation (should not trigger state updates)
+        rejectSave!(new Error('Save failed'));
+        await Promise.resolve(); // Let microtasks flush
+
+        expect(storageService.saveProject).toHaveBeenCalledTimes(1);
+
+        // If we get here without React warnings, the fix is working
+        // (state updates on unmounted components would cause warnings/errors in tests)
+    });
+
+    it('should cancel pending save if unmounted before timer fires', () => {
+        const { unmount } = renderHook(() => useAutoSave(mockProjectState, mockMessages));
+
+        // Advance time but not enough for debounce
+        vi.advanceTimersByTime(1000);
+
+        // Unmount before timer fires
+        unmount();
+
+        // Advance past debounce delay
+        vi.advanceTimersByTime(1000);
+
+        // Should not have saved
+        expect(storageService.saveProject).not.toHaveBeenCalled();
     });
 });

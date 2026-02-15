@@ -1,10 +1,10 @@
 import { ArrowRight } from 'lucide-react';
 import { ProjectCard } from './ProjectCard';
-import type { StoredProject } from '@/services/storage';
+import type { ProjectMetadata } from '@/services/storage';
 import './RecentProjects.css';
 
 export interface RecentProjectsProps {
-    projects: StoredProject[];
+    projects: ProjectMetadata[];
     onOpenProject: (projectId: string) => void;
     onRenameProject: (projectId: string, newName: string) => void;
     onDuplicateProject: (projectId: string) => void;

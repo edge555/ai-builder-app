@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { WelcomePage, BuilderPage } from './pages';
-import { storageService, type StoredProject } from '@/services/storage';
+import { storageService, type ProjectMetadata } from '@/services/storage';
 import { createLogger } from '@/utils/logger';
 import './App.css';
 
@@ -18,14 +18,15 @@ const appLogger = createLogger('App');
  */
 function App() {
   const [isInitializing, setIsInitializing] = useState(true);
-  const [savedProjects, setSavedProjects] = useState<StoredProject[]>([]);
+  const [savedProjects, setSavedProjects] = useState<ProjectMetadata[]>([]);
 
   // Initialize storage on mount
   useEffect(() => {
     const initStorage = async () => {
       try {
         await storageService.initialize();
-        const projects = await storageService.getAllProjects();
+        // Use metadata method for better performance - no need to load files/messages
+        const projects = await storageService.getAllProjectMetadata();
         setSavedProjects(projects);
       } catch (error) {
         appLogger.error('Failed to initialize storage', { error });
@@ -40,7 +41,8 @@ function App() {
   // Refresh project list
   const refreshProjectList = async () => {
     try {
-      const projects = await storageService.getAllProjects();
+      // Use metadata method for better performance - no need to load files/messages
+      const projects = await storageService.getAllProjectMetadata();
       setSavedProjects(projects);
     } catch (error) {
       appLogger.error('Failed to refresh project list', { error });
@@ -88,7 +90,7 @@ function WelcomePageWrapper({
   savedProjects,
   onProjectsChanged,
 }: {
-  savedProjects: StoredProject[];
+  savedProjects: ProjectMetadata[];
   onProjectsChanged: () => Promise<void>;
 }) {
   const navigate = useNavigate();

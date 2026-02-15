@@ -1,5 +1,5 @@
 export { storageService } from './StorageService';
-export type { StoredProject, SerializedChatMessage } from './types';
+export type { StoredProject, ProjectMetadata, SerializedChatMessage } from './types';
 export {
   toStoredProject,
   toSerializedProjectState,
