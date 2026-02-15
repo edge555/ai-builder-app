@@ -27,11 +27,11 @@ describe('StreamingProjectGenerator', () => {
             formatErrorsForAI: vi.fn(),
         };
 
-        (GeminiClient as any).mockImplementation(() => mockGeminiClient);
-        (ValidationPipeline as any).mockImplementation(() => mockValidationPipeline);
+        (GeminiClient as any).mockImplementation(function () { return mockGeminiClient; });
+        (ValidationPipeline as any).mockImplementation(function () { return mockValidationPipeline; });
 
         // Mock both class and factory function
-        (buildValidatorModule.BuildValidator as any).mockImplementation(() => mockBuildValidator);
+        (buildValidatorModule.BuildValidator as any).mockImplementation(function () { return mockBuildValidator; });
         (buildValidatorModule.createBuildValidator as any).mockReturnValue(mockBuildValidator);
 
         generator = new StreamingProjectGenerator(mockGeminiClient);
@@ -89,7 +89,7 @@ describe('StreamingProjectGenerator', () => {
         const result = await generator.generateProjectStreaming('test', callbacks);
 
         expect(result.success).toBe(false);
-        expect(callbacks.onError).toHaveBeenCalledWith('AI Error');
+        expect(callbacks.onError).toHaveBeenCalledWith('AI Error', expect.anything());
     });
 
     it('should handle validation errors', async () => {
@@ -117,4 +117,30 @@ describe('StreamingProjectGenerator', () => {
         expect(callbacks.onError).toHaveBeenCalled();
         expect(result.validationErrors).toHaveLength(1);
     });
+
+    it('should handle abort signal', async () => {
+        const controller = new AbortController();
+        const callbacks = {
+            signal: controller.signal,
+            onError: vi.fn(),
+        };
+
+        mockGeminiClient.generateStreaming.mockImplementation(async ({ signal }: any) => {
+            if (signal.aborted) {
+                return { success: false, error: 'Request was cancelled' };
+            }
+            return { success: true, content: '{}' };
+        });
+
+        controller.abort();
+
+        const result = await generator.generateProjectStreaming('test', callbacks);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('cancelled');
+        expect(mockGeminiClient.generateStreaming).toHaveBeenCalledWith(expect.objectContaining({
+            signal: controller.signal
+        }));
+    });
+
 });
