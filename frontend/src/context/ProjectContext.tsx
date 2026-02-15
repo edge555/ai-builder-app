@@ -1,10 +1,10 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
-import type { SerializedProjectState } from '@/shared';
+import { useState, useCallback, useMemo, useRef, type ReactNode } from 'react';
+import type { SerializedProjectState } from '@ai-app-builder/shared/types';
 import { useUndoRedo } from '@/hooks/useUndoRedo';
 import { ProjectContext, type ProjectContextValue, type VersionCallbacks } from './ProjectContext.context';
 
 export interface ProjectProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
   /** Optional initial project state for restoration */
   initialState?: SerializedProjectState | null;
 }

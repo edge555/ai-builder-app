@@ -1,11 +1,11 @@
-import React, { useState, useCallback, useMemo, memo, useRef } from 'react';
+import { useState, useCallback, useMemo, memo, useRef } from 'react';
 import {
   SandpackProvider,
   SandpackLayout,
   SandpackPreview,
 } from '@codesandbox/sandpack-react';
 import { Code, Monitor } from 'lucide-react';
-import type { SerializedProjectState } from '@/shared';
+import type { SerializedProjectState } from '@ai-app-builder/shared/types';
 import type { LoadingPhase } from '../ChatInterface';
 import { PreviewToolbar, type DeviceMode } from './PreviewToolbar';
 import { PreviewSkeleton } from './PreviewSkeleton';
@@ -13,7 +13,6 @@ import { SandpackErrorListener } from './SandpackErrorListener';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { CodeEditorView } from '../CodeEditor';
 import { TabBar } from '../TabBar/TabBar';
-import { BrowserChrome } from '../BrowserChrome/BrowserChrome';
 import './PreviewPanel.css';
 
 /**

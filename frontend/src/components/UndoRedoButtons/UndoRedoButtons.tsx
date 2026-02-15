@@ -1,4 +1,3 @@
-import React from 'react';
 import './UndoRedoButtons.css';
 
 export interface UndoRedoButtonsProps {

@@ -1,4 +1,3 @@
-import React from 'react';
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import './BrowserChrome.css';
 

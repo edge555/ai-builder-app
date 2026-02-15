@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useEffect, useRef } from 'react';
+import { useCallback, useMemo, useEffect, useRef, type ReactNode } from 'react';
 import { usePreviewErrorState, usePreviewErrorActions } from './PreviewErrorContext.context';
 import { useGenerationState, useGenerationActions } from './GenerationContext.context';
 import { useProject } from './ProjectContext.context';
@@ -9,7 +9,7 @@ import { AutoRepairContext, type AutoRepairContextValue } from './AutoRepairCont
  * Provider for unified auto-repair coordination.
  * Bridges PreviewErrorContext (error detection) and GenerationContext (repair execution).
  */
-export function AutoRepairProvider({ children }: { children: React.ReactNode }) {
+export function AutoRepairProvider({ children }: { children: ReactNode }) {
   // Split state and actions to reduce re-renders
   const previewErrorState = usePreviewErrorState();
   const previewErrorActions = usePreviewErrorActions();
@@ -32,7 +32,7 @@ export function AutoRepairProvider({ children }: { children: React.ReactNode }) 
 
     // Check if we should auto-repair (inline the check to avoid unstable function dependency)
     const hasError = previewErrorState.currentError !== null ||
-                     (previewErrorState.aggregatedErrors?.totalCount ?? 0) > 0;
+      (previewErrorState.aggregatedErrors?.totalCount ?? 0) > 0;
     const shouldRepair =
       previewErrorState.repairPhase === 'repairing' &&
       !generationState.isAutoRepairing &&

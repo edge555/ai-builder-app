@@ -15,7 +15,7 @@ export interface ValidationResult {
  */
 export interface ValidationError {
   /** Type of validation error */
-  type: 'invalid_json' | 'invalid_path' | 'syntax_error' | 'forbidden_pattern' | 'architecture_warning';
+  type: 'invalid_json' | 'invalid_path' | 'syntax_error' | 'forbidden_pattern' | 'architecture_warning' | 'styling_warning';
   /** Human-readable error message */
   message: string;
   /** File path where the error occurred (if applicable) */

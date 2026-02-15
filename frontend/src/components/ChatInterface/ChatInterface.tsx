@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect, forwardRef, lazy, Suspense, memo } from 'react';
+import { useState, useRef, useEffect, forwardRef, memo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { ChangeSummary, FileDiff } from '@/shared';
+import type { ChangeSummary, FileDiff } from '@ai-app-builder/shared/types';
 import { ErrorMessage, classifyError } from '../ErrorMessage';
 import { PromptSuggestions } from '../PromptSuggestions';
 import { StreamingIndicator } from '../StreamingIndicator';
@@ -437,7 +437,7 @@ interface MessageItemProps {
  * Renders a single chat message with optional change summary.
  * Accepts refs to avoid React dev warnings when something upstream attaches refs.
  */
-const MessageItemWithRef = React.memo(
+const MessageItemWithRef = memo(
   forwardRef<HTMLDivElement, MessageItemProps>(function MessageItemWithRef({ message, onFileClick }, ref) {
     const isUser = message.role === 'user';
 
@@ -470,54 +470,6 @@ const MessageItemWithRef = React.memo(
 
 MessageItemWithRef.displayName = 'MessageItem';
 
-/**
- * Props for the ChangeSummaryDisplay component.
- */
-interface ChangeSummaryDisplayProps {
-  summary: ChangeSummary;
-}
-
-/**
- * Displays a summary of changes made by the AI.
- */
-const ChangeSummaryDisplay = React.memo(function ChangeSummaryDisplay({ summary }: ChangeSummaryDisplayProps) {
-  return (
-    <div className="change-summary" role="region" aria-label="Change summary">
-      <div className="change-summary-header">Changes Made</div>
-      <div className="change-summary-stats">
-        {summary.filesAdded > 0 && (
-          <span className="change-stat change-stat-added">
-            +{summary.filesAdded} file{summary.filesAdded !== 1 ? 's' : ''} added
-          </span>
-        )}
-        {summary.filesModified > 0 && (
-          <span className="change-stat change-stat-modified">
-            ~{summary.filesModified} file{summary.filesModified !== 1 ? 's' : ''} modified
-          </span>
-        )}
-        {summary.filesDeleted > 0 && (
-          <span className="change-stat change-stat-deleted">
-            -{summary.filesDeleted} file{summary.filesDeleted !== 1 ? 's' : ''} deleted
-          </span>
-        )}
-      </div>
-      <div className="change-summary-lines">
-        <span className="lines-added">+{summary.linesAdded} lines</span>
-        <span className="lines-deleted">-{summary.linesDeleted} lines</span>
-      </div>
-      {summary.affectedFiles.length > 0 && (
-        <details className="change-summary-files">
-          <summary>Affected files ({summary.affectedFiles.length})</summary>
-          <ul>
-            {summary.affectedFiles.map((file) => (
-              <li key={file}>{file}</li>
-            ))}
-          </ul>
-        </details>
-      )}
-    </div>
-  );
-});
 
 /**
  * detailed loading steps for different phases to simulate complex processing.

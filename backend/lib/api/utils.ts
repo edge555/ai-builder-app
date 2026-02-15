@@ -9,8 +9,8 @@
 
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
-import type { ErrorResponse, ApiError } from '@ai-app-builder/shared';
-import { sanitizeError } from '@ai-app-builder/shared';
+import type { ErrorResponse, ApiError } from '@ai-app-builder/shared/types';
+import { sanitizeError } from '@ai-app-builder/shared/utils';
 import { config } from '../config';
 import { AppError } from './error';
 import { createLogger } from '../logger';
@@ -267,15 +267,15 @@ export async function withTimeout<T>(
   // Handle external abort signal
   const abortPromise = signal
     ? new Promise<never>((_, reject) => {
-        if (signal.aborted) {
-          reject(new Error(`${operationName} was aborted`));
-          return;
-        }
-        signal.addEventListener('abort', () => {
-          didTimeout = true; // Treat abort like timeout for cleanup
-          cleanup().then(() => reject(new Error(`${operationName} was aborted`)));
-        });
-      })
+      if (signal.aborted) {
+        reject(new Error(`${operationName} was aborted`));
+        return;
+      }
+      signal.addEventListener('abort', () => {
+        didTimeout = true; // Treat abort like timeout for cleanup
+        cleanup().then(() => reject(new Error(`${operationName} was aborted`)));
+      });
+    })
     : null;
 
   try {

@@ -239,11 +239,11 @@ export class GeminiClient {
     const timeoutController = new AbortController();
     const timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
 
-    // Combine external signal (if provided) with timeout signal
     const signal = request.signal
       ? AbortSignal.any([request.signal, timeoutController.signal])
       : timeoutController.signal;
 
+    let accumulated = '';
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -271,7 +271,6 @@ export class GeminiClient {
       }
 
       const decoder = new TextDecoder();
-      let accumulated = '';
       const parserState = createParserState();
 
       while (true) {
@@ -447,10 +446,10 @@ export class GeminiClient {
       // Extract token usage if available
       const usage = data.usageMetadata
         ? {
-            inputTokens: data.usageMetadata.promptTokenCount,
-            outputTokens: data.usageMetadata.candidatesTokenCount,
-            totalTokens: data.usageMetadata.totalTokenCount,
-          }
+          inputTokens: data.usageMetadata.promptTokenCount,
+          outputTokens: data.usageMetadata.candidatesTokenCount,
+          totalTokens: data.usageMetadata.totalTokenCount,
+        }
         : undefined;
 
       logger.info('Gemini request completed successfully', {

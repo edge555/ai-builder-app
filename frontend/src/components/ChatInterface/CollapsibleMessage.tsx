@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { type ReactNode } from 'react';
 import type { ChatMessage } from './ChatInterface';
 import './CollapsibleMessage.css';
 
@@ -12,7 +12,7 @@ interface CollapsibleMessageProps {
     /** Callback when toggle button is clicked */
     onToggle: () => void;
     /** The message content to display when expanded */
-    children: React.ReactNode;
+    children: ReactNode;
 }
 
 /**

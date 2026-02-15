@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { SerializedProjectState } from '@/shared';
+import type { SerializedProjectState } from '@ai-app-builder/shared/types';
 
 const MAX_STACK_SIZE = 20;
 
@@ -41,15 +41,15 @@ export function useUndoRedo(currentState: SerializedProjectState | null): UndoRe
     if (undoStack.length === 0) return null;
 
     const previousState = undoStack[undoStack.length - 1];
-    
+
     // Move current state to redo stack
     if (currentState) {
       setRedoStack((prev) => [...prev, currentState].slice(-MAX_STACK_SIZE));
     }
-    
+
     // Remove from undo stack
     setUndoStack((prev) => prev.slice(0, -1));
-    
+
     return previousState;
   }, [undoStack, currentState]);
 
@@ -57,15 +57,15 @@ export function useUndoRedo(currentState: SerializedProjectState | null): UndoRe
     if (redoStack.length === 0) return null;
 
     const nextState = redoStack[redoStack.length - 1];
-    
+
     // Move current state to undo stack
     if (currentState) {
       setUndoStack((prev) => [...prev, currentState].slice(-MAX_STACK_SIZE));
     }
-    
+
     // Remove from redo stack
     setRedoStack((prev) => prev.slice(0, -1));
-    
+
     return nextState;
   }, [redoStack, currentState]);
 

@@ -26,11 +26,16 @@ vi.mock('@/utils/logger', () => ({
 
 describe('ExportButton', () => {
     const mockProjectState = {
+        id: 'test-project',
         name: 'Test Project',
+        description: 'Test Description',
         files: {
             'index.html': '<html></html>',
             'app.js': 'console.log("test");',
         },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        currentVersionId: 'v1',
     };
 
     beforeEach(() => {
@@ -48,10 +53,14 @@ describe('ExportButton', () => {
 
     it('should render export button', () => {
         vi.mocked(useProject).mockReturnValue({
-            projectState: mockProjectState,
+            projectState: mockProjectState as any,
             setProjectState: vi.fn(),
+            setVersionCallbacks: vi.fn(),
+            renameProject: vi.fn(),
             undo: vi.fn(),
             redo: vi.fn(),
+            canUndo: false,
+            canRedo: false,
         });
 
         render(<ExportButton />);
@@ -62,8 +71,12 @@ describe('ExportButton', () => {
         vi.mocked(useProject).mockReturnValue({
             projectState: null,
             setProjectState: vi.fn(),
+            setVersionCallbacks: vi.fn(),
+            renameProject: vi.fn(),
             undo: vi.fn(),
             redo: vi.fn(),
+            canUndo: false,
+            canRedo: false,
         });
 
         render(<ExportButton />);
@@ -74,10 +87,14 @@ describe('ExportButton', () => {
 
     it('should trigger export on click', async () => {
         vi.mocked(useProject).mockReturnValue({
-            projectState: mockProjectState,
+            projectState: mockProjectState as any,
             setProjectState: vi.fn(),
+            setVersionCallbacks: vi.fn(),
+            renameProject: vi.fn(),
             undo: vi.fn(),
             redo: vi.fn(),
+            canUndo: false,
+            canRedo: false,
         });
 
         const mockBlob = new Blob(['test'], { type: 'application/zip' });
@@ -107,10 +124,14 @@ describe('ExportButton', () => {
 
     it('should show loading state during export', async () => {
         vi.mocked(useProject).mockReturnValue({
-            projectState: mockProjectState,
+            projectState: mockProjectState as any,
             setProjectState: vi.fn(),
+            setVersionCallbacks: vi.fn(),
+            renameProject: vi.fn(),
             undo: vi.fn(),
             redo: vi.fn(),
+            canUndo: false,
+            canRedo: false,
         });
 
         const mockBlob = new Blob(['test'], { type: 'application/zip' });
@@ -134,10 +155,14 @@ describe('ExportButton', () => {
 
     it('should create download link with correct filename', async () => {
         vi.mocked(useProject).mockReturnValue({
-            projectState: mockProjectState,
+            projectState: mockProjectState as any,
             setProjectState: vi.fn(),
+            setVersionCallbacks: vi.fn(),
+            renameProject: vi.fn(),
             undo: vi.fn(),
             redo: vi.fn(),
+            canUndo: false,
+            canRedo: false,
         });
 
         const mockBlob = new Blob(['test'], { type: 'application/zip' });
@@ -164,10 +189,14 @@ describe('ExportButton', () => {
 
     it('should handle export errors gracefully', async () => {
         vi.mocked(useProject).mockReturnValue({
-            projectState: mockProjectState,
+            projectState: mockProjectState as any,
             setProjectState: vi.fn(),
+            setVersionCallbacks: vi.fn(),
+            renameProject: vi.fn(),
             undo: vi.fn(),
             redo: vi.fn(),
+            canUndo: false,
+            canRedo: false,
         });
 
         (global.fetch as any).mockResolvedValue({
@@ -190,10 +219,14 @@ describe('ExportButton', () => {
 
     it('should show error message in title on failure', async () => {
         vi.mocked(useProject).mockReturnValue({
-            projectState: mockProjectState,
+            projectState: mockProjectState as any,
             setProjectState: vi.fn(),
+            setVersionCallbacks: vi.fn(),
+            renameProject: vi.fn(),
             undo: vi.fn(),
             redo: vi.fn(),
+            canUndo: false,
+            canRedo: false,
         });
 
         (global.fetch as any).mockRejectedValue(new Error('Network error'));
@@ -210,10 +243,14 @@ describe('ExportButton', () => {
 
     it('should cleanup blob URL after download', async () => {
         vi.mocked(useProject).mockReturnValue({
-            projectState: mockProjectState,
+            projectState: mockProjectState as any,
             setProjectState: vi.fn(),
+            setVersionCallbacks: vi.fn(),
+            renameProject: vi.fn(),
             undo: vi.fn(),
             redo: vi.fn(),
+            canUndo: false,
+            canRedo: false,
         });
 
         const mockBlob = new Blob(['test'], { type: 'application/zip' });
@@ -234,10 +271,14 @@ describe('ExportButton', () => {
 
     it('should have proper ARIA label', () => {
         vi.mocked(useProject).mockReturnValue({
-            projectState: mockProjectState,
+            projectState: mockProjectState as any,
             setProjectState: vi.fn(),
+            setVersionCallbacks: vi.fn(),
+            renameProject: vi.fn(),
             undo: vi.fn(),
             redo: vi.fn(),
+            canUndo: false,
+            canRedo: false,
         });
 
         render(<ExportButton />);
@@ -247,10 +288,14 @@ describe('ExportButton', () => {
 
     it('should handle missing configuration', async () => {
         vi.mocked(useProject).mockReturnValue({
-            projectState: mockProjectState,
+            projectState: mockProjectState as any,
             setProjectState: vi.fn(),
+            setVersionCallbacks: vi.fn(),
+            renameProject: vi.fn(),
             undo: vi.fn(),
             redo: vi.fn(),
+            canUndo: false,
+            canRedo: false,
         });
 
         // Re-mock with missing config

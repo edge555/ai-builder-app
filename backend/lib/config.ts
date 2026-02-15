@@ -15,9 +15,9 @@ const envSchema = z.object({
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
   GEMINI_EASY_MODEL: z.string().default('gemini-2.5-flash-lite'),
   GEMINI_HARD_MODEL: z.string().default('gemini-2.5-flash'),
-  MAX_OUTPUT_TOKENS: z.preprocess((val) => Number(val), z.number().default(16384)),
+  MAX_OUTPUT_TOKENS: z.coerce.number().default(16384),
   ALLOWED_ORIGINS: z.string().default('http://localhost:8080'),
-  PORT: z.preprocess((val) => Number(val), z.number().default(4000)),
+  PORT: z.coerce.number().default(4000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 

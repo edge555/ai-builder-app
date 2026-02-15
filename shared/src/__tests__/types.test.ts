@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 
 // Import schemas from shared package
-import type { SerializedProjectState } from '@/shared';
+import type { SerializedProjectState } from '../types';
 
 describe('Shared Types and Validators', () => {
     describe('SerializedProjectState', () => {
@@ -10,9 +10,13 @@ describe('Shared Types and Validators', () => {
             const validState: SerializedProjectState = {
                 id: 'test-id',
                 name: 'Test Project',
+                description: 'Test description',
                 files: {
                     'index.html': '<html></html>',
                 },
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                currentVersionId: 'v1',
             };
 
             expect(validState.id).toBe('test-id');
@@ -24,7 +28,11 @@ describe('Shared Types and Validators', () => {
             const validState: SerializedProjectState = {
                 id: 'test-id',
                 name: 'Empty Project',
+                description: 'Test description',
                 files: {},
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                currentVersionId: 'v1',
             };
 
             expect(validState.files).toEqual({});
@@ -34,11 +42,15 @@ describe('Shared Types and Validators', () => {
             const validState: SerializedProjectState = {
                 id: 'test-id',
                 name: 'Multi-file Project',
+                description: 'Test description',
                 files: {
                     'index.html': '<html></html>',
                     'app.js': 'console.log("test");',
                     'styles.css': 'body { margin: 0; }',
                 },
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                currentVersionId: 'v1',
             };
 
             expect(Object.keys(validState.files).length).toBe(3);
@@ -74,11 +86,15 @@ describe('Shared Types and Validators', () => {
             const validState: SerializedProjectState = {
                 id: 'test-id',
                 name: 'Test Project',
+                description: 'Test description',
                 files: {
                     'file-with-dash.js': 'content',
                     'file_with_underscore.ts': 'content',
                     'file.with.dots.css': 'content',
                 },
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                currentVersionId: 'v1',
             };
 
             expect(Object.keys(validState.files).length).toBe(3);
@@ -89,9 +105,13 @@ describe('Shared Types and Validators', () => {
             const validState: SerializedProjectState = {
                 id: 'test-id',
                 name: 'Test Project',
+                description: 'Test description',
                 files: {
                     'large-file.txt': longContent,
                 },
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                currentVersionId: 'v1',
             };
 
             expect(validState.files['large-file.txt'].length).toBe(10000);
@@ -101,7 +121,11 @@ describe('Shared Types and Validators', () => {
             const validState: SerializedProjectState = {
                 id: 'test-id',
                 name: 'Test Project 测试 🚀',
+                description: 'Test description',
                 files: {},
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                currentVersionId: 'v1',
             };
 
             expect(validState.name).toContain('测试');

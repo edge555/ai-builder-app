@@ -111,16 +111,14 @@ export class ModificationEngine {
         includeDesignSystem
       );
 
-      if (!modificationResult.success) {
+      if (!modificationResult.success || !modificationResult.updatedFiles || !modificationResult.deletedFiles) {
         return {
           success: false,
-          error: modificationResult.error,
+          error: modificationResult.error ?? 'Modification failed with incomplete output',
         };
       }
 
       const { updatedFiles, deletedFiles } = modificationResult;
-
-      // Step 4: Validate the modified files
       const validationResult = await this.validateModifiedFiles(updatedFiles);
       if (!validationResult.valid) {
         return {
@@ -454,149 +452,149 @@ export class ModificationEngine {
     const mutableUpdatedFiles = { ...updatedFiles };
 
     while (!buildResult.valid && buildRetryCount < this.maxBuildRetries) {
-        buildRetryCount++;
-        logger.info('Modification build retry', {
+      buildRetryCount++;
+      logger.info('Modification build retry', {
+        attempt: buildRetryCount,
+        maxRetries: this.maxBuildRetries,
+        errors: buildResult.errors.map(e => e.message),
+        hasFailureHistory: buildFailureHistory.length > 0,
+      });
+
+      // Format errors for AI
+      const errorContext = this.buildValidator.formatErrorsForAI(buildResult.errors);
+
+      // Request AI to fix the errors with failure history
+      const fixUserRequest = buildFixPrompt({
+        mode: 'modification',
+        errorContext,
+        originalPrompt: prompt,
+        failureHistory: buildFailureHistory.length > 0 ? buildFailureHistory : undefined,
+      });
+      const fixSystemInstruction = getModificationPrompt(fixUserRequest, includeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
+      const fixContextPrompt = buildModificationPrompt(fixUserRequest, slices, projectState);
+
+      const fixResponse = await this.geminiClient.generate({
+        prompt: fixContextPrompt,
+        systemInstruction: fixSystemInstruction,
+        temperature: 0.5,
+        maxOutputTokens: MAX_OUTPUT_TOKENS_MODIFICATION,
+        responseSchema: MODIFICATION_OUTPUT_SCHEMA,
+      });
+
+      if (!fixResponse.success || !fixResponse.content) {
+        logger.error('Failed to get fix response from AI');
+        // Record this failure
+        buildFailureHistory.push({
           attempt: buildRetryCount,
-          maxRetries: this.maxBuildRetries,
-          errors: buildResult.errors.map(e => e.message),
-          hasFailureHistory: buildFailureHistory.length > 0,
+          error: fixResponse.error || 'AI failed to generate fix',
+          timestamp: new Date().toISOString(),
         });
+        break;
+      }
 
-        // Format errors for AI
-        const errorContext = this.buildValidator.formatErrorsForAI(buildResult.errors);
-
-        // Request AI to fix the errors with failure history
-        const fixUserRequest = buildFixPrompt({
-          mode: 'modification',
-          errorContext,
-          originalPrompt: prompt,
-          failureHistory: buildFailureHistory.length > 0 ? buildFailureHistory : undefined,
-        });
-        const fixSystemInstruction = getModificationPrompt(fixUserRequest, includeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
-        const fixContextPrompt = buildModificationPrompt(fixUserRequest, slices, projectState);
-
-        const fixResponse = await this.geminiClient.generate({
-          prompt: fixContextPrompt,
-          systemInstruction: fixSystemInstruction,
-          temperature: 0.5,
-          maxOutputTokens: MAX_OUTPUT_TOKENS_MODIFICATION,
-          responseSchema: MODIFICATION_OUTPUT_SCHEMA,
-        });
-
-        if (!fixResponse.success || !fixResponse.content) {
-          logger.error('Failed to get fix response from AI');
-          // Record this failure
-          buildFailureHistory.push({
-            attempt: buildRetryCount,
-            error: fixResponse.error || 'AI failed to generate fix',
-            timestamp: new Date().toISOString(),
-          });
-          break;
+      // Parse and process the fix
+      try {
+        if (typeof fixResponse.content !== 'string') {
+          throw new Error('Fix response content is missing');
         }
 
-        // Parse and process the fix
+        // With responseSchema, Gemini returns guaranteed valid JSON
+        let parsedFixData: unknown;
         try {
-          if (typeof fixResponse.content !== 'string') {
-            throw new Error('Fix response content is missing');
-          }
-
-          // With responseSchema, Gemini returns guaranteed valid JSON
-          let parsedFixData: unknown;
-          try {
-            parsedFixData = JSON.parse(fixResponse.content);
-          } catch (parseError) {
-            logger.error('Failed to parse fix response JSON', {
-              error: parseError instanceof Error ? parseError.message : String(parseError),
-            });
-            // Record this failure
-            buildFailureHistory.push({
-              attempt: buildRetryCount,
-              error: parseError instanceof Error ? parseError.message : 'JSON parse error',
-              strategy: 'Attempted to fix build errors but returned invalid JSON',
-              timestamp: new Date().toISOString(),
-            });
-            continue;
-          }
-
-          // Validate with Zod schema
-          const fixZodResult = ModificationOutputSchema.safeParse(parsedFixData);
-          if (!fixZodResult.success) {
-            logger.error('Fix response failed Zod validation', {
-              errors: fixZodResult.error.issues,
-            });
-            // Record this failure
-            buildFailureHistory.push({
-              attempt: buildRetryCount,
-              error: `Schema validation failed: ${fixZodResult.error.message}`,
-              strategy: 'Attempted to fix build errors but returned invalid schema',
-              timestamp: new Date().toISOString(),
-            });
-            continue;
-          }
-
-          const fixOutput = fixZodResult.data;
-          if (!fixOutput.files || !Array.isArray(fixOutput.files)) {
-            // Record this failure
-            buildFailureHistory.push({
-              attempt: buildRetryCount,
-              error: 'Fix response missing files array',
-              timestamp: new Date().toISOString(),
-            });
-            continue;
-          }
-
-          // Apply fixes to our updatedFiles map
-          for (const fileEdit of fixOutput.files) {
-            if (fileEdit.operation === 'modify' && fileEdit.edits) {
-              // We need to apply edits to the content in tempFiles (which has previous mods applied)
-              const currentContent = tempFiles[fileEdit.path];
-              if (currentContent) {
-                const editResult = applyEdits(currentContent, fileEdit.edits);
-                if (editResult.success) {
-                  mutableUpdatedFiles[fileEdit.path] = editResult.content!; // Update the modifications map
-                  tempFiles[fileEdit.path] = editResult.content!;    // Update temp view
-                }
-              }
-            } else if (fileEdit.operation === 'create' && fileEdit.content) {
-              mutableUpdatedFiles[fileEdit.path] = fileEdit.content;
-              tempFiles[fileEdit.path] = fileEdit.content;
-            }
-          }
-
-          // Re-validate
-          const previousErrors = buildResult.errors.map(e => e.message).join('; ');
-          buildResult = this.buildValidator.validate(tempFiles);
-          if (buildResult.valid) {
-            logger.info('Modification build errors fixed successfully');
-          } else {
-            // Record this failure for next iteration
-            buildFailureHistory.push({
-              attempt: buildRetryCount,
-              error: buildResult.errors.map(e => e.message).join('; '),
-              strategy: `Tried to fix: ${previousErrors}`,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        } catch (e) {
-          logger.error('Error applying fixes', { error: e instanceof Error ? e.message : 'Unknown error' });
+          parsedFixData = JSON.parse(fixResponse.content);
+        } catch (parseError) {
+          logger.error('Failed to parse fix response JSON', {
+            error: parseError instanceof Error ? parseError.message : String(parseError),
+          });
           // Record this failure
           buildFailureHistory.push({
             attempt: buildRetryCount,
-            error: e instanceof Error ? e.message : 'Unknown error',
+            error: parseError instanceof Error ? parseError.message : 'JSON parse error',
+            strategy: 'Attempted to fix build errors but returned invalid JSON',
+            timestamp: new Date().toISOString(),
+          });
+          continue;
+        }
+
+        // Validate with Zod schema
+        const fixZodResult = ModificationOutputSchema.safeParse(parsedFixData);
+        if (!fixZodResult.success) {
+          logger.error('Fix response failed Zod validation', {
+            errors: fixZodResult.error.issues,
+          });
+          // Record this failure
+          buildFailureHistory.push({
+            attempt: buildRetryCount,
+            error: `Schema validation failed: ${fixZodResult.error.message}`,
+            strategy: 'Attempted to fix build errors but returned invalid schema',
+            timestamp: new Date().toISOString(),
+          });
+          continue;
+        }
+
+        const fixOutput = fixZodResult.data;
+        if (!fixOutput.files || !Array.isArray(fixOutput.files)) {
+          // Record this failure
+          buildFailureHistory.push({
+            attempt: buildRetryCount,
+            error: 'Fix response missing files array',
+            timestamp: new Date().toISOString(),
+          });
+          continue;
+        }
+
+        // Apply fixes to our updatedFiles map
+        for (const fileEdit of fixOutput.files) {
+          if (fileEdit.operation === 'modify' && fileEdit.edits) {
+            // We need to apply edits to the content in tempFiles (which has previous mods applied)
+            const currentContent = tempFiles[fileEdit.path];
+            if (currentContent) {
+              const editResult = applyEdits(currentContent, fileEdit.edits);
+              if (editResult.success) {
+                mutableUpdatedFiles[fileEdit.path] = editResult.content!; // Update the modifications map
+                tempFiles[fileEdit.path] = editResult.content!;    // Update temp view
+              }
+            }
+          } else if (fileEdit.operation === 'create' && fileEdit.content) {
+            mutableUpdatedFiles[fileEdit.path] = fileEdit.content;
+            tempFiles[fileEdit.path] = fileEdit.content;
+          }
+        }
+
+        // Re-validate
+        const previousErrors = buildResult.errors.map(e => e.message).join('; ');
+        buildResult = this.buildValidator.validate(tempFiles);
+        if (buildResult.valid) {
+          logger.info('Modification build errors fixed successfully');
+        } else {
+          // Record this failure for next iteration
+          buildFailureHistory.push({
+            attempt: buildRetryCount,
+            error: buildResult.errors.map(e => e.message).join('; '),
+            strategy: `Tried to fix: ${previousErrors}`,
             timestamp: new Date().toISOString(),
           });
         }
-      }
-
-      // Log warning if still has errors
-      if (!buildResult.valid) {
-        logger.warn('Build warnings after retries', {
-          errors: buildResult.errors.map(e => ({ message: e.message, file: e.file })),
+      } catch (e) {
+        logger.error('Error applying fixes', { error: e instanceof Error ? e.message : 'Unknown error' });
+        // Record this failure
+        buildFailureHistory.push({
+          attempt: buildRetryCount,
+          error: e instanceof Error ? e.message : 'Unknown error',
+          timestamp: new Date().toISOString(),
         });
       }
-
-      return { updatedFiles: mutableUpdatedFiles };
     }
+
+    // Log warning if still has errors
+    if (!buildResult.valid) {
+      logger.warn('Build warnings after retries', {
+        errors: buildResult.errors.map(e => ({ message: e.message, file: e.file })),
+      });
+    }
+
+    return { updatedFiles: mutableUpdatedFiles };
+  }
 
   /**
    * Create final modification result with updated project state and metadata.

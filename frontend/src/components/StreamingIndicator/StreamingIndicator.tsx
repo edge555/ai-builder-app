@@ -1,4 +1,3 @@
-import React from 'react';
 import type { StreamingState } from '@/context';
 import './StreamingIndicator.css';
 

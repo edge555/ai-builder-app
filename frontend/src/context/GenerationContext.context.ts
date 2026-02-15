@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { LoadingPhase } from '../components/ChatInterface';
-import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState } from '@/shared';
+import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState } from '@ai-app-builder/shared/types';
 
 export type StreamingPhase = 'idle' | 'connecting' | 'generating' | 'processing' | 'complete' | 'error';
 
@@ -48,7 +48,7 @@ export interface GenerationActionsValue {
 /**
  * Combined generation context value (for backward compatibility).
  */
-export interface GenerationContextValue extends GenerationStateValue, GenerationActionsValue {}
+export interface GenerationContextValue extends GenerationStateValue, GenerationActionsValue { }
 
 export const GenerationStateContext = createContext<GenerationStateValue | null>(null);
 export const GenerationActionsContext = createContext<GenerationActionsValue | null>(null);

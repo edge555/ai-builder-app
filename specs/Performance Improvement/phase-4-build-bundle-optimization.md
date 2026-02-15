@@ -5,7 +5,7 @@
 
 ---
 
-## [ ] Task 4.1: Add Vite Manual Chunk Splitting
+## [x] Task 4.1: Add Vite Manual Chunk Splitting
 
 **Files:**
 - `frontend/vite.config.ts`
@@ -47,7 +47,7 @@ build: {
 
 ---
 
-## [ ] Task 4.2: Fix Shared Package Import Path (Source vs Dist)
+## [x] Task 4.2: Fix Shared Package Import Path (Source vs Dist)
 
 **Files:**
 - `frontend/vite.config.ts` (resolve.alias)
@@ -75,7 +75,7 @@ Frontend imports shared package from TypeScript source (`../shared/src`) instead
 
 ---
 
-## [ ] Task 4.3: Enable Shared Package Code Splitting
+## [x] Task 4.3: Enable Shared Package Code Splitting
 
 **Files:**
 - `shared/tsup.config.ts`
@@ -114,7 +114,7 @@ Frontend imports shared package from TypeScript source (`../shared/src`) instead
 
 ---
 
-## [ ] Task 4.4: Make Sourcemaps Conditional
+## [x] Task 4.4: Make Sourcemaps Conditional
 
 **Files:**
 - `shared/tsup.config.ts` (line 8)
@@ -141,7 +141,7 @@ Frontend imports shared package from TypeScript source (`../shared/src`) instead
 
 ---
 
-## [ ] Task 4.5: Enable Frontend TypeScript Strict Mode
+## [x] Task 4.5: Enable Frontend TypeScript Strict Mode
 
 **Files:**
 - `frontend/tsconfig.json` (lines 22-25)
@@ -168,7 +168,7 @@ Frontend has `strict: false`, overriding the strict base config. This disables:
 
 ---
 
-## [ ] Task 4.6: Clean Up Duplicate and Unused Dependencies
+## [x] Task 4.6: Clean Up Duplicate and Unused Dependencies
 
 **Files:**
 - Root `package.json`
@@ -198,7 +198,7 @@ Frontend has `strict: false`, overriding the strict base config. This disables:
 
 ---
 
-## [ ] Task 4.7: Add Next.js Production Optimizations
+## [x] Task 4.7: Add Next.js Production Optimizations
 
 **Files:**
 - `backend/next.config.js`
