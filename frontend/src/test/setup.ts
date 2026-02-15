@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom';
-import { afterEach, beforeAll, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
+
+// Note: afterEach, beforeAll, and vi are globally available due to globals: true in vitest.config.ts
 
 // Cleanup after each test
 afterEach(() => {

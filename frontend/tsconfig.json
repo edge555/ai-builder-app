@@ -30,16 +30,10 @@
         "./src/*"
       ],
       "@/shared": [
-        "../shared/src"
+        "../shared/dist"
       ],
       "@/shared/*": [
-        "../shared/src/*"
-      ],
-      "@ai-app-builder/shared": [
-        "../shared/src"
-      ],
-      "@ai-app-builder/shared/*": [
-        "../shared/src/*"
+        "../shared/dist/*"
       ]
     }
   },

@@ -168,7 +168,7 @@ Frontend has `strict: false`, overriding the strict base config. This disables:
 
 ---
 
-## [ ] Task 4.6: Clean Up Duplicate and Unused Dependencies
+## [x] Task 4.6: Clean Up Duplicate and Unused Dependencies
 
 **Files:**
 - Root `package.json`
@@ -198,7 +198,7 @@ Frontend has `strict: false`, overriding the strict base config. This disables:
 
 ---
 
-## [ ] Task 4.7: Add Next.js Production Optimizations
+## [x] Task 4.7: Add Next.js Production Optimizations
 
 **Files:**
 - `backend/next.config.js`
