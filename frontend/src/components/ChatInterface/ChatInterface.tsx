@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, forwardRef, lazy, Suspense, memo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ChangeSummary, FileDiff } from '@/shared';
 import { ErrorMessage, classifyError } from '../ErrorMessage';
 import { PromptSuggestions } from '../PromptSuggestions';
@@ -30,6 +31,18 @@ export interface ChatMessage {
  * Loading phase for progress indication.
  */
 export type LoadingPhase = 'idle' | 'generating' | 'modifying' | 'validating' | 'processing';
+
+/**
+ * Threshold for enabling message virtualization.
+ * Message lists with more items than this will use virtual scrolling.
+ */
+const VIRTUALIZATION_THRESHOLD = 20;
+
+/**
+ * Estimated height of a chat message (in pixels).
+ * Used for virtual scrolling calculations.
+ */
+const ESTIMATED_MESSAGE_HEIGHT = 150;
 
 /**
  * Props for the ChatInterface component.
@@ -84,7 +97,11 @@ const ChatInterfaceComponent = function ChatInterface({
   const [inputValue, setInputValue] = useState('');
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Determine if we should use virtualization
+  const shouldVirtualize = messages.length > VIRTUALIZATION_THRESHOLD;
 
   // Collapsible messages state
   const {
@@ -98,10 +115,30 @@ const ChatInterfaceComponent = function ChatInterface({
     hasCollapsibleMessages,
   } = useCollapsibleMessages(messages);
 
+  // Setup virtualizer for large message lists
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => messagesContainerRef.current,
+    estimateSize: () => ESTIMATED_MESSAGE_HEIGHT,
+    overscan: 5,
+    enabled: shouldVirtualize,
+  });
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (shouldVirtualize) {
+      // For virtualized lists, scroll to the last item
+      if (messages.length > 0) {
+        virtualizer.scrollToIndex(messages.length - 1, {
+          align: 'end',
+          behavior: 'smooth',
+        });
+      }
+    } else {
+      // For non-virtualized lists, use the old scroll method
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, shouldVirtualize, virtualizer]);
 
   // Focus input on mount
   useEffect(() => {
@@ -142,7 +179,13 @@ const ChatInterfaceComponent = function ChatInterface({
 
   return (
     <div className="chat-interface" role="region" aria-label="Chat interface">
-      <div className="chat-messages" role="log" aria-live="polite">
+      <div
+        ref={messagesContainerRef}
+        className="chat-messages"
+        role="log"
+        aria-live="polite"
+        style={shouldVirtualize ? { overflow: 'auto' } : undefined}
+      >
         {messages.length === 0 && (
           <div className="chat-empty-state">
             <div className="chat-empty-icon" aria-hidden="true">✨</div>
@@ -172,17 +215,54 @@ const ChatInterfaceComponent = function ChatInterface({
             onExpandAll={expandAll}
           />
         )}
-        {messages.map((message) => (
-          <CollapsibleMessage
-            key={message.id}
-            message={message}
-            isCollapsed={isCollapsed(message.id)}
-            canCollapse={canCollapse(message.id)}
-            onToggle={() => toggle(message.id)}
+        {shouldVirtualize ? (
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
           >
-            <MessageItemWithRef message={message} onFileClick={onFileClick} />
-          </CollapsibleMessage>
-        ))}
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const message = messages[virtualItem.index];
+              return (
+                <div
+                  key={message.id}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                >
+                  <CollapsibleMessage
+                    message={message}
+                    isCollapsed={isCollapsed(message.id)}
+                    canCollapse={canCollapse(message.id)}
+                    onToggle={() => toggle(message.id)}
+                  >
+                    <MessageItemWithRef message={message} onFileClick={onFileClick} />
+                  </CollapsibleMessage>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          messages.map((message) => (
+            <CollapsibleMessage
+              key={message.id}
+              message={message}
+              isCollapsed={isCollapsed(message.id)}
+              canCollapse={canCollapse(message.id)}
+              onToggle={() => toggle(message.id)}
+            >
+              <MessageItemWithRef message={message} onFileClick={onFileClick} />
+            </CollapsibleMessage>
+          ))
+        )}
         {isStreaming && streamingState && (
           <StreamingIndicator state={streamingState} />
         )}
@@ -198,7 +278,7 @@ const ChatInterfaceComponent = function ChatInterface({
             />
           </div>
         )}
-        <div ref={messagesEndRef} />
+        {!shouldVirtualize && <div ref={messagesEndRef} />}
       </div>
 
       {/* Contextual suggestions above input when project exists */}

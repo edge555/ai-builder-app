@@ -1,5 +1,6 @@
-import { useState, useMemo, memo } from 'react';
-import { Search, X, FolderSearch, ArrowUpDown, FolderPlus, Sparkles } from 'lucide-react';
+import { useState, useMemo, memo, useRef, useDeferredValue } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { Search, X, FolderSearch, ArrowUpDown, FolderPlus, Sparkles, Loader2 } from 'lucide-react';
 import { ProjectCard } from './ProjectCard';
 import { ProjectCardSkeleton } from './ProjectCardSkeleton';
 import { ProjectGalleryTabs } from './ProjectGalleryTabs';
@@ -20,6 +21,120 @@ export interface ProjectGalleryProps {
 type SortOption = 'lastModified' | 'nameAsc' | 'oldestFirst';
 
 /**
+ * Threshold for enabling virtualization.
+ * Lists with more items than this will use virtual scrolling.
+ */
+const VIRTUALIZATION_THRESHOLD = 20;
+
+/**
+ * Estimated height of a project card (in pixels).
+ * Used for virtual scrolling calculations.
+ */
+const ESTIMATED_CARD_HEIGHT = 200;
+
+/**
+ * Component that renders projects either as a normal grid or virtualized list
+ * based on the number of projects.
+ */
+interface VirtualizedOrNormalGridProps {
+  projects: ProjectMetadata[];
+  onOpenProject: (projectId: string) => void;
+  onRenameProject: (projectId: string, newName: string) => void;
+  onDuplicateProject: (projectId: string) => void;
+  onDeleteProject: (projectId: string) => void;
+}
+
+function VirtualizedOrNormalGrid({
+  projects,
+  onOpenProject,
+  onRenameProject,
+  onDuplicateProject,
+  onDeleteProject,
+}: VirtualizedOrNormalGridProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  // Use virtualization for large lists
+  const shouldVirtualize = projects.length > VIRTUALIZATION_THRESHOLD;
+
+  const virtualizer = useVirtualizer({
+    count: projects.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ESTIMATED_CARD_HEIGHT,
+    overscan: 5, // Render 5 extra items above/below viewport
+    enabled: shouldVirtualize,
+  });
+
+  // For small lists, render normally with grid layout
+  if (!shouldVirtualize) {
+    return (
+      <div className="project-gallery-grid" role="tabpanel" id="all-projects-panel">
+        {projects.map((project) => (
+          <ProjectCard
+            key={project.id}
+            project={project}
+            onOpen={onOpenProject}
+            onRename={onRenameProject}
+            onDuplicate={onDuplicateProject}
+            onDelete={onDeleteProject}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // For large lists, use virtualization
+  const virtualItems = virtualizer.getVirtualItems();
+
+  return (
+    <div
+      ref={parentRef}
+      role="tabpanel"
+      id="all-projects-panel"
+      style={{
+        height: '600px',
+        overflow: 'auto',
+      }}
+    >
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        <div className="project-gallery-grid">
+          {virtualItems.map((virtualRow) => {
+            const project = projects[virtualRow.index];
+            return (
+              <div
+                key={project.id}
+                data-index={virtualRow.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <ProjectCard
+                  project={project}
+                  onOpen={onOpenProject}
+                  onRename={onRenameProject}
+                  onDuplicate={onDuplicateProject}
+                  onDelete={onDeleteProject}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Grid layout displaying saved projects as cards.
  * Shows projects sorted by most recently updated.
  */
@@ -36,12 +151,18 @@ const ProjectGalleryComponent = function ProjectGallery({
   const [sortBy, setSortBy] = useState<SortOption>('lastModified');
   const [activeTab, setActiveTab] = useState<'recent' | 'all'>('recent');
 
+  // Use deferred value for search query to prevent blocking UI during typing
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  // Detect if the deferred value is stale (user is still typing)
+  const isSearchStale = searchQuery !== deferredSearchQuery;
+
   const filteredAndSortedProjects = useMemo(() => {
     let result = [...projects];
 
-    // Filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
+    // Filter using deferred search query to avoid blocking UI
+    if (deferredSearchQuery.trim()) {
+      const query = deferredSearchQuery.toLowerCase().trim();
       result = result.filter((project) =>
         project.name.toLowerCase().includes(query)
       );
@@ -65,7 +186,7 @@ const ProjectGalleryComponent = function ProjectGallery({
     });
 
     return result;
-  }, [projects, searchQuery, sortBy]);
+  }, [projects, deferredSearchQuery, sortBy]);
 
   // Get the 3 most recent projects for the Recent tab
   const recentProjects = useMemo(() => {
@@ -134,7 +255,11 @@ const ProjectGalleryComponent = function ProjectGallery({
             {/* Search Bar */}
             <div className="project-gallery-search" role="search">
               <div className="project-gallery-search-inner">
-                <Search className="project-gallery-search-icon" size={18} aria-hidden="true" />
+                {isSearchStale ? (
+                  <Loader2 className="project-gallery-search-icon project-gallery-search-spinner" size={18} aria-hidden="true" />
+                ) : (
+                  <Search className="project-gallery-search-icon" size={18} aria-hidden="true" />
+                )}
                 <input
                   type="search"
                   placeholder="Search projects..."
@@ -143,7 +268,7 @@ const ProjectGalleryComponent = function ProjectGallery({
                   className="project-gallery-search-input"
                   aria-label="Search projects"
                 />
-                {searchQuery && (
+                {searchQuery && !isSearchStale && (
                   <button
                     className="project-gallery-search-clear"
                     onClick={() => setSearchQuery('')}
@@ -195,18 +320,13 @@ const ProjectGalleryComponent = function ProjectGallery({
       ) : (
         <>
           {filteredAndSortedProjects.length > 0 ? (
-            <div className="project-gallery-grid" role="tabpanel" id="all-projects-panel">
-              {filteredAndSortedProjects.map((project) => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  onOpen={onOpenProject}
-                  onRename={onRenameProject}
-                  onDuplicate={onDuplicateProject}
-                  onDelete={onDeleteProject}
-                />
-              ))}
-            </div>
+            <VirtualizedOrNormalGrid
+              projects={filteredAndSortedProjects}
+              onOpenProject={onOpenProject}
+              onRenameProject={onRenameProject}
+              onDuplicateProject={onDuplicateProject}
+              onDeleteProject={onDeleteProject}
+            />
           ) : (
             <div className="project-gallery-empty-search">
               <div className="project-gallery-empty-icon">

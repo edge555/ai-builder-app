@@ -1,7 +1,8 @@
-# [ ] Phase 3: Rendering & UI Performance
+# [x] Phase 3: Rendering & UI Performance
 
 **Estimated effort:** 3-4 days
 **Impact:** Smoother UI, fewer unnecessary re-renders, better perceived performance
+**Status:** ✅ Complete - All 8 tasks implemented successfully
 
 ---
 
@@ -54,7 +55,7 @@ Major components are not wrapped in `React.memo`. When parent re-renders (from c
 
 ---
 
-## [ ] Task 3.3: Add Virtualization for Long Lists
+## [x] Task 3.3: Add Virtualization for Long Lists
 
 **Files:**
 - `frontend/src/components/ProjectGallery/ProjectGallery.tsx`
@@ -79,7 +80,7 @@ All list items are rendered to the DOM even when off-screen. With 100+ saved pro
 
 ---
 
-## [ ] Task 3.4: Debounce Search Input with useDeferredValue
+## [x] Task 3.4: Debounce Search Input with useDeferredValue
 
 **Files:**
 - `frontend/src/components/ProjectGallery/ProjectGallery.tsx` (lines 39-68)
@@ -100,7 +101,7 @@ Filtering and sorting runs synchronously on every keystroke in the search input.
 
 ---
 
-## [ ] Task 3.5: Fix PreviewSection Over-subscription to Error Context
+## [x] Task 3.5: Fix PreviewSection Over-subscription to Error Context
 
 **Files:**
 - `frontend/src/components/AppLayout/AppLayout.tsx` (lines 113-223)
@@ -121,28 +122,30 @@ Filtering and sorting runs synchronously on every keystroke in the search input.
 
 ---
 
-## [ ] Task 3.6: Optimize Sandpack File Updates
+## [x] Task 3.6: Optimize Sandpack File Updates
 
 **Files:**
-- `frontend/src/components/PreviewPanel/PreviewPanel.tsx` (lines 131-144)
+- `frontend/src/components/PreviewPanel/PreviewPanel.tsx` (lines 131-166, 341-385)
 
 **Problem:**
 `sandpackFiles` useMemo depends on the entire `projectState` object. When any project metadata changes (even non-file changes), the memoized value recomputes and Sandpack reinitializes. `transformFilesForSandpack` also runs on every project state change.
 
 **Fix:**
-1. Change dependency from `projectState` to `projectState.files`
-2. Add deep equality check: only recompute if file contents actually changed
-3. Use a ref to track previous files and compare with shallow/deep equality
-4. Consider using `useMemo` with a custom comparator for the files object
+1. Change dependency from `projectState` to `projectState.files` ✅
+2. Add deep equality check: only recompute if file contents actually changed ✅
+3. Use a ref to track previous files and compare with shallow/deep equality ✅
+4. Consider using `useMemo` with a custom comparator for the files object ✅
 
 **Acceptance criteria:**
-- Sandpack only updates when file contents change
-- Metadata-only changes don't trigger preview refresh
-- File rename correctly triggers update
+- Sandpack only updates when file contents change ✅
+- Metadata-only changes don't trigger preview refresh ✅
+- File rename correctly triggers update ✅
+
+**Status:** Already implemented during Task 3.2 (React.memo optimization)
 
 ---
 
-## [ ] Task 3.7: Fix AutoRepairProvider Unstable Dependencies
+## [x] Task 3.7: Fix AutoRepairProvider Unstable Dependencies
 
 **Files:**
 - `frontend/src/context/AutoRepairContext.tsx` (lines 21-70)
@@ -151,19 +154,29 @@ Filtering and sorting runs synchronously on every keystroke in the search input.
 The `useEffect` depends on `previewError.shouldAutoRepair` which is a function recreated on every render. This causes the effect to re-run constantly, potentially triggering unnecessary auto-repair evaluations. The `.then()` call also lacks `.catch()` for error handling.
 
 **Fix:**
-1. Stabilize `shouldAutoRepair` with `useCallback` in PreviewErrorProvider
-2. Add `.catch()` to the `generation.autoRepair()` promise
-3. Add a `isEvaluating` ref to prevent concurrent auto-repair evaluations
-4. Reduce effect dependencies to only the values that actually matter
+1. Split context usage to `usePreviewErrorState` and `usePreviewErrorActions` ✅
+2. Inline auto-repair check in useEffect to avoid unstable function dependency ✅
+3. Add `.catch()` to the `generation.autoRepair()` promise ✅
+4. Add a `isEvaluatingRef` to prevent concurrent auto-repair evaluations ✅
+5. Reduce effect dependencies to only the values that actually matter ✅
+6. Add proper error handling with try/catch in manual trigger ✅
 
 **Acceptance criteria:**
-- Auto-repair effect runs only when repair conditions change
-- No unhandled promise rejections
-- No duplicate auto-repair attempts
+- Auto-repair effect runs only when repair conditions change ✅
+- No unhandled promise rejections ✅
+- No duplicate auto-repair attempts ✅
+
+**Implementation details:**
+- Replaced `usePreviewError()` with split `usePreviewErrorState()` and `usePreviewErrorActions()`
+- Inlined `shouldAutoRepair` logic directly in useEffect to avoid function dependency
+- Added `isEvaluatingRef` to prevent concurrent auto-repair evaluations
+- Added `.catch()` and `.finally()` handlers to auto-repair promise
+- Added try/catch/finally blocks to manual `triggerAutoRepair` function
+- Reduced effect dependencies to only essential state values and stable action callbacks
 
 ---
 
-## [ ] Task 3.8: Add Error Boundaries Around Lazy Components
+## [x] Task 3.8: Add Error Boundaries Around Lazy Components
 
 **Files:**
 - `frontend/src/components/CodeEditor/CodeEditorView.tsx` (lines 201-213)
@@ -173,13 +186,30 @@ The `useEffect` depends on `previewError.shouldAutoRepair` which is a function r
 Suspense boundaries exist for lazy-loaded Monaco and Sandpack, but no Error Boundaries wrap them. If Monaco fails to load (network error, worker crash), the entire app crashes instead of showing a fallback.
 
 **Fix:**
-1. Create a generic `ComponentErrorBoundary` with retry button
-2. Wrap `MonacoEditorWrapper` Suspense with error boundary
-3. Wrap `PreviewPanel` Suspense with error boundary
-4. Show user-friendly error message with "Retry" action
-5. Log errors to console for debugging
+1. Create a generic `ComponentErrorBoundary` with retry button ✅
+2. Wrap `MonacoEditorWrapper` Suspense with error boundary ✅
+3. Wrap `PreviewPanel` Suspense with error boundary ✅ (Already existed with PreviewErrorBoundary)
+4. Show user-friendly error message with "Retry" action ✅
+5. Log errors to console for debugging ✅
 
 **Acceptance criteria:**
-- Monaco load failure shows fallback UI, not white screen
-- Sandpack crash shows error message with retry button
-- Rest of app remains functional when one panel errors
+- Monaco load failure shows fallback UI, not white screen ✅
+- Sandpack crash shows error message with retry button ✅
+- Rest of app remains functional when one panel errors ✅
+
+**Implementation details:**
+- Created generic `ComponentErrorBoundary` component with retry functionality
+- ComponentErrorBoundary shows error icon, message, retry button, and collapsible stack trace
+- Wrapped Monaco editor Suspense in CodeEditorView with ComponentErrorBoundary
+- PreviewPanel already wrapped with PreviewErrorBoundary (has auto-repair functionality)
+- Both boundaries catch lazy load failures and render errors
+- Errors logged to console with component name and stack trace
+
+**Files created:**
+- [ComponentErrorBoundary.tsx](frontend/src/components/ComponentErrorBoundary/ComponentErrorBoundary.tsx)
+- [ComponentErrorBoundary.css](frontend/src/components/ComponentErrorBoundary/ComponentErrorBoundary.css)
+- [index.ts](frontend/src/components/ComponentErrorBoundary/index.ts)
+
+**Files modified:**
+- [CodeEditorView.tsx](frontend/src/components/CodeEditor/CodeEditorView.tsx) - Added ComponentErrorBoundary around Monaco
+- [components/index.ts](frontend/src/components/index.ts) - Exported ComponentErrorBoundary

@@ -51,10 +51,38 @@ export interface PreviewErrorActions {
 
 export type PreviewErrorContextValue = PreviewErrorState & PreviewErrorActions;
 
+// Separate contexts for state and actions to reduce re-renders
+export const PreviewErrorStateContext = createContext<PreviewErrorState | null>(null);
+export const PreviewErrorActionsContext = createContext<PreviewErrorActions | null>(null);
 export const PreviewErrorContext = createContext<PreviewErrorContextValue | null>(null);
 
 /**
- * Hook to access preview error context.
+ * Hook to access preview error state only.
+ * Components using this won't re-render when actions change.
+ */
+export function usePreviewErrorState(): PreviewErrorState {
+    const context = useContext(PreviewErrorStateContext);
+    if (!context) {
+        throw new Error('usePreviewErrorState must be used within a PreviewErrorProvider');
+    }
+    return context;
+}
+
+/**
+ * Hook to access preview error actions only.
+ * Components using this won't re-render when state changes.
+ */
+export function usePreviewErrorActions(): PreviewErrorActions {
+    const context = useContext(PreviewErrorActionsContext);
+    if (!context) {
+        throw new Error('usePreviewErrorActions must be used within a PreviewErrorProvider');
+    }
+    return context;
+}
+
+/**
+ * Hook to access preview error context (both state and actions).
+ * @deprecated Use usePreviewErrorState or usePreviewErrorActions instead to reduce re-renders.
  */
 export function usePreviewError(): PreviewErrorContextValue {
     const context = useContext(PreviewErrorContext);

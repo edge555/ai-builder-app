@@ -3,3 +3,4 @@ export { useKeyboardShortcuts, type KeyboardShortcutHandlers } from './useKeyboa
 export { useErrorMonitor, type UseErrorMonitorOptions, type UseErrorMonitorReturn } from './useErrorMonitor';
 export { useAutoSave, type UseAutoSaveOptions, type UseAutoSaveResult } from './useAutoSave';
 export { useSubmitPrompt } from './useSubmitPrompt';
+export { usePreviewErrorHandlers } from './usePreviewErrorHandlers';

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense, memo } from 'react';
 import type { SerializedProjectState } from '@/shared';
 import { useProject } from '@/context/ProjectContext.context';
+import { ComponentErrorBoundary } from '@/components/ComponentErrorBoundary';
 import { FileTreeSidebar } from './FileTreeSidebar';
 import { TabBar } from './TabBar';
 const MonacoEditorWrapper = lazy(() => import('./MonacoEditorWrapper').then(m => ({ default: m.MonacoEditorWrapper })));
@@ -196,17 +197,19 @@ const CodeEditorViewComponent = function CodeEditorView({ files }: CodeEditorVie
 
         {/* Monaco Editor */}
         <div className="code-editor-content">
-          <Suspense fallback={<CodeEditorSkeleton />}>
-            <MonacoEditorWrapper
-              filePath={activeFile}
-              content={getActiveFileContent()}
-              onChange={(value) => {
-                if (activeFile) {
-                  handleFileChange(activeFile, value);
-                }
-              }}
-            />
-          </Suspense>
+          <ComponentErrorBoundary componentName="Code Editor">
+            <Suspense fallback={<CodeEditorSkeleton />}>
+              <MonacoEditorWrapper
+                filePath={activeFile}
+                content={getActiveFileContent()}
+                onChange={(value) => {
+                  if (activeFile) {
+                    handleFileChange(activeFile, value);
+                  }
+                }}
+              />
+            </Suspense>
+          </ComponentErrorBoundary>
         </div>
       </div>
     </div>

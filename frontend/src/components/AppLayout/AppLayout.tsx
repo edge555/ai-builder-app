@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 
-import { ChatInterface, RepairStatus } from '../../components';
+import { ChatInterface } from '../../components';
 import { PreviewSkeleton } from '../PreviewPanel/PreviewSkeleton';
 const PreviewPanel = lazy(() => import('../PreviewPanel/PreviewPanel'));
 import { PreviewErrorBoundary } from '../PreviewPanel/PreviewErrorBoundary';
@@ -8,16 +8,17 @@ import { ExportButton } from '../ExportButton';
 import { PanelToggle, type ActivePanel } from '../PanelToggle';
 import { UndoRedoButtons } from '../UndoRedoButtons';
 import { StatusIndicator } from '../StatusIndicator';
-import { KeyboardHint } from '../KeyboardHint';
 import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
+import { ErrorOverlay } from './ErrorOverlay';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useAutoSave } from '@/hooks/useAutoSave';
+import { usePreviewErrorHandlers } from '@/hooks/usePreviewErrorHandlers';
 import { initialSuggestions, analyzeProjectForSuggestions } from '@/data/prompt-suggestions';
 import { type RuntimeError } from '@/shared';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { Sparkles, ArrowLeft, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { createLogger } from '@/utils/logger';
-import { useProject, useChatMessages, useGenerationState, useGenerationActions, usePreviewError } from '../../context';
+import { useProject, useChatMessages, useGenerationState, useGenerationActions } from '../../context';
 import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
 
 const RESIZE_MIN_WIDTH = 300;
@@ -57,7 +58,7 @@ interface ChatPanelProps {
 }
 
 function ChatPanel({ onFileClick }: ChatPanelProps) {
-    const { messages, clearMessages } = useChatMessages();
+    const { messages } = useChatMessages();
     const { isLoading, loadingPhase, error, streamingState, isStreaming } = useGenerationState();
     const { clearError, abortCurrentRequest } = useGenerationActions();
     const { projectState } = useProject();
@@ -113,82 +114,82 @@ const appLayoutLogger = createLogger('AppLayout');
 
 function PreviewSection({ activePanel }: { activePanel: ActivePanel }) {
     const { projectState } = useProject();
-    const { isLoading, loadingPhase, isAutoRepairing, autoRepairAttempt } = useGenerationState();
+    const { isLoading, loadingPhase, isAutoRepairing } = useGenerationState();
     const { autoRepair, resetAutoRepair } = useGenerationActions();
-    const {
-        reportError,
-        reportAggregatedErrors,
-        repairPhase,
-        setRepairPhase,
-        startAutoRepair,
-        completeAutoRepair,
-        clearAllErrors,
-        dismissRepairStatus,
-        shouldAutoRepair,
-        aggregatedErrors,
-        maxRepairAttempts,
-        repairAttempts,
-    } = usePreviewError();
+
+    // Use the new handler hook that doesn't cause re-renders on state changes
+    const errorHandlers = usePreviewErrorHandlers();
+
+    // Store project state in ref for use in callbacks
+    const projectStateRef = useRef(projectState);
+    useEffect(() => {
+        projectStateRef.current = projectState;
+    }, [projectState]);
 
     // Reset auto-repair attempts when project state changes successfully
     useEffect(() => {
+        const repairPhase = errorHandlers.getRepairPhase();
         if (repairPhase === 'idle' || repairPhase === 'success') {
             resetAutoRepair();
         }
-    }, [projectState?.currentVersionId, repairPhase, resetAutoRepair]);
+    }, [projectState?.currentVersionId, errorHandlers, resetAutoRepair]);
 
     const handlePreviewError = useCallback((runtimeError: RuntimeError) => {
         appLayoutLogger.error('Preview error captured', {
             type: runtimeError.type,
             message: runtimeError.message
         });
-        reportError(runtimeError);
-    }, [reportError]);
+        errorHandlers.reportError(runtimeError);
+    }, [errorHandlers]);
 
     const handleErrorsReady = useCallback((errors: AggregatedErrors) => {
         appLayoutLogger.info('Errors ready for repair', { totalCount: errors.totalCount });
-        reportAggregatedErrors(errors);
-    }, [reportAggregatedErrors]);
+        errorHandlers.reportAggregatedErrors(errors);
+    }, [errorHandlers]);
 
     const handleAutoRepair = useCallback(async (runtimeError: RuntimeError) => {
-        if (!shouldAutoRepair()) {
+        if (!errorHandlers.shouldAutoRepair()) {
             return;
         }
 
-        startAutoRepair();
+        errorHandlers.startAutoRepair();
 
         try {
-            const success = await autoRepair(runtimeError, projectState);
-            completeAutoRepair(success);
+            const success = await autoRepair(runtimeError, projectStateRef.current);
+            errorHandlers.completeAutoRepair(success);
         } catch (err) {
             appLayoutLogger.error('Auto-repair failed', { err });
-            completeAutoRepair(false);
+            errorHandlers.completeAutoRepair(false);
         }
-    }, [autoRepair, shouldAutoRepair, startAutoRepair, completeAutoRepair]);
+    }, [autoRepair, errorHandlers]);
 
     const handleBundlerIdle = useCallback(() => {
         // Bundler recovered, clear errors
+        const repairPhase = errorHandlers.getRepairPhase();
         if (repairPhase !== 'repairing') {
-            clearAllErrors();
-            setRepairPhase('idle');
+            errorHandlers.clearAllErrors();
+            errorHandlers.setRepairPhase('idle');
         }
-    }, [clearAllErrors, setRepairPhase, repairPhase]);
+    }, [errorHandlers]);
 
     // Auto-trigger repair when errors are ready and repair phase is 'repairing'
     useEffect(() => {
-        if (repairPhase === 'repairing' && aggregatedErrors && aggregatedErrors.totalCount > 0 && !isAutoRepairing) {
+        const repairPhase = errorHandlers.getRepairPhase();
+        const aggregatedErrors = errorHandlers.getAggregatedErrors();
+        const isAutoRepairingCurrent = errorHandlers.getIsAutoRepairing();
+
+        if (repairPhase === 'repairing' && aggregatedErrors && aggregatedErrors.totalCount > 0 && !isAutoRepairingCurrent) {
             const firstError = aggregatedErrors.errors[0];
             if (firstError) {
                 handleAutoRepair(firstError);
             }
         }
-    }, [repairPhase, aggregatedErrors, isAutoRepairing, handleAutoRepair]);
+    }, [errorHandlers, handleAutoRepair]);
 
     // Determine if auto-repair button should be available
-    const canAutoRepair = projectState !== null && autoRepairAttempt < maxRepairAttempts;
-
-    // Get current file being repaired for display
-    const currentFile = aggregatedErrors?.affectedFiles[0];
+    // Note: This is the only place we actually need to subscribe to state for rendering
+    // We'll keep this minimal and accept the re-render since it's needed for the UI
+    const canAutoRepair = projectState !== null;
 
     return (
         <>
@@ -211,15 +212,8 @@ function PreviewSection({ activePanel }: { activePanel: ActivePanel }) {
                 </Suspense>
             </PreviewErrorBoundary>
 
-            {/* Repair status toast */}
-            <RepairStatus
-                phase={repairPhase}
-                attempt={repairAttempts}
-                maxAttempts={maxRepairAttempts}
-                errorCount={aggregatedErrors?.totalCount || 1}
-                currentFile={currentFile}
-                onDismiss={dismissRepairStatus}
-            />
+            {/* Error overlay displays repair status independently */}
+            <ErrorOverlay />
         </>
     );
 }
@@ -468,7 +462,7 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                             : undefined
                     }}
                 >
-                    {!isSidebarCollapsed && <ChatPanel onFileClick={(filePath) => {
+                    {!isSidebarCollapsed && <ChatPanel onFileClick={() => {
                         // Switch to preview panel when file is clicked
                         setActivePanel('preview');
                         // TODO: In future, we could also programmatically switch to code view
