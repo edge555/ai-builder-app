@@ -27,6 +27,8 @@ export interface StreamingCallbacks {
   onComplete?: (result: { projectState: ProjectState; version: Version }) => void;
   onError?: (error: string, errorData?: { errorCode?: string; errorType?: string; partialContent?: string }) => void;
   onHeartbeat?: () => void;
+  /** Optional abort signal to cancel generation on client disconnect */
+  signal?: AbortSignal;
 }
 
 /**
@@ -84,6 +86,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       temperature: 0.7,
       maxOutputTokens: MAX_OUTPUT_TOKENS_GENERATION,
       responseSchema: PROJECT_OUTPUT_SCHEMA,
+      signal: callbacks.signal,
       onChunk: (chunk: string, accumulatedLength: number) => {
         accumulatedText += chunk;
         callbacks.onProgress?.(accumulatedLength);
@@ -171,12 +174,30 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     }
 
 
+    // If aborted, skip build-fix and downstream work
+    if (callbacks.signal?.aborted) {
+      logger.info('Generation aborted by client before build-fix loop');
+      return {
+        success: false,
+        error: 'Generation cancelled by client',
+      };
+    }
+
     // Build validation with auto-retry using universal retry loop
     const finalFiles = await this.runBuildFixLoop(
       validationResult.sanitizedOutput!,
       'generation',
       description
     );
+
+    // If aborted after build-fix, skip file emission
+    if (callbacks.signal?.aborted) {
+      logger.info('Generation aborted by client after build-fix loop');
+      return {
+        success: false,
+        error: 'Generation cancelled by client',
+      };
+    }
 
     // Create project state
 

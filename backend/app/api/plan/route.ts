@@ -17,11 +17,14 @@ import type {
 } from '@ai-app-builder/shared';
 import { PlanProjectRequestSchema } from '@ai-app-builder/shared';
 import { createMetadataFilePlanner } from '../../../lib/analysis';
-import { getCorsHeaders, handleOptions, handleError } from '../../../lib/api';
+import { getCorsHeaders, handleOptions, handleError, withTimeout, TimeoutError, AppError } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
 
 const logger = createLogger('api/plan');
+
+// Timeout for planning operations (60 seconds)
+const PLAN_TIMEOUT_MS = 60_000;
 
 /**
  * Handle OPTIONS preflight request
@@ -50,13 +53,20 @@ export async function POST(
       totalFiles: validatedRequest.fileTreeMetadata.length,
     });
 
-    // Call MetadataFilePlanner.plan()
+    // Call MetadataFilePlanner.plan() with timeout
     const planner = createMetadataFilePlanner();
     // TODO: Pass requestId to planner when it supports it
-    const planResult = await planner.plan(
-      validatedRequest.prompt,
-      validatedRequest.fileTreeMetadata,
-      validatedRequest.projectName || 'project'
+    const planResult = await withTimeout(
+      planner.plan(
+        validatedRequest.prompt,
+        validatedRequest.fileTreeMetadata,
+        validatedRequest.projectName || 'project'
+      ),
+      {
+        timeoutMs: PLAN_TIMEOUT_MS,
+        operationName: 'project planning',
+        signal: request.signal,
+      }
     );
 
     // Calculate timing metadata
@@ -89,6 +99,20 @@ export async function POST(
 
     return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
   } catch (error) {
+    // Handle timeout errors specifically
+    if (error instanceof TimeoutError) {
+      contextLogger.error('Planning timed out', {
+        timeoutMs: error.timeoutMs,
+      });
+      const timeoutError = AppError.network(
+        'OPERATION_TIMEOUT',
+        `Project planning timed out after ${error.timeoutMs / 1000} seconds`,
+        { timeoutMs: error.timeoutMs },
+        504
+      );
+      return handleError(timeoutError, 'api/plan', request);
+    }
+
     contextLogger.error('Planning failed', {
       error: error instanceof Error ? error.message : String(error),
     });

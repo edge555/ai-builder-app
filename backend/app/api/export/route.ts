@@ -10,7 +10,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { ErrorResponse } from '@ai-app-builder/shared';
 import { deserializeProjectState, ExportProjectRequestSchema } from '@ai-app-builder/shared';
 import { exportAsZipBuffer } from '../../../lib/core';
-import { getCorsHeaders, handleOptions, handleError, AppError } from '../../../lib/api';
+import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError } from '../../../lib/api';
+import { createLogger } from '../../../lib/logger';
+
+const logger = createLogger('api/export');
+
+// Timeout for export operations (60 seconds)
+const EXPORT_TIMEOUT_MS = 60_000;
 
 /**
  * Handle OPTIONS preflight request
@@ -32,8 +38,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Deserialize project state
     const projectState = deserializeProjectState(validatedRequest.projectState as any);
 
-    // Generate ZIP file
-    const zipBuffer = await exportAsZipBuffer(projectState);
+    // Generate ZIP file with timeout
+    const zipBuffer = await withTimeout(
+      exportAsZipBuffer(projectState),
+      {
+        timeoutMs: EXPORT_TIMEOUT_MS,
+        operationName: 'project export',
+        signal: request.signal,
+      }
+    );
 
     // Generate filename from project name
     const sanitizedName = projectState.name
@@ -55,6 +68,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
 
   } catch (error) {
+    // Handle timeout errors specifically
+    if (error instanceof TimeoutError) {
+      logger.error('Export timed out', {
+        timeoutMs: error.timeoutMs,
+      });
+      const timeoutError = AppError.network(
+        'OPERATION_TIMEOUT',
+        `Project export timed out after ${error.timeoutMs / 1000} seconds`,
+        { timeoutMs: error.timeoutMs },
+        504
+      );
+      return handleError(timeoutError, 'api/export', request);
+    }
+
     return handleError(error, 'api/export', request);
   }
 }
