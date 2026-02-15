@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import type { ChatMessage } from '../components/ChatInterface';
-import type { ChangeSummary, FileDiff } from '@/shared';
+import { useState, useCallback, useMemo, type ReactNode } from 'react';
+import type { ChatMessage } from '../components/ChatInterface/ChatInterface';
+import type { ChangeSummary, FileDiff } from '@ai-app-builder/shared/types';
 import { ChatMessagesContext, type ChatMessagesContextValue } from './ChatMessagesContext.context';
 
 /**
@@ -11,7 +11,7 @@ function generateId(): string {
 }
 
 export interface ChatMessagesProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
   /** Optional initial messages for restoration */
   initialMessages?: ChatMessage[];
 }

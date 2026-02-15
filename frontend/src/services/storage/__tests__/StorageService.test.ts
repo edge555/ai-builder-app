@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { storageService } from '../StorageService';
-import type { StoredProject, ProjectMetadata, SerializedChatMessage } from '../types';
+import type { StoredProject, SerializedChatMessage } from '../types';
 
 // Mock logger
 vi.mock('@/utils/logger', () => ({

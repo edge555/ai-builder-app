@@ -4,7 +4,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared';
+import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared/types';
 import { GeminiClient } from '../ai';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
 import { buildFixPrompt } from './prompts/build-fix-prompt';

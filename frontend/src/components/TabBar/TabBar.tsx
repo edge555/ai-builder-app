@@ -1,10 +1,10 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, type ReactNode, type KeyboardEvent } from 'react';
 import './TabBar.css';
 
 export interface Tab {
     id: string;
     label: string;
-    icon?: React.ReactNode;
+    icon?: ReactNode;
 }
 
 export interface TabBarProps {
@@ -28,7 +28,7 @@ export function TabBar({ tabs, activeTab, onTabChange, className = '' }: TabBarP
     const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
     // Handle keyboard navigation
-    const handleKeyDown = (e: React.KeyboardEvent, currentIndex: number) => {
+    const handleKeyDown = (e: KeyboardEvent, currentIndex: number) => {
         let nextIndex = currentIndex;
 
         switch (e.key) {

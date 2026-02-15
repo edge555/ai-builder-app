@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import type { ChangeSummary, FileDiff } from '@/shared';
+import { useState, useMemo } from 'react';
+import type { ChangeSummary, FileDiff } from '@ai-app-builder/shared/types';
 import { FileText, FilePlus, FileEdit, FileX, ChevronDown, ChevronRight } from 'lucide-react';
 import './FileChangeSummary.css';
 

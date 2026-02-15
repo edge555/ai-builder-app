@@ -45,9 +45,14 @@ describe('WelcomePage', () => {
         {
             id: '1',
             name: 'Test Project',
-            projectState: { name: 'Test Project', files: {} },
+            description: 'Test description',
+            files: { 'index.html': '<html></html>' },
+            currentVersionId: 'v1',
             createdAt: '2024-01-01T10:00:00Z',
             updatedAt: '2024-01-01T10:00:00Z',
+            chatMessages: [],
+            fileCount: 1,
+            thumbnailFiles: ['index.html'],
         },
     ];
 

@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // Mock lucide-react icons
@@ -93,14 +92,14 @@ describe('BrowserChrome', () => {
     });
 
     it('should apply spin class to refresh icon when refreshing', () => {
-        const { container } = render(<BrowserChrome isRefreshing={true} />);
+        render(<BrowserChrome isRefreshing={true} />);
 
         const refreshIcon = screen.getByTestId('icon-refresh');
         expect(refreshIcon.className).toContain('spin');
     });
 
     it('should not apply spin class when not refreshing', () => {
-        const { container } = render(<BrowserChrome isRefreshing={false} />);
+        render(<BrowserChrome isRefreshing={false} />);
 
         const refreshIcon = screen.getByTestId('icon-refresh');
         expect(refreshIcon.className).not.toContain('spin');

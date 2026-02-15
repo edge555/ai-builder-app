@@ -21,11 +21,14 @@ describe('repair-prompt', () => {
 
     describe('buildRepairPrompt', () => {
         it('should build a prompt for a single runtime error', () => {
-            const error = {
+            const error: any = {
                 type: 'REFERENCE_ERROR' as const,
                 message: 'x is not defined',
                 filePath: 'App.tsx',
                 line: 10,
+                priority: 'high',
+                timestamp: new Date().toISOString(),
+                source: 'console',
             };
 
             const prompt = buildRepairPrompt(error);
@@ -39,10 +42,13 @@ describe('repair-prompt', () => {
         });
 
         it('should include suggested fixes if provided', () => {
-            const error = {
+            const error: any = {
                 type: 'TYPE_ERROR' as const,
                 message: 'Cannot read property x of undefined',
                 suggestedFixes: ['Add null check', 'Initialize variable'],
+                priority: 'medium',
+                timestamp: new Date().toISOString(),
+                source: 'console',
             };
 
             const prompt = buildRepairPrompt(error);
@@ -53,7 +59,13 @@ describe('repair-prompt', () => {
         });
 
         it('should use errorAggregator if provided and has report', () => {
-            const error = { type: 'TYPE_ERROR' as const, message: 'err' };
+            const error: any = {
+                type: 'TYPE_ERROR' as const,
+                message: 'err',
+                priority: 'low',
+                timestamp: new Date().toISOString(),
+                source: 'console',
+            };
             const mockAggregator = {
                 buildErrorReport: () => 'Aggregated Error Report',
             } as any;

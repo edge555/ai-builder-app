@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import type { SerializedVersion, FileDiff } from '@/shared';
+import { useMemo, memo } from 'react';
+import type { SerializedVersion, FileDiff } from '@ai-app-builder/shared/types';
 import './HistoryPanel.css';
 
 /**
@@ -80,7 +80,7 @@ export function HistoryPanel({
 }: HistoryPanelProps) {
   // Sort versions by timestamp (newest first)
   const sortedVersions = useMemo(() => {
-    return [...versions].sort((a, b) => 
+    return [...versions].sort((a, b) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
   }, [versions]);
@@ -169,9 +169,9 @@ interface VersionItemProps {
 /**
  * Renders a single version in the timeline.
  */
-const VersionItem = React.memo(function VersionItem({ version, isCurrent, isInitial, isNewest, onRevert, isLoading = false }: VersionItemProps) {
+const VersionItem = memo(function VersionItem({ version, isCurrent, isInitial, onRevert, isLoading = false }: VersionItemProps) {
   const stats = useMemo(() => computeVersionStats(version.diffs), [version.diffs]);
-  
+
   const versionClass = [
     'history-version',
     isCurrent ? 'history-version-current' : '',
@@ -183,8 +183,8 @@ const VersionItem = React.memo(function VersionItem({ version, isCurrent, isInit
   };
 
   // Truncate long prompts
-  const displayPrompt = version.prompt.length > 150 
-    ? version.prompt.substring(0, 150) + '...' 
+  const displayPrompt = version.prompt.length > 150
+    ? version.prompt.substring(0, 150) + '...'
     : version.prompt;
 
   return (

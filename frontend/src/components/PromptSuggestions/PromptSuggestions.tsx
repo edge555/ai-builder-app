@@ -1,4 +1,3 @@
-import React from 'react';
 import type { PromptSuggestion } from '@/data/prompt-suggestions';
 import './PromptSuggestions.css';
 

@@ -40,6 +40,13 @@ export class AppError extends Error {
     }
 
     /**
+     * Factory for network/upstream errors (502/503/504)
+     */
+    static network(code: string, message: string, details?: Record<string, unknown>, statusCode = 502): AppError {
+        return new AppError({ type: 'api', code, message, details, recoverable: true, statusCode });
+    }
+
+    /**
      * Factory for validation errors (422)
      */
     static validation(message: string, details?: Record<string, unknown>, recoverable = true): AppError {

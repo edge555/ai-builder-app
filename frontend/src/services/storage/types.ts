@@ -1,6 +1,5 @@
-import type { SerializedProjectState } from '@/shared';
-import type { ChatMessage } from '@/components';
-import type { ChangeSummary, FileDiff } from '@/shared';
+import type { SerializedProjectState, ChangeSummary, FileDiff } from '@ai-app-builder/shared/types';
+import type { ChatMessage } from '@/components/ChatInterface/ChatInterface';
 
 /**
  * Represents a stored project in IndexedDB.

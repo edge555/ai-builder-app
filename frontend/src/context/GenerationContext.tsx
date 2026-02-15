@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import type { LoadingPhase } from '../components/ChatInterface';
-import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState, RepairAttempt } from '@/shared';
+import { useState, useCallback, useMemo, useRef, useEffect, type ReactNode } from 'react';
+import type { LoadingPhase } from '../components/ChatInterface/ChatInterface';
+import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState, RepairAttempt } from '@ai-app-builder/shared/types';
 import { config as appConfig } from '../config';
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 import { parseSSEStream } from '@/utils/sse-parser';
@@ -27,7 +27,7 @@ const STREAMING_TIMEOUT_MS = 120000; // 120 seconds
  * Provider for generation and modification operations.
  * Manages loading states, streaming, and auto-repair.
  */
-export function GenerationProvider({ children }: { children: React.ReactNode }) {
+export function GenerationProvider({ children }: { children: ReactNode }) {
   const errorAggregator = useErrorAggregator();
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');

@@ -7,8 +7,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { ComputeDiffResponse, ErrorResponse } from '@ai-app-builder/shared';
-import { ComputeDiffRequestSchema } from '@ai-app-builder/shared';
+import type { ComputeDiffResponse, ErrorResponse, ComputeDiffRequest } from '@ai-app-builder/shared/types';
+import { ComputeDiffRequestSchema } from '@ai-app-builder/shared/schemas';
 import { getVersionManager } from '../../../lib/core';
 import { getDiffEngine } from '../../../lib/diff';
 import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError } from '../../../lib/api';

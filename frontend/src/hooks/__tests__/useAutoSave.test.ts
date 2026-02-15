@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { renderHook, waitFor, act } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useAutoSave } from '../useAutoSave';
 import { storageService } from '@/services/storage';
-import type { SerializedProjectState } from '@/shared';
-import type { ChatMessage } from '@/components';
+import type { SerializedProjectState } from '@ai-app-builder/shared/types';
+import type { ChatMessage } from '@/components/ChatInterface/ChatInterface';
 
 // Mock storage service
 vi.mock('@/services/storage', () => ({
@@ -35,15 +35,21 @@ describe('useAutoSave', () => {
     const mockProjectState: SerializedProjectState = {
         id: 'test-project-id',
         name: 'Test Project',
+        description: 'Test Description',
         files: {
             'index.html': '<html></html>',
         },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        currentVersionId: 'v1',
     };
 
     const mockMessages: ChatMessage[] = [
         {
+            id: 'm1',
             role: 'user',
             content: 'Create a test app',
+            timestamp: new Date(),
         },
     ];
 
@@ -108,7 +114,7 @@ describe('useAutoSave', () => {
     });
 
     it('should set isSaving to true during save operation', async () => {
-        let resolveSave: () => void;
+        let resolveSave: (value: void | PromiseLike<void>) => void = () => { };
         const savePromise = new Promise<void>((resolve) => {
             resolveSave = resolve;
         });
@@ -216,7 +222,7 @@ describe('useAutoSave', () => {
 
         const updatedMessages: ChatMessage[] = [
             ...mockMessages,
-            { role: 'assistant', content: 'Project created' },
+            { id: 'm2', role: 'assistant', content: 'Project created', timestamp: new Date() },
         ];
 
         renderHook(() => useAutoSave(mockProjectState, updatedMessages));
@@ -232,7 +238,7 @@ describe('useAutoSave', () => {
 
     it('should not update state if unmounted during async save (StrictMode fix)', async () => {
         // Mock a slow save operation
-        let resolveSave: () => void;
+        let resolveSave: (value: void | PromiseLike<void>) => void = () => { };
         const savePromise = new Promise<void>((resolve) => {
             resolveSave = resolve;
         });
@@ -265,7 +271,7 @@ describe('useAutoSave', () => {
 
     it('should not update state if unmounted during async save error (StrictMode fix)', async () => {
         // Mock a slow save operation that fails
-        let rejectSave: (error: Error) => void;
+        let rejectSave: (reason?: any) => void = () => { };
         const savePromise = new Promise<void>((_, reject) => {
             rejectSave = reject;
         });

@@ -1,17 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
-import { VersionProvider, useVersion } from '../VersionContext';
+import { render, screen } from '@testing-library/react';
+import { VersionProvider } from '../VersionContext';
+import { useVersions } from '../VersionContext.context';
 
 // Test component
 function TestComponent() {
-    const { canUndo, canRedo, undo, redo } = useVersion();
+    const { versions, isLoadingVersions } = useVersions();
 
     return (
         <div>
-            <div data-testid="can-undo">{canUndo ? 'yes' : 'no'}</div>
-            <div data-testid="can-redo">{canRedo ? 'yes' : 'no'}</div>
-            <button onClick={undo}>Undo</button>
-            <button onClick={redo}>Redo</button>
+            <div data-testid="version-count">{versions.length}</div>
+            <div data-testid="loading-status">{isLoadingVersions ? 'loading' : 'idle'}</div>
         </div>
     );
 }
@@ -28,18 +27,7 @@ describe('VersionContext', () => {
             </VersionProvider>
         );
 
-        expect(screen.getByTestId('can-undo')).toBeInTheDocument();
-        expect(screen.getByTestId('can-redo')).toBeInTheDocument();
-    });
-
-    it('should have undo and redo functions', () => {
-        render(
-            <VersionProvider>
-                <TestComponent />
-            </VersionProvider>
-        );
-
-        expect(screen.getByText('Undo')).toBeInTheDocument();
-        expect(screen.getByText('Redo')).toBeInTheDocument();
+        expect(screen.getByTestId('version-count')).toBeInTheDocument();
+        expect(screen.getByTestId('loading-status')).toHaveTextContent('idle');
     });
 });

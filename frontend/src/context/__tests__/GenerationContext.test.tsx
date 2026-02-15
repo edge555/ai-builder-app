@@ -1,4 +1,4 @@
-import React from 'react';
+import { useContext } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { GenerationProvider } from '../GenerationContext';
@@ -23,7 +23,8 @@ describe('GenerationContext Integration', () => {
     });
 
     const TestComponent = () => {
-        const context = React.useContext(GenerationContext);
+        const context = useContext(GenerationContext);
+        if (!context) return null;
         return (
             <div>
                 <div data-testid="is-streaming">{context.isStreaming.toString()}</div>
@@ -41,7 +42,7 @@ describe('GenerationContext Integration', () => {
             body: { getReader: () => ({}) },
         });
 
-        (parseSSEStream as any).mockImplementation(async (reader, handlers) => {
+        (parseSSEStream as any).mockImplementation(async (_reader: any, handlers: any) => {
             act(() => {
                 handlers.onStart();
                 handlers.onProgress(100);

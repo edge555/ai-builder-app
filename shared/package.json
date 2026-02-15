@@ -10,6 +10,21 @@
             "types": "./dist/index.d.ts",
             "import": "./dist/index.mjs",
             "require": "./dist/index.js"
+        },
+        "./types": {
+            "types": "./dist/types.d.ts",
+            "import": "./dist/types.mjs",
+            "require": "./dist/types.js"
+        },
+        "./schemas": {
+            "types": "./dist/schemas.d.ts",
+            "import": "./dist/schemas.mjs",
+            "require": "./dist/schemas.js"
+        },
+        "./utils": {
+            "types": "./dist/utils.d.ts",
+            "import": "./dist/utils.mjs",
+            "require": "./dist/utils.js"
         }
     },
     "scripts": {
