@@ -137,7 +137,7 @@ export class DependencyGraph {
     const sortedEntries = entries.sort((a, b) => a.filePath.localeCompare(b.filePath));
 
     // Create a string of "path:hash" pairs
-    const keyParts = sortedEntries.map((entry) => `${entry.filePath}:${entry.contentHash}`);
+    const keyParts = sortedEntries.map((entry) => `${entry.filePath}:${entry.hash}`);
 
     // Hash the combined string
     return createHash('sha256').update(keyParts.join('|')).digest('hex');

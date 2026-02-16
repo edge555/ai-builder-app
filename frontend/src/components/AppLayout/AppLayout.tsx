@@ -243,10 +243,7 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                     }}
                 >
                     {!isSidebarCollapsed && <ChatPanel onFileClick={() => {
-                        // Switch to preview panel when file is clicked
                         setActivePanel('preview');
-                        // TODO: In future, we could also programmatically switch to code view
-                        // and open the specific file in the code editor
                     }} />}
                     {isSidebarCollapsed && windowWidth > DESKTOP_BREAKPOINT && (
                         <div className="sidebar-collapsed-rail">

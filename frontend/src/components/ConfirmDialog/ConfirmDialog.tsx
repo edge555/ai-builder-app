@@ -79,10 +79,6 @@ export function ConfirmDialog({
     };
   }, [onCancel]);
 
-  const handleConfirm = () => {
-    onConfirm();
-  };
-
   return (
     <dialog ref={dialogRef} className="confirm-dialog">
       <div className="confirm-dialog-content">
@@ -108,7 +104,7 @@ export function ConfirmDialog({
           <button
             type="button"
             className={`confirm-dialog-button confirm-dialog-button--${confirmVariant}`}
-            onClick={handleConfirm}
+            onClick={onConfirm}
             autoFocus
           >
             {confirmLabel}

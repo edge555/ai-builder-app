@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GenerateProjectRequestSchema, ModifyProjectRequestSchema } from '../schemas/api';
+import { GenerateProjectRequestSchema, ModifyProjectRequestSchema, PlanProjectRequestSchema } from '../schemas/api';
 import { computeFileDiff, generateChangeSummary } from '../utils/diff';
 
 describe('Shared Package Tests', () => {
@@ -30,6 +30,97 @@ describe('Shared Package Tests', () => {
                 },
             };
             const result = ModifyProjectRequestSchema.safeParse(data);
+            expect(result.success).toBe(true);
+        });
+
+        it('should validate valid PlanProjectRequest', () => {
+            const data = {
+                prompt: 'Add a new feature',
+                fileTreeMetadata: [
+                    {
+                        path: 'src/App.tsx',
+                        fileType: 'component',
+                        lineCount: 50,
+                        exports: ['App'],
+                        imports: ['react'],
+                    },
+                ],
+            };
+            const result = PlanProjectRequestSchema.safeParse(data);
+            expect(result.success).toBe(true);
+        });
+
+        it('should reject PlanProjectRequest with prompt longer than 50,000 characters', () => {
+            const longPrompt = 'a'.repeat(50001);
+            const data = {
+                prompt: longPrompt,
+                fileTreeMetadata: [
+                    {
+                        path: 'src/App.tsx',
+                        fileType: 'component',
+                        lineCount: 50,
+                        exports: ['App'],
+                        imports: ['react'],
+                    },
+                ],
+            };
+            const result = PlanProjectRequestSchema.safeParse(data);
+            expect(result.success).toBe(false);
+            if (!result.success) {
+                expect(result.error.issues[0].message).toContain('too long');
+            }
+        });
+
+        it('should reject PlanProjectRequest with more than 500 metadata entries', () => {
+            const metadata = Array.from({ length: 501 }, (_, i) => ({
+                path: `file${i}.ts`,
+                fileType: 'component' as const,
+                lineCount: 10,
+                exports: [],
+                imports: [],
+            }));
+            const data = {
+                prompt: 'Valid prompt',
+                fileTreeMetadata: metadata,
+            };
+            const result = PlanProjectRequestSchema.safeParse(data);
+            expect(result.success).toBe(false);
+            if (!result.success) {
+                expect(result.error.issues[0].message).toContain('Too many files');
+            }
+        });
+
+        it('should accept PlanProjectRequest with exactly 50,000 characters', () => {
+            const maxPrompt = 'a'.repeat(50000);
+            const data = {
+                prompt: maxPrompt,
+                fileTreeMetadata: [
+                    {
+                        path: 'src/App.tsx',
+                        fileType: 'component',
+                        lineCount: 50,
+                        exports: ['App'],
+                        imports: ['react'],
+                    },
+                ],
+            };
+            const result = PlanProjectRequestSchema.safeParse(data);
+            expect(result.success).toBe(true);
+        });
+
+        it('should accept PlanProjectRequest with exactly 500 metadata entries', () => {
+            const metadata = Array.from({ length: 500 }, (_, i) => ({
+                path: `file${i}.ts`,
+                fileType: 'component' as const,
+                lineCount: 10,
+                exports: [],
+                imports: [],
+            }));
+            const data = {
+                prompt: 'Valid prompt',
+                fileTreeMetadata: metadata,
+            };
+            const result = PlanProjectRequestSchema.safeParse(data);
             expect(result.success).toBe(true);
         });
     });

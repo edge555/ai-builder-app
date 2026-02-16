@@ -54,10 +54,10 @@ export const FileMetadataEntrySchema = z.object({
 });
 
 export const PlanProjectRequestSchema = z.object({
-    fileTreeMetadata: z.array(FileMetadataEntrySchema).min(1, 'fileTreeMetadata cannot be empty'),
+    fileTreeMetadata: z.array(FileMetadataEntrySchema).min(1, 'fileTreeMetadata cannot be empty').max(500, 'Too many files in metadata (max 500)'),
     projectName: z.string().optional(),
     projectDescription: z.string().optional(),
-    prompt: z.string().min(1, 'Prompt is required'),
+    prompt: z.string().min(1, 'Prompt is required').max(50000, 'Prompt is too long (max 50,000 characters)'),
 });
 
 /**

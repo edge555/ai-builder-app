@@ -75,10 +75,6 @@ export function RepairStatus({
     }
   }, [phase, autoDismissMs, handleExit]);
 
-  const handleDismiss = () => {
-    handleExit();
-  };
-
   if (!isVisible) return null;
 
   const getIcon = () => {
@@ -154,7 +150,7 @@ export function RepairStatus({
         {(phase === 'success' || phase === 'failed') && (
           <button
             className="repair-status-dismiss"
-            onClick={handleDismiss}
+            onClick={handleExit}
             aria-label="Dismiss"
           >
             <X size={14} />

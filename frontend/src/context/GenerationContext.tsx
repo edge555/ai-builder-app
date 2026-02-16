@@ -74,9 +74,6 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /**
-   * Resets auto-repair state.
-   */
-  /**
    * Aborts the current in-flight request.
    */
   const abortCurrentRequest = useCallback(() => {
