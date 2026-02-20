@@ -11,7 +11,7 @@ import { buildFixPrompt } from './prompts/build-fix-prompt';
 import { processFiles } from './file-processor';
 import { ProjectOutputSchema } from './schemas';
 import { createLogger } from '../logger';
-import { MAX_OUTPUT_TOKENS_GENERATION, MAX_OUTPUT_TOKENS_MODIFICATION } from '../constants';
+import { MAX_OUTPUT_TOKENS_GENERATION } from '../constants';
 import { parseIncrementalFiles, estimateTotalFiles } from '../utils/incremental-json-parser';
 import { BaseProjectGenerator } from './base-project-generator';
 
@@ -80,7 +80,6 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     let lastParsedIndex = 0;
     let accumulatedText = '';
     const emittedFiles = new Set<string>();
-    let streamAborted = false;
     let warningCount = 0;
 
     // Call Gemini API with structured output and streaming

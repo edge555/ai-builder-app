@@ -190,7 +190,7 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                         <EditableProjectName
                             name={projectState.name}
                             onRename={renameProject}
-                            disabled={isLoading}
+                            disabled={true}
                         />
                     ) : (
                         <h1>AI App Builder</h1>

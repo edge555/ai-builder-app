@@ -14,12 +14,6 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
   ProjectState,
   Version,
-  FileDiff,
-  ChangeSummary,
-  EditOperation,
-  FileEdit,
-  ModificationOutput,
-  EditApplicationResult,
   RepairAttempt,
   ModificationResult,
 } from '@ai-app-builder/shared';
@@ -35,8 +29,6 @@ import { MAX_OUTPUT_TOKENS_MODIFICATION } from '../constants';
 import {
   FilePlanner,
   createFilePlanner,
-  SliceSelector,
-  createSliceSelector
 } from '../analysis';
 import { ModificationOutputSchema } from '../core/schemas';
 import { isSafePath } from '../utils';
@@ -56,7 +48,6 @@ export class ModificationEngine {
   private readonly geminiClient: GeminiClient;
   private readonly validationPipeline: ValidationPipeline;
   private readonly filePlanner: FilePlanner;
-  private readonly sliceSelector: SliceSelector;
   private readonly buildValidator: BuildValidator;
   private readonly maxBuildRetries = 2;
 
@@ -64,7 +55,6 @@ export class ModificationEngine {
     // Modification requires the most capable model (Pro or specialized Flash) for complex instruction following and code generation
     this.geminiClient = geminiClient ?? createGeminiClient(config.ai.hardModel);
     this.validationPipeline = new ValidationPipeline();
-    this.sliceSelector = createSliceSelector();
     this.filePlanner = createFilePlanner(this.geminiClient);
     this.buildValidator = createBuildValidator();
   }

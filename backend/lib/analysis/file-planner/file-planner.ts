@@ -5,8 +5,6 @@
  * Uses a two-phase approach:
  * 1. Planning Phase: AI receives compact file tree metadata and selects relevant files
  * 2. Context Assembly: Selected files are assembled into CodeSlices for execution
- *
- * Requirements: 3.1, 3.2, 3.4, 3.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 8.4
  */
 
 import type { ProjectState } from '@ai-app-builder/shared';
