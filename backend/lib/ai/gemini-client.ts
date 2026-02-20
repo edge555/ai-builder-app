@@ -17,6 +17,7 @@ import type {
   GeminiResponse,
   GeminiAPIResponse,
 } from './gemini-types';
+import type { AIProvider } from './ai-provider';
 
 const logger = createLogger('gemini-client');
 
@@ -24,7 +25,7 @@ const logger = createLogger('gemini-client');
  * Client for interacting with Google's Gemini API.
  * Implements timeout and retry logic with exponential backoff.
  */
-export class GeminiClient {
+export class GeminiClient implements AIProvider {
   private readonly apiKey: string;
   private readonly model: string;
   private readonly timeout: number;

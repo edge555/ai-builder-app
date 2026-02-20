@@ -5,7 +5,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared/types';
-import { GeminiClient } from '../ai';
+import type { AIProvider } from '../ai';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
 import { buildFixPrompt } from './prompts/build-fix-prompt';
 import { processFiles } from './file-processor';
@@ -43,8 +43,8 @@ export type StreamingGenerationResult = OperationResult;
  * Streaming Project Generator that emits files as they're generated.
  */
 export class StreamingProjectGenerator extends BaseProjectGenerator {
-  constructor(geminiClient?: GeminiClient) {
-    super(geminiClient);
+  constructor(aiProvider?: AIProvider) {
+    super(aiProvider);
   }
 
   /**
@@ -70,7 +70,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     // Build prompt with proper injection defense
     const systemInstruction = getGenerationPrompt(description);
 
-    logger.info('Sending streaming request to Gemini', {
+    logger.info('Sending streaming request to AI provider', {
       systemInstructionLength: systemInstruction.length,
       temperature: 0.7,
       maxOutputTokens: MAX_OUTPUT_TOKENS_GENERATION,
@@ -82,8 +82,8 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     const emittedFiles = new Set<string>();
     let warningCount = 0;
 
-    // Call Gemini API with structured output and streaming
-    const response = await this.geminiClient.generateStreaming({
+    // Call AI provider with structured output and streaming
+    const response = await this.aiProvider.generateStreaming({
       prompt: 'Generate the project based on the user request in the system instruction.',
       systemInstruction: systemInstruction,
       temperature: 0.7,

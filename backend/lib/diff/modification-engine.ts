@@ -18,7 +18,8 @@ import type {
   ModificationResult,
 } from '@ai-app-builder/shared';
 import type { CodeSlice } from '../analysis/file-planner/types';
-import { GeminiClient, createGeminiClient } from '../ai';
+import type { AIProvider } from '../ai';
+import { createAIProviderWithModel } from '../ai';
 import { ValidationPipeline } from '../core/validation-pipeline';
 import { BuildValidator, createBuildValidator } from '../core/build-validator';
 import { getModificationPrompt, MODIFICATION_OUTPUT_SCHEMA } from './prompts/modification-prompt';
@@ -45,17 +46,17 @@ const logger = createLogger('ModificationEngine');
  * Includes build validation with auto-retry.
  */
 export class ModificationEngine {
-  private readonly geminiClient: GeminiClient;
+  private readonly aiProvider: AIProvider;
   private readonly validationPipeline: ValidationPipeline;
   private readonly filePlanner: FilePlanner;
   private readonly buildValidator: BuildValidator;
   private readonly maxBuildRetries = 2;
 
-  constructor(geminiClient?: GeminiClient) {
+  constructor(aiProvider?: AIProvider) {
     // Modification requires the most capable model (Pro or specialized Flash) for complex instruction following and code generation
-    this.geminiClient = geminiClient ?? createGeminiClient(config.ai.hardModel);
+    this.aiProvider = aiProvider ?? createAIProviderWithModel(config.ai.hardModel);
     this.validationPipeline = new ValidationPipeline();
-    this.filePlanner = createFilePlanner(this.geminiClient);
+    this.filePlanner = createFilePlanner(this.aiProvider);
     this.buildValidator = createBuildValidator();
   }
 
@@ -226,7 +227,7 @@ export class ModificationEngine {
       });
 
       // Call Gemini API with structured output
-      const response = await this.geminiClient.generate({
+      const response = await this.aiProvider.generate({
         prompt: fullPrompt,
         systemInstruction: systemInstruction,
         temperature: 0.7,
@@ -463,7 +464,7 @@ export class ModificationEngine {
       const fixSystemInstruction = getModificationPrompt(fixUserRequest, includeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
       const fixContextPrompt = buildModificationPrompt(fixUserRequest, slices, projectState);
 
-      const fixResponse = await this.geminiClient.generate({
+      const fixResponse = await this.aiProvider.generate({
         prompt: fixContextPrompt,
         systemInstruction: fixSystemInstruction,
         temperature: 0.5,

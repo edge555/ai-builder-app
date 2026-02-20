@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createLogger } from './logger';
 import {
   DIFF_CONTEXT_LINES,
   MAX_COMPONENT_LINES,
@@ -7,14 +8,19 @@ import {
   GEMINI_TIMEOUT,
 } from './constants';
 
+const logger = createLogger('config');
+
 /**
  * Zod schema for backend environment variables.
  */
 const envSchema = z.object({
-  GEMINI_API_KEY: z.string().min(1, 'GEMINI_API_KEY is required for project generation'),
+  AI_PROVIDER: z.enum(['gemini', 'modal']).default('gemini'),
+  GEMINI_API_KEY: z.string().default(''),
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
   GEMINI_EASY_MODEL: z.string().default('gemini-2.5-flash-lite'),
   GEMINI_HARD_MODEL: z.string().default('gemini-2.5-flash'),
+  MODAL_API_URL: z.string().url().optional(),
+  MODAL_API_KEY: z.string().optional(),
   MAX_OUTPUT_TOKENS: z.coerce.number().default(16384),
   ALLOWED_ORIGINS: z.string().default('http://localhost:8080'),
   PORT: z.coerce.number().default(4000),
@@ -33,12 +39,20 @@ export function validateEnv() {
     result.error.issues.forEach((issue) => {
       console.error(`   - ${issue.path.join('.')}: ${issue.message}`);
     });
-    // In a real production app, we might process.exit(1) here
-    // For now, we'll throw to let Next.js handle it or log it clearly
     throw new Error('Invalid environment configuration');
   }
 
-  return result.data;
+  const data = result.data;
+
+  // Conditional validation: require provider-specific vars
+  if (data.AI_PROVIDER === 'gemini' && !data.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is required when AI_PROVIDER=gemini');
+  }
+  if (data.AI_PROVIDER === 'modal' && !data.MODAL_API_URL) {
+    throw new Error('MODAL_API_URL is required when AI_PROVIDER=modal');
+  }
+
+  return data;
 }
 
 // Validate environment variables early
@@ -61,6 +75,11 @@ export interface BackendConfig {
     model: string;
     easyModel: string;
     hardModel: string;
+  };
+  provider: {
+    name: 'gemini' | 'modal';
+    modalApiUrl?: string;
+    modalApiKey?: string;
   };
   validation: {
     maxComponentLines: number;
@@ -99,12 +118,31 @@ export const config: BackendConfig = {
     easyModel: env.GEMINI_EASY_MODEL,
     hardModel: env.GEMINI_HARD_MODEL,
   },
+  provider: {
+    name: env.AI_PROVIDER,
+    modalApiUrl: env.MODAL_API_URL,
+    modalApiKey: env.MODAL_API_KEY,
+  },
   validation: {
     maxComponentLines: MAX_COMPONENT_LINES,
     maxAppLines: MAX_APP_LINES,
     contextLines: DIFF_CONTEXT_LINES,
   },
 };
+
+// Log configuration on startup
+logger.info('Backend configuration loaded', {
+  aiProvider: config.provider.name,
+  ...(config.provider.name === 'modal' && {
+    modalApiUrl: config.provider.modalApiUrl,
+    hasModalApiKey: !!config.provider.modalApiKey,
+  }),
+  ...(config.provider.name === 'gemini' && {
+    geminiModel: config.ai.model,
+    geminiEasyModel: config.ai.easyModel,
+    geminiHardModel: config.ai.hardModel,
+  }),
+});
 
 // Re-export constants for convenience
 export {

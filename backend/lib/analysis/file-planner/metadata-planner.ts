@@ -9,8 +9,8 @@
  */
 
 import type { FileTreeMetadata } from '@ai-app-builder/shared';
-import type { GeminiClient } from '../../ai';
-import { createGeminiClient } from '../../ai';
+import type { AIProvider } from '../../ai';
+import { createAIProvider } from '../../ai';
 import { createLogger } from '../../logger';
 import type { FilePlannerResult, PlanningResponse } from './types';
 import { buildMetadataBasedPrompt } from './metadata-planning';
@@ -24,11 +24,11 @@ const logger = createLogger('metadata-file-planner');
  * Falls back to heuristic selection when AI is unavailable or fails.
  */
 export class MetadataFilePlanner {
-  private geminiClient: GeminiClient | null;
+  private aiProvider: AIProvider | null;
   private fallbackSelector: MetadataFallbackSelector;
 
-  constructor(geminiClient?: GeminiClient) {
-    this.geminiClient = geminiClient ?? null;
+  constructor(aiProvider?: AIProvider) {
+    this.aiProvider = aiProvider ?? null;
     this.fallbackSelector = new MetadataFallbackSelector();
   }
 
@@ -51,9 +51,9 @@ export class MetadataFilePlanner {
       projectName,
     });
 
-    // If no Gemini client available, use fallback immediately
-    if (!this.geminiClient) {
-      logger.info('No Gemini client available, using fallback selector');
+    // If no AI provider available, use fallback immediately
+    if (!this.aiProvider) {
+      logger.info('No AI provider available, using fallback selector');
       return this.fallbackSelector.select(prompt, metadata);
     }
 
@@ -82,28 +82,28 @@ export class MetadataFilePlanner {
       // Build the metadata-based planning prompt
       const planningPrompt = buildMetadataBasedPrompt(prompt, metadata, projectName);
 
-      logger.info('Sending request to Gemini', {
+      logger.info('Sending request to AI provider', {
         promptLength: planningPrompt.length,
         systemInstructionLength: PLANNING_SYSTEM_PROMPT.length,
         temperature: PLANNING_TEMPERATURE,
       });
-      logger.debug('Gemini request prompt', {
+      logger.debug('AI provider request prompt', {
         prompt: planningPrompt,
         systemInstruction: PLANNING_SYSTEM_PROMPT,
       });
 
-      const response = await this.geminiClient!.generate({
+      const response = await this.aiProvider!.generate({
         prompt: planningPrompt,
         systemInstruction: PLANNING_SYSTEM_PROMPT,
         temperature: PLANNING_TEMPERATURE,
       });
 
-      logger.info('Received response from Gemini', {
+      logger.info('Received response from AI provider', {
         success: response.success,
         contentLength: response.content?.length ?? 0,
         hasError: !!response.error,
       });
-      logger.debug('Gemini response content', {
+      logger.debug('AI provider response content', {
         content: response.content,
         error: response.error,
       });
@@ -192,20 +192,20 @@ export class MetadataFilePlanner {
 
 /**
  * Create a MetadataFilePlanner instance.
- * If no GeminiClient is provided, attempts to create one from environment.
- * Falls back to heuristic-only mode if Gemini is unavailable.
+ * If no AIProvider is provided, attempts to create one from environment.
+ * Falls back to heuristic-only mode if the provider is unavailable.
  */
-export function createMetadataFilePlanner(geminiClient?: GeminiClient): MetadataFilePlanner {
-  if (geminiClient) {
-    return new MetadataFilePlanner(geminiClient);
+export function createMetadataFilePlanner(aiProvider?: AIProvider): MetadataFilePlanner {
+  if (aiProvider) {
+    return new MetadataFilePlanner(aiProvider);
   }
 
-  // Try to create a Gemini client from environment
+  // Try to create a provider from environment
   try {
-    const client = createGeminiClient();
-    return new MetadataFilePlanner(client);
+    const provider = createAIProvider();
+    return new MetadataFilePlanner(provider);
   } catch (error) {
-    logger.warn('Could not create Gemini client, using fallback-only mode', {
+    logger.warn('Could not create AI provider, using fallback-only mode', {
       error: error instanceof Error ? error.message : String(error),
     });
     return new MetadataFilePlanner();

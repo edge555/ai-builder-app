@@ -4,7 +4,8 @@
  */
 
 import type { FileDiff, RepairAttempt } from '@ai-app-builder/shared';
-import { GeminiClient, createGeminiClient } from '../ai';
+import type { AIProvider } from '../ai';
+import { createAIProvider } from '../ai';
 import { ValidationPipeline } from './validation-pipeline';
 import { BuildValidator, createBuildValidator } from './build-validator';
 import { buildFixPrompt, type BuildFixMode } from './prompts/build-fix-prompt';
@@ -21,13 +22,13 @@ const logger = createLogger('BaseProjectGenerator');
  * Contains shared logic for both streaming and non-streaming generation.
  */
 export abstract class BaseProjectGenerator {
-    protected readonly geminiClient: GeminiClient;
+    protected readonly aiProvider: AIProvider;
     protected readonly validationPipeline: ValidationPipeline;
     protected readonly buildValidator: BuildValidator;
     protected readonly maxBuildRetries = 3;
 
-    constructor(geminiClient?: GeminiClient) {
-        this.geminiClient = geminiClient ?? createGeminiClient();
+    constructor(aiProvider?: AIProvider) {
+        this.aiProvider = aiProvider ?? createAIProvider();
         this.validationPipeline = new ValidationPipeline();
         this.buildValidator = createBuildValidator();
     }
@@ -116,19 +117,18 @@ export abstract class BaseProjectGenerator {
             const fixSystemInstruction = getGenerationPrompt(fixPromptContent) +
                 '\n\nIMPORTANT: You must fix ALL the build errors listed above. Make sure to either add missing dependencies to package.json OR use native alternatives.';
 
-            // Log what we're sending to Gemini for fix
-            logger.info('Sending build fix request to Gemini', {
+            logger.info('Sending build fix request to AI provider', {
                 attempt: buildRetryCount,
                 systemInstructionLength: fixSystemInstruction.length,
                 errorCount: buildResult.errors.length,
                 hasFailureHistory: failureHistory.length > 0,
             });
-            logger.debug('Gemini fix request details', {
+            logger.debug('AI provider fix request details', {
                 systemInstruction: fixSystemInstruction,
             });
 
             // Request AI to fix the errors
-            const fixResponse = await this.geminiClient.generate({
+            const fixResponse = await this.aiProvider.generate({
                 prompt: 'Generate the fixed project based on the error context in the system instruction.',
                 systemInstruction: fixSystemInstruction,
                 temperature: 0.5,
@@ -136,13 +136,12 @@ export abstract class BaseProjectGenerator {
                 responseSchema: PROJECT_OUTPUT_SCHEMA,
             });
 
-            // Log what we received from Gemini
-            logger.info('Received fix response from Gemini', {
+            logger.info('Received fix response from AI provider', {
                 success: fixResponse.success,
                 contentLength: fixResponse.content?.length ?? 0,
                 hasError: !!fixResponse.error,
             });
-            logger.debug('Gemini fix response content', {
+            logger.debug('AI provider fix response content', {
                 content: fixResponse.content,
                 error: fixResponse.error,
             });
