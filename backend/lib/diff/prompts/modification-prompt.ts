@@ -9,9 +9,14 @@ import {
   DESIGN_SYSTEM_CONSTANTS,
   ACCESSIBILITY_GUIDANCE,
   SEARCH_REPLACE_GUIDANCE,
+  getOutputBudgetGuidance,
   SYNTAX_INTEGRITY_RULES,
+  DETAILED_REACT_GUIDANCE,
+  DETAILED_CSS_GUIDANCE,
+  DETAILED_JSON_OUTPUT_GUIDANCE,
   wrapUserInput
 } from '../../core/prompts/shared-prompt-fragments';
+import { getProviderPromptConfig } from '../../core/prompts/provider-prompt-config';
 
 /**
  * Design system prompt for UI-related modifications.
@@ -23,6 +28,7 @@ export const DESIGN_SYSTEM_PROMPT = DESIGN_SYSTEM_CONSTANTS;
  * Builds the core modification prompt with user input properly wrapped.
  */
 function buildModificationPrompt(userPrompt: string, includeDesignSystem: boolean): string {
+  const config = getProviderPromptConfig();
   const designSystemSection = includeDesignSystem ? `\n${DESIGN_SYSTEM_CONSTANTS}\n\n${ACCESSIBILITY_GUIDANCE}\n` : '';
 
   return `You are a SENIOR full-stack developer modifying an existing web application.
@@ -47,7 +53,16 @@ For each file, output JSON with "path", "operation" ("modify"|"create"|"delete")
 
 ${SEARCH_REPLACE_GUIDANCE}
 
+${getOutputBudgetGuidance(config.outputBudgetTokens)}
+
 ${SYNTAX_INTEGRITY_RULES}
+
+${config.includeDetailedGuidance ? `${DETAILED_REACT_GUIDANCE}
+
+${DETAILED_CSS_GUIDANCE}
+
+${DETAILED_JSON_OUTPUT_GUIDANCE}
+` : ''}
 
 You will receive:
 - The user's modification request

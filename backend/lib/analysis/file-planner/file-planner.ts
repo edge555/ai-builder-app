@@ -19,7 +19,7 @@ import { generateFileTreeMetadata } from './metadata-generator';
 import { FallbackSelector } from './fallback-selector';
 import { TokenBudgetManager } from './token-budget';
 import {
-  PLANNING_SYSTEM_PROMPT,
+  getPlanningSystemPrompt,
   PLANNING_TEMPERATURE,
   PLANNING_OUTPUT_SCHEMA,
   buildPlanningPrompt,
@@ -139,7 +139,7 @@ export class FilePlanner {
 
       const response = await this.aiProvider!.generate({
         prompt: planningPrompt,
-        systemInstruction: PLANNING_SYSTEM_PROMPT,
+        systemInstruction: getPlanningSystemPrompt(),
         temperature: PLANNING_TEMPERATURE,
         maxOutputTokens: getMaxOutputTokens('planning'),
         responseSchema: PLANNING_OUTPUT_SCHEMA,
