@@ -3,7 +3,6 @@ const nextConfig = {
   // transpilePackages: ['@ai-app-builder/shared'],
 
   // Production optimizations
-  swcMinify: true, // Use SWC for faster minification
   productionBrowserSourceMaps: false, // Disable sourcemaps in production builds
   compress: true, // Enable gzip compression for responses
   poweredByHeader: false, // Remove X-Powered-By header for security

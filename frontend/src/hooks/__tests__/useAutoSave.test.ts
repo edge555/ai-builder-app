@@ -191,7 +191,8 @@ describe('useAutoSave', () => {
         (storageService.saveProject as any).mockResolvedValue(undefined);
         (storageService.setMetadata as any).mockResolvedValue(undefined);
 
-        rerender({ projectState: { ...mockProjectState, name: 'Updated' }, messages: mockMessages });
+        // Simulate a real update: name and updatedAt both change (updatedAt is a meaningful primitive)
+        rerender({ projectState: { ...mockProjectState, name: 'Updated', updatedAt: new Date(Date.now() + 1000).toISOString() }, messages: mockMessages });
         await vi.runAllTimersAsync();
 
         expect(result.current.saveError).toBeNull();

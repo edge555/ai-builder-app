@@ -39,6 +39,13 @@ export function useAutoSave(
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
 
+  // Keep refs always up-to-date so the save callback reads current data
+  // without needing the full objects as effect dependencies.
+  const projectStateRef = useRef(projectState);
+  projectStateRef.current = projectState;
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   // Track mounted state
   useEffect(() => {
     isMountedRef.current = true;
@@ -47,9 +54,17 @@ export function useAutoSave(
     };
   }, []);
 
+  // Extract stable primitives that represent meaningful changes.
+  // Depending on full objects would restart the debounce on every render
+  // (new object references) even when data is identical.
+  const projectId = projectState?.id;
+  const projectVersionId = projectState?.currentVersionId;
+  const projectUpdatedAt = projectState?.updatedAt;
+  const messageCount = messages.length;
+
   useEffect(() => {
     // Don't save if no project state
-    if (!projectState) {
+    if (!projectStateRef.current) {
       return;
     }
 
@@ -69,14 +84,18 @@ export function useAutoSave(
       setSaveError(null);
 
       try {
+        // Read from refs to get the latest values (avoids stale closures)
+        const currentProjectState = projectStateRef.current!;
+        const currentMessages = messagesRef.current;
+
         // Build stored project from current state
-        const storedProject = toStoredProject(projectState, messages);
+        const storedProject = toStoredProject(currentProjectState, currentMessages);
 
         // Save to IndexedDB
         await storageService.saveProject(storedProject);
 
         // Save last opened project ID to metadata
-        await storageService.setMetadata('lastOpenedProjectId', projectState.id);
+        await storageService.setMetadata('lastOpenedProjectId', currentProjectState.id);
 
         // Update last saved timestamp (guard against unmount during async operation)
         if (isMountedRef.current) {
@@ -102,7 +121,7 @@ export function useAutoSave(
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [projectState, messages, debounceMs]);
+  }, [projectId, projectVersionId, projectUpdatedAt, messageCount, debounceMs]);
 
   return {
     isSaving,

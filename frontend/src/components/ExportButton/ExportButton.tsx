@@ -4,7 +4,7 @@ import { forwardRef, useState, useCallback } from 'react';
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 import { createLogger } from '@/utils/logger';
 
-import { useProject } from '../../context';
+import { useProjectState } from '../../context';
 
 const exportLogger = createLogger('ExportButton');
 
@@ -14,7 +14,7 @@ const exportLogger = createLogger('ExportButton');
  * Requirements: 7.1
  */
 export const ExportButton = forwardRef<HTMLButtonElement, Record<string, never>>(function ExportButton(_props, ref) {
-    const { projectState } = useProject();
+    const { projectState } = useProjectState();
     const [isExporting, setIsExporting] = useState(false);
     const [exportError, setExportError] = useState<string | null>(null);
 

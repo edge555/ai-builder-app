@@ -18,14 +18,15 @@ import type {
   ModificationResult,
 } from '@ai-app-builder/shared';
 import type { CodeSlice } from '../analysis/file-planner/types';
-import { GeminiClient, createGeminiClient } from '../ai';
+import type { AIProvider } from '../ai';
+import { createAIProviderWithModel } from '../ai';
 import { ValidationPipeline } from '../core/validation-pipeline';
 import { BuildValidator, createBuildValidator } from '../core/build-validator';
 import { getModificationPrompt, MODIFICATION_OUTPUT_SCHEMA } from './prompts/modification-prompt';
 import { formatCode } from '../prettier-config';
 import { createLogger } from '../logger';
 import { config } from '../config';
-import { MAX_OUTPUT_TOKENS_MODIFICATION } from '../constants';
+import { getMaxOutputTokens } from '../config';
 import {
   FilePlanner,
   createFilePlanner,
@@ -45,17 +46,17 @@ const logger = createLogger('ModificationEngine');
  * Includes build validation with auto-retry.
  */
 export class ModificationEngine {
-  private readonly geminiClient: GeminiClient;
+  private readonly aiProvider: AIProvider;
   private readonly validationPipeline: ValidationPipeline;
   private readonly filePlanner: FilePlanner;
   private readonly buildValidator: BuildValidator;
   private readonly maxBuildRetries = 2;
 
-  constructor(geminiClient?: GeminiClient) {
+  constructor(aiProvider?: AIProvider) {
     // Modification requires the most capable model (Pro or specialized Flash) for complex instruction following and code generation
-    this.geminiClient = geminiClient ?? createGeminiClient(config.ai.hardModel);
+    this.aiProvider = aiProvider ?? createAIProviderWithModel(config.ai.hardModel);
     this.validationPipeline = new ValidationPipeline();
-    this.filePlanner = createFilePlanner(this.geminiClient);
+    this.filePlanner = createFilePlanner(this.aiProvider);
     this.buildValidator = createBuildValidator();
   }
 
@@ -189,16 +190,13 @@ export class ModificationEngine {
   }> {
     const contextPrompt = buildModificationPrompt(prompt, slices, projectState);
 
-    // Retry configuration
-    const MAX_RETRIES = 3;
-    let attempt = 0;
+    const MAX_ATTEMPTS = 4;
     let lastEditError: string | null = null;
     let updatedFiles: Record<string, string | null> = {};
     let deletedFiles: string[] = [];
 
-    while (attempt <= MAX_RETRIES) {
-      attempt++;
-      logger.info('Modification attempt', { attempt, maxAttempts: MAX_RETRIES + 1 });
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      logger.info('Modification attempt', { attempt, maxAttempts: MAX_ATTEMPTS });
 
       // Build prompt with error feedback if this is a retry
       let userRequest = prompt;
@@ -226,11 +224,11 @@ export class ModificationEngine {
       });
 
       // Call Gemini API with structured output
-      const response = await this.geminiClient.generate({
+      const response = await this.aiProvider.generate({
         prompt: fullPrompt,
         systemInstruction: systemInstruction,
         temperature: 0.7,
-        maxOutputTokens: MAX_OUTPUT_TOKENS_MODIFICATION,
+        maxOutputTokens: getMaxOutputTokens('modification'),
         responseSchema: MODIFICATION_OUTPUT_SCHEMA,
       });
 
@@ -385,18 +383,13 @@ export class ModificationEngine {
         return { success: true, updatedFiles, deletedFiles };
       }
 
-      // If we've exhausted retries, return error
-      if (attempt > MAX_RETRIES) {
-        return {
-          success: false,
-          error: `Failed after ${MAX_RETRIES + 1} attempts. Last error: ${lastEditError}`,
-        };
-      }
-
       logger.info('Retrying due to error', { error: lastEditError });
     }
 
-    return { success: false, error: 'Unexpected error in modification loop' };
+    return {
+      success: false,
+      error: `Failed after ${MAX_ATTEMPTS} attempts. Last error: ${lastEditError}`,
+    };
   }
 
   /**
@@ -463,11 +456,11 @@ export class ModificationEngine {
       const fixSystemInstruction = getModificationPrompt(fixUserRequest, includeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
       const fixContextPrompt = buildModificationPrompt(fixUserRequest, slices, projectState);
 
-      const fixResponse = await this.geminiClient.generate({
+      const fixResponse = await this.aiProvider.generate({
         prompt: fixContextPrompt,
         systemInstruction: fixSystemInstruction,
         temperature: 0.5,
-        maxOutputTokens: MAX_OUTPUT_TOKENS_MODIFICATION,
+        maxOutputTokens: getMaxOutputTokens('modification'),
         responseSchema: MODIFICATION_OUTPUT_SCHEMA,
       });
 

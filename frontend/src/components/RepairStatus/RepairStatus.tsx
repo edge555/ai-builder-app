@@ -4,7 +4,7 @@
  */
 
 import { Wrench, CheckCircle, AlertCircle, Loader2, X } from 'lucide-react';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import './RepairStatus.css';
 
 export type RepairPhase = 'idle' | 'detecting' | 'repairing' | 'success' | 'failed';
@@ -46,12 +46,20 @@ export function RepairStatus({
 }: RepairStatusProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up timer on unmount
+  useEffect(() => () => {
+    if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+  }, []);
 
   const handleExit = useCallback(() => {
     setIsExiting(true);
-    setTimeout(() => {
+    if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+    exitTimerRef.current = setTimeout(() => {
       setIsVisible(false);
       onDismiss?.();
+      exitTimerRef.current = null;
     }, 300); // Match CSS transition
   }, [onDismiss]);
 

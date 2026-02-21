@@ -6,12 +6,14 @@ import './CollapsibleMessage.css';
 interface CollapsibleMessageProps {
     /** The message to display */
     message: ChatMessage;
+    /** ID of the message, passed back to onToggle to avoid inline closures */
+    messageId: string;
     /** Whether the message is currently collapsed */
     isCollapsed: boolean;
     /** Whether this message can be collapsed */
     canCollapse: boolean;
-    /** Callback when toggle button is clicked */
-    onToggle: () => void;
+    /** Callback when toggle button is clicked. Receives the messageId. */
+    onToggle: (id: string) => void;
     /** The message content to display when expanded */
     children: ReactNode;
 }
@@ -48,6 +50,7 @@ function getMessageSummary(message: ChatMessage): string {
  */
 export function CollapsibleMessage({
     message,
+    messageId,
     isCollapsed,
     canCollapse,
     onToggle,
@@ -60,13 +63,13 @@ export function CollapsibleMessage({
         return (
             <div
                 className="collapsible-message collapsible-message-collapsed"
-                onClick={onToggle}
+                onClick={() => onToggle(messageId)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        onToggle();
+                        onToggle(messageId);
                     }
                 }}
                 aria-expanded="false"
@@ -85,7 +88,7 @@ export function CollapsibleMessage({
                         aria-label="Expand message"
                         onClick={(e) => {
                             e.stopPropagation();
-                            onToggle();
+                            onToggle(messageId);
                         }}
                     >
                         <svg
@@ -115,7 +118,7 @@ export function CollapsibleMessage({
             {canCollapse && (
                 <button
                     className="collapsible-message-toggle collapsible-message-toggle-expanded"
-                    onClick={onToggle}
+                    onClick={() => onToggle(messageId)}
                     aria-label="Collapse message"
                     aria-expanded="true"
                 >

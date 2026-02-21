@@ -12,9 +12,12 @@ import type { PlanningResponse } from './types';
 import { PlanningResponseSchema } from '../../core/schemas';
 import { toGeminiSchema } from '../../core/gemini-schema-converter';
 
+import { getProviderPromptConfig } from '../../core/prompts/provider-prompt-config';
+
 /**
  * System prompt for the AI planning call.
  * Instructs the AI to select files based on the user's modification request.
+ * @deprecated Use getPlanningSystemPrompt() instead for provider-aware guidance.
  */
 export const PLANNING_SYSTEM_PROMPT = `You are a code planning assistant. Your task is to analyze a user's modification request and select which files from the project need to be included for the modification.
 
@@ -34,8 +37,30 @@ Guidelines:
 - Include parent components if modifying child components
 - For style changes, include relevant CSS/style files
 - When adding new components, include the parent file where it will be imported
+- When using Modal/Qwen: Output ONLY raw JSON without markdown code fences.
 
 Respond with valid JSON only. No additional text or explanation outside the JSON.`;
+
+/**
+ * Returns the planning system prompt, potentially enriched for specific providers.
+ */
+export function getPlanningSystemPrompt(): string {
+  const config = getProviderPromptConfig();
+
+  let prompt = PLANNING_SYSTEM_PROMPT;
+
+  if (config.provider === 'modal') {
+    prompt += `
+
+=== JSON OUTPUT REMINDER (CRITICAL) ===
+- Output ONLY raw JSON. No markdown code fences (\`\`\`json ... \`\`\`).
+- No text before or after the JSON object.
+- Use exact file paths as shown in the FILE TREE.
+- Include a "reasoning" field explaining your selection.`;
+  }
+
+  return prompt;
+}
 
 /**
  * JSON schema for the planning response.
@@ -79,26 +104,29 @@ Remember:
 - Use exact file paths as shown in the tree`;
 }
 
+import { extractJsonFromResponse } from '../../ai/modal-response-parser';
+
 /**
  * Parse and validate the AI planning response.
- * With responseSchema, Gemini returns guaranteed valid JSON.
+ * Handles potential markdown code blocks and other formatting artifacts.
  *
  * @param response - Raw response string from the AI
  * @returns Parsed PlanningResponse or null if invalid
  */
 export function parsePlanningResponse(response: string): PlanningResponse | null {
-  // With responseSchema, Gemini returns guaranteed valid JSON
-  let parsedData: unknown;
+  const extracted = extractJsonFromResponse(response);
+  if (!extracted) return null;
+
   try {
-    parsedData = JSON.parse(response);
+    const parsedData = JSON.parse(extracted);
+    const zodResult = PlanningResponseSchema.safeParse(parsedData);
+
+    if (!zodResult.success) {
+      return null;
+    }
+
+    return zodResult.data;
   } catch {
     return null;
   }
-
-  const zodResult = PlanningResponseSchema.safeParse(parsedData);
-  if (!zodResult.success) {
-    return null;
-  }
-
-  return zodResult.data;
 }

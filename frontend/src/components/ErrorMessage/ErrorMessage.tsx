@@ -1,10 +1,6 @@
 import { forwardRef } from 'react';
+import { type ErrorType } from '../../utils/error-messages';
 import './ErrorMessage.css';
-
-/**
- * Error type classification for user-friendly messages.
- */
-export type ErrorType = 'network' | 'validation' | 'ai_output' | 'timeout' | 'unknown';
 
 /**
  * Props for the ErrorMessage component.
@@ -32,6 +28,9 @@ const ERROR_TITLES: Record<ErrorType, string> = {
   validation: 'Validation Error',
   ai_output: 'Generation Error',
   timeout: 'Request Timeout',
+  rate_limit: 'Rate Limit',
+  api_error: 'API Error',
+  cancelled: 'Cancelled',
   unknown: 'Error',
 };
 
@@ -43,6 +42,9 @@ const ERROR_SUGGESTIONS: Record<ErrorType, string> = {
   validation: 'The request could not be processed. Please try a different approach.',
   ai_output: 'The AI generated invalid output. Please try rephrasing your request.',
   timeout: 'The request took too long. Please try again.',
+  rate_limit: 'Please wait a moment before trying again.',
+  api_error: 'The server returned an error. Please try again later.',
+  cancelled: 'The request was cancelled.',
   unknown: 'An unexpected error occurred. Please try again.',
 };
 

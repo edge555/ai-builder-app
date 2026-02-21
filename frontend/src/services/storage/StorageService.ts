@@ -94,7 +94,7 @@ class StorageService {
                 const project = cursor.value;
                 // Migrate chat messages to separate store
                 if (project.chatMessages && Array.isArray(project.chatMessages)) {
-                  project.chatMessages.forEach((msg: any) => {
+                  project.chatMessages.forEach((msg: SerializedChatMessage) => {
                     chatStore.put({
                       projectId: project.id,
                       messageId: msg.id,
@@ -327,9 +327,9 @@ class StorageService {
         const request = index.getAll(projectId);
         request.onsuccess = () => {
           // Remove projectId and messageId from results (they're just keys)
-          const results = request.result.map((msg: any) => {
+          const results = request.result.map((msg: SerializedChatMessage & { projectId: string; messageId: string }) => {
             const { projectId: _pid, messageId: _mid, ...message } = msg;
-            return message;
+            return message as SerializedChatMessage;
           });
           resolve(results);
         };
@@ -525,17 +525,36 @@ class StorageService {
 
   /**
    * Renames a project.
+   * Uses a targeted get-and-put within a single transaction to avoid loading
+   * and re-saving the full project (files + chat messages).
    */
   async renameProject(id: string, newName: string): Promise<void> {
     try {
-      const project = await this.getProject(id);
-      if (!project) {
+      const db = await this.ensureInitialized();
+      const transaction = db.transaction([this.PROJECTS_STORE], 'readwrite');
+      const store = transaction.objectStore(this.PROJECTS_STORE);
+
+      // Load only the project record (chat messages live in a separate store)
+      const record = await new Promise<Omit<StoredProject, 'chatMessages'> | undefined>(
+        (resolve, reject) => {
+          const request = store.get(id);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        }
+      );
+
+      if (!record) {
         throw new Error(`Project ${id} not found`);
       }
 
-      await this.saveProject({
-        ...project,
-        name: newName,
+      await new Promise<void>((resolve, reject) => {
+        const request = store.put({
+          ...record,
+          name: newName,
+          updatedAt: new Date().toISOString(),
+        });
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
       });
     } catch (error) {
       storageLogger.error('Failed to rename project', { error });
@@ -573,13 +592,13 @@ class StorageService {
   /**
    * Retrieves a metadata value by key.
    */
-  async getMetadata(key: string): Promise<any> {
+  async getMetadata(key: string): Promise<unknown> {
     try {
       const db = await this.ensureInitialized();
       const transaction = db.transaction([this.METADATA_STORE], 'readonly');
       const store = transaction.objectStore(this.METADATA_STORE);
 
-      const result = await new Promise<any>((resolve, reject) => {
+      const result = await new Promise<unknown>((resolve, reject) => {
         const request = store.get(key);
         request.onsuccess = () => resolve(request.result?.value);
         request.onerror = () => reject(request.error);
@@ -595,7 +614,7 @@ class StorageService {
   /**
    * Sets a metadata value by key.
    */
-  async setMetadata(key: string, value: any): Promise<void> {
+  async setMetadata(key: string, value: unknown): Promise<void> {
     try {
       const db = await this.ensureInitialized();
       const transaction = db.transaction([this.METADATA_STORE], 'readwrite');

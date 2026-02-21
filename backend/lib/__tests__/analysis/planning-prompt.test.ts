@@ -9,6 +9,7 @@ import {
   PLANNING_SYSTEM_PROMPT,
   PLANNING_OUTPUT_SCHEMA,
   PLANNING_TEMPERATURE,
+  getPlanningSystemPrompt,
   buildPlanningPrompt,
   parsePlanningResponse,
 } from '../../analysis/file-planner/planning-prompt';
@@ -25,21 +26,54 @@ describe('PLANNING_SYSTEM_PROMPT', () => {
   });
 });
 
+describe('getPlanningSystemPrompt', () => {
+  it('should include the base planning prompt', () => {
+    const prompt = getPlanningSystemPrompt();
+    expect(prompt).toContain('Primary files');
+    expect(prompt).toContain('JSON');
+  });
+
+  it('should NOT include JSON reminder when AI_PROVIDER is gemini', () => {
+    const originalProvider = process.env.AI_PROVIDER;
+    process.env.AI_PROVIDER = 'gemini';
+    try {
+      const prompt = getPlanningSystemPrompt();
+      expect(prompt).not.toContain('=== JSON OUTPUT REMINDER');
+    } finally {
+      process.env.AI_PROVIDER = originalProvider;
+    }
+  });
+
+  it('should include JSON reminder when AI_PROVIDER is modal', () => {
+    const originalProvider = process.env.AI_PROVIDER;
+    process.env.AI_PROVIDER = 'modal';
+    try {
+      const prompt = getPlanningSystemPrompt();
+      expect(prompt).toContain('=== JSON OUTPUT REMINDER');
+      expect(prompt).toContain('Output ONLY raw JSON');
+    } finally {
+      process.env.AI_PROVIDER = originalProvider;
+    }
+  });
+});
+
 describe('PLANNING_OUTPUT_SCHEMA', () => {
   it('should define required fields', () => {
     expect(PLANNING_OUTPUT_SCHEMA.required).toContain('primaryFiles');
     expect(PLANNING_OUTPUT_SCHEMA.required).toContain('contextFiles');
-    expect(PLANNING_OUTPUT_SCHEMA.required).toContain('reasoning');
+    // reasoning and category have defaults, so they are not in 'required'
   });
 
   it('should define primaryFiles as array of strings', () => {
-    expect(PLANNING_OUTPUT_SCHEMA.properties.primaryFiles.type).toBe('array');
-    expect(PLANNING_OUTPUT_SCHEMA.properties.primaryFiles.items.type).toBe('string');
+    const props = PLANNING_OUTPUT_SCHEMA.properties as any;
+    expect(props.primaryFiles.type).toBe('array');
+    expect(props.primaryFiles.items.type).toBe('string');
   });
 
   it('should define contextFiles as array of strings', () => {
-    expect(PLANNING_OUTPUT_SCHEMA.properties.contextFiles.type).toBe('array');
-    expect(PLANNING_OUTPUT_SCHEMA.properties.contextFiles.items.type).toBe('string');
+    const props = PLANNING_OUTPUT_SCHEMA.properties as any;
+    expect(props.contextFiles.type).toBe('array');
+    expect(props.contextFiles.items.type).toBe('string');
   });
 });
 
@@ -169,7 +203,7 @@ describe('parsePlanningResponse', () => {
     expect(result?.reasoning).toBe('');
   });
 
-  it('should filter out non-string values from file arrays', () => {
+  it('should return null for non-string values in file arrays (strict Zod validation)', () => {
     const response = JSON.stringify({
       primaryFiles: ['src/App.tsx', 123, null, 'src/utils.ts'],
       contextFiles: ['src/types.ts', undefined, 'src/config.ts'],
@@ -178,9 +212,7 @@ describe('parsePlanningResponse', () => {
 
     const result = parsePlanningResponse(response);
 
-    expect(result).not.toBeNull();
-    expect(result?.primaryFiles).toEqual(['src/App.tsx', 'src/utils.ts']);
-    expect(result?.contextFiles).toEqual(['src/types.ts', 'src/config.ts']);
+    expect(result).toBeNull();
   });
 
   it('should handle empty arrays', () => {

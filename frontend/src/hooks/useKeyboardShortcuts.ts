@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 
 export interface KeyboardShortcutHandlers {
   onUndo?: () => void;
@@ -14,6 +14,14 @@ export interface KeyboardShortcutHandlers {
  * - Ctrl+B / Cmd+B (toggle sidebar)
  */
 export function useKeyboardShortcuts(handlers: KeyboardShortcutHandlers) {
+  // Use a ref to keep handlers stable across re-renders
+  const handlersRef = useRef(handlers);
+
+  // Keep the ref in sync with the latest handlers
+  useEffect(() => {
+    handlersRef.current = handlers;
+  }, [handlers]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Don't trigger shortcuts when typing in inputs or Monaco editor
     const target = e.target as HTMLElement;
@@ -32,24 +40,24 @@ export function useKeyboardShortcuts(handlers: KeyboardShortcutHandlers) {
     // Undo: Ctrl+Z / Cmd+Z
     if (modKey && e.key === 'z' && !e.shiftKey) {
       e.preventDefault();
-      handlers.onUndo?.();
+      handlersRef.current.onUndo?.();
       return;
     }
 
     // Redo: Ctrl+Shift+Z / Cmd+Shift+Z or Ctrl+Y
     if ((modKey && e.key === 'z' && e.shiftKey) || (modKey && e.key === 'y')) {
       e.preventDefault();
-      handlers.onRedo?.();
+      handlersRef.current.onRedo?.();
       return;
     }
 
     // Toggle Sidebar: Ctrl+B / Cmd+B
     if (modKey && e.key === 'b' && !e.shiftKey) {
       e.preventDefault();
-      handlers.onToggleSidebar?.();
+      handlersRef.current.onToggleSidebar?.();
       return;
     }
-  }, [handlers]);
+  }, []); // Empty dependency array means handleKeyDown is stable
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);

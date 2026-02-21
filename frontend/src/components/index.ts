@@ -7,7 +7,6 @@ export { PreviewHeader, type PreviewHeaderProps } from './PreviewPanel/PreviewHe
 export { transformFilesForSandpack, hasRequiredFiles, getEntryFile, DEFAULT_FILES } from './PreviewPanel/previewUtils';
 // DiffViewer is lazy-loaded in ChatInterface - not exported to enable code-splitting
 // export { DiffViewer, type DiffViewerProps } from './DiffViewer';
-export { HistoryPanel, type HistoryPanelProps } from './HistoryPanel';
 export { ErrorBoundary, type ErrorBoundaryProps } from './ErrorBoundary';
 export { ComponentErrorBoundary, type ComponentErrorBoundaryProps } from './ComponentErrorBoundary';
 export { ErrorMessage, classifyError, type ErrorMessageProps, type ErrorType } from './ErrorMessage';

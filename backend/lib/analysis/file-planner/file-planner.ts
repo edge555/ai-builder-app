@@ -8,10 +8,10 @@
  */
 
 import type { ProjectState } from '@ai-app-builder/shared';
-import type { GeminiClient } from '../../ai/gemini-client';
-import { createGeminiClient } from '../../ai/gemini-client';
+import type { AIProvider } from '../../ai/ai-provider';
+import { createAIProvider } from '../../ai/ai-provider-factory';
 import { config } from '../../config';
-import { MAX_OUTPUT_TOKENS_PLANNING } from '../../constants';
+import { getMaxOutputTokens } from '../../config';
 import { createLogger } from '../../logger';
 import type { ChunkIndex, CodeSlice, FilePlannerResult, PlanningResponse } from './types';
 import { ChunkIndexBuilder } from './chunk-index';
@@ -19,7 +19,7 @@ import { generateFileTreeMetadata } from './metadata-generator';
 import { FallbackSelector } from './fallback-selector';
 import { TokenBudgetManager } from './token-budget';
 import {
-  PLANNING_SYSTEM_PROMPT,
+  getPlanningSystemPrompt,
   PLANNING_TEMPERATURE,
   PLANNING_OUTPUT_SCHEMA,
   buildPlanningPrompt,
@@ -33,7 +33,7 @@ const logger = createLogger('file-planner');
  * Replaces IntentClassifier in ModificationEngine.
  */
 export class FilePlanner {
-  private geminiClient: GeminiClient | null;
+  private aiProvider: AIProvider | null;
   private fallbackSelector: FallbackSelector;
   private tokenBudgetManager: TokenBudgetManager;
   private chunkIndexBuilder: ChunkIndexBuilder;
@@ -51,8 +51,8 @@ export class FilePlanner {
   // Current cache key for the active chunk index (ensures consistency)
   private currentCacheKey: string | null = null;
 
-  constructor(geminiClient?: GeminiClient) {
-    this.geminiClient = geminiClient ?? null;
+  constructor(aiProvider?: AIProvider) {
+    this.aiProvider = aiProvider ?? null;
     this.fallbackSelector = new FallbackSelector();
     this.tokenBudgetManager = new TokenBudgetManager();
     this.chunkIndexBuilder = new ChunkIndexBuilder();
@@ -77,11 +77,11 @@ export class FilePlanner {
     logger.info('Starting file planning', { prompt: prompt.substring(0, 100) });
 
     // Step 1: Build or retrieve cached chunk index
-    const chunkIndex = this.getCachedChunkIndex(projectState);
+    const { index: chunkIndex, fromCache } = this.getCachedChunkIndex(projectState);
     logger.debug('Chunk index ready', {
       chunkCount: chunkIndex.chunks.size,
       fileCount: chunkIndex.fileMetadata.size,
-      fromCache: this.wasFromCache(projectState),
+      fromCache,
     });
 
     // Step 2: Generate file tree metadata for planning call
@@ -91,10 +91,10 @@ export class FilePlanner {
     // Step 3: Call AI for planning (or fall back to heuristics)
     let plannerResult: FilePlannerResult;
 
-    if (this.geminiClient) {
+    if (this.aiProvider) {
       plannerResult = await this.callPlanningAI(prompt, metadata, chunkIndex, projectState);
     } else {
-      logger.info('No Gemini client available, using fallback selector');
+      logger.info('No AI provider available, using fallback selector');
       plannerResult = this.fallbackSelector.select(prompt, chunkIndex, projectState);
     }
 
@@ -137,11 +137,11 @@ export class FilePlanner {
         promptLength: planningPrompt.length,
       });
 
-      const response = await this.geminiClient!.generate({
+      const response = await this.aiProvider!.generate({
         prompt: planningPrompt,
-        systemInstruction: PLANNING_SYSTEM_PROMPT,
+        systemInstruction: getPlanningSystemPrompt(),
         temperature: PLANNING_TEMPERATURE,
-        maxOutputTokens: MAX_OUTPUT_TOKENS_PLANNING,
+        maxOutputTokens: getMaxOutputTokens('planning'),
         responseSchema: PLANNING_OUTPUT_SCHEMA,
       });
 
@@ -489,7 +489,7 @@ export class FilePlanner {
    * Caches based on file count and total content length to detect changes.
    * Implements memory-based eviction to prevent unbounded growth.
    */
-  private getCachedChunkIndex(projectState: ProjectState): ChunkIndex {
+  private getCachedChunkIndex(projectState: ProjectState): { index: ChunkIndex; fromCache: boolean } {
     const cacheKey = this.getProjectStateCacheKey(projectState);
 
     // Set current cache key for consistent usage across methods
@@ -503,7 +503,7 @@ export class FilePlanner {
         cacheKey,
         estimatedSize: `${(cached.estimatedSize / 1024 / 1024).toFixed(2)}MB`,
       });
-      return cached.index;
+      return { index: cached.index, fromCache: true };
     }
 
     // Build new index
@@ -526,7 +526,7 @@ export class FilePlanner {
     // Evict based on both count and memory limits
     this.evictCacheIfNeeded();
 
-    return index;
+    return { index, fromCache: false };
   }
 
   /**
@@ -602,15 +602,6 @@ export class FilePlanner {
     }
   }
 
-  /**
-   * Check if the last chunk index was from cache.
-   */
-  private wasFromCache(projectState: ProjectState): boolean {
-    const cacheKey = this.getProjectStateCacheKey(projectState);
-    const cached = this.chunkIndexCache.get(cacheKey);
-    const now = Date.now();
-    return cached !== undefined && (now - cached.timestamp) < this.CACHE_TTL_MS;
-  }
 
   /**
    * Generate a cache key for project state based on file count and content hash.
@@ -636,20 +627,20 @@ export class FilePlanner {
 
 /**
  * Create a FilePlanner instance.
- * If no GeminiClient is provided, attempts to create one from environment.
- * Falls back to heuristic-only mode if Gemini is unavailable.
+ * If no AIProvider is provided, attempts to create one from environment.
+ * Falls back to heuristic-only mode if the provider is unavailable.
  */
-export function createFilePlanner(geminiClient?: GeminiClient): FilePlanner {
-  if (geminiClient) {
-    return new FilePlanner(geminiClient);
+export function createFilePlanner(aiProvider?: AIProvider): FilePlanner {
+  if (aiProvider) {
+    return new FilePlanner(aiProvider);
   }
 
-  // Try to create a Gemini client from environment
+  // Try to create a provider from environment
   try {
-    const client = createGeminiClient(config.ai.easyModel);
-    return new FilePlanner(client);
+    const provider = createAIProvider(config.ai.easyModel);
+    return new FilePlanner(provider);
   } catch (error) {
-    logger.warn('Could not create Gemini client, using fallback-only mode', {
+    logger.warn('Could not create AI provider, using fallback-only mode', {
       error: error instanceof Error ? error.message : String(error),
     });
     return new FilePlanner();

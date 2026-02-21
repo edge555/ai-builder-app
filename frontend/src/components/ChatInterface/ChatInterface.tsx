@@ -219,9 +219,10 @@ const ChatInterfaceComponent = function ChatInterface({
                 >
                   <CollapsibleMessage
                     message={message}
+                    messageId={message.id}
                     isCollapsed={isCollapsed(message.id)}
                     canCollapse={canCollapse(message.id)}
-                    onToggle={() => toggle(message.id)}
+                    onToggle={toggle}
                   >
                     <MessageItemWithRef message={message} onFileClick={onFileClick} />
                   </CollapsibleMessage>
@@ -234,9 +235,10 @@ const ChatInterfaceComponent = function ChatInterface({
             <CollapsibleMessage
               key={message.id}
               message={message}
+              messageId={message.id}
               isCollapsed={isCollapsed(message.id)}
               canCollapse={canCollapse(message.id)}
-              onToggle={() => toggle(message.id)}
+              onToggle={toggle}
             >
               <MessageItemWithRef message={message} onFileClick={onFileClick} />
             </CollapsibleMessage>

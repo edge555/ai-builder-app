@@ -6,12 +6,12 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared';
-import { GeminiClient } from '../ai';
+import { AIProvider } from '../ai';
 import type { BuildError } from './build-validator';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
 import { buildFixPrompt } from './prompts/build-fix-prompt';
 import { createLogger } from '../logger';
-import { MAX_OUTPUT_TOKENS_GENERATION, MAX_OUTPUT_TOKENS_MODIFICATION } from '../constants';
+import { getMaxOutputTokens } from '../config';
 import { processFiles } from './file-processor';
 import { ProjectOutputSchema } from './schemas';
 import { isSafePath } from '../utils';
@@ -31,8 +31,8 @@ export type GenerationResult = OperationResult;
  * Includes build validation with auto-retry for fixing build errors.
  */
 export class ProjectGenerator extends BaseProjectGenerator {
-  constructor(geminiClient?: GeminiClient) {
-    super(geminiClient);
+  constructor(aiProvider?: AIProvider) {
+    super(aiProvider);
   }
 
   /**
@@ -58,19 +58,19 @@ export class ProjectGenerator extends BaseProjectGenerator {
     logger.info('Sending request to Gemini', {
       systemInstructionLength: systemInstruction.length,
       temperature: 0.7,
-      maxOutputTokens: MAX_OUTPUT_TOKENS_GENERATION,
+      maxOutputTokens: getMaxOutputTokens('generation'),
     });
     logger.debug('Gemini request details', {
       systemInstruction: systemInstruction,
       responseSchema: PROJECT_OUTPUT_SCHEMA,
     });
 
-    // Call Gemini API with structured output
-    const response = await this.geminiClient.generate({
+    // Call AI provider with structured output
+    const response = await this.aiProvider.generate({
       prompt: 'Generate the project based on the user request in the system instruction.',
       systemInstruction: systemInstruction,
       temperature: 0.7,
-      maxOutputTokens: MAX_OUTPUT_TOKENS_GENERATION,
+      maxOutputTokens: getMaxOutputTokens('generation'),
       responseSchema: PROJECT_OUTPUT_SCHEMA,
     });
 

@@ -191,7 +191,12 @@ export const contextualSuggestions: Record<string, PromptSuggestion[]> = {
  */
 export function analyzeProjectForSuggestions(files: Record<string, string>): PromptSuggestion[] {
   const suggestions: PromptSuggestion[] = [];
-  const allContent = Object.values(files).join('\n').toLowerCase();
+  // Sample first 10 files and first 2000 chars of each to avoid performance issues with large projects
+  const allContent = Object.values(files)
+    .slice(0, 10)
+    .map(content => content.slice(0, 2000))
+    .join('\n')
+    .toLowerCase();
   const fileNames = Object.keys(files).map(f => f.toLowerCase());
 
   // Detect app type for context-specific suggestions

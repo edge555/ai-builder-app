@@ -10,6 +10,7 @@ import { sanitizeUrl, truncatePayload } from './gemini-utils';
 import { createParserState, parseStreamChunk, trimParserBuffer } from './gemini-json-parser';
 import { extractResponseContent, validateStreamingContent } from './gemini-response-validator';
 import { OperationTimer, formatMetrics } from '../metrics';
+import { categorizeError, isRetryableError } from './ai-error-utils';
 import type {
   GeminiClientConfig,
   GeminiRequest,
@@ -17,6 +18,7 @@ import type {
   GeminiResponse,
   GeminiAPIResponse,
 } from './gemini-types';
+import type { AIProvider } from './ai-provider';
 
 const logger = createLogger('gemini-client');
 
@@ -24,7 +26,7 @@ const logger = createLogger('gemini-client');
  * Client for interacting with Google's Gemini API.
  * Implements timeout and retry logic with exponential backoff.
  */
-export class GeminiClient {
+export class GeminiClient implements AIProvider {
   private readonly apiKey: string;
   private readonly model: string;
   private readonly timeout: number;
@@ -83,7 +85,7 @@ export class GeminiClient {
         retryCount = attempt;
 
         // Don't retry on non-retryable errors
-        if (!this.isRetryableError(lastError)) {
+        if (!isRetryableError(lastError, 'gemini api error')) {
           break;
         }
 
@@ -101,7 +103,7 @@ export class GeminiClient {
 
     contextLogger.error('Gemini generate failed', formatMetrics(metrics));
 
-    const { errorType, errorCode } = this.categorizeError(lastError!);
+    const { errorType, errorCode } = categorizeError(lastError!, 'gemini api error');
 
     return {
       success: false,
@@ -156,7 +158,7 @@ export class GeminiClient {
         }
 
         // Don't retry on non-retryable errors
-        if (!this.isRetryableError(lastError)) {
+        if (!isRetryableError(lastError, 'gemini api error')) {
           break;
         }
 
@@ -175,7 +177,7 @@ export class GeminiClient {
 
     contextLogger.error('Gemini generateStreaming failed', formatMetrics(metrics));
 
-    const { errorType, errorCode } = this.categorizeError(lastError!);
+    const { errorType, errorCode } = categorizeError(lastError!, 'gemini api error');
 
     return {
       success: false,
@@ -478,52 +480,6 @@ export class GeminiClient {
       throw error;
     }
   }
-
-  /**
-   * Categorizes an error into a type and code.
-   */
-  private categorizeError(error: Error): { errorType: GeminiResponse['errorType']; errorCode: string } {
-    const message = error.message.toLowerCase();
-
-    // Timeout errors
-    if (message.includes('timeout')) {
-      return { errorType: 'timeout', errorCode: 'TIMEOUT' };
-    }
-
-    // Cancelled/aborted requests
-    if (message.includes('cancel') || message.includes('abort')) {
-      return { errorType: 'cancelled', errorCode: 'CANCELLED' };
-    }
-
-    // Rate limit errors
-    if (message.includes('rate limit') || message.includes('429') || message.includes('quota')) {
-      return { errorType: 'rate_limit', errorCode: 'RATE_LIMIT_EXCEEDED' };
-    }
-
-    // API errors (4xx, 5xx)
-    if (message.includes('gemini api error') || /[45]\d{2}/.test(message)) {
-      return { errorType: 'api_error', errorCode: 'API_ERROR' };
-    }
-
-    // Unknown errors
-    return { errorType: 'unknown', errorCode: 'INTERNAL_ERROR' };
-  }
-
-  /**
-   * Determines if an error is retryable.
-   */
-  private isRetryableError(error: Error): boolean {
-    const { errorType } = this.categorizeError(error);
-
-    // NEVER retry on timeout or cancelled - this ensures 60s max wait
-    if (errorType === 'timeout' || errorType === 'cancelled') {
-      return false;
-    }
-
-    // Retry on rate limiting and server errors
-    return errorType === 'rate_limit' || errorType === 'api_error';
-  }
-
 
   /**
    * Calculates exponential backoff delay.

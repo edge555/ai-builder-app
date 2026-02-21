@@ -30,8 +30,6 @@ export type {
 // Supporting classes (exported for testing/advanced use)
 export { ChunkIndexBuilder } from './chunk-index';
 export { FallbackSelector } from './fallback-selector';
-export { MetadataFallbackSelector, createMetadataFallbackSelector } from './metadata-fallback';
-export { MetadataFilePlanner, createMetadataFilePlanner } from './metadata-planner';
 export { TokenBudgetManager } from './token-budget';
 export { generateFileTreeMetadata } from './metadata-generator';
 export {
@@ -40,4 +38,4 @@ export {
   PLANNING_SYSTEM_PROMPT,
   PLANNING_TEMPERATURE,
 } from './planning-prompt';
-export { buildMetadataBasedPrompt } from './metadata-planning';
+

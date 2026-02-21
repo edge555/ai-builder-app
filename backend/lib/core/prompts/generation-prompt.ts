@@ -8,10 +8,14 @@ import {
   LAYOUT_FUNDAMENTALS,
   DESIGN_SYSTEM_CONSTANTS,
   ACCESSIBILITY_GUIDANCE,
-  OUTPUT_BUDGET_GUIDANCE,
+  getOutputBudgetGuidance,
   SYNTAX_INTEGRITY_RULES,
+  DETAILED_REACT_GUIDANCE,
+  DETAILED_CSS_GUIDANCE,
+  DETAILED_JSON_OUTPUT_GUIDANCE,
   wrapUserInput
 } from './shared-prompt-fragments';
+import { getProviderPromptConfig } from './provider-prompt-config';
 
 /**
  * Builds the system prompt for project generation.
@@ -55,6 +59,7 @@ function shouldIncludeDesignSystem(userPrompt: string): boolean {
 }
 
 function buildGenerationPrompt(userPrompt: string): string {
+  const config = getProviderPromptConfig();
   return `You are a SENIOR React architect generating production-quality, modular React applications.
 CRITICAL: NEVER put everything in App.tsx — use proper component separation.
 
@@ -93,18 +98,19 @@ Only use packages listed in package.json. Add to dependencies if absolutely need
 
 ${SYNTAX_INTEGRITY_RULES}
 
-${OUTPUT_BUDGET_GUIDANCE}
+${config.includeDetailedGuidance ? `${DETAILED_REACT_GUIDANCE}
+
+${DETAILED_CSS_GUIDANCE}
+
+${DETAILED_JSON_OUTPUT_GUIDANCE}
+
+` : ''}${getOutputBudgetGuidance(config.outputBudgetTokens)}
 
 ${wrapUserInput(userPrompt)}
 
 Generate a complete React application with perfect syntax and proper component separation.`;
 }
 
-/**
- * System prompt for project generation.
- * @deprecated Use buildGenerationPrompt() instead for proper prompt injection defense
- */
-export const GENERATION_SYSTEM_PROMPT = buildGenerationPrompt('');
 
 /**
  * Builds a generation prompt with user input properly wrapped for injection defense.

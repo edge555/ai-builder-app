@@ -11,7 +11,7 @@ import {
   AutoRepairProvider,
   PreviewErrorProvider,
   ErrorAggregatorProvider,
-  useProject,
+  useProjectState,
 } from '@/context';
 import {
   storageService,
@@ -25,7 +25,7 @@ import { createLogger } from '@/utils/logger';
  * Must be rendered inside ProjectProvider to access project state.
  */
 function ProjectUrlSync() {
-  const { projectState } = useProject();
+  const { projectState } = useProjectState();
   const { projectId } = useParams();
   const navigate = useNavigate();
 

@@ -37,6 +37,16 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
   const lastErrorRef = useRef<string | null>(null);
   const autoRepairTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Use refs to avoid stale closures in stable callbacks
+  const repairPhaseRef = useRef<RepairPhase>(repairPhase);
+  const repairAttemptsRef = useRef(repairAttempts);
+  const isAutoRepairingRef = useRef(isAutoRepairing);
+
+  // Sync refs with state values
+  useEffect(() => { repairPhaseRef.current = repairPhase; }, [repairPhase]);
+  useEffect(() => { repairAttemptsRef.current = repairAttempts; }, [repairAttempts]);
+  useEffect(() => { isAutoRepairingRef.current = isAutoRepairing; }, [isAutoRepairing]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -71,7 +81,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     errorAggregator.addError(error);
 
     // Set detecting phase
-    if (repairPhase === 'idle') {
+    if (repairPhaseRef.current === 'idle') {
       setRepairPhase('detecting');
     }
 
@@ -81,7 +91,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
       message: error.message,
       file: error.filePath,
     });
-  }, [repairPhase]);
+  }, []);
 
   /**
    * Report aggregated errors ready for repair.
@@ -101,12 +111,12 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
       const delay = errors.hasCriticalErrors ? 0 : AUTO_REPAIR_DEBOUNCE_MS;
 
       autoRepairTimeoutRef.current = setTimeout(() => {
-        if (repairAttempts < MAX_REPAIR_ATTEMPTS && !isAutoRepairing) {
+        if (repairAttemptsRef.current < MAX_REPAIR_ATTEMPTS && !isAutoRepairingRef.current) {
           setRepairPhase('repairing');
         }
       }, delay);
     }
-  }, [repairAttempts, isAutoRepairing]);
+  }, []);
 
   /**
    * Clear the current error.
@@ -161,14 +171,14 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
       }, 3000);
     } else {
       // Check if we should retry or give up
-      if (repairAttempts >= MAX_REPAIR_ATTEMPTS) {
+      if (repairAttemptsRef.current >= MAX_REPAIR_ATTEMPTS) {
         setRepairPhase('failed');
       } else {
         // Will retry on next error detection
         setRepairPhase('detecting');
       }
     }
-  }, [repairAttempts]);
+  }, []);
 
   /**
    * Reset repair attempts counter.
@@ -190,10 +200,10 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
   const shouldAutoRepair = useCallback(() => {
     return (
       (currentError !== null || (aggregatedErrors?.totalCount ?? 0) > 0) &&
-      !isAutoRepairing &&
-      repairAttempts < MAX_REPAIR_ATTEMPTS
+      !isAutoRepairingRef.current &&
+      repairAttemptsRef.current < MAX_REPAIR_ATTEMPTS
     );
-  }, [currentError, aggregatedErrors, isAutoRepairing, repairAttempts]);
+  }, [currentError, aggregatedErrors]);
 
   /**
    * Dismiss the repair status UI.

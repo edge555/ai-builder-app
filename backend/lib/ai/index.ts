@@ -13,3 +13,7 @@ export type {
   GeminiResponse,
   GeminiAPIResponse,
 } from './gemini-types';
+
+export type { AIProvider, AIRequest, AIStreamingRequest, AIResponse } from './ai-provider';
+export { ModalClient, createModalClient } from './modal-client';
+export { createAIProvider, createAIProviderWithModel } from './ai-provider-factory';

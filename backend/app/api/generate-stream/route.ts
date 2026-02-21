@@ -25,7 +25,7 @@ import {
 const logger = createLogger('api/generate-stream');
 
 const HEARTBEAT_INTERVAL_MS = 10000; // 10 seconds
-const STREAM_TIMEOUT_MS = 120000; // 120 seconds
+const STREAM_TIMEOUT_MS = 960000; // 16 minutes (Modal can take 10-15+ min for large generations)
 
 /**
  * Handle OPTIONS preflight request

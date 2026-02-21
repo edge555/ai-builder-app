@@ -1,7 +1,7 @@
 import type { RepairAttempt } from '@/shared';
 import { useCallback, useRef } from 'react';
 
-import { useProject, useChatMessages, useGenerationActions } from '../context';
+import { useProjectState, useProjectActions, useChatMessages, useGenerationActions } from '../context';
 import { storageService, toStoredProject } from '../services/storage';
 import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError } from '../utils/error-messages';
 import { createLogger } from '../utils/logger';
@@ -16,7 +16,8 @@ const MAX_API_RETRIES = 3;
  * Now includes API-level retry logic with failure history accumulation.
  */
 export function useSubmitPrompt() {
-    const project = useProject();
+    const { projectState } = useProjectState();
+    const { setProjectState, undo: projectUndo, redo: projectRedo } = useProjectActions();
     const chatMessages = useChatMessages();
     const generation = useGenerationActions();
 
@@ -71,7 +72,7 @@ export function useSubmitPrompt() {
         let retryCount = 0;
 
         try {
-            if (!project.projectState) {
+            if (!projectState) {
                 // No project exists, generate a new one using streaming with retry
                 generation.setLoadingPhase('generating');
 
@@ -89,7 +90,7 @@ export function useSubmitPrompt() {
 
                     generation.setLoadingPhase('validating');
                     if (result.success && result.projectState) {
-                        project.setProjectState(result.projectState, false);
+                        setProjectState(result.projectState, false);
 
                         const fileCount = Object.keys(result.projectState.files).length;
                         const successMessage = getGenerationSuccessMessage(result.projectState.name, fileCount);
@@ -131,14 +132,14 @@ export function useSubmitPrompt() {
 
                         // If this was the last retry or error is not retryable, show error
                         if (retryCount >= MAX_API_RETRIES || !isRetryableError(errorType)) {
-                            const userMessage = getUserFriendlyErrorMessage({
+                            const errorText = getUserFriendlyErrorMessage({
                                 errorType,
                                 originalMessage: errorMsg,
                             });
                             chatMessages.addAssistantMessage(
                                 retryCount >= MAX_API_RETRIES
-                                    ? `Sorry, I couldn't generate the project after ${MAX_API_RETRIES} attempts. ${userMessage}`
-                                    : userMessage
+                                    ? `Sorry, I couldn't generate the project after ${MAX_API_RETRIES} attempts. ${errorText}`
+                                    : errorText
                             );
                             if (!isRetryableError(errorType)) {
                                 break; // Stop retrying non-retryable errors
@@ -161,11 +162,11 @@ export function useSubmitPrompt() {
                         );
                     }
 
-                    const result = await generation.modifyProject(project.projectState, prompt);
+                    const result = await generation.modifyProject(projectState, prompt);
 
                     generation.setLoadingPhase('validating');
                     if (result.success && result.projectState) {
-                        project.setProjectState(result.projectState, true); // Save to undo stack
+                        setProjectState(result.projectState, true); // Save to undo stack
                         chatMessages.addAssistantMessage(
                             getModificationSuccessMessage(result.changeSummary?.description),
                             result.changeSummary,
@@ -193,14 +194,14 @@ export function useSubmitPrompt() {
 
                         // If this was the last retry or error is not retryable, show error
                         if (retryCount >= MAX_API_RETRIES || !isRetryableError(errorType)) {
-                            const userMessage = getUserFriendlyErrorMessage({
+                            const errorText = getUserFriendlyErrorMessage({
                                 errorType,
                                 originalMessage: errorMsg,
                             });
                             chatMessages.addAssistantMessage(
                                 retryCount >= MAX_API_RETRIES
-                                    ? `Sorry, I couldn't make those changes after ${MAX_API_RETRIES} attempts. ${userMessage}`
-                                    : userMessage
+                                    ? `Sorry, I couldn't make those changes after ${MAX_API_RETRIES} attempts. ${errorText}`
+                                    : errorText
                             );
                             if (!isRetryableError(errorType)) {
                                 break; // Stop retrying non-retryable errors
@@ -217,11 +218,11 @@ export function useSubmitPrompt() {
 
             // Don't show error message for user-initiated cancellation
             if (errorType !== 'cancelled') {
-                const userMessage = getUserFriendlyErrorMessage({
+                const errorText = getUserFriendlyErrorMessage({
                     errorType,
                     originalMessage: errorMsg,
                 });
-                chatMessages.addAssistantMessage(`Sorry, something went wrong: ${userMessage}`);
+                chatMessages.addAssistantMessage(`Sorry, something went wrong: ${errorText}`);
             }
         } finally {
             generation.setIsLoading(false);
@@ -229,7 +230,8 @@ export function useSubmitPrompt() {
             isSubmittingRef.current = false;
         }
     }, [
-        project,
+        projectState,
+        setProjectState,
         chatMessages,
         generation,
         getGenerationSuccessMessage,
@@ -240,17 +242,17 @@ export function useSubmitPrompt() {
      * Undo wrapper that adds an assistant message.
      */
     const undo = useCallback(() => {
-        project.undo();
+        projectUndo();
         chatMessages.addAssistantMessage('↩️ Reverted to previous state');
-    }, [project, chatMessages]);
+    }, [projectUndo, chatMessages]);
 
     /**
      * Redo wrapper that adds an assistant message.
      */
     const redo = useCallback(() => {
-        project.redo();
+        projectRedo();
         chatMessages.addAssistantMessage('↪️ Restored undone changes');
-    }, [project, chatMessages]);
+    }, [projectRedo, chatMessages]);
 
     return {
         submitPrompt,

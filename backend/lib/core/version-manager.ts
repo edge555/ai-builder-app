@@ -12,6 +12,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { Version, ProjectState, FileDiff } from '@ai-app-builder/shared';
 import { getDiffEngine } from '../diff/diff-engine';
+import { createLogger } from '../logger';
+
+const logger = createLogger('version-manager');
 
 /**
  * Maximum number of versions to keep per project.
@@ -74,6 +77,8 @@ export class VersionManager {
    * Updates the last access time for a project (LRU tracking).
    */
   private touchProject(projectId: string): void {
+    // Move to the end of the Map to maintain LRU order via insertion order
+    this.projectAccessTimes.delete(projectId);
     this.projectAccessTimes.set(projectId, Date.now());
   }
 
@@ -88,23 +93,24 @@ export class VersionManager {
     const versionCount = projectVersions.size;
     if (versionCount <= MAX_VERSIONS_PER_PROJECT) return;
 
-    // Get all versions sorted by timestamp (oldest first)
-    const versions = Array.from(projectVersions.values()).sort(
-      (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
-    );
-
     // Calculate how many to evict
     const toEvict = versionCount - MAX_VERSIONS_PER_PROJECT;
 
-    // Evict oldest versions
+    // Map iterator returns keys in insertion order (FIFO)
+    const keys = projectVersions.keys();
     for (let i = 0; i < toEvict; i++) {
-      projectVersions.delete(versions[i].id);
+      const result = keys.next();
+      if (!result.done) {
+        projectVersions.delete(result.value);
+      }
     }
 
-    console.log(
-      `[VersionManager] Evicted ${toEvict} old version(s) from project ${projectId}. ` +
-      `Versions: ${versionCount} -> ${projectVersions.size}`
-    );
+    logger.info(`Evicted ${toEvict} old version(s) from project ${projectId}`, {
+      projectId,
+      evictedCount: toEvict,
+      before: versionCount,
+      after: projectVersions.size,
+    });
   }
 
   /**
@@ -115,26 +121,27 @@ export class VersionManager {
     const projectCount = this.versionsByProject.size;
     if (projectCount <= MAX_PROJECTS) return;
 
-    // Get all projects sorted by last access time (oldest first)
-    const projectsWithTime = Array.from(this.projectAccessTimes.entries())
-      .map(([projectId, accessTime]) => ({ projectId, accessTime }))
-      .sort((a, b) => a.accessTime - b.accessTime);
-
     // Calculate how many to evict
     const toEvict = projectCount - MAX_PROJECTS;
 
-    // Evict least recently used projects
+    // Map iterator returns keys in insertion order (LRU due to touchProject's delete/set)
+    const keys = this.projectAccessTimes.keys();
     for (let i = 0; i < toEvict; i++) {
-      const { projectId } = projectsWithTime[i];
-      const versionCount = this.versionsByProject.get(projectId)?.size ?? 0;
+      const result = keys.next();
+      if (!result.done) {
+        const projectId = result.value;
+        const versionCount = this.versionsByProject.get(projectId)?.size ?? 0;
 
-      this.versionsByProject.delete(projectId);
-      this.projectAccessTimes.delete(projectId);
+        this.versionsByProject.delete(projectId);
+        this.projectAccessTimes.delete(projectId);
 
-      console.log(
-        `[VersionManager] Evicted LRU project ${projectId} with ${versionCount} version(s). ` +
-        `Projects: ${projectCount} -> ${this.versionsByProject.size}`
-      );
+        logger.info(`Evicted LRU project ${projectId}`, {
+          projectId,
+          versionCount,
+          before: projectCount,
+          after: this.versionsByProject.size,
+        });
+      }
     }
   }
 
@@ -236,10 +243,30 @@ export class VersionManager {
   /**
    * Gets the latest version for a project.
    * Returns null if no versions exist.
+   * Uses O(n) linear scan instead of O(n log n) sort.
    */
   getLatestVersion(projectId: string): Version | null {
-    const versions = this.getAllVersions(projectId);
-    return versions.length > 0 ? versions[versions.length - 1] : null;
+    const projectVersions = this.versionsByProject.get(projectId);
+    if (!projectVersions || projectVersions.size === 0) {
+      return null;
+    }
+
+    // Update LRU tracking
+    this.touchProject(projectId);
+
+    // Find the version with max timestamp in O(n) time
+    let latestVersion: Version | null = null;
+    let maxTimestamp = -Infinity;
+
+    for (const version of projectVersions.values()) {
+      const timestamp = version.timestamp.getTime();
+      if (timestamp > maxTimestamp) {
+        maxTimestamp = timestamp;
+        latestVersion = version;
+      }
+    }
+
+    return latestVersion;
   }
 
   /**
@@ -292,10 +319,10 @@ export class VersionManager {
     const projectsEvicted = projectCountBefore - projectCountAfter;
 
     if (projectsEvicted > 0 || totalVersionsEvicted > 0) {
-      console.log(
-        `[VersionManager] Cleanup complete. ` +
-        `Projects evicted: ${projectsEvicted}, Versions evicted: ${totalVersionsEvicted}`
-      );
+      logger.info('Cleanup complete', {
+        projectsEvicted,
+        versionsEvicted: totalVersionsEvicted
+      });
     }
 
     return {
