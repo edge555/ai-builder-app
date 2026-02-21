@@ -13,7 +13,7 @@ import { categorizeError, isRetryableError } from './ai-error-utils';
 
 const logger = createLogger('modal-client');
 
-const DEFAULT_TIMEOUT = 300_000; // 5 minutes — Modal models can be slower
+const DEFAULT_TIMEOUT = 660_000; // 11 minutes — must exceed Modal function timeout (10 min)
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_RETRY_BASE_DELAY = 1000;
 
@@ -46,8 +46,6 @@ export class ModalClient implements AIProvider {
   private readonly timeout: number;
   private readonly maxRetries: number;
   private readonly retryBaseDelay: number;
-  private readonly model: string | undefined;
-
   constructor(clientConfig: ModalClientConfig) {
     if (!clientConfig.apiUrl) {
       throw new Error('Modal API URL is required');
@@ -58,7 +56,6 @@ export class ModalClient implements AIProvider {
     this.timeout = clientConfig.timeout ?? DEFAULT_TIMEOUT;
     this.maxRetries = clientConfig.maxRetries ?? DEFAULT_MAX_RETRIES;
     this.retryBaseDelay = clientConfig.retryBaseDelay ?? DEFAULT_RETRY_BASE_DELAY;
-    this.model = clientConfig.model;
   }
 
   /**
@@ -126,13 +123,14 @@ export class ModalClient implements AIProvider {
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
-        await this.makeStreamingRequest(request);
+        const content = await this.makeStreamingRequest(request);
 
         const metrics = timer.complete(true, { retryCount: attempt });
         contextLogger.info('Modal streaming completed', formatMetrics(metrics));
 
         return {
           success: true,
+          content,
           retryCount: attempt,
         };
       } catch (error) {
@@ -182,13 +180,11 @@ export class ModalClient implements AIProvider {
       temperature: request.temperature ?? config.ai.temperature,
       max_tokens: request.maxOutputTokens ?? config.ai.maxOutputTokens,
       response_format: request.responseSchema ? 'json_object' : 'text',
-      ...(this.model && { model: this.model }),
     };
 
     logger.debug('Modal API request', {
       url: this.apiUrl,
       promptLength: prompt.length,
-      model: this.model,
     });
 
     const timeoutController = new AbortController();
@@ -261,8 +257,9 @@ export class ModalClient implements AIProvider {
 
   /**
    * Makes a streaming request to the Modal SSE endpoint.
+   * Returns the full accumulated response content.
    */
-  private async makeStreamingRequest(request: AIStreamingRequest): Promise<void> {
+  private async makeStreamingRequest(request: AIStreamingRequest): Promise<string> {
     const url = this.streamApiUrl ?? (this.apiUrl.endsWith('/stream') ? this.apiUrl : `${this.apiUrl}/stream`);
     const prompt = this.formatPrompt(request);
 
@@ -272,7 +269,6 @@ export class ModalClient implements AIProvider {
       temperature: request.temperature ?? config.ai.temperature,
       max_tokens: request.maxOutputTokens ?? config.ai.maxOutputTokens,
       response_format: request.responseSchema ? 'json_object' : 'text',
-      ...(this.model && { model: this.model }),
     };
 
     logger.debug('Modal SSE request', {
@@ -302,8 +298,6 @@ export class ModalClient implements AIProvider {
         body: JSON.stringify(body),
         signal,
       });
-
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -351,6 +345,10 @@ export class ModalClient implements AIProvider {
           }
         }
       }
+
+      // Stream fully consumed — clear timeout now that we're done reading
+      clearTimeout(timeoutId);
+      return accumulated;
     } catch (error) {
       clearTimeout(timeoutId);
       throw error;
@@ -368,8 +366,8 @@ export class ModalClient implements AIProvider {
       // Only user prompt + JSON schema hint — system instruction is handled separately in getSystemInstruction
       return (
         request.prompt +
-        '\n\nYou MUST respond with valid JSON only. Schema:\n' +
-        JSON.stringify(request.responseSchema, null, 2)
+        '\n\nYou MUST respond with valid JSON only. Schema: ' +
+        JSON.stringify(request.responseSchema)
       );
     }
     return request.prompt;

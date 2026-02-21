@@ -123,6 +123,7 @@ export const DETAILED_REACT_GUIDANCE = `=== DETAILED REACT PATTERNS ===
    - Use React.Fragment (<>...</>) to avoid unnecessary wrapper divs.
    - Conditional rendering: {condition && <Component />} or {condition ? <A /> : <B />}.
    - Map over arrays with a stable, unique key (use item.id, NOT array index).
+   - EXPORTS (CRITICAL): Every component file MUST end with \`export default ComponentName\`. NEVER use named-only exports (\`export { App }\`) for components — this causes "Element type is invalid: got undefined" at runtime. Default export + default import must always match: \`export default Timer\` ↔ \`import Timer from './Timer'\`.
 
 5. TYPESCRIPT PATTERNS:
    - Define Props interfaces for every component: interface ButtonProps { label: string; onClick: () => void; }
@@ -204,4 +205,5 @@ export const SYNTAX_INTEGRITY_RULES = `=== SYNTAX & INTEGRITY RULES (CRITICAL) =
 1. Every file must be complete, functional, and self-contained — no partial snippets, placeholders, or "rest of code here" comments.
 2. All brackets, braces, parentheses, quotes, and tags must be balanced and closed.
 3. Do NOT use markdown code fences (\`\`\`) inside JSON "content" or "replace" strings.
-4. Keep components focused; split complex features into multiple files. File paths must not contain spaces.`;
+4. Keep components focused; split complex features into multiple files. File paths must not contain spaces.
+5. EXPORTS: Always use \`export default ComponentName\` for every component file. Never use named-only exports for components — \`export { App }\` causes "Element type is invalid: got undefined" when imported as \`import App from './App'\`.`;

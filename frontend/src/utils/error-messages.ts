@@ -2,7 +2,15 @@
  * Utility functions for generating user-friendly error messages
  */
 
-export type ErrorType = 'timeout' | 'rate_limit' | 'api_error' | 'cancelled' | 'unknown';
+export type ErrorType =
+  | 'timeout'
+  | 'rate_limit'
+  | 'api_error'
+  | 'cancelled'
+  | 'validation'
+  | 'ai_output'
+  | 'network'
+  | 'unknown';
 
 export interface ErrorContext {
   errorType?: ErrorType;

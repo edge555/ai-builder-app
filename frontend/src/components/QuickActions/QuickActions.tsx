@@ -11,6 +11,39 @@ export interface QuickActionsProps {
     error?: string | null;
 }
 
+// Static action objects defined at module scope to avoid recreation on every render.
+const fixErrorsAction: PromptSuggestion = {
+    id: 'fix-errors',
+    label: 'Fix errors',
+    prompt: 'Please fix the errors in the application.',
+    icon: <Bug size={14} />,
+    category: 'utility'
+};
+
+const darkModeAction: PromptSuggestion = {
+    id: 'add-dark-mode',
+    label: 'Add dark mode',
+    prompt: 'Add dark mode support to the application.',
+    icon: <Moon size={14} />,
+    category: 'ui'
+};
+
+const responsiveAction: PromptSuggestion = {
+    id: 'make-responsive',
+    label: 'Make responsive',
+    prompt: 'Make the application fully responsive for all device sizes.',
+    icon: <Smartphone size={14} />,
+    category: 'ui'
+};
+
+const animationsAction: PromptSuggestion = {
+    id: 'add-animations',
+    label: 'Add animations',
+    prompt: 'Add smooth animations and transitions to the interface.',
+    icon: <Wand2 size={14} />,
+    category: 'ui'
+};
+
 /**
  * QuickActions component displays contextual suggestion chips above the chat input.
  */
@@ -28,39 +61,6 @@ export function QuickActions({
             scrollRef.current.scrollLeft = 0;
         }
     }, [suggestions, error]);
-
-    // Specific quick actions
-    const fixErrorsAction: PromptSuggestion = {
-        id: 'fix-errors',
-        label: 'Fix errors',
-        prompt: 'Please fix the errors in the application.',
-        icon: <Bug size={14} />,
-        category: 'utility'
-    };
-
-    const darkModeAction: PromptSuggestion = {
-        id: 'add-dark-mode',
-        label: 'Add dark mode',
-        prompt: 'Add dark mode support to the application.',
-        icon: <Moon size={14} />,
-        category: 'ui'
-    };
-
-    const responsiveAction: PromptSuggestion = {
-        id: 'make-responsive',
-        label: 'Make responsive',
-        prompt: 'Make the application fully responsive for all device sizes.',
-        icon: <Smartphone size={14} />,
-        category: 'ui'
-    };
-
-    const animationsAction: PromptSuggestion = {
-        id: 'add-animations',
-        label: 'Add animations',
-        prompt: 'Add smooth animations and transitions to the interface.',
-        icon: <Wand2 size={14} />,
-        category: 'ui'
-    };
 
     // Combine actions, prioritizing "Fix errors" if there's an error
     const rawActions = [

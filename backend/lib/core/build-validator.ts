@@ -128,7 +128,7 @@ function normalizePath(path: string): string {
 function resolveRelativeImport(
     fromFile: string,
     importPath: string,
-    allFiles: string[]
+    normalizedFilesSet: Set<string>
 ): string | null {
     // Get directory of the importing file
     const fromDir = fromFile.substring(0, fromFile.lastIndexOf('/'));
@@ -152,25 +152,22 @@ function resolveRelativeImport(
     // Normalize the resolved path
     resolved = normalizePath(resolved);
 
-    // Check if the exact file exists
-    const normalizedFiles = allFiles.map(f => normalizePath(f));
-
     // Try exact match
-    if (normalizedFiles.includes(resolved)) {
+    if (normalizedFilesSet.has(resolved)) {
         return resolved;
     }
 
     // Try with common extensions
     const extensions = ['.ts', '.tsx', '.js', '.jsx', '.css'];
     for (const ext of extensions) {
-        if (normalizedFiles.includes(resolved + ext)) {
+        if (normalizedFilesSet.has(resolved + ext)) {
             return resolved + ext;
         }
     }
 
     // Try as directory with index file
     for (const ext of extensions) {
-        if (normalizedFiles.includes(`${resolved}/index${ext}`)) {
+        if (normalizedFilesSet.has(`${resolved}/index${ext}`)) {
             return `${resolved}/index${ext}`;
         }
     }
@@ -201,6 +198,7 @@ export class BuildValidator {
     validate(files: Record<string, string>): BuildValidationResult {
         const errors: BuildError[] = [];
         const allFilePaths = Object.keys(files);
+        const normalizedFilesSet = new Set(allFilePaths.map(f => normalizePath(f)));
 
         // Find package.json
         const packageJsonPath = allFilePaths.find(p => p.endsWith('package.json'));
@@ -227,7 +225,7 @@ export class BuildValidator {
                     importPath.endsWith('.jpg') || importPath.endsWith('.json')) {
                     // For CSS imports, check if the file exists
                     if (importPath.endsWith('.css') && isRelativeImport(importPath)) {
-                        const resolved = resolveRelativeImport(filePath, importPath, allFilePaths);
+                        const resolved = resolveRelativeImport(filePath, importPath, normalizedFilesSet);
                         if (!resolved) {
                             errors.push({
                                 type: 'missing_file',
@@ -243,7 +241,7 @@ export class BuildValidator {
 
                 if (isRelativeImport(importPath)) {
                     // Check if relative import resolves to existing file
-                    const resolved = resolveRelativeImport(filePath, importPath, allFilePaths);
+                    const resolved = resolveRelativeImport(filePath, importPath, normalizedFilesSet);
                     if (!resolved) {
                         errors.push({
                             type: 'broken_import',

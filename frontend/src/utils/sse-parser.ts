@@ -16,6 +16,19 @@ export interface StreamWarningData {
     type: 'formatting' | 'validation';
 }
 
+export interface StreamFileData {
+    path: string;
+    content: string;
+    index: number;
+    total: number;
+}
+
+export interface StreamCompleteData {
+    projectState?: { files: Record<string, string>;[key: string]: unknown };
+    version?: unknown;
+    [key: string]: unknown;
+}
+
 export interface StreamEndData {
     totalFiles: number;
     successfulFiles: number;
@@ -28,10 +41,10 @@ export async function parseSSEStream(
     handlers: {
         onStart?: () => void;
         onProgress?: (length: number) => void;
-        onFile?: (data: any, files: Record<string, string>) => void;
+        onFile?: (data: StreamFileData, files: Record<string, string>) => void;
         onWarning?: (warning: StreamWarningData) => void;
         onStreamEnd?: (summary: StreamEndData) => void;
-        onComplete?: (data: any, files: Record<string, string>) => void;
+        onComplete?: (data: StreamCompleteData, files: Record<string, string>) => void;
         onError?: (errorData: StreamErrorData) => void;
         onHeartbeat?: () => void;
     }

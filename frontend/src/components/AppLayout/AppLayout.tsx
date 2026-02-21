@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
-import { useProject, useChatMessages, useGenerationState } from '../../context';
+import { useProjectState, useProjectActions, useChatMessages, useGenerationState } from '../../context';
 import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
 import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
 import { ExportButton } from '../ExportButton';
@@ -65,10 +65,10 @@ export interface AppLayoutProps {
  */
 export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) {
     const { undo, redo, submitPrompt } = useSubmitPrompt();
-    const project = useProject();
+    const { projectState, canUndo, canRedo } = useProjectState();
+    const { renameProject } = useProjectActions();
     const { messages } = useChatMessages();
     const { isLoading, loadingPhase } = useGenerationState();
-    const { projectState, canUndo, canRedo, renameProject } = project;
 
     // Auto-save project state and messages
     const { isSaving, lastSavedAt } = useAutoSave(projectState, messages);
@@ -190,7 +190,7 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                         <EditableProjectName
                             name={projectState.name}
                             onRename={renameProject}
-                            disabled={true}
+                            disabled={isLoading}
                         />
                     ) : (
                         <h1>AI App Builder</h1>

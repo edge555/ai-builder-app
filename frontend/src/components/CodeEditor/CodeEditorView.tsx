@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback, lazy, Suspense, memo } from '
 
 
 import { ComponentErrorBoundary } from '@/components/ComponentErrorBoundary';
-import { useProject } from '@/context/ProjectContext.context';
+import { useProjectState, useProjectActions } from '@/context/ProjectContext.context';
 
 import { CodeEditorSkeleton } from './CodeEditorSkeleton';
 import { FileTreeSidebar } from './FileTreeSidebar';
@@ -18,7 +18,8 @@ interface CodeEditorViewProps {
 }
 
 const CodeEditorViewComponent = function CodeEditorView({ files }: CodeEditorViewProps) {
-  const { projectState, setProjectState } = useProject();
+  const { projectState } = useProjectState();
+  const { setProjectState } = useProjectActions();
 
   // UI state
   const [openFiles, setOpenFiles] = useState<string[]>([]);

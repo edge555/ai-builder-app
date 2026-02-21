@@ -77,11 +77,11 @@ export class FilePlanner {
     logger.info('Starting file planning', { prompt: prompt.substring(0, 100) });
 
     // Step 1: Build or retrieve cached chunk index
-    const chunkIndex = this.getCachedChunkIndex(projectState);
+    const { index: chunkIndex, fromCache } = this.getCachedChunkIndex(projectState);
     logger.debug('Chunk index ready', {
       chunkCount: chunkIndex.chunks.size,
       fileCount: chunkIndex.fileMetadata.size,
-      fromCache: this.wasFromCache(projectState),
+      fromCache,
     });
 
     // Step 2: Generate file tree metadata for planning call
@@ -489,7 +489,7 @@ export class FilePlanner {
    * Caches based on file count and total content length to detect changes.
    * Implements memory-based eviction to prevent unbounded growth.
    */
-  private getCachedChunkIndex(projectState: ProjectState): ChunkIndex {
+  private getCachedChunkIndex(projectState: ProjectState): { index: ChunkIndex; fromCache: boolean } {
     const cacheKey = this.getProjectStateCacheKey(projectState);
 
     // Set current cache key for consistent usage across methods
@@ -503,7 +503,7 @@ export class FilePlanner {
         cacheKey,
         estimatedSize: `${(cached.estimatedSize / 1024 / 1024).toFixed(2)}MB`,
       });
-      return cached.index;
+      return { index: cached.index, fromCache: true };
     }
 
     // Build new index
@@ -526,7 +526,7 @@ export class FilePlanner {
     // Evict based on both count and memory limits
     this.evictCacheIfNeeded();
 
-    return index;
+    return { index, fromCache: false };
   }
 
   /**
@@ -602,15 +602,6 @@ export class FilePlanner {
     }
   }
 
-  /**
-   * Check if the last chunk index was from cache.
-   */
-  private wasFromCache(projectState: ProjectState): boolean {
-    const cacheKey = this.getProjectStateCacheKey(projectState);
-    const cached = this.chunkIndexCache.get(cacheKey);
-    const now = Date.now();
-    return cached !== undefined && (now - cached.timestamp) < this.CACHE_TTL_MS;
-  }
 
   /**
    * Generate a cache key for project state based on file count and content hash.

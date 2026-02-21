@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 
-import { useChatMessages, useGenerationState, useGenerationActions, useProject } from '@/context';
+import { useChatMessages, useGenerationState, useGenerationActions, useProjectState } from '@/context';
 import { initialSuggestions, analyzeProjectForSuggestions } from '@/data/prompt-suggestions';
 import { useSubmitPrompt } from '@/hooks/useSubmitPrompt';
 
@@ -17,7 +17,7 @@ export function ChatPanel({ onFileClick }: ChatPanelProps) {
   const { messages } = useChatMessages();
   const { isLoading, loadingPhase, error, streamingState, isStreaming } = useGenerationState();
   const { clearError, abortCurrentRequest } = useGenerationActions();
-  const { projectState } = useProject();
+  const { projectState } = useProjectState();
   const { submitPrompt } = useSubmitPrompt();
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
 

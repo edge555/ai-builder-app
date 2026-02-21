@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an AI-powered app builder monorepo that generates web applications from natural language prompts. The system uses Google Gemini AI to generate complete React projects with live preview, code editing (Monaco), and version control.
+This is an AI-powered app builder monorepo that generates web applications from natural language prompts. The system uses a pluggable AI provider layer (Google Gemini by default, Modal-hosted models as an alternative) to generate complete React projects with live preview, code editing (Monaco), and version control.
 
 ## Monorepo Structure
 
@@ -46,10 +46,11 @@ backend/
 │   ├── diff/            # Diff calculation
 │   └── export/          # ZIP export
 ├── lib/               # Core business logic
-│   ├── ai/           # Gemini client + caching
-│   ├── core/         # Generation + file processing
-│   ├── analysis/     # Dependency graph + file indexing
+│   ├── ai/           # AI provider abstraction (Gemini + Modal clients)
+│   ├── core/         # Generation + file processing + build validation
+│   ├── analysis/     # Dependency graph + file indexing + file planner
 │   ├── diff/         # Smart diff generation
+│   ├── streaming/    # SSE backpressure controller
 │   └── utils/        # Utilities (parser, validation)
 └── scripts/          # Development/testing scripts
 ```
@@ -139,7 +140,7 @@ The frontend uses React Router with the following routes:
 ### Request Flow
 1. User enters prompt in **frontend** ChatInterface (or selects a starter template)
 2. **frontend** sends request to **backend** `/api/generate-stream` or `/api/modify-stream`
-3. **backend** uses GeminiClient to stream AI responses via SSE
+3. **backend** uses the active AI provider (Gemini or Modal, selected by `AI_PROVIDER` env var) to stream AI responses via SSE with backpressure control
 4. Incremental JSON parser extracts files as they arrive
 5. Files are validated and processed, then streamed back to frontend
 6. **frontend** updates ProjectContext and renders in PreviewPanel (Sandpack)
@@ -185,18 +186,28 @@ The app includes an intelligent auto-repair system that detects and fixes previe
 - `export/`: Export project as ZIP
 
 **Core Logic** (`backend/lib/`):
+- `ai/ai-provider.ts`: `AIProvider` interface — contract all providers implement (`generate`, `generateStreaming`)
+- `ai/ai-provider-factory.ts`: Factory that reads `AI_PROVIDER` env var and instantiates the correct provider
 - `ai/gemini-client.ts`: Google Gemini API integration with streaming and caching
+- `ai/modal-client.ts`: Modal-hosted AI model client (e.g., Qwen) with SSE streaming and retry logic
+- `ai/modal-response-parser.ts`: Extracts valid JSON from free-form Modal model responses
 - `core/streaming-generator.ts`: Orchestrates SSE streaming of generated files
 - `core/file-processor.ts`: Validates and processes generated files with Prettier formatting
+- `core/build-validator.ts`: Validates generated code for missing dependencies, broken imports, and syntax errors — used in the auto-retry loop
+- `core/prompts/provider-prompt-config.ts`: Controls prompt assembly per provider (Modal uses 30k token budget + detailed guidance; Gemini uses 15k)
 - `analysis/dependency-graph.ts`: **Performance-optimized** dependency graph with content-based caching (152x speedup on cache hits) and O(1) import resolution
 - `analysis/file-index.ts`: File indexing for modification context
+- `analysis/file-planner/`: AI-powered file selection for modifications (two-phase: planning then context assembly) with chunk-index caching and memory management
 - `diff/`: Smart diff generation for modifications
+- `streaming/backpressure-controller.ts`: SSE backpressure controller with `EventPriority` (CRITICAL/NORMAL/LOW) — drops low-priority events under load
 - `utils/incremental-json-parser.ts`: **Performance-optimized** streaming JSON parser with O(n) complexity (was O(n²)), processes 10MB in ~23ms
 
 **Backend Performance Optimizations**:
 - **Incremental JSON Parser**: Optimized from O(n²) to O(n) using single-pass character scanning instead of repeated `indexOf()` calls. Achieves 403 MB/s throughput.
 - **Dependency Graph Caching**: Content-based cache using SHA-256 hash of file paths + content hashes. Cache hits provide 152x speedup (10.56ms → 0.07ms). Pre-computed path lookup map for O(1) import resolution instead of trying 8 extensions per import.
+- **SSE Backpressure**: `BackpressureController` drops heartbeat (LOW) and progress (NORMAL) events when buffer is under pressure; file and complete events (CRITICAL) are never dropped.
 - **Gemini Client**: Context caching support for reducing API costs on repeated requests with same context
+- **VersionManager**: Bounded memory via FIFO per-project eviction (max 50 versions) and LRU global project eviction (max 500 projects)
 
 ### Key Frontend Components
 
@@ -331,6 +342,12 @@ export function useGenerationActions() { /* ... */ }
 
 **Contexts Using Split Pattern**: GenerationContext, PreviewErrorContext, ChatMessagesContext, VersionContext
 
+**AI Provider Abstraction Pattern**:
+- All AI calls go through `AIProvider` interface (`generate` / `generateStreaming`)
+- `createAIProvider()` factory reads `AI_PROVIDER` env var at startup and returns the appropriate client
+- Provider-specific prompt tuning via `getProviderPromptConfig()` — controls token budget and guidance verbosity
+- `ModalClient` aggregates streaming SSE chunks internally and calls `onChunk` progressively; its `generateStreaming()` returns the full accumulated content just like `GeminiClient`
+
 ### Storage System
 
 **frontend** uses `storageService` (`frontend/src/services/storage/`) for:
@@ -379,8 +396,13 @@ Supabase edge functions (`supabase/functions/_shared/`) import shared utilities 
 Copy `.env.example` to create environment files:
 
 **Backend** (`.env` or inline):
-- `GEMINI_API_KEY`: Google Gemini API key (required)
-- `GEMINI_MODEL`: Model to use (default: gemini-2.5-flash)
+- `AI_PROVIDER`: AI backend to use — `gemini` (default) or `modal`
+- `GEMINI_API_KEY`: Google Gemini API key (required when `AI_PROVIDER=gemini`)
+- `GEMINI_MODEL`: Gemini model to use (default: gemini-2.5-flash)
+- `MODAL_API_URL`: Modal FastAPI endpoint URL (required when `AI_PROVIDER=modal`)
+- `MODAL_STREAM_API_URL`: Optional Modal SSE streaming endpoint (falls back to `MODAL_API_URL/stream`)
+- `MODAL_API_KEY`: Optional bearer token for Modal endpoint authentication
+- `MODAL_TIMEOUT`: Optional request timeout in ms for Modal (default: 300,000 — 5 minutes)
 - `CORS_ORIGIN`: Frontend URL (default: http://localhost:8080)
 
 **Frontend** (`.env` or inline):
@@ -559,6 +581,7 @@ Both frontend and backend use path aliases:
   - Missing dependencies in generated `package.json`
   - Syntax errors in generated files
   - Sandpack bundler timeout (increase timeout in PreviewPanel)
+  - When using Modal provider, generation can take 10–15 minutes — stream timeout is set to 16 minutes; ensure proxies don't cut the connection earlier (heartbeats keep the SSE alive)
 
 **Auto-Repair Infinite Loop**:
 - **Issue**: Auto-repair keeps triggering repeatedly

@@ -1,7 +1,7 @@
 import type { RuntimeError } from '@/shared';
 import { useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 
-import { useProject, useGenerationState, useGenerationActions } from '@/context';
+import { useProjectState, useGenerationState, useGenerationActions } from '@/context';
 import { usePreviewErrorHandlers } from '@/hooks/usePreviewErrorHandlers';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { createLogger } from '@/utils/logger';
@@ -25,7 +25,7 @@ export interface PreviewSectionProps {
  * Wraps PreviewPanel with error boundary and manages error state.
  */
 export function PreviewSection({ activePanel }: PreviewSectionProps) {
-  const { projectState } = useProject();
+  const { projectState } = useProjectState();
   const { isLoading, loadingPhase, isAutoRepairing } = useGenerationState();
   const { autoRepair, resetAutoRepair } = useGenerationActions();
 

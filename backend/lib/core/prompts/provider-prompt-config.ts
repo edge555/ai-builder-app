@@ -14,10 +14,10 @@ export interface ProviderPromptConfig {
 }
 
 /**
- * Returns prompt configuration based on the active AI provider.
- * Reads AI_PROVIDER from environment at call time.
+ * Cached config computed once at module load time.
+ * AI_PROVIDER does not change at runtime, so this is safe.
  */
-export function getProviderPromptConfig(): ProviderPromptConfig {
+const _cachedConfig: ProviderPromptConfig = (() => {
   const provider = (process.env.AI_PROVIDER ?? 'gemini') as 'gemini' | 'modal';
 
   if (provider === 'modal') {
@@ -33,4 +33,12 @@ export function getProviderPromptConfig(): ProviderPromptConfig {
     outputBudgetTokens: 15000,
     includeDetailedGuidance: false,
   };
+})();
+
+/**
+ * Returns prompt configuration based on the active AI provider.
+ * Config is computed once at module load time since AI_PROVIDER is static.
+ */
+export function getProviderPromptConfig(): ProviderPromptConfig {
+  return _cachedConfig;
 }

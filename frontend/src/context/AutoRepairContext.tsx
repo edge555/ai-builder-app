@@ -4,7 +4,7 @@ import { AutoRepairContext, type AutoRepairContextValue } from './AutoRepairCont
 import { useChatMessages } from './ChatMessagesContext.context';
 import { useGenerationState, useGenerationActions } from './GenerationContext.context';
 import { usePreviewErrorState, usePreviewErrorActions } from './PreviewErrorContext.context';
-import { useProject } from './ProjectContext.context';
+import { useProjectState } from './ProjectContext.context';
 
 /**
  * Provider for unified auto-repair coordination.
@@ -16,7 +16,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
   const previewErrorActions = usePreviewErrorActions();
   const generationState = useGenerationState();
   const generationActions = useGenerationActions();
-  const project = useProject();
+  const { projectState } = useProjectState();
   const chatMessages = useChatMessages();
 
   // Prevent concurrent auto-repair evaluations
@@ -56,14 +56,14 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
       ? previewErrorState.currentError // Use current as representative
       : previewErrorState.currentError;
 
-    if (errorToRepair && project.projectState) {
+    if (errorToRepair && projectState) {
       // Show repair attempt number
       const attemptNumber = generationState.autoRepairAttempt + 1;
       chatMessages.addAssistantMessage(
         `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
       );
 
-      generationActions.autoRepair(errorToRepair, project.projectState)
+      generationActions.autoRepair(errorToRepair, projectState)
         .then(success => {
           if (success) {
             // Repair succeeded
@@ -106,7 +106,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
     previewErrorState.maxRepairAttempts,
     generationState.isAutoRepairing,
     generationState.autoRepairAttempt,
-    project.projectState,
+    projectState,
     // Stable actions (wrapped in useCallback)
     previewErrorActions.startAutoRepair,
     previewErrorActions.completeAutoRepair,
@@ -120,7 +120,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
    */
   const triggerAutoRepair = useCallback(async (): Promise<boolean> => {
     const errorToRepair = previewErrorState.currentError;
-    if (!errorToRepair || !project.projectState) {
+    if (!errorToRepair || !projectState) {
       return false;
     }
 
@@ -140,7 +140,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
         `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
       );
 
-      const success = await generationActions.autoRepair(errorToRepair, project.projectState);
+      const success = await generationActions.autoRepair(errorToRepair, projectState);
 
       if (success) {
         previewErrorActions.completeAutoRepair(true);
@@ -171,7 +171,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
     generationState.autoRepairAttempt,
     generationActions.autoRepair,
     generationActions.resetAutoRepair,
-    project.projectState,
+    projectState,
     chatMessages.addAssistantMessage,
   ]);
 

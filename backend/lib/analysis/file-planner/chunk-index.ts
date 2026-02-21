@@ -144,8 +144,8 @@ export class ChunkIndexBuilder {
   parseFile(filePath: string, content: string): CodeChunk[] {
     const chunks: CodeChunk[] = [];
     const lines = content.split('\n');
-    const imports = this.parseImports(content);
-    const exportedSymbols = this.getExportedSymbols(content);
+    const imports = this.parseImports(lines);
+    const exportedSymbols = this.getExportedSymbols(lines);
     const processedLines = new Set<number>();
 
     // Extract interfaces
@@ -186,9 +186,8 @@ export class ChunkIndexBuilder {
   /**
    * Parse import statements to track dependencies.
    */
-  private parseImports(content: string): Map<string, string[]> {
+  private parseImports(lines: string[]): Map<string, string[]> {
     const imports = new Map<string, string[]>();
-    const lines = content.split('\n');
 
     for (const line of lines) {
       // Named import: import { a, b } from 'module'
@@ -241,9 +240,8 @@ export class ChunkIndexBuilder {
   /**
    * Get all exported symbol names from content.
    */
-  private getExportedSymbols(content: string): Set<string> {
+  private getExportedSymbols(lines: string[]): Set<string> {
     const exported = new Set<string>();
-    const lines = content.split('\n');
 
     for (const line of lines) {
       // export function/const/class/interface/type Name

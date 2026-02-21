@@ -5,7 +5,7 @@ import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/cl
 import { getUserFriendlyErrorMessage } from '@/utils/error-messages';
 import { createLogger } from '@/utils/logger';
 import { buildRepairPrompt } from '@/utils/repair-prompt';
-import { parseSSEStream } from '@/utils/sse-parser';
+import { parseSSEStream, type StreamFileData, type StreamCompleteData } from '@/utils/sse-parser';
 
 import { type LoadingPhase } from '../components';
 import { config as appConfig } from '../config';
@@ -26,7 +26,8 @@ import {
 const genLogger = createLogger('Generation');
 
 const MAX_AUTO_REPAIR_ATTEMPTS = 3;
-const STREAMING_TIMEOUT_MS = 120000; // 120 seconds
+const STREAMING_INACTIVITY_TIMEOUT_MS = 120_000; // 120s of silence = dead connection
+const STREAMING_MAX_TIMEOUT_MS = 900_000; // 15 min absolute cap (safety net)
 
 /**
  * Provider for generation and modification operations.
@@ -105,10 +106,21 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     streamAbortRef.current = controller;
 
-    // Set timeout for streaming
-    const timeoutId = setTimeout(() => {
+    // Absolute max timeout — fires regardless of activity
+    const maxTimeoutId = setTimeout(() => {
       controller.abort();
-    }, STREAMING_TIMEOUT_MS);
+    }, STREAMING_MAX_TIMEOUT_MS);
+
+    // Inactivity timeout — reset on every SSE event (heartbeat, progress, file, etc.)
+    // If the server goes completely silent for 120s, abort the connection
+    let inactivityTimeoutId: ReturnType<typeof setTimeout>;
+    const resetInactivityTimeout = () => {
+      clearTimeout(inactivityTimeoutId);
+      inactivityTimeoutId = setTimeout(() => {
+        controller.abort();
+      }, STREAMING_INACTIVITY_TIMEOUT_MS);
+    };
+    resetInactivityTimeout();
 
     setIsStreaming(true);
     setStreamingState({
@@ -146,12 +158,15 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
 
       const result = await parseSSEStream(reader, {
         onStart: () => {
+          resetInactivityTimeout();
           setStreamingState(prev => prev ? { ...prev, phase: 'generating', lastHeartbeat: Date.now() } : null);
         },
         onProgress: (length: number) => {
+          resetInactivityTimeout();
           setStreamingState(prev => prev ? { ...prev, textLength: length, lastHeartbeat: Date.now() } : null);
         },
-        onFile: (data: { path: string; content: string; index: number; total: number }, files: Record<string, string>) => {
+        onFile: (data: StreamFileData, files: Record<string, string>) => {
+          resetInactivityTimeout();
           setStreamingState(prev => prev ? {
             ...prev,
             phase: 'processing',
@@ -163,6 +178,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           } : null);
         },
         onWarning: (warning) => {
+          resetInactivityTimeout();
           setStreamingState(prev => prev ? {
             ...prev,
             warnings: [...prev.warnings, warning],
@@ -170,13 +186,15 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           } : null);
         },
         onStreamEnd: (summary) => {
+          resetInactivityTimeout();
           setStreamingState(prev => prev ? {
             ...prev,
             summary,
             lastHeartbeat: Date.now(),
           } : null);
         },
-        onComplete: (data: any, files: Record<string, string>) => {
+        onComplete: (data: StreamCompleteData, files: Record<string, string>) => {
+          resetInactivityTimeout();
           setStreamingState(prev => prev ? {
             ...prev,
             phase: 'complete',
@@ -186,6 +204,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           } : null);
         },
         onError: (errorData) => {
+          resetInactivityTimeout();
           // Create user-friendly error message based on error type
           const userMessage = getUserFriendlyErrorMessage({
             errorType: errorData.errorType,
@@ -202,14 +221,17 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           } : null);
         },
         onHeartbeat: () => {
+          resetInactivityTimeout();
           setStreamingState(prev => prev ? { ...prev, lastHeartbeat: Date.now() } : null);
         },
       });
 
-      clearTimeout(timeoutId);
+      clearTimeout(inactivityTimeoutId);
+      clearTimeout(maxTimeoutId);
       return result;
     } catch (e) {
-      clearTimeout(timeoutId);
+      clearTimeout(inactivityTimeoutId);
+      clearTimeout(maxTimeoutId);
       if (e instanceof Error && e.name === 'AbortError') {
         // Check if it was user-initiated abort
         if (controller.signal.aborted) {
@@ -258,7 +280,8 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       return await response.json() as GenerateProjectResponse;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Request timed out after 60 seconds. Please try again with a simpler request.');
+        const timeoutSeconds = Math.round(appConfig.api.timeout / 1000);
+        throw new Error(`Request timed out after ${timeoutSeconds} seconds. Please try again with a simpler request.`);
       }
       throw error;
     } finally {
@@ -301,7 +324,8 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       return await response.json() as ModifyProjectResponse;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Request timed out after 60 seconds. Please try again with a simpler request.');
+        const timeoutSeconds = Math.round(appConfig.api.timeout / 1000);
+        throw new Error(`Request timed out after ${timeoutSeconds} seconds. Please try again with a simpler request.`);
       }
       throw error;
     } finally {

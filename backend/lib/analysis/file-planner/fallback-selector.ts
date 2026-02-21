@@ -214,32 +214,43 @@ export class FallbackSelector {
       return scores;
     }
 
+    // Pre-compile regexes for each word to avoid re-creating per file
+    const wordRegexes = new Map<string, { global: RegExp; single: RegExp }>();
+    for (const word of promptWords) {
+      if (word.length > 3) {
+        wordRegexes.set(word, {
+          global: new RegExp(`\\b${word}\\b`, 'gi'),
+          single: new RegExp(`\\b${word}\\b`, 'i'),
+        });
+      }
+    }
+
     for (const [filePath, content] of Object.entries(projectState.files)) {
       const contentLower = content.toLowerCase();
       const matchReasons: string[] = [];
       let score = 0;
 
       // Check for keyword matches in content
-      for (const word of promptWords) {
-        if (word.length > 3) {
-          // Count occurrences of the word in content
-          const regex = new RegExp(`\\b${word}\\b`, 'gi');
-          const matches = contentLower.match(regex);
-          
-          if (matches) {
-            const count = matches.length;
-            // Score based on frequency, but cap to avoid over-weighting
-            const wordScore = Math.min(count * 3, 15);
-            score += wordScore;
-            matchReasons.push(`Content contains "${word}" (${count}x)`);
-          }
+      for (const [word, regexes] of wordRegexes) {
+        // Reset lastIndex for global regex reuse
+        regexes.global.lastIndex = 0;
+        const matches = contentLower.match(regexes.global);
+
+        if (matches) {
+          const count = matches.length;
+          // Score based on frequency, but cap to avoid over-weighting
+          const wordScore = Math.min(count * 3, 15);
+          score += wordScore;
+          matchReasons.push(`Content contains "${word}" (${count}x)`);
         }
       }
 
       // Bonus for files that contain multiple prompt words
       const matchedWords = promptWords.filter(word => {
-        const regex = new RegExp(`\\b${word}\\b`, 'i');
-        return regex.test(contentLower);
+        const regexes = wordRegexes.get(word);
+        if (!regexes) return false;
+        regexes.single.lastIndex = 0;
+        return regexes.single.test(contentLower);
       });
 
       if (matchedWords.length > 1) {
