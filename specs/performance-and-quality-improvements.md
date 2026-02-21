@@ -8,124 +8,92 @@ Comprehensive audit of the entire codebase (backend, frontend, shared, infrastru
 
 ## Group 1: Delete Dead Code (Zero Risk)
 
-### ☐ 1.1 Delete MetadataFilePlanner files
-- [ ] Delete `backend/lib/analysis/file-planner/metadata-planner.ts`
-- [ ] Delete `backend/lib/analysis/file-planner/metadata-planning.ts`
-- [ ] Delete `backend/lib/analysis/file-planner/metadata-fallback.ts`
-- [ ] Remove corresponding exports from `backend/lib/analysis/file-planner/index.ts`
+### ☑ 1.1 Delete MetadataFilePlanner files
+- [x] Delete `backend/lib/analysis/file-planner/metadata-planner.ts`
+- [x] Delete `backend/lib/analysis/file-planner/metadata-planning.ts`
+- [x] Delete `backend/lib/analysis/file-planner/metadata-fallback.ts`
+- [x] Remove corresponding exports from `backend/lib/analysis/file-planner/index.ts`
 
-### ☐ 1.2 Delete HistoryPanel and VersionContext
-- [ ] Delete `frontend/src/components/HistoryPanel/` directory
-- [ ] Delete `frontend/src/context/VersionContext.tsx` and `VersionContext.context.ts`
-- [ ] Delete `frontend/src/context/__tests__/VersionContext.test.tsx`
-- [ ] Remove exports from `frontend/src/components/index.ts` and `frontend/src/context/index.ts`
+### ☑ 1.2 Delete HistoryPanel and VersionContext
+- [x] Delete `frontend/src/components/HistoryPanel/` directory
+- [x] Delete `frontend/src/context/VersionContext.tsx` and `VersionContext.context.ts`
+- [x] Delete `frontend/src/context/__tests__/VersionContext.test.tsx`
+- [x] Remove exports from `frontend/src/components/index.ts` and `frontend/src/context/index.ts`
 
-### ☐ 1.3 Remove deprecated prompt constant exports
-- [ ] In `backend/lib/core/prompts/generation-prompt.ts`: remove `GENERATION_SYSTEM_PROMPT` constant
-- [ ] In `backend/lib/diff/prompts/modification-prompt.ts`: remove `CORE_MODIFICATION_PROMPT` constant
-- [ ] These are built at module load time wasting CPU on startup
+### ☑ 1.3 Remove deprecated prompt constant exports
+- [x] In `backend/lib/core/prompts/generation-prompt.ts`: remove `GENERATION_SYSTEM_PROMPT` constant
+- [x] In `backend/lib/diff/prompts/modification-prompt.ts`: remove `CORE_MODIFICATION_PROMPT` constant
+- [x] These are built at module load time wasting CPU on startup
 
-### ☐ 1.4 Delete dead env-schema.ts
-- [ ] Delete `shared/src/config/env-schema.ts`
-- [ ] Remove `export * from './config/env-schema'` from `shared/src/index.ts`
+### ☑ 1.4 Delete dead env-schema.ts
+- [x] Delete `shared/src/config/env-schema.ts`
+- [x] Remove `export * from './config/env-schema'` from `shared/src/index.ts`
 
 ---
 
 ## Group 2: Infrastructure Cleanup
 
-### ☐ 2.1 Remove `swcMinify` from next.config.js
-- [ ] Deprecated in Next.js 13+ (SWC is now default). Remove to eliminate deprecation warning.
+### ☑ 2.1 Remove `swcMinify` from next.config.js
+- [x] Deprecated in Next.js 13+ (SWC is now default). Remove to eliminate deprecation warning.
 
-### ☐ 2.2 Remove unused backend dependencies
+### ☑ 2.2 Remove unused backend dependencies
 In `backend/package.json`:
-- [ ] Remove `fast-check` (zero imports found)
-- [ ] Remove `@types/uuid` (uuid v9 includes own types)
+- [x] Remove `fast-check` (zero imports found)
+- [x] Remove `@types/uuid` (uuid v9 includes own types)
 
-### ☐ 2.3 Move `@types/react-syntax-highlighter` to devDependencies
-- [ ] In `frontend/package.json`, move from `dependencies` to `devDependencies`.
+### ☑ 2.3 Move `@types/react-syntax-highlighter` to devDependencies
+- [x] In `frontend/package.json`, move from `dependencies` to `devDependencies`.
 
-### ☐ 2.4 Add explicit `zod` dependency to frontend
-- [ ] Add `"zod": "^4.3.6"` to `frontend/package.json` (frontend/src/config.ts imports zod but it's only resolved via workspace symlink)
+### ☑ 2.4 Add explicit `zod` dependency to frontend
+- [x] Add `"zod": "^4.3.6"` to `frontend/package.json` (frontend/src/config.ts imports zod but it's only resolved via workspace symlink)
 
 ---
 
 ## Group 3: Correctness Bugs (Stale Closures)
 
-### ☐ 3.1 Fix reportError stale closure on repairPhase
+### ☑ 3.1 Fix reportError stale closure on repairPhase
 **File:** `frontend/src/context/PreviewErrorContext.tsx:84`
 
-- [ ] `reportError` closes over `repairPhase` state — reads stale value during transitions.
+- [x] `reportError` closes over `repairPhase` state — reads stale value during transitions.
 
-**Fix:** Use a ref:
-```typescript
-const repairPhaseRef = useRef<RepairPhase>('idle');
-useEffect(() => { repairPhaseRef.current = repairPhase; }, [repairPhase]);
-
-const reportError = useCallback((error: RuntimeError) => {
-  if (repairPhaseRef.current === 'idle') {
-    setRepairPhase('detecting');
-  }
-}, []); // stable — no dependency on repairPhase
-```
-
-### ☐ 3.2 Fix completeAutoRepair stale repairAttempts
+### ☑ 3.2 Fix completeAutoRepair stale repairAttempts
 **File:** `frontend/src/context/PreviewErrorContext.tsx:163`
 
-- [ ] `completeAutoRepair` closes over `repairAttempts` — check `repairAttempts >= MAX_REPAIR_ATTEMPTS` reads stale value.
+- [x] `completeAutoRepair` closes over `repairAttempts` — check `repairAttempts >= MAX_REPAIR_ATTEMPTS` reads stale value.
 
-**Fix:** Mirror with ref:
-```typescript
-const repairAttemptsRef = useRef(0);
-useEffect(() => { repairAttemptsRef.current = repairAttempts; }, [repairAttempts]);
-
-const completeAutoRepair = useCallback((success: boolean) => {
-  if (repairAttemptsRef.current >= MAX_REPAIR_ATTEMPTS) {
-    setRepairPhase('failed');
-  } else {
-    setRepairPhase('detecting');
-  }
-}, []);
-```
-
-### ☐ 3.3 Fix RepairStatus setTimeout without cleanup
+### ☑ 3.3 Fix RepairStatus setTimeout without cleanup
 **File:** `frontend/src/components/RepairStatus/RepairStatus.tsx:51`
 
-- [ ] `handleExit` creates a setTimeout that fires after unmount.
-
-**Fix:** Store timer in ref, clean up on unmount:
-```typescript
-const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-useEffect(() => () => { if (exitTimerRef.current) clearTimeout(exitTimerRef.current); }, []);
-```
+- [x] `handleExit` creates a setTimeout that fires after unmount.
 
 ---
 
 ## Group 4: Backend Code Quality
 
-### ☐ 4.1 Replace console.log with structured logger in VersionManager
+### ☑ 4.1 Replace console.log with structured logger in VersionManager
 **File:** `backend/lib/core/version-manager.ts:104, 134, 295`
 
-- [ ] Three `console.log` calls bypass LOG_LEVEL filtering and request correlation. Replace with `createLogger('version-manager')`.
+- [x] Three `console.log` calls bypass LOG_LEVEL filtering and request correlation. Replace with `createLogger('version-manager')`.
 
-### ☐ 4.2 Fix worker task ID collision
+### ☑ 4.2 Fix worker task ID collision
 **File:** `backend/lib/core/worker-pool.ts:75`
 
-- [ ] `Math.random().toString(36).substring(7)` produces ~3-4 chars. Replace with `crypto.randomUUID()`.
+- [x] `Math.random().toString(36).substring(7)` produces ~3-4 chars. Replace with `crypto.randomUUID()`.
 
-### ☐ 4.3 Track workerToTaskId to reject tasks on worker error
+### ☑ 4.3 Track workerToTaskId to reject tasks on worker error
 **File:** `backend/lib/core/worker-pool.ts:43-51`
 
-- [ ] When a worker errors, its in-progress task leaks for 30s. Add `workerToTaskId: Map<number, string>` and reject the task in the error handler.
+- [x] When a worker errors, its in-progress task hangs for 30s until timeout. Track `workerToTaskId` to `reject` immediately.
 
-### ☐ 4.4 Extract shared categorizeError function
+### ☑ 4.4 Extract shared categorizeError function
 **Files:** `backend/lib/ai/gemini-client.ts:486`, `backend/lib/ai/modal-client.ts:399`
 
-- [ ] Near-identical private methods. Extract to `backend/lib/ai/ai-error-utils.ts` and import in both clients.
+- [x] Near-identical private methods. Extract to `backend/lib/ai/ai-error-utils.ts` and import in both clients.
 
-### ☐ 4.5 Fix misleading loop condition in modification-engine
+### ☑ 4.5 Fix misleading loop condition in modification-engine
 **File:** `backend/lib/diff/modification-engine.ts:200`
 
-- [ ] `while (attempt <= MAX_RETRIES)` runs MAX_RETRIES+1 times. Rename to MAX_ATTEMPTS or fix the loop bounds to match semantics.
+- [x] `while (attempt <= MAX_RETRIES)` runs MAX_RETRIES+1 times. Rename to MAX_ATTEMPTS or fix the loop bounds to match semantics.
 
 ---
 

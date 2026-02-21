@@ -190,16 +190,13 @@ export class ModificationEngine {
   }> {
     const contextPrompt = buildModificationPrompt(prompt, slices, projectState);
 
-    // Retry configuration
-    const MAX_RETRIES = 3;
-    let attempt = 0;
+    const MAX_ATTEMPTS = 4;
     let lastEditError: string | null = null;
     let updatedFiles: Record<string, string | null> = {};
     let deletedFiles: string[] = [];
 
-    while (attempt <= MAX_RETRIES) {
-      attempt++;
-      logger.info('Modification attempt', { attempt, maxAttempts: MAX_RETRIES + 1 });
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      logger.info('Modification attempt', { attempt, maxAttempts: MAX_ATTEMPTS });
 
       // Build prompt with error feedback if this is a retry
       let userRequest = prompt;
@@ -386,18 +383,13 @@ export class ModificationEngine {
         return { success: true, updatedFiles, deletedFiles };
       }
 
-      // If we've exhausted retries, return error
-      if (attempt > MAX_RETRIES) {
-        return {
-          success: false,
-          error: `Failed after ${MAX_RETRIES + 1} attempts. Last error: ${lastEditError}`,
-        };
-      }
-
       logger.info('Retrying due to error', { error: lastEditError });
     }
 
-    return { success: false, error: 'Unexpected error in modification loop' };
+    return {
+      success: false,
+      error: `Failed after ${MAX_ATTEMPTS} attempts. Last error: ${lastEditError}`,
+    };
   }
 
   /**

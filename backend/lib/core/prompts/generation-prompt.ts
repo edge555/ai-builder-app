@@ -111,11 +111,6 @@ ${wrapUserInput(userPrompt)}
 Generate a complete React application with perfect syntax and proper component separation.`;
 }
 
-/**
- * System prompt for project generation.
- * @deprecated Use buildGenerationPrompt() instead for proper prompt injection defense
- */
-export const GENERATION_SYSTEM_PROMPT = buildGenerationPrompt('');
 
 /**
  * Builds a generation prompt with user input properly wrapped for injection defense.

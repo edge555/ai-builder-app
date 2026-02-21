@@ -7,7 +7,7 @@ import { createLogger } from '@/utils/logger';
 import { buildRepairPrompt } from '@/utils/repair-prompt';
 import { parseSSEStream } from '@/utils/sse-parser';
 
-import type { LoadingPhase } from '../components/ChatInterface/ChatInterface';
+import { type LoadingPhase } from '../components';
 import { config as appConfig } from '../config';
 
 

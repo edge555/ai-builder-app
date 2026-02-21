@@ -12,6 +12,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { Version, ProjectState, FileDiff } from '@ai-app-builder/shared';
 import { getDiffEngine } from '../diff/diff-engine';
+import { createLogger } from '../logger';
+
+const logger = createLogger('version-manager');
 
 /**
  * Maximum number of versions to keep per project.
@@ -101,10 +104,12 @@ export class VersionManager {
       projectVersions.delete(versions[i].id);
     }
 
-    console.log(
-      `[VersionManager] Evicted ${toEvict} old version(s) from project ${projectId}. ` +
-      `Versions: ${versionCount} -> ${projectVersions.size}`
-    );
+    logger.info(`Evicted ${toEvict} old version(s) from project ${projectId}`, {
+      projectId,
+      evictedCount: toEvict,
+      before: versionCount,
+      after: projectVersions.size
+    });
   }
 
   /**
@@ -131,10 +136,12 @@ export class VersionManager {
       this.versionsByProject.delete(projectId);
       this.projectAccessTimes.delete(projectId);
 
-      console.log(
-        `[VersionManager] Evicted LRU project ${projectId} with ${versionCount} version(s). ` +
-        `Projects: ${projectCount} -> ${this.versionsByProject.size}`
-      );
+      logger.info(`Evicted LRU project ${projectId}`, {
+        projectId,
+        versionCount,
+        before: projectCount,
+        after: this.versionsByProject.size
+      });
     }
   }
 
@@ -292,10 +299,10 @@ export class VersionManager {
     const projectsEvicted = projectCountBefore - projectCountAfter;
 
     if (projectsEvicted > 0 || totalVersionsEvicted > 0) {
-      console.log(
-        `[VersionManager] Cleanup complete. ` +
-        `Projects evicted: ${projectsEvicted}, Versions evicted: ${totalVersionsEvicted}`
-      );
+      logger.info('Cleanup complete', {
+        projectsEvicted,
+        versionsEvicted: totalVersionsEvicted
+      });
     }
 
     return {

@@ -99,11 +99,6 @@ ${wrapUserInput(userPrompt)}
 }`;
 }
 
-/**
- * Core modification prompt without design system.
- * @deprecated Use getModificationPrompt() instead for proper prompt injection defense
- */
-export const CORE_MODIFICATION_PROMPT = buildModificationPrompt('', false);
 
 /**
  * Builds a modification prompt with user input properly wrapped for injection defense.

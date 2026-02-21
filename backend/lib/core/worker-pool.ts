@@ -1,4 +1,5 @@
 import { Worker } from 'worker_threads';
+import crypto from 'node:crypto';
 import { createLogger } from '../logger';
 
 const logger = createLogger('worker-pool');
@@ -15,6 +16,7 @@ export class WorkerPool {
     private workers: Worker[] = [];
     private taskQueue: WorkerTask[] = [];
     private activeTasks: Map<string, WorkerTask> = new Map();
+    private workerToTaskId: Map<number, string> = new Map(); // workerIndex -> taskId
     private workerStatus: boolean[] = []; // true = busy, false = free
     private workerScript: string;
     private poolSize: number;
@@ -42,10 +44,7 @@ export class WorkerPool {
 
         worker.on('error', (err) => {
             logger.error(`Worker ${index} error`, { error: err.message });
-            // Clean up current task on this worker if any
-            // Since we don't map worker -> task ID easily here without extra state,
-            // we rely on the task timeout or a more complex mapping.
-            // For now, simpler to just restart worker.
+            this.abortTaskOnWorker(index, `Worker error: ${err.message}`);
             worker.terminate().catch(() => { });
             this.replaceWorker(index);
         });
@@ -53,12 +52,25 @@ export class WorkerPool {
         worker.on('exit', (code) => {
             if (code !== 0) {
                 logger.error(`Worker ${index} stopped with exit code ${code}`);
+                this.abortTaskOnWorker(index, `Worker stopped with exit code ${code}`);
                 this.replaceWorker(index);
             }
         });
 
         this.workers[index] = worker;
         this.workerStatus[index] = false; // Worker is ready
+        this.workerToTaskId.delete(index);
+    }
+
+    private abortTaskOnWorker(workerIndex: number, reason: string) {
+        const taskId = this.workerToTaskId.get(workerIndex);
+        if (taskId && this.activeTasks.has(taskId)) {
+            const task = this.activeTasks.get(taskId)!;
+            clearTimeout(task.timeout);
+            task.reject(new Error(reason));
+            this.activeTasks.delete(taskId);
+            this.workerToTaskId.delete(workerIndex);
+        }
     }
 
     private replaceWorker(index: number) {
@@ -72,7 +84,7 @@ export class WorkerPool {
 
     public runTask(data: any): Promise<any> {
         return new Promise((resolve, reject) => {
-            const id = Math.random().toString(36).substring(7);
+            const id = crypto.randomUUID();
 
             const timeout = setTimeout(() => {
                 if (this.activeTasks.has(id)) {
@@ -105,6 +117,7 @@ export class WorkerPool {
 
         this.workerStatus[workerIndex] = true;
         this.activeTasks.set(task.id, task);
+        this.workerToTaskId.set(workerIndex, task.id);
 
         // Add ID to data so we can map response back
         this.workers[workerIndex].postMessage({ ...task.data, id: task.id });
@@ -129,6 +142,7 @@ export class WorkerPool {
             }
 
             this.activeTasks.delete(id);
+            this.workerToTaskId.delete(workerIndex);
         }
 
         this.workerStatus[workerIndex] = false;
