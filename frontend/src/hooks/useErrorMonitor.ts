@@ -60,7 +60,7 @@ export function useErrorMonitor(options: UseErrorMonitorOptions = {}): UseErrorM
       errorAggregator.clear();
       isSetup.current = false;
     };
-  }, [enabled, onErrorsReady]);
+  }, [enabled, onErrorsReady, errorAggregator]);
 
   /**
    * Capture a console error message.

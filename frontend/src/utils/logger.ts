@@ -47,12 +47,12 @@ function formatMessage(
     name: string,
     message: string,
     context?: Record<string, unknown>
-): { message: string; args: any[] } {
+): { message: string; args: unknown[] } {
     const timestamp = new Date().toISOString();
     const levelUpper = level.toUpperCase().padEnd(5);
     const prefix = `[${timestamp}] ${levelUpper} [${name}] ${message}`;
 
-    const args: any[] = [];
+    const args: unknown[] = [];
     if (context && Object.keys(context).length > 0) {
         args.push(context);
     }

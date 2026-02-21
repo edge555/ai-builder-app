@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+
 import { validateProjectQuality } from '../../core/validators/unified-validator';
 
 describe('unified-validator', () => {
@@ -147,14 +148,14 @@ describe('unified-validator', () => {
       };
 
       const warnings = validateProjectQuality(files);
-      
+
       // Should have both architecture warnings (hooks, types, organization)
       // and styling warnings (no CSS files)
       expect(warnings.length).toBeGreaterThan(2);
-      
+
       const architectureWarnings = warnings.filter(w => w.type === 'architecture_warning');
       const stylingWarnings = warnings.filter(w => w.type === 'styling_warning');
-      
+
       expect(architectureWarnings.length).toBeGreaterThan(0);
       expect(stylingWarnings.length).toBeGreaterThan(0);
     });

@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+
 import {
   parseIncrementalFiles,
   estimateTotalFiles,
@@ -55,11 +56,11 @@ describe('parseIncrementalFiles', () => {
 
   it('should resume parsing from lastParsedIndex', () => {
     const json = '{"path":"src/App.tsx","content":"app"}{"path":"src/index.tsx","content":"index"}';
-    
+
     // First parse
     const result1 = parseIncrementalFiles(json, 0);
     expect(result1.files).toHaveLength(2);
-    
+
     // Resume from where we left off (should find nothing new)
     const result2 = parseIncrementalFiles(json, result1.lastParsedIndex);
     expect(result2.files).toHaveLength(0);
@@ -68,7 +69,7 @@ describe('parseIncrementalFiles', () => {
   it('should handle empty or invalid JSON', () => {
     const result = parseIncrementalFiles('');
     expect(result.files).toHaveLength(0);
-    
+
     const result2 = parseIncrementalFiles('invalid json');
     expect(result2.files).toHaveLength(0);
   });
