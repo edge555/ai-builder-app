@@ -104,3 +104,4 @@ kiro-specs/
 *.tgz
 
 .claude
+__pycache__

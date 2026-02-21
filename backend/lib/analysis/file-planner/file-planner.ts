@@ -11,7 +11,7 @@ import type { ProjectState } from '@ai-app-builder/shared';
 import type { AIProvider } from '../../ai/ai-provider';
 import { createAIProvider } from '../../ai/ai-provider-factory';
 import { config } from '../../config';
-import { MAX_OUTPUT_TOKENS_PLANNING } from '../../constants';
+import { getMaxOutputTokens } from '../../config';
 import { createLogger } from '../../logger';
 import type { ChunkIndex, CodeSlice, FilePlannerResult, PlanningResponse } from './types';
 import { ChunkIndexBuilder } from './chunk-index';
@@ -141,7 +141,7 @@ export class FilePlanner {
         prompt: planningPrompt,
         systemInstruction: PLANNING_SYSTEM_PROMPT,
         temperature: PLANNING_TEMPERATURE,
-        maxOutputTokens: MAX_OUTPUT_TOKENS_PLANNING,
+        maxOutputTokens: getMaxOutputTokens('planning'),
         responseSchema: PLANNING_OUTPUT_SCHEMA,
       });
 

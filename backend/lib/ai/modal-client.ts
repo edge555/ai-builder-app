@@ -12,13 +12,15 @@ import type { AIProvider, AIRequest, AIStreamingRequest, AIResponse } from './ai
 
 const logger = createLogger('modal-client');
 
-const DEFAULT_TIMEOUT = 120_000; // 2 minutes — Modal models can be slower
+const DEFAULT_TIMEOUT = 300_000; // 5 minutes — Modal models can be slower
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_RETRY_BASE_DELAY = 1000;
 
 export interface ModalClientConfig {
   /** Modal FastAPI endpoint URL */
   apiUrl: string;
+  /** Modal FastAPI streaming endpoint URL (SSE) */
+  streamApiUrl?: string;
   /** Optional API key for authentication */
   apiKey?: string;
   /** Request timeout in milliseconds */
@@ -38,6 +40,7 @@ export interface ModalClientConfig {
  */
 export class ModalClient implements AIProvider {
   private readonly apiUrl: string;
+  private readonly streamApiUrl: string | undefined;
   private readonly apiKey: string | undefined;
   private readonly timeout: number;
   private readonly maxRetries: number;
@@ -49,6 +52,7 @@ export class ModalClient implements AIProvider {
       throw new Error('Modal API URL is required');
     }
     this.apiUrl = clientConfig.apiUrl;
+    this.streamApiUrl = clientConfig.streamApiUrl;
     this.apiKey = clientConfig.apiKey;
     this.timeout = clientConfig.timeout ?? DEFAULT_TIMEOUT;
     this.maxRetries = clientConfig.maxRetries ?? DEFAULT_MAX_RETRIES;
@@ -110,18 +114,59 @@ export class ModalClient implements AIProvider {
   }
 
   /**
-   * Streaming implementation: calls generate() internally, then emits the full
-   * content via onChunk in a single call (Modal doesn't support streaming natively).
+   * Streaming implementation: calls makeStreamingRequest() with retry logic.
    */
   async generateStreaming(request: AIStreamingRequest): Promise<AIResponse> {
-    const result = await this.generate(request);
+    const timer = new OperationTimer('modal-generate-streaming', request.requestId);
+    const contextLogger = request.requestId ? logger.withRequestId(request.requestId) : logger;
 
-    // Emit the full content as a single chunk if successful
-    if (result.success && result.content) {
-      request.onChunk?.(result.content, result.content.length);
+    let lastError: Error | null = null;
+    let retryCount = 0;
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        await this.makeStreamingRequest(request);
+
+        const metrics = timer.complete(true, { retryCount: attempt });
+        contextLogger.info('Modal streaming completed', formatMetrics(metrics));
+
+        return {
+          success: true,
+          retryCount: attempt,
+        };
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        retryCount = attempt;
+
+        if (!this.isRetryableError(lastError)) {
+          break;
+        }
+
+        contextLogger.warn(`Modal streaming attempt ${attempt} failed, retrying...`, {
+          error: lastError.message,
+        });
+
+        if (attempt < this.maxRetries) {
+          await this.delay(this.calculateBackoff(attempt));
+        }
+      }
     }
 
-    return result;
+    const metrics = timer.complete(false, {
+      retryCount,
+      error: lastError?.message ?? 'Unknown error occurred',
+    });
+    contextLogger.error('Modal streaming failed', formatMetrics(metrics));
+
+    const { errorType, errorCode } = this.categorizeError(lastError!);
+
+    return {
+      success: false,
+      error: lastError?.message ?? 'Unknown error occurred',
+      errorType,
+      errorCode,
+      retryCount,
+    };
   }
 
   /**
@@ -132,17 +177,12 @@ export class ModalClient implements AIProvider {
 
     const body = {
       prompt,
-      system_instruction: undefined as string | undefined,
+      system_instruction: this.getSystemInstruction(request) ?? '',
       temperature: request.temperature ?? config.ai.temperature,
       max_tokens: request.maxOutputTokens ?? config.ai.maxOutputTokens,
+      response_format: request.responseSchema ? 'json_object' : 'text',
       ...(this.model && { model: this.model }),
     };
-
-    // If we didn't fold system instruction into prompt (no responseSchema),
-    // send it as a separate field
-    if (!request.responseSchema) {
-      body.system_instruction = this.getSystemInstruction(request);
-    }
 
     logger.debug('Modal API request', {
       url: this.apiUrl,
@@ -183,7 +223,7 @@ export class ModalClient implements AIProvider {
         throw new Error(`Modal API error: ${response.status} - ${errorText}`);
       }
 
-      const data = await response.json() as { content?: string; [key: string]: unknown };
+      const data = await response.json() as { content?: string;[key: string]: unknown };
       const rawContent = typeof data.content === 'string' ? data.content : JSON.stringify(data);
 
       logger.debug('Modal API response received', {
@@ -219,33 +259,118 @@ export class ModalClient implements AIProvider {
   }
 
   /**
-   * Combines system instruction, cache config parts, and user prompt.
-   * When responseSchema is present, adds a JSON instruction since Modal
-   * can't enforce structured output natively.
+   * Makes a streaming request to the Modal SSE endpoint.
    */
-  private formatPrompt(request: AIRequest): string {
-    const parts: string[] = [];
+  private async makeStreamingRequest(request: AIStreamingRequest): Promise<void> {
+    const url = this.streamApiUrl ?? (this.apiUrl.endsWith('/stream') ? this.apiUrl : `${this.apiUrl}/stream`);
+    const prompt = this.formatPrompt(request);
 
-    // When responseSchema is present, fold everything into the prompt
-    // with an explicit JSON instruction
-    if (request.responseSchema) {
-      const systemInstruction = this.getSystemInstruction(request);
-      if (systemInstruction) {
-        parts.push(systemInstruction);
+    const body = {
+      prompt,
+      system_instruction: this.getSystemInstruction(request) ?? '',
+      temperature: request.temperature ?? config.ai.temperature,
+      max_tokens: request.maxOutputTokens ?? config.ai.maxOutputTokens,
+      response_format: request.responseSchema ? 'json_object' : 'text',
+      ...(this.model && { model: this.model }),
+    };
+
+    logger.debug('Modal SSE request', {
+      url,
+      promptLength: prompt.length,
+    });
+
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
+
+    const signal = request.signal
+      ? AbortSignal.any([request.signal, timeoutController.signal])
+      : timeoutController.signal;
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+      };
+      if (this.apiKey) {
+        headers['Authorization'] = `Bearer ${this.apiKey}`;
       }
 
-      parts.push(request.prompt);
-      parts.push(
-        '\n\nIMPORTANT: You MUST respond with valid JSON only, no markdown or explanation. ' +
-        'Your response must conform to this JSON schema:\n' +
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Modal API error: ${response.status} - ${errorText}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Response body is null');
+      }
+
+      const decoder = new TextDecoder();
+      let accumulated = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? ''; // Keep the last incomplete line in the buffer
+
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+
+          if (trimmedLine.startsWith('data: ')) {
+            const dataStr = trimmedLine.slice(6);
+            if (dataStr === '[DONE]') {
+              continue;
+            }
+
+            try {
+              const data = JSON.parse(dataStr);
+              const token = data.token;
+              if (typeof token === 'string') {
+                accumulated += token;
+                request.onChunk?.(token, accumulated.length);
+              }
+            } catch (err) {
+              logger.warn('Failed to parse SSE data', { line: trimmedLine, error: err });
+            }
+          }
+        }
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  }
+
+  /**
+   * Builds the user-turn prompt content.
+   * System instruction is always sent as a separate field — never folded in here.
+   * When responseSchema is present, appends a JSON schema hint to the user prompt
+   * so the model knows the expected output format.
+   */
+  private formatPrompt(request: AIRequest): string {
+    if (request.responseSchema) {
+      // Only user prompt + JSON schema hint — system instruction is handled separately in getSystemInstruction
+      return (
+        request.prompt +
+        '\n\nYou MUST respond with valid JSON only. Schema:\n' +
         JSON.stringify(request.responseSchema, null, 2)
       );
-
-      return parts.join('\n\n');
     }
-
-    // No responseSchema — just return the user prompt
-    // (system instruction sent as separate field)
     return request.prompt;
   }
 
@@ -325,6 +450,7 @@ export function createModalClient(model?: string): ModalClient {
 
   return new ModalClient({
     apiUrl,
+    streamApiUrl: process.env.MODAL_STREAM_API_URL,
     apiKey: process.env.MODAL_API_KEY,
     timeout: process.env.MODAL_TIMEOUT
       ? parseInt(process.env.MODAL_TIMEOUT, 10)

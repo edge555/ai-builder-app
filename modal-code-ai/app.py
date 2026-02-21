@@ -1,3 +1,5 @@
+import json
+
 import modal
 from pydantic import BaseModel
 
@@ -23,6 +25,7 @@ class GenerateRequest(BaseModel):
     system_instruction: str = ""
     temperature: float = 0.7
     max_tokens: int = 1024
+    response_format: str = "text"   # "text" | "json_object"
 
 
 @app.cls(
@@ -54,9 +57,13 @@ class CodeGenerator:
 
     @modal.method()
     def generate(self, request: GenerateRequest) -> dict:
+        system = request.system_instruction
+        if request.response_format == "json_object":
+            system += "\n\nCRITICAL: Respond with valid JSON only. No markdown, no explanation. Start with '{' and end with '}'."
+
         messages = []
-        if request.system_instruction:
-            messages.append({"role": "system", "content": request.system_instruction})
+        if system:
+            messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": request.prompt})
 
         formatted_prompt = self.tokenizer.apply_chat_template(
@@ -81,8 +88,74 @@ class CodeGenerator:
 
         return {"content": content, "model": self.model_name}
 
+    @modal.method(is_generator=True)
+    def generate_stream(self, request: GenerateRequest):
+        from threading import Thread
+        from transformers import TextIteratorStreamer
+
+        system = request.system_instruction
+        if request.response_format == "json_object":
+            system += "\n\nCRITICAL: Respond with valid JSON only. No markdown, no explanation. Start with '{' and end with '}'."
+
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": request.prompt})
+
+        formatted_prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+
+        inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to("cuda")
+
+        streamer = TextIteratorStreamer(
+            self.tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=True,
+        )
+
+        generation_kwargs = {
+            **inputs,
+            "max_new_tokens": request.max_tokens,
+            "temperature": request.temperature,
+            "top_p": 0.9,
+            "do_sample": True,
+            "streamer": streamer,
+        }
+
+        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
+        thread.start()
+
+        for token in streamer:
+            if token:
+                yield token
+
+        thread.join()
+
 
 @app.function(image=image)
 @modal.fastapi_endpoint(method="POST")
 def generate_api(request: GenerateRequest):
     return CodeGenerator().generate.remote(request)
+
+
+@app.function(image=image)
+@modal.fastapi_endpoint(method="POST")
+def generate_stream_api(request: GenerateRequest):
+    from starlette.responses import StreamingResponse
+
+    def event_stream():
+        for token in CodeGenerator().generate_stream.remote_gen(request):
+            yield f"data: {json.dumps({'token': token})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )

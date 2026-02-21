@@ -26,7 +26,7 @@ import { getModificationPrompt, MODIFICATION_OUTPUT_SCHEMA } from './prompts/mod
 import { formatCode } from '../prettier-config';
 import { createLogger } from '../logger';
 import { config } from '../config';
-import { MAX_OUTPUT_TOKENS_MODIFICATION } from '../constants';
+import { getMaxOutputTokens } from '../config';
 import {
   FilePlanner,
   createFilePlanner,
@@ -231,7 +231,7 @@ export class ModificationEngine {
         prompt: fullPrompt,
         systemInstruction: systemInstruction,
         temperature: 0.7,
-        maxOutputTokens: MAX_OUTPUT_TOKENS_MODIFICATION,
+        maxOutputTokens: getMaxOutputTokens('modification'),
         responseSchema: MODIFICATION_OUTPUT_SCHEMA,
       });
 
@@ -468,7 +468,7 @@ export class ModificationEngine {
         prompt: fixContextPrompt,
         systemInstruction: fixSystemInstruction,
         temperature: 0.5,
-        maxOutputTokens: MAX_OUTPUT_TOKENS_MODIFICATION,
+        maxOutputTokens: getMaxOutputTokens('modification'),
         responseSchema: MODIFICATION_OUTPUT_SCHEMA,
       });
 

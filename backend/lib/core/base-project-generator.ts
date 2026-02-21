@@ -12,7 +12,7 @@ import { buildFixPrompt, type BuildFixMode } from './prompts/build-fix-prompt';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
 import { ProjectOutputSchema } from './schemas';
 import { processFiles } from './file-processor';
-import { MAX_OUTPUT_TOKENS_MODIFICATION } from '../constants';
+import { getMaxOutputTokens } from '../config';
 import { createLogger } from '../logger';
 
 const logger = createLogger('BaseProjectGenerator');
@@ -132,7 +132,7 @@ export abstract class BaseProjectGenerator {
                 prompt: 'Generate the fixed project based on the error context in the system instruction.',
                 systemInstruction: fixSystemInstruction,
                 temperature: 0.5,
-                maxOutputTokens: MAX_OUTPUT_TOKENS_MODIFICATION,
+                maxOutputTokens: getMaxOutputTokens('modification'),
                 responseSchema: PROJECT_OUTPUT_SCHEMA,
             });
 

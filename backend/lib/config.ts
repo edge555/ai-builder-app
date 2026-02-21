@@ -6,6 +6,12 @@ import {
   MAX_APP_LINES,
   API_REQUEST_TIMEOUT,
   GEMINI_TIMEOUT,
+  MAX_OUTPUT_TOKENS_GENERATION,
+  MAX_OUTPUT_TOKENS_MODIFICATION,
+  MAX_OUTPUT_TOKENS_PLANNING,
+  MODAL_MAX_OUTPUT_TOKENS_GENERATION,
+  MODAL_MAX_OUTPUT_TOKENS_MODIFICATION,
+  MODAL_MAX_OUTPUT_TOKENS_PLANNING,
 } from './constants';
 
 const logger = createLogger('config');
@@ -20,6 +26,7 @@ const envSchema = z.object({
   GEMINI_EASY_MODEL: z.string().default('gemini-2.5-flash-lite'),
   GEMINI_HARD_MODEL: z.string().default('gemini-2.5-flash'),
   MODAL_API_URL: z.string().url().optional(),
+  MODAL_STREAM_API_URL: z.string().url().optional(),
   MODAL_API_KEY: z.string().optional(),
   MAX_OUTPUT_TOKENS: z.coerce.number().default(16384),
   ALLOWED_ORIGINS: z.string().default('http://localhost:8080'),
@@ -79,6 +86,7 @@ export interface BackendConfig {
   provider: {
     name: 'gemini' | 'modal';
     modalApiUrl?: string;
+    modalStreamApiUrl?: string;
     modalApiKey?: string;
   };
   validation: {
@@ -121,6 +129,7 @@ export const config: BackendConfig = {
   provider: {
     name: env.AI_PROVIDER,
     modalApiUrl: env.MODAL_API_URL,
+    modalStreamApiUrl: env.MODAL_STREAM_API_URL,
     modalApiKey: env.MODAL_API_KEY,
   },
   validation: {
@@ -135,6 +144,7 @@ logger.info('Backend configuration loaded', {
   aiProvider: config.provider.name,
   ...(config.provider.name === 'modal' && {
     modalApiUrl: config.provider.modalApiUrl,
+    modalStreamApiUrl: config.provider.modalStreamApiUrl,
     hasModalApiKey: !!config.provider.modalApiKey,
   }),
   ...(config.provider.name === 'gemini' && {
@@ -143,6 +153,27 @@ logger.info('Backend configuration loaded', {
     geminiHardModel: config.ai.hardModel,
   }),
 });
+
+/**
+ * Returns the max output tokens for the given operation type,
+ * selecting provider-specific limits based on the active AI provider.
+ */
+export function getMaxOutputTokens(
+  operationType: 'generation' | 'modification' | 'planning'
+): number {
+  if (config.provider.name === 'modal') {
+    return {
+      generation: MODAL_MAX_OUTPUT_TOKENS_GENERATION,
+      modification: MODAL_MAX_OUTPUT_TOKENS_MODIFICATION,
+      planning: MODAL_MAX_OUTPUT_TOKENS_PLANNING,
+    }[operationType];
+  }
+  return {
+    generation: MAX_OUTPUT_TOKENS_GENERATION,
+    modification: MAX_OUTPUT_TOKENS_MODIFICATION,
+    planning: MAX_OUTPUT_TOKENS_PLANNING,
+  }[operationType];
+}
 
 // Re-export constants for convenience
 export {

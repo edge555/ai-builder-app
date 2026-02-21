@@ -63,13 +63,21 @@ export function QuickActions({
     };
 
     // Combine actions, prioritizing "Fix errors" if there's an error
-    const allActions = [
+    const rawActions = [
         ...(error ? [fixErrorsAction] : []),
-        ...suggestions.slice(0, 3), // Show a few dynamic suggestions
+        ...suggestions.slice(0, 4), // Show up to 4 dynamic suggestions
         darkModeAction,
         responsiveAction,
         animationsAction,
     ];
+
+    // De-duplicate by ID to prevent key collisions
+    const seenIds = new Set<string>();
+    const allActions = rawActions.filter(action => {
+        if (seenIds.has(action.id)) return false;
+        seenIds.add(action.id);
+        return true;
+    });
 
     if (allActions.length === 0) return null;
 

@@ -11,7 +11,7 @@ import { buildFixPrompt } from './prompts/build-fix-prompt';
 import { processFiles } from './file-processor';
 import { ProjectOutputSchema } from './schemas';
 import { createLogger } from '../logger';
-import { MAX_OUTPUT_TOKENS_GENERATION } from '../constants';
+import { getMaxOutputTokens } from '../config';
 import { parseIncrementalFiles, estimateTotalFiles } from '../utils/incremental-json-parser';
 import { BaseProjectGenerator } from './base-project-generator';
 
@@ -73,7 +73,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     logger.info('Sending streaming request to AI provider', {
       systemInstructionLength: systemInstruction.length,
       temperature: 0.7,
-      maxOutputTokens: MAX_OUTPUT_TOKENS_GENERATION,
+      maxOutputTokens: getMaxOutputTokens('generation'),
     });
 
     // Track parsed files to emit them incrementally
@@ -87,7 +87,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       prompt: 'Generate the project based on the user request in the system instruction.',
       systemInstruction: systemInstruction,
       temperature: 0.7,
-      maxOutputTokens: MAX_OUTPUT_TOKENS_GENERATION,
+      maxOutputTokens: getMaxOutputTokens('generation'),
       responseSchema: PROJECT_OUTPUT_SCHEMA,
       signal: callbacks.signal,
       onChunk: (chunk: string, accumulatedLength: number) => {
