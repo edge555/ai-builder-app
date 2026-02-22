@@ -53,6 +53,8 @@ export interface AIResponse {
   errorCode?: string;
   /** Error type categorization */
   errorType?: 'timeout' | 'rate_limit' | 'api_error' | 'cancelled' | 'unknown';
+  /** ID of the model that generated the response */
+  modelId?: string;
   /** Number of retry attempts made */
   retryCount?: number;
   /** Token usage information */

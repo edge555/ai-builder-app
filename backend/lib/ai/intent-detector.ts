@@ -33,7 +33,7 @@ Rules:
 - When in doubt, output: coding`;
 
 export class IntentDetector {
-  constructor(private readonly agentRouter: AgentRouter) {}
+  constructor(private readonly agentRouter: AgentRouter) { }
 
   async detect(prompt: string, requestId?: string): Promise<TaskType> {
     const timer = new OperationTimer('intent-detect', requestId);
@@ -71,10 +71,11 @@ export class IntentDetector {
       const detected = VALID_TASK_TYPES.find((t) => raw.includes(t)) ?? FALLBACK_TASK;
 
       const metrics = timer.complete(true);
-      contextLogger.info('[intent-detector] Prompt classified', {
+      contextLogger.info(`[intent-detector] Prompt classified as: ${detected} | Model: ${response.modelId ?? 'unknown'} | Latency: ${metrics.durationMs}ms`, {
         ...formatMetrics(metrics),
         detected,
         raw,
+        modelId: response.modelId,
       });
 
       return detected;

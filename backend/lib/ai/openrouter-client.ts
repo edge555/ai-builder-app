@@ -53,7 +53,7 @@ export class OpenRouterClient implements AIProvider {
         const { content, usage } = await this.makeRequest(request, false);
 
         const metrics = timer.complete(true, { retryCount: attempt });
-        contextLogger.info('OpenRouter generate completed', {
+        contextLogger.info(`[openrouter-client] Request to ${this.model} | Tokens: ${usage?.prompt_tokens ?? 0}/${usage?.completion_tokens ?? 0} | Latency: ${metrics.durationMs}ms`, {
           ...formatMetrics(metrics),
           model: this.model,
           ...(usage && { inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens }),
@@ -62,6 +62,7 @@ export class OpenRouterClient implements AIProvider {
         return {
           success: true,
           content,
+          modelId: this.model,
           retryCount: attempt,
           ...(usage && {
             usage: {
@@ -102,6 +103,7 @@ export class OpenRouterClient implements AIProvider {
 
     return {
       success: false,
+      modelId: this.model,
       error: lastError?.message ?? 'Unknown error occurred',
       errorType,
       errorCode,
@@ -121,7 +123,7 @@ export class OpenRouterClient implements AIProvider {
         const content = await this.makeStreamingRequest(request);
 
         const metrics = timer.complete(true, { retryCount: attempt });
-        contextLogger.info('OpenRouter streaming completed', {
+        contextLogger.info(`[openrouter-client] Request to ${this.model} | Streaming | Latency: ${metrics.durationMs}ms`, {
           ...formatMetrics(metrics),
           model: this.model,
         });
@@ -129,6 +131,7 @@ export class OpenRouterClient implements AIProvider {
         return {
           success: true,
           content,
+          modelId: this.model,
           retryCount: attempt,
         };
       } catch (error) {
@@ -163,6 +166,7 @@ export class OpenRouterClient implements AIProvider {
 
     return {
       success: false,
+      modelId: this.model,
       error: lastError?.message ?? 'Unknown error occurred',
       errorType,
       errorCode,

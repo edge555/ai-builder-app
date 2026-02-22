@@ -9,6 +9,7 @@ import { createLogger } from '../logger';
 import { config } from '../config';
 import { load, getActiveModelsForTask } from './agent-config-store';
 import { OpenRouterClient } from './openrouter-client';
+import { OperationTimer, formatMetrics } from '../metrics';
 import type { AIProvider, AIRequest, AIStreamingRequest, AIResponse } from './ai-provider';
 import type { AgentConfig, TaskType } from './agent-config-types';
 
@@ -75,7 +76,7 @@ export class FallbackAIProvider implements AIProvider {
     private readonly taskType: TaskType,
     private readonly modelIds: string[],
     private readonly clients: OpenRouterClient[]
-  ) {}
+  ) { }
 
   async generate(request: AIRequest): Promise<AIResponse> {
     return this.runWithFallback('generate', request);
@@ -89,12 +90,14 @@ export class FallbackAIProvider implements AIProvider {
     method: 'generate' | 'generateStreaming',
     request: AIRequest | AIStreamingRequest
   ): Promise<AIResponse> {
+    const timer = new OperationTimer(`agent-router-${this.taskType}`, request.requestId);
     let lastResponse: AIResponse | null = null;
 
     for (let i = 0; i < this.clients.length; i++) {
       const modelId = this.modelIds[i];
+      const attemptTimer = new OperationTimer(`agent-router-attempt-${modelId}`, request.requestId);
 
-      logger.info('[agent-router] Trying model', {
+      logger.info(`[agent-router] Trying model`, {
         taskType: this.taskType,
         model: modelId,
         attempt: i + 1,
@@ -104,31 +107,38 @@ export class FallbackAIProvider implements AIProvider {
       const response = await this.clients[i][method](request as AIStreamingRequest);
       lastResponse = response;
 
+      const attemptMetrics = attemptTimer.complete(response.success);
+
       if (response.success) {
-        logger.info('[agent-router] Model succeeded', {
+        logger.info(`[agent-router] Task: ${this.taskType} | Model: ${modelId} | Status: success | Latency: ${attemptMetrics.durationMs}ms`, {
           taskType: this.taskType,
           model: modelId,
+          ...formatMetrics(attemptMetrics),
         });
+        timer.complete(true);
         return response;
       }
 
       // Model failed — log and try next
       if (i < this.clients.length - 1) {
-        logger.warn('[agent-router] Fallback triggered', {
+        logger.warn(`[agent-router] Fallback triggered: ${this.taskType} | Failed: ${modelId} | Next: ${this.modelIds[i + 1]}`, {
           taskType: this.taskType,
           failed: modelId,
           next: this.modelIds[i + 1],
           error: response.error,
+          latency: attemptMetrics.durationMs,
         });
       } else {
-        logger.error('[agent-router] All models exhausted', {
+        logger.error(`[agent-router] Task: ${this.taskType} | Model: ${modelId} | Status: failed | Latency: ${attemptMetrics.durationMs}ms`, {
           taskType: this.taskType,
-          failed: modelId,
+          model: modelId,
           error: response.error,
+          ...formatMetrics(attemptMetrics),
         });
       }
     }
 
+    timer.complete(false);
     // All models failed — return the last response
     return lastResponse!;
   }

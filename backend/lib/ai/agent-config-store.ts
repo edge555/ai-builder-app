@@ -5,7 +5,7 @@ import type { AgentConfig, TaskType, ModelEntry } from './agent-config-types';
 
 const logger = createLogger('agent-config-store');
 
-const CONFIG_PATH = join(__dirname, '../../data/agent-config.json');
+const CONFIG_PATH = join(process.cwd(), 'data/agent-config.json');
 
 const TASK_TYPES: TaskType[] = ['intent', 'planning', 'coding', 'debugging', 'documentation'];
 
