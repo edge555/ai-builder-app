@@ -4,7 +4,7 @@ import { Routes, Route, useNavigate } from 'react-router-dom';
 import { storageService, type ProjectMetadata } from '@/services/storage';
 import { createLogger } from '@/utils/logger';
 
-import { WelcomePage, BuilderPage } from './pages';
+import { WelcomePage, BuilderPage, AgentSettingsPage } from './pages';
 import './App.css';
 
 const appLogger = createLogger('App');
@@ -81,6 +81,7 @@ function App() {
         }
       />
       <Route path="/project/:projectId" element={<BuilderPage />} />
+      <Route path="/settings/agents" element={<AgentSettingsPage />} />
     </Routes>
   );
 }

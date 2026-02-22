@@ -1,5 +1,6 @@
-import { Sparkles, ArrowLeft, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Sparkles, ArrowLeft, PanelLeftClose, PanelLeft, Settings } from 'lucide-react';
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -64,6 +65,7 @@ export interface AppLayoutProps {
  * Requirements: 8.1, 9.1
  */
 export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) {
+    const navigate = useNavigate();
     const { undo, redo, submitPrompt } = useSubmitPrompt();
     const { projectState, canUndo, canRedo } = useProjectState();
     const { renameProject } = useProjectActions();
@@ -215,6 +217,14 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                             />
                         </div>
                         <ExportButton />
+                        <button
+                            className="settings-button"
+                            onClick={() => navigate('/settings/agents')}
+                            aria-label="Agent Settings"
+                            title="Agent Settings"
+                        >
+                            <Settings size={18} />
+                        </button>
                     </div>
                 </div>
             </header>

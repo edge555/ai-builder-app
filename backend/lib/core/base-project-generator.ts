@@ -5,7 +5,6 @@
 
 import type { FileDiff, RepairAttempt } from '@ai-app-builder/shared';
 import type { AIProvider } from '../ai';
-import { createAIProvider } from '../ai';
 import { ValidationPipeline } from './validation-pipeline';
 import { BuildValidator, createBuildValidator } from './build-validator';
 import { buildFixPrompt, type BuildFixMode } from './prompts/build-fix-prompt';
@@ -27,8 +26,8 @@ export abstract class BaseProjectGenerator {
     protected readonly buildValidator: BuildValidator;
     protected readonly maxBuildRetries = 3;
 
-    constructor(aiProvider?: AIProvider) {
-        this.aiProvider = aiProvider ?? createAIProvider();
+    constructor(aiProvider: AIProvider) {
+        this.aiProvider = aiProvider;
         this.validationPipeline = new ValidationPipeline();
         this.buildValidator = createBuildValidator();
     }

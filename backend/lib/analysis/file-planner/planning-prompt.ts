@@ -10,14 +10,13 @@
 
 import type { PlanningResponse } from './types';
 import { PlanningResponseSchema } from '../../core/schemas';
-import { toGeminiSchema } from '../../core/gemini-schema-converter';
+import { toSimpleJsonSchema } from '../../core/zod-to-json-schema';
 
 import { getProviderPromptConfig } from '../../core/prompts/provider-prompt-config';
 
 /**
  * System prompt for the AI planning call.
  * Instructs the AI to select files based on the user's modification request.
- * @deprecated Use getPlanningSystemPrompt() instead for provider-aware guidance.
  */
 export const PLANNING_SYSTEM_PROMPT = `You are a code planning assistant. Your task is to analyze a user's modification request and select which files from the project need to be included for the modification.
 
@@ -66,7 +65,7 @@ export function getPlanningSystemPrompt(): string {
  * JSON schema for the planning response.
  * Used to validate and parse AI responses.
  */
-export const PLANNING_OUTPUT_SCHEMA = toGeminiSchema(PlanningResponseSchema);
+export const PLANNING_OUTPUT_SCHEMA = toSimpleJsonSchema(PlanningResponseSchema);
 
 /**
  * Recommended temperature for planning calls.

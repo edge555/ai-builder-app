@@ -33,9 +33,9 @@ describe('getPlanningSystemPrompt', () => {
     expect(prompt).toContain('JSON');
   });
 
-  it('should NOT include JSON reminder when AI_PROVIDER is gemini', () => {
+  it('should NOT include JSON reminder when AI_PROVIDER is openrouter', () => {
     const originalProvider = process.env.AI_PROVIDER;
-    process.env.AI_PROVIDER = 'gemini';
+    process.env.AI_PROVIDER = 'openrouter';
     try {
       const prompt = getPlanningSystemPrompt();
       expect(prompt).not.toContain('=== JSON OUTPUT REMINDER');

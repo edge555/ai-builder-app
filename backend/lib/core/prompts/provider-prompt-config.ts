@@ -6,7 +6,7 @@
  */
 
 export interface ProviderPromptConfig {
-  provider: 'gemini' | 'modal';
+  provider: 'modal' | 'openrouter';
   /** Approximate output token budget to communicate to the model */
   outputBudgetTokens: number;
   /** Whether to include detailed React/CSS/JSON guidance (for less capable models) */
@@ -18,7 +18,7 @@ export interface ProviderPromptConfig {
  * AI_PROVIDER does not change at runtime, so this is safe.
  */
 const _cachedConfig: ProviderPromptConfig = (() => {
-  const provider = (process.env.AI_PROVIDER ?? 'gemini') as 'gemini' | 'modal';
+  const provider = (process.env.AI_PROVIDER ?? 'openrouter') as 'modal' | 'openrouter';
 
   if (provider === 'modal') {
     return {
@@ -29,7 +29,7 @@ const _cachedConfig: ProviderPromptConfig = (() => {
   }
 
   return {
-    provider: 'gemini',
+    provider: 'openrouter',
     outputBudgetTokens: 15000,
     includeDetailedGuidance: false,
   };

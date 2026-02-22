@@ -120,11 +120,11 @@ export function getGenerationPrompt(userPrompt: string): string {
 }
 
 import { ProjectOutputSchema } from '../schemas';
-import { toGeminiSchema } from '../gemini-schema-converter';
+import { toSimpleJsonSchema } from '../zod-to-json-schema';
 
 /**
  * JSON Schema for project generation output.
- * Forces Gemini to return properly structured JSON.
- * Note: Gemini API doesn't support additionalProperties, so we use an array structure instead.
+ * Forces the AI to return properly structured JSON.
+ * Note: Some providers don't support additionalProperties, so we use an array structure instead.
  */
-export const PROJECT_OUTPUT_SCHEMA = toGeminiSchema(ProjectOutputSchema);
+export const PROJECT_OUTPUT_SCHEMA = toSimpleJsonSchema(ProjectOutputSchema);

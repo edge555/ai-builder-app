@@ -1,0 +1,388 @@
+.agent-settings-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--background));
+}
+
+/* Header */
+.agent-settings-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 12px 24px;
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.agent-settings-header-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.agent-settings-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: transparent;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition: all 150ms ease;
+  flex-shrink: 0;
+}
+
+.agent-settings-back-btn:hover {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.05);
+  color: hsl(var(--primary));
+}
+
+.agent-settings-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  flex: 1;
+}
+
+.agent-settings-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--gradient-primary);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms ease;
+  flex-shrink: 0;
+}
+
+.agent-settings-save-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px hsl(262 83% 58% / 0.3);
+}
+
+.agent-settings-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Status message */
+.agent-settings-status {
+  max-width: 800px;
+  margin: 12px auto 0;
+  width: calc(100% - 48px);
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: center;
+  animation: fadeInUp 200ms ease;
+}
+
+.agent-settings-status-success {
+  background: hsl(150 60% 50% / 0.1);
+  color: hsl(150 60% 40%);
+  border: 1px solid hsl(150 60% 50% / 0.2);
+}
+
+.agent-settings-status-error {
+  background: hsl(0 70% 50% / 0.1);
+  color: hsl(0 70% 45%);
+  border: 1px solid hsl(0 70% 50% / 0.2);
+}
+
+/* Tabs */
+.agent-settings-tabs {
+  display: flex;
+  gap: 4px;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 16px 24px 0;
+  border-bottom: 1px solid hsl(var(--border));
+  overflow-x: auto;
+}
+
+.agent-settings-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms ease;
+  white-space: nowrap;
+  margin-bottom: -1px;
+}
+
+.agent-settings-tab:hover {
+  color: hsl(var(--foreground));
+}
+
+.agent-settings-tab-active {
+  color: hsl(var(--primary));
+  border-bottom-color: hsl(var(--primary));
+}
+
+.agent-settings-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: hsl(var(--muted));
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.agent-settings-tab-active .agent-settings-tab-count {
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+}
+
+/* Content */
+.agent-settings-content {
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 24px;
+  flex: 1;
+}
+
+/* Model list */
+.agent-settings-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.agent-settings-empty {
+  padding: 40px 24px;
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+  border: 1px dashed hsl(var(--border));
+  border-radius: var(--radius);
+}
+
+.agent-settings-model-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  transition: all 150ms ease;
+}
+
+.agent-settings-model-row:hover {
+  border-color: hsl(var(--border) / 0.8);
+  background: hsl(var(--muted) / 0.3);
+}
+
+.agent-settings-model-row-inactive {
+  opacity: 0.5;
+}
+
+.agent-settings-model-checkbox input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: hsl(var(--primary));
+}
+
+.agent-settings-model-priority {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.agent-settings-model-id {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-settings-model-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Icon buttons */
+.agent-settings-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.agent-settings-icon-btn:hover:not(:disabled) {
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.05);
+}
+
+.agent-settings-icon-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.agent-settings-icon-btn-danger:hover:not(:disabled) {
+  border-color: hsl(0 70% 50%);
+  color: hsl(0 70% 50%);
+  background: hsl(0 70% 50% / 0.05);
+}
+
+/* Add model */
+.agent-settings-add-model {
+  display: flex;
+  gap: 8px;
+}
+
+.agent-settings-add-model-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  transition: all 150ms ease;
+}
+
+.agent-settings-add-model-input:focus {
+  outline: none;
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1);
+}
+
+.agent-settings-add-model-input::placeholder {
+  color: hsl(var(--muted-foreground));
+  font-family: inherit;
+}
+
+.agent-settings-add-model-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.agent-settings-add-model-btn:hover:not(:disabled) {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.05);
+  color: hsl(var(--primary));
+}
+
+.agent-settings-add-model-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Loading state */
+.agent-settings-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 80px 24px;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+}
+
+/* Spinner animation */
+.agent-settings-spinner {
+  animation: agent-settings-spin 1s linear infinite;
+}
+
+@keyframes agent-settings-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .agent-settings-header {
+    padding: 10px 16px;
+  }
+
+  .agent-settings-tabs {
+    padding: 12px 16px 0;
+  }
+
+  .agent-settings-tab {
+    padding: 8px 12px;
+    font-size: 0.8125rem;
+  }
+
+  .agent-settings-content {
+    padding: 16px;
+  }
+
+  .agent-settings-add-model {
+    flex-direction: column;
+  }
+
+  .agent-settings-save-btn span {
+    display: none;
+  }
+
+  .agent-settings-save-btn {
+    padding: 8px 12px;
+  }
+}

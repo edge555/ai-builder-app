@@ -1,16 +1,16 @@
 /**
- * Gemini Schema Converter
- * Converts Zod schemas to Gemini-compatible JSON schema format.
+ * Zod to JSON Schema Converter
+ * Converts Zod schemas to a simplified JSON schema format compatible with LLMs.
  */
 
 import { z } from 'zod';
 
-export type GeminiSchema = {
+export type SimpleJsonSchema = {
   type?: 'object' | 'array' | 'string' | 'number';
   description?: string;
-  properties?: Record<string, GeminiSchema>;
+  properties?: Record<string, SimpleJsonSchema>;
   required?: string[];
-  items?: GeminiSchema;
+  items?: SimpleJsonSchema;
   enum?: string[];
 };
 
@@ -47,11 +47,11 @@ function resolveShape(shape: ZodDef['shape']): Record<string, z.ZodTypeAny> | un
 }
 
 /**
- * Convert Zod schema to Gemini-compatible JSON schema.
- * Compatible with Zod 4.x
+ * Convert Zod schema to a simplified JSON schema.
+ * This format is understood by both Gemini and OpenRouter (via json_schema format).
  */
-export function toGeminiSchema(schema: z.ZodTypeAny): GeminiSchema {
-  const result: GeminiSchema = {};
+export function toSimpleJsonSchema(schema: z.ZodTypeAny): SimpleJsonSchema {
+  const result: SimpleJsonSchema = {};
 
   // Get description from various possible locations (Zod 4 compatibility)
   const def = getZodDef(schema);
@@ -70,12 +70,12 @@ export function toGeminiSchema(schema: z.ZodTypeAny): GeminiSchema {
     const shape = resolveShape(
       (schema as { shape?: ZodDef['shape'] }).shape ?? def?.shape
     );
-    const properties: Record<string, GeminiSchema> = {};
+    const properties: Record<string, SimpleJsonSchema> = {};
     const required: string[] = [];
 
     if (shape) {
       for (const [key, value] of Object.entries(shape)) {
-        properties[key] = toGeminiSchema(value);
+        properties[key] = toSimpleJsonSchema(value);
         const valueType =
           (value as { type?: string }).type ?? getZodDef(value)?.type;
         if (valueType !== 'optional' && valueType !== 'default') {
@@ -94,7 +94,7 @@ export function toGeminiSchema(schema: z.ZodTypeAny): GeminiSchema {
     const innerSchema =
       (schema as { element?: z.ZodTypeAny }).element ?? def?.element;
     if (innerSchema instanceof z.ZodType) {
-      result.items = toGeminiSchema(innerSchema);
+      result.items = toSimpleJsonSchema(innerSchema);
     } else {
       result.items = { type: 'string' };
     }
@@ -111,13 +111,13 @@ export function toGeminiSchema(schema: z.ZodTypeAny): GeminiSchema {
       (schema as { unwrap?: () => z.ZodTypeAny }).unwrap?.() ??
       def?.innerType;
     if (innerType instanceof z.ZodType) {
-      return toGeminiSchema(innerType);
+      return toSimpleJsonSchema(innerType);
     }
     result.type = 'string';
   } else if (schemaType === 'default' || schema instanceof z.ZodDefault) {
     const innerType = def?.innerType;
     if (innerType instanceof z.ZodType) {
-      return toGeminiSchema(innerType);
+      return toSimpleJsonSchema(innerType);
     }
     result.type = 'string';
   } else if (schemaType === 'discriminatedUnion' || schemaType === 'union') {
@@ -127,12 +127,12 @@ export function toGeminiSchema(schema: z.ZodTypeAny): GeminiSchema {
 
     if (options && Array.isArray(options) && options.length > 0) {
       result.type = 'object';
-      const allProperties: Record<string, GeminiSchema> = {};
+      const allProperties: Record<string, SimpleJsonSchema> = {};
       const propertyCounts: Record<string, number> = {};
 
       // Process each variant (should be objects)
       for (const variant of options) {
-        const variantSchema = toGeminiSchema(variant);
+        const variantSchema = toSimpleJsonSchema(variant);
 
         if (variantSchema.type === 'object' && variantSchema.properties) {
           for (const [key, value] of Object.entries(variantSchema.properties)) {

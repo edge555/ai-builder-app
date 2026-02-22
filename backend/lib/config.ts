@@ -5,7 +5,7 @@ import {
   MAX_COMPONENT_LINES,
   MAX_APP_LINES,
   API_REQUEST_TIMEOUT,
-  GEMINI_TIMEOUT,
+  OPENROUTER_TIMEOUT,
   MAX_OUTPUT_TOKENS_GENERATION,
   MAX_OUTPUT_TOKENS_MODIFICATION,
   MAX_OUTPUT_TOKENS_PLANNING,
@@ -20,11 +20,8 @@ const logger = createLogger('config');
  * Zod schema for backend environment variables.
  */
 const envSchema = z.object({
-  AI_PROVIDER: z.enum(['gemini', 'modal']).default('gemini'),
-  GEMINI_API_KEY: z.string().default(''),
-  GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
-  GEMINI_EASY_MODEL: z.string().default('gemini-2.5-flash-lite'),
-  GEMINI_HARD_MODEL: z.string().default('gemini-2.5-flash'),
+  AI_PROVIDER: z.enum(['modal', 'openrouter']).default('openrouter'),
+  OPENROUTER_API_KEY: z.string().optional(),
   MODAL_API_URL: z.string().url().optional(),
   MODAL_STREAM_API_URL: z.string().url().optional(),
   MODAL_API_KEY: z.string().optional(),
@@ -52,8 +49,8 @@ export function validateEnv() {
   const data = result.data;
 
   // Conditional validation: require provider-specific vars
-  if (data.AI_PROVIDER === 'gemini' && !data.GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is required when AI_PROVIDER=gemini');
+  if (data.AI_PROVIDER === 'openrouter' && !data.OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY is required when AI_PROVIDER=openrouter');
   }
   if (data.AI_PROVIDER === 'modal' && !data.MODAL_API_URL) {
     throw new Error('MODAL_API_URL is required when AI_PROVIDER=modal');
@@ -76,15 +73,10 @@ export interface BackendConfig {
     maxRetries: number;
     retryBaseDelay: number;
   };
-  ai: {
-    maxOutputTokens: number;
-    temperature: number;
-    model: string;
-    easyModel: string;
-    hardModel: string;
-  };
   provider: {
-    name: 'gemini' | 'modal';
+    name: 'modal' | 'openrouter';
+    openrouterApiKey?: string;
+    openrouterTimeout: number;
     modalApiUrl?: string;
     modalStreamApiUrl?: string;
     modalApiKey?: string;
@@ -119,15 +111,10 @@ export const config: BackendConfig = {
     maxRetries: 3,
     retryBaseDelay: 1000,
   },
-  ai: {
-    maxOutputTokens: env.MAX_OUTPUT_TOKENS,
-    temperature: 0.7,
-    model: env.GEMINI_MODEL,
-    easyModel: env.GEMINI_EASY_MODEL,
-    hardModel: env.GEMINI_HARD_MODEL,
-  },
   provider: {
     name: env.AI_PROVIDER,
+    openrouterApiKey: env.OPENROUTER_API_KEY,
+    openrouterTimeout: OPENROUTER_TIMEOUT,
     modalApiUrl: env.MODAL_API_URL,
     modalStreamApiUrl: env.MODAL_STREAM_API_URL,
     modalApiKey: env.MODAL_API_KEY,
@@ -142,15 +129,13 @@ export const config: BackendConfig = {
 // Log configuration on startup
 logger.info('Backend configuration loaded', {
   aiProvider: config.provider.name,
+  ...(config.provider.name === 'openrouter' && {
+    hasOpenrouterApiKey: !!config.provider.openrouterApiKey,
+  }),
   ...(config.provider.name === 'modal' && {
     modalApiUrl: config.provider.modalApiUrl,
     modalStreamApiUrl: config.provider.modalStreamApiUrl,
     hasModalApiKey: !!config.provider.modalApiKey,
-  }),
-  ...(config.provider.name === 'gemini' && {
-    geminiModel: config.ai.model,
-    geminiEasyModel: config.ai.easyModel,
-    geminiHardModel: config.ai.hardModel,
   }),
 });
 
@@ -183,7 +168,7 @@ export {
   MAX_COMPONENT_LINES,
   MAX_APP_LINES,
   API_REQUEST_TIMEOUT,
-  GEMINI_TIMEOUT,
+  OPENROUTER_TIMEOUT,
   VALID_CODE_EXTENSIONS,
   VALID_STYLE_EXTENSIONS,
 } from './constants';

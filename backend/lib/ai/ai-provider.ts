@@ -1,19 +1,72 @@
 /**
  * AI Provider Interface
- * Defines the contract that all AI providers (Gemini, Modal, etc.) must implement.
- * Type aliases reference existing Gemini types which are already provider-agnostic in shape.
+ * Defines the contract that all AI providers (OpenRouter, Modal, etc.) must implement.
  */
 
-import type { GeminiRequest, GeminiStreamingRequest, GeminiResponse } from './gemini-types';
-
 /** Provider-agnostic request type */
-export type AIRequest = GeminiRequest;
+export interface AIRequest {
+  /** The prompt to send to the AI */
+  prompt: string;
+  /** System instruction for the model */
+  systemInstruction?: string;
+  /**
+   * Optional configuration for cached content.
+   * Allows splitting system instructions into static (cacheable) and dynamic parts.
+   */
+  cacheConfig?: {
+    /** Static, cacheable portion of the system instruction */
+    staticInstruction: string;
+    /** Dynamic, per-request portion of the system instruction */
+    dynamicInstruction?: string;
+    /**
+     * Optional logical cache identifier.
+     */
+    cacheId?: string;
+  };
+  /** Temperature for response generation (0-1) */
+  temperature?: number;
+  /** Maximum tokens in response */
+  maxOutputTokens?: number;
+  /** JSON schema for structured output */
+  responseSchema?: object;
+  /** Optional abort signal for request cancellation */
+  signal?: AbortSignal;
+  /** Optional request ID for correlation and tracking */
+  requestId?: string;
+}
 
 /** Provider-agnostic streaming request type */
-export type AIStreamingRequest = GeminiStreamingRequest;
+export interface AIStreamingRequest extends AIRequest {
+  /** Callback for each chunk of streamed content */
+  onChunk?: (chunk: string, accumulatedLength: number) => void;
+}
 
 /** Provider-agnostic response type */
-export type AIResponse = GeminiResponse;
+export interface AIResponse {
+  /** Whether the request was successful */
+  success: boolean;
+  /** The generated text content */
+  content?: string;
+  /** Error message if unsuccessful */
+  error?: string;
+  /** Error code for programmatic handling */
+  errorCode?: string;
+  /** Error type categorization */
+  errorType?: 'timeout' | 'rate_limit' | 'api_error' | 'cancelled' | 'unknown';
+  /** Number of retry attempts made */
+  retryCount?: number;
+  /** Token usage information */
+  usage?: {
+    /** Number of input tokens */
+    inputTokens?: number;
+    /** Number of output tokens */
+    outputTokens?: number;
+    /** Total tokens used */
+    totalTokens?: number;
+  };
+  /** Partial content if streaming was interrupted */
+  partialContent?: string;
+}
 
 /**
  * Interface that all AI providers must implement.

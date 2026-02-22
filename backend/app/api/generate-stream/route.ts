@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
           }, STREAM_TIMEOUT_MS);
 
           // Generate project with streaming callbacks
-          const generator = createStreamingProjectGenerator();
+          const generator = await createStreamingProjectGenerator();
 
           const result = await generator.generateProjectStreaming(body.description, {
             signal: request.signal,
