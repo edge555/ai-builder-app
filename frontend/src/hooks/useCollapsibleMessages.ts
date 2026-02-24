@@ -91,14 +91,18 @@ export function useCollapsibleMessages(messages: ChatMessage[]) {
         return collapsedIds.size > 0;
     }, [collapsedIds]);
 
-    return {
-        isCollapsed,
-        canCollapse,
-        toggle,
-        collapseAll,
-        expandAll,
-        allCollapsed,
-        anyCollapsed,
-        hasCollapsibleMessages: collapsibleIds.length > 0,
-    };
+    return useMemo(
+        () => ({
+            isCollapsed,
+            canCollapse,
+            toggle,
+            collapseAll,
+            expandAll,
+            allCollapsed,
+            anyCollapsed,
+            hasCollapsibleMessages: collapsibleIds.length > 0,
+        }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [isCollapsed, canCollapse, toggle, collapseAll, expandAll, allCollapsed, anyCollapsed, collapsibleIds.length]
+    );
 }

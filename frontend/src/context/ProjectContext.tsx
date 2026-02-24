@@ -23,12 +23,19 @@ export interface ProjectProviderProps {
  * Provider for project state management.
  * Manages project state, undo/redo, and version callbacks.
  * Provides three contexts: state-only, actions-only, and combined (for backward compat).
+ *
+ * All action callbacks are stable (never change reference) by using refs
+ * to access latest state. This prevents cascading re-renders in action consumers.
  */
 export function ProjectProvider({ children, initialState }: ProjectProviderProps) {
   const [projectState, setProjectStateInternal] = useState<SerializedProjectState | null>(initialState ?? null);
   const versionCallbacksRef = useRef<VersionCallbacks>({});
 
-  // Undo/Redo hook
+  // Ref for accessing latest projectState inside stable callbacks
+  const projectStateRef = useRef(projectState);
+  projectStateRef.current = projectState;
+
+  // Undo/Redo hook — pushState, undo, redo are now stable callbacks
   const undoRedo = useUndoRedo(projectState);
 
   /**
@@ -41,17 +48,18 @@ export function ProjectProvider({ children, initialState }: ProjectProviderProps
   /**
    * Sets the project state and notifies callbacks.
    * Optionally saves to undo stack.
+   * Stable callback — reads projectState via ref.
    */
   const setProjectState = useCallback((newState: SerializedProjectState | null, saveToUndo = false) => {
     // Save current state to undo stack before changing
-    if (saveToUndo && projectState) {
-      undoRedo.pushState(projectState);
+    if (saveToUndo && projectStateRef.current) {
+      undoRedo.pushState(projectStateRef.current);
     }
     setProjectStateInternal(newState);
     if (newState && versionCallbacksRef.current.onProjectStateChanged) {
       versionCallbacksRef.current.onProjectStateChanged(newState);
     }
-  }, [projectState, undoRedo]);
+  }, [undoRedo.pushState]);
 
   /**
    * Undo to previous project state.
@@ -61,7 +69,7 @@ export function ProjectProvider({ children, initialState }: ProjectProviderProps
     if (previousState) {
       setProjectStateInternal(previousState);
     }
-  }, [undoRedo]);
+  }, [undoRedo.undo]);
 
   /**
    * Redo to next project state.
@@ -71,23 +79,25 @@ export function ProjectProvider({ children, initialState }: ProjectProviderProps
     if (nextState) {
       setProjectStateInternal(nextState);
     }
-  }, [undoRedo]);
+  }, [undoRedo.redo]);
 
   /**
    * Renames the current project.
    * Updates the project name and updatedAt timestamp.
+   * Stable callback — reads projectState via ref.
    */
   const renameProject = useCallback((newName: string) => {
-    if (!projectState) return;
+    const current = projectStateRef.current;
+    if (!current) return;
 
     const updatedState: SerializedProjectState = {
-      ...projectState,
+      ...current,
       name: newName,
       updatedAt: new Date().toISOString(),
     };
 
     setProjectState(updatedState, false);
-  }, [projectState, setProjectState]);
+  }, [setProjectState]);
 
   // State context: re-renders subscribers when projectState or undo/redo flags change.
   const stateValue = useMemo<ProjectStateValue>(() => ({

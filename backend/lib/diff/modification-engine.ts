@@ -69,7 +69,7 @@ export class ModificationEngine {
   async modifyProject(
     projectState: ProjectState,
     prompt: string,
-    options?: { skipPlanning?: boolean }
+    options?: { skipPlanning?: boolean; requestId?: string }
   ): Promise<ModificationResult> {
     if (!prompt || prompt.trim() === '') {
       return {
@@ -85,20 +85,24 @@ export class ModificationEngine {
       };
     }
 
+    const contextLogger = options?.requestId ? logger.withRequestId(options.requestId) : logger;
+    const requestId = options?.requestId;
+
     try {
       // Step 1: Select code slices and determine category
       const { slices, category } = await this.selectCodeSlices(projectState, prompt, options?.skipPlanning);
 
       // Step 2: Determine if design system should be included based on category
       const includeDesignSystem = category === 'ui' || category === 'style' || category === 'mixed';
-      logger.debug('System instruction determined', { category, includeDesignSystem });
+      contextLogger.debug('System instruction determined', { category, includeDesignSystem });
 
       // Step 3: Generate modifications with retry logic
       const modificationResult = await this.generateModifications(
         prompt,
         slices,
         projectState,
-        includeDesignSystem
+        includeDesignSystem,
+        requestId
       );
 
       if (!modificationResult.success || !modificationResult.updatedFiles || !modificationResult.deletedFiles) {
@@ -124,7 +128,8 @@ export class ModificationEngine {
         updatedFiles,
         prompt,
         slices,
-        includeDesignSystem
+        includeDesignSystem,
+        requestId
       );
 
       // Use the potentially updated files from build validation
@@ -180,7 +185,8 @@ export class ModificationEngine {
     prompt: string,
     slices: CodeSlice[],
     projectState: ProjectState,
-    includeDesignSystem: boolean
+    includeDesignSystem: boolean,
+    requestId?: string
   ): Promise<{
     success: boolean;
     error?: string;
@@ -229,6 +235,7 @@ export class ModificationEngine {
         temperature: 0.7,
         maxOutputTokens: getMaxOutputTokens('modification'),
         responseSchema: MODIFICATION_OUTPUT_SCHEMA,
+        requestId,
       });
 
       // Log what we received from Gemini
@@ -415,7 +422,8 @@ export class ModificationEngine {
     updatedFiles: Record<string, string | null>,
     prompt: string,
     slices: CodeSlice[],
-    includeDesignSystem: boolean
+    includeDesignSystem: boolean,
+    requestId?: string
   ): Promise<{ updatedFiles: Record<string, string | null> }> {
     // Create a temporary view of what the project will look like
     const tempFiles = { ...projectState.files };
@@ -461,6 +469,7 @@ export class ModificationEngine {
         temperature: 0.5,
         maxOutputTokens: getMaxOutputTokens('modification'),
         responseSchema: MODIFICATION_OUTPUT_SCHEMA,
+        requestId,
       });
 
       if (!fixResponse.success || !fixResponse.content) {

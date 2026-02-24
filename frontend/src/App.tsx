@@ -1,11 +1,16 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 
+import { PageSkeleton } from '@/components/PageSkeleton/PageSkeleton';
 import { storageService, type ProjectMetadata } from '@/services/storage';
 import { createLogger } from '@/utils/logger';
 
-import { WelcomePage, BuilderPage, AgentSettingsPage } from './pages';
 import './App.css';
+
+// Route-level code splitting: each page loads as a separate chunk
+const WelcomePage = lazy(() => import('./pages/WelcomePage'));
+const BuilderPage = lazy(() => import('./pages/BuilderPage'));
+const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 
 const appLogger = createLogger('App');
 
@@ -74,14 +79,30 @@ function App() {
       <Route
         path="/"
         element={
-          <WelcomePageWrapper
-            savedProjects={savedProjects}
-            onProjectsChanged={refreshProjectList}
-          />
+          <Suspense fallback={<PageSkeleton />}>
+            <WelcomePageWrapper
+              savedProjects={savedProjects}
+              onProjectsChanged={refreshProjectList}
+            />
+          </Suspense>
         }
       />
-      <Route path="/project/:projectId" element={<BuilderPage />} />
-      <Route path="/settings/agents" element={<AgentSettingsPage />} />
+      <Route
+        path="/project/:projectId"
+        element={
+          <Suspense fallback={<PageSkeleton />}>
+            <BuilderPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/settings/agents"
+        element={
+          <Suspense fallback={<PageSkeleton />}>
+            <AgentSettingsPage />
+          </Suspense>
+        }
+      />
     </Routes>
   );
 }

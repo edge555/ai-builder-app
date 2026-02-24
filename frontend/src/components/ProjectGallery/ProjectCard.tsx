@@ -11,6 +11,8 @@ export interface ProjectCardProps {
   onRename: (projectId: string, newName: string) => void;
   onDuplicate: (projectId: string) => void;
   onDelete: (projectId: string) => void;
+  /** Called on mouseenter — used to preload the BuilderPage chunk before click. */
+  onPreload?: () => void;
 }
 
 /**
@@ -70,6 +72,7 @@ export function ProjectCard({
   onRename,
   onDuplicate,
   onDelete,
+  onPreload,
 }: ProjectCardProps) {
   const handleCardClick = (e: MouseEvent) => {
     // Don't trigger open if clicking on action buttons or editable name
@@ -99,6 +102,7 @@ export function ProjectCard({
     <article
       className="project-card"
       onClick={handleCardClick}
+      onMouseEnter={onPreload}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {

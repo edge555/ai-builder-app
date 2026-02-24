@@ -1,12 +1,14 @@
 /**
  * Shared API Utilities
- * 
+ *
  * Provides common utilities for API routes including CORS headers,
  * error response formatting, and response helpers.
- * 
+ *
  * Implements Requirements 1.1, 1.2, 1.3, 1.4, 1.5
  */
 
+import { gzip } from 'zlib';
+import { promisify } from 'util';
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import type { ErrorResponse, ApiError } from '@ai-app-builder/shared/types';
@@ -16,6 +18,7 @@ import { AppError } from './error';
 import { createLogger } from '../logger';
 
 const logger = createLogger('api/utils');
+const gzipAsync = promisify(gzip);
 
 /**
  * Options for creating an error response
@@ -169,6 +172,72 @@ export function handleOptions(): NextResponse {
  */
 export function jsonResponse<T>(data: T, status = 200, request?: Request): NextResponse<T> {
   return NextResponse.json(data, { status, headers: getCorsHeaders(request) });
+}
+
+/**
+ * Options for gzipJson.
+ */
+export interface GzipJsonOptions {
+  /** HTTP status code (default: 200) */
+  status?: number;
+  /** Extra headers to include alongside CORS and compression headers */
+  headers?: Record<string, string>;
+  /** The incoming request — used for CORS and to check Accept-Encoding */
+  request?: Request;
+}
+
+/**
+ * Returns a gzip-compressed JSON response when the client supports it.
+ *
+ * Next.js `compress: true` in next.config.js only applies to page/static
+ * responses, NOT to App Router Route Handlers that return a raw NextResponse.
+ * This helper fills that gap for large JSON payloads (e.g. /api/modify,
+ * /api/generate) where the savings are most significant.
+ *
+ * Falls back to plain `NextResponse.json()` if the client doesn't advertise
+ * `Accept-Encoding: gzip` or if gzip fails.
+ *
+ * @param data    - Serialisable response body
+ * @param options - Status, extra headers, and the incoming request
+ */
+export async function gzipJson<T>(
+  data: T,
+  options: GzipJsonOptions = {}
+): Promise<Response> {
+  const { status = 200, headers: extraHeaders = {}, request } = options;
+  const corsHeaders = getCorsHeaders(request);
+
+  // Only compress if the client advertises gzip support
+  const acceptEncoding = request?.headers.get('accept-encoding') ?? '';
+  const clientAcceptsGzip = acceptEncoding.includes('gzip');
+
+  if (clientAcceptsGzip) {
+    try {
+      const json = JSON.stringify(data);
+      const compressed = await gzipAsync(Buffer.from(json, 'utf-8'));
+
+      return new Response(compressed, {
+        status,
+        headers: {
+          ...corsHeaders,
+          ...extraHeaders,
+          'Content-Type': 'application/json',
+          'Content-Encoding': 'gzip',
+          'Vary': 'Accept-Encoding',
+        },
+      });
+    } catch (err) {
+      logger.warn('gzip compression failed, falling back to uncompressed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // Fallback: plain JSON
+  return NextResponse.json(data, {
+    status,
+    headers: { ...corsHeaders, ...extraHeaders, 'Vary': 'Accept-Encoding' },
+  }) as Response;
 }
 
 /**

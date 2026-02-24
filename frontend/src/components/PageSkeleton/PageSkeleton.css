@@ -1,0 +1,26 @@
+.page-skeleton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    height: 100dvh;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+    color: hsl(var(--muted-foreground));
+    background: hsl(var(--background));
+}
+
+.page-skeleton-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid hsl(var(--muted-foreground) / 0.25);
+    border-top-color: hsl(var(--primary));
+    border-radius: 50%;
+    animation: page-skeleton-spin 0.8s linear infinite;
+}
+
+@keyframes page-skeleton-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

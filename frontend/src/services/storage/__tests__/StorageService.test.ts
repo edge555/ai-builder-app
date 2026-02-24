@@ -374,4 +374,73 @@ describe('StorageService', () => {
       });
     });
   });
+
+  describe('Write coalescing', () => {
+    it('should coalesce concurrent writes to the same project (latest wins)', async () => {
+      // Fire multiple saves for the same project ID without awaiting
+      const save1 = storageService.saveProject({
+        ...mockProject,
+        id: 'coalesce-test',
+        name: 'Version 1',
+      });
+
+      const save2 = storageService.saveProject({
+        ...mockProject,
+        id: 'coalesce-test',
+        name: 'Version 2',
+      });
+
+      const save3 = storageService.saveProject({
+        ...mockProject,
+        id: 'coalesce-test',
+        name: 'Version 3',
+      });
+
+      await Promise.all([save1, save2, save3]);
+
+      const retrieved = await storageService.getProject('coalesce-test');
+      expect(retrieved).toBeDefined();
+      // Latest write should win
+      expect(retrieved?.name).toBe('Version 3');
+    });
+
+    it('should not coalesce writes for different project IDs', async () => {
+      const saveA = storageService.saveProject({
+        ...mockProject,
+        id: 'project-a',
+        name: 'Project A',
+      });
+
+      const saveB = storageService.saveProject({
+        ...mockProject,
+        id: 'project-b',
+        name: 'Project B',
+      });
+
+      await Promise.all([saveA, saveB]);
+
+      const projectA = await storageService.getProject('project-a');
+      const projectB = await storageService.getProject('project-b');
+      expect(projectA?.name).toBe('Project A');
+      expect(projectB?.name).toBe('Project B');
+    });
+
+    it('should resolve all callers after coalesced write completes', async () => {
+      const results: string[] = [];
+
+      const save1 = storageService
+        .saveProject({ ...mockProject, id: 'resolve-test', name: 'V1' })
+        .then(() => results.push('save1'));
+
+      const save2 = storageService
+        .saveProject({ ...mockProject, id: 'resolve-test', name: 'V2' })
+        .then(() => results.push('save2'));
+
+      await Promise.all([save1, save2]);
+
+      // Both promises should resolve
+      expect(results).toContain('save1');
+      expect(results).toContain('save2');
+    });
+  });
 });

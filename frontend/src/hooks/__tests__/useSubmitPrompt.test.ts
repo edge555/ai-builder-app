@@ -1,34 +1,49 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { useProject, useChatMessages, useGenerationActions } from '../../context';
+import { useProjectState, useProjectActions, useChatMessages, useGenerationActions } from '../../context';
 import { useSubmitPrompt } from '../useSubmitPrompt';
 
 // Mock context hooks
 vi.mock('../../context', () => ({
-    useProject: vi.fn(),
+    useProjectState: vi.fn(),
+    useProjectActions: vi.fn(),
     useChatMessages: vi.fn(),
     useGenerationActions: vi.fn(),
 }));
 
+// Mock storage service
+vi.mock('../../services/storage', () => ({
+    storageService: {
+        saveProject: vi.fn().mockResolvedValue(undefined),
+        setMetadata: vi.fn().mockResolvedValue(undefined),
+    },
+    toStoredProject: vi.fn().mockReturnValue({}),
+}));
+
 describe('useSubmitPrompt', () => {
-    let mockProject: any;
+    let mockProjectState: any;
+    let mockProjectActions: any;
     let mockChatMessages: any;
     let mockGeneration: any;
 
     beforeEach(() => {
         vi.clearAllMocks();
 
-        mockProject = {
+        mockProjectState = {
             projectState: null,
+        };
+
+        mockProjectActions = {
             setProjectState: vi.fn(),
             undo: vi.fn(),
             redo: vi.fn(),
         };
 
         mockChatMessages = {
-            addUserMessage: vi.fn(),
-            addAssistantMessage: vi.fn(),
+            messages: [],
+            addUserMessage: vi.fn().mockReturnValue({ id: 'user-1', role: 'user', content: '' }),
+            addAssistantMessage: vi.fn().mockReturnValue({ id: 'asst-1', role: 'assistant', content: '' }),
         };
 
         mockGeneration = {
@@ -40,7 +55,8 @@ describe('useSubmitPrompt', () => {
             abortCurrentRequest: vi.fn(),
         };
 
-        vi.mocked(useProject).mockReturnValue(mockProject);
+        vi.mocked(useProjectState).mockReturnValue(mockProjectState);
+        vi.mocked(useProjectActions).mockReturnValue(mockProjectActions);
         vi.mocked(useChatMessages).mockReturnValue(mockChatMessages);
         vi.mocked(useGenerationActions).mockReturnValue(mockGeneration);
     });
@@ -51,7 +67,7 @@ describe('useSubmitPrompt', () => {
 
         mockGeneration.generateProjectStreaming.mockResolvedValue({
             success: true,
-            projectState: { name: 'test-app', files: { 'App.tsx': 'code' } },
+            projectState: { id: 'test-1', name: 'test-app', files: { 'App.tsx': 'code' } },
         });
 
         await act(async () => {
@@ -61,7 +77,7 @@ describe('useSubmitPrompt', () => {
         expect(mockChatMessages.addUserMessage).toHaveBeenCalledWith(prompt);
         expect(mockGeneration.setIsLoading).toHaveBeenCalledWith(true);
         expect(mockGeneration.setLoadingPhase).toHaveBeenCalledWith('generating');
-        expect(mockProject.setProjectState).toHaveBeenCalledWith(
+        expect(mockProjectActions.setProjectState).toHaveBeenCalledWith(
             expect.objectContaining({ name: 'test-app' }),
             false
         );
@@ -113,7 +129,7 @@ describe('useSubmitPrompt', () => {
     });
 
     it('should modify existing project', async () => {
-        mockProject.projectState = { name: 'old', files: {} };
+        mockProjectState.projectState = { name: 'old', files: {} };
         const { result } = renderHook(() => useSubmitPrompt());
         const prompt = 'add a button';
 
@@ -128,7 +144,7 @@ describe('useSubmitPrompt', () => {
         });
 
         expect(mockGeneration.setLoadingPhase).toHaveBeenCalledWith('modifying');
-        expect(mockProject.setProjectState).toHaveBeenCalledWith(
+        expect(mockProjectActions.setProjectState).toHaveBeenCalledWith(
             expect.objectContaining({ name: 'old' }),
             true
         );
@@ -145,13 +161,49 @@ describe('useSubmitPrompt', () => {
         act(() => {
             result.current.undo();
         });
-        expect(mockProject.undo).toHaveBeenCalled();
+        expect(mockProjectActions.undo).toHaveBeenCalled();
         expect(mockChatMessages.addAssistantMessage).toHaveBeenCalledWith(expect.stringContaining('Reverted'));
 
         act(() => {
             result.current.redo();
         });
-        expect(mockProject.redo).toHaveBeenCalled();
+        expect(mockProjectActions.redo).toHaveBeenCalled();
         expect(mockChatMessages.addAssistantMessage).toHaveBeenCalledWith(expect.stringContaining('Restored'));
+    });
+
+    it('should abort in-flight request when new submit arrives', async () => {
+        const { result } = renderHook(() => useSubmitPrompt());
+
+        // First call: hang indefinitely
+        let resolveFirst: any;
+        mockGeneration.generateProjectStreaming.mockImplementationOnce(
+            () => new Promise(resolve => { resolveFirst = resolve; })
+        );
+
+        // Start first submission (don't await — it's in-flight)
+        let firstPromise: Promise<void>;
+        act(() => {
+            firstPromise = result.current.submitPrompt('first prompt');
+        });
+
+        // Second call: resolve immediately
+        mockGeneration.generateProjectStreaming.mockResolvedValueOnce({
+            success: true,
+            projectState: { id: 'test-2', name: 'second-app', files: { 'App.tsx': 'code' } },
+        });
+
+        // Submit second request while first is in-flight
+        await act(async () => {
+            await result.current.submitPrompt('second prompt');
+        });
+
+        // abortCurrentRequest should have been called to cancel the first
+        expect(mockGeneration.abortCurrentRequest).toHaveBeenCalled();
+
+        // Resolve the first to let it finish cleanly
+        resolveFirst?.({ success: false, error: 'Request was cancelled' });
+        await act(async () => {
+            await firstPromise!;
+        });
     });
 });

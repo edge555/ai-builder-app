@@ -80,6 +80,15 @@ const CodeEditorView = lazy(() => import('./components/CodeEditor/CodeEditorView
 - Error boundary prevents app crash if lazy load fails
 - Skeleton loaders provide visual feedback during loading
 
+### Critical CSS Inlining
+
+`frontend/index.html` includes inlined critical CSS in the `<head>` to prevent Flash Of Unstyled Content (FOUC):
+- CSS reset (`box-sizing`, margin/padding)
+- CSS custom properties for light/dark mode (`--background`, `--foreground`, etc.)
+- Layout foundations (`html, body, #root` at 100% height)
+- `.page-skeleton` and `.page-skeleton-spinner` loading indicator styles
+- This CSS is intentionally duplicated from `index.css` and `PageSkeleton.css` so the loading state renders before any JS/external CSS loads
+
 ## Common Commands
 
 ### Development
@@ -178,7 +187,9 @@ The app includes an intelligent auto-repair system that detects and fixes previe
 ### Key Backend Components
 
 **API Routes** (`backend/app/api/`):
-- `generate-stream/`: Initial project generation with streaming
+- `generate/`: Non-streaming project generation (returns gzipped JSON with `X-Request-Id`)
+- `generate-stream/`: Initial project generation with streaming (SSE with `X-Request-Id`)
+- `modify/`: Non-streaming project modification (returns gzipped JSON with `X-Request-Id`)
 - `modify-stream/`: Project modification with streaming
 - `plan/`: Generate modification plan without executing
 - `diff/`: Calculate diffs between versions
@@ -191,14 +202,15 @@ The app includes an intelligent auto-repair system that detects and fixes previe
 - `ai/gemini-client.ts`: Google Gemini API integration with streaming and caching
 - `ai/modal-client.ts`: Modal-hosted AI model client (e.g., Qwen) with SSE streaming and retry logic
 - `ai/modal-response-parser.ts`: Extracts valid JSON from free-form Modal model responses
-- `core/streaming-generator.ts`: Orchestrates SSE streaming of generated files
+- `api/utils.ts`: Shared API utilities — `gzipJson()` for gzip-compressed JSON responses, CORS helpers, request ID generation
+- `core/streaming-generator.ts`: Orchestrates SSE streaming of generated files (supports `requestId` propagation)
 - `core/file-processor.ts`: Validates and processes generated files with Prettier formatting
 - `core/build-validator.ts`: Validates generated code for missing dependencies, broken imports, and syntax errors — used in the auto-retry loop
 - `core/prompts/provider-prompt-config.ts`: Controls prompt assembly per provider (Modal uses 30k token budget + detailed guidance; Gemini uses 15k)
 - `analysis/dependency-graph.ts`: **Performance-optimized** dependency graph with content-based caching (152x speedup on cache hits) and O(1) import resolution
 - `analysis/file-index.ts`: File indexing for modification context
 - `analysis/file-planner/`: AI-powered file selection for modifications (two-phase: planning then context assembly) with chunk-index caching and memory management
-- `diff/`: Smart diff generation for modifications
+- `diff/modification-engine.ts`: Smart diff generation for modifications (supports `requestId` propagation through planning and build validation loops)
 - `streaming/backpressure-controller.ts`: SSE backpressure controller with `EventPriority` (CRITICAL/NORMAL/LOW) — drops low-priority events under load
 - `utils/incremental-json-parser.ts`: **Performance-optimized** streaming JSON parser with O(n) complexity (was O(n²)), processes 10MB in ~23ms
 
@@ -208,6 +220,8 @@ The app includes an intelligent auto-repair system that detects and fixes previe
 - **SSE Backpressure**: `BackpressureController` drops heartbeat (LOW) and progress (NORMAL) events when buffer is under pressure; file and complete events (CRITICAL) are never dropped.
 - **Gemini Client**: Context caching support for reducing API costs on repeated requests with same context
 - **VersionManager**: Bounded memory via FIFO per-project eviction (max 50 versions) and LRU global project eviction (max 500 projects)
+- **Gzip Compression**: `gzipJson()` utility compresses JSON API responses when client accepts gzip. Next.js `compress: true` doesn't apply to App Router Route Handlers, so this fills the gap. Used in `generate/` and `modify/` routes.
+- **Request ID Propagation**: All API routes generate a `requestId` via `generateRequestId()`, propagated through streaming generator → AI provider calls → modification engine → build validation loop. All logs carry request ID via `logger.withRequestId()`. Response includes `X-Request-Id` header.
 
 ### Key Frontend Components
 
@@ -357,6 +371,7 @@ export function useGenerationActions() { /* ... */ }
   - Projects indexed by ID and sorted by last modified date
 - **Project Management**: CRUD operations (create, read, update, delete, rename, duplicate)
 - **Auto-save**: Automatic persistence with debouncing to prevent excessive writes
+- **Write Coalescing**: `StorageService.saveProject()` coalesces concurrent writes per project ID — tracks in-flight promises, buffers pending writes (latest wins), and drains pending queue after each write completes. Prevents race conditions between rapid auto-save and manual save.
 - **Serialization**: Projects serialized to `StoredProject` format with timestamps
 
 ### Starter Templates System
@@ -470,6 +485,9 @@ Both frontend and backend use path aliases:
 7. **Template-Driven Generation**: Curated starter templates with pre-written prompts for common use cases
 8. **Progressive Enhancement**: Skeleton loading states for better perceived performance
 9. **Responsive Layout**: Mobile-first responsive design with collapsible sidebar, overlay panels on tablet, and full resizable layout on desktop
+10. **Request ID Tracing**: Every API request gets a unique ID propagated through all layers (route → generator → AI provider → logs → response headers)
+11. **Write Coalescing**: Concurrent IndexedDB writes to the same entity are coalesced (latest wins) to prevent race conditions
+12. **Critical CSS Inlining**: Above-the-fold CSS inlined in `index.html` to prevent FOUC before JS loads
 
 ### Performance Patterns
 
@@ -505,6 +523,12 @@ Both frontend and backend use path aliases:
    - Callbacks access latest state via refs, preventing re-render cascades
    - Essential for AutoRepairProvider to avoid infinite effect loops
 
+7. **Storage Write Coalescing**: Prevent race conditions in IndexedDB writes
+   - Track in-flight promises per entity ID (`writeInFlight` map)
+   - Buffer pending writes (latest wins) while write is in-flight (`writePending` map)
+   - Drain pending queue after each write completes
+   - All callers' promises resolve after coalesced write completes
+
 **Backend Performance**:
 1. **O(n) Streaming Parser**: Single-pass character scanning instead of repeated string searches
    - Eliminates O(n²) complexity from `indexOf()` calls
@@ -519,6 +543,16 @@ Both frontend and backend use path aliases:
 3. **Concurrent Processing**: Use `Promise.all()` for parallel operations where possible
    - File formatting, validation, and processing in parallel
    - Multiple API calls processed concurrently
+
+4. **Gzip Response Compression**: `gzipJson()` compresses Route Handler JSON responses
+   - Next.js `compress: true` doesn't cover App Router Route Handlers
+   - Checks `Accept-Encoding` header, falls back to uncompressed
+   - Always sets `Vary: Accept-Encoding` for correct caching
+
+5. **Request ID Propagation**: Structured logging with request context
+   - `generateRequestId()` creates unique ID per API request
+   - `logger.withRequestId(id)` creates scoped logger carrying ID
+   - `X-Request-Id` returned in response headers (both SSE and JSON)
 
 **Key Lessons**:
 - **Avoid `indexOf()` in loops**: Use state machines with single-pass scanning

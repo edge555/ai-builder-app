@@ -6,7 +6,7 @@
  * Implements Requirement 10.2
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import type {
   ModifyProjectResponse,
   ErrorResponse,
@@ -19,7 +19,7 @@ import {
 } from '@ai-app-builder/shared';
 import { createModificationEngine } from '../../../lib/diff';
 import { detectIntent } from '../../../lib/ai/ai-provider-factory';
-import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError } from '../../../lib/api';
+import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError, gzipJson } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
 
@@ -37,7 +37,7 @@ export async function OPTIONS() {
 
 export async function POST(
   request: NextRequest
-): Promise<NextResponse<ModifyProjectResponse | ErrorResponse>> {
+): Promise<Response> {
   // Generate request ID for correlation
   const requestId = generateRequestId();
   const contextLogger = logger.withRequestId(requestId);
@@ -66,9 +66,8 @@ export async function POST(
 
     // Modify project with timeout
     const engine = await createModificationEngine(detectedTaskType);
-    // TODO: Pass requestId to engine when it supports it
     const result = await withTimeout(
-      engine.modifyProject(projectState, validatedRequest.prompt, { skipPlanning }),
+      engine.modifyProject(projectState, validatedRequest.prompt, { skipPlanning, requestId }),
       {
         timeoutMs: MODIFY_TIMEOUT_MS,
         operationName: 'project modification',
@@ -99,7 +98,7 @@ export async function POST(
       changedFiles: result.diffs?.length ?? 0,
     });
 
-    return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
+    return gzipJson(response, { status: 200, headers: { ...getCorsHeaders(request), 'X-Request-Id': requestId }, request });
   } catch (error) {
     // Handle timeout errors specifically
     if (error instanceof TimeoutError) {

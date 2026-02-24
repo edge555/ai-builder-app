@@ -6,11 +6,11 @@
  * Implements Requirement 10.1
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import type { GenerateProjectResponse, ErrorResponse } from '@ai-app-builder/shared';
 import { serializeProjectState, serializeVersion, GenerateProjectRequestSchema } from '@ai-app-builder/shared';
 import { createProjectGenerator } from '../../../lib/core';
-import { getCorsHeaders, handleOptions, handleError, AppError } from '../../../lib/api';
+import { getCorsHeaders, handleOptions, handleError, AppError, gzipJson } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
 
@@ -23,7 +23,7 @@ export async function OPTIONS() {
   return handleOptions();
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse<GenerateProjectResponse | ErrorResponse>> {
+export async function POST(request: NextRequest): Promise<Response> {
   // Generate request ID for correlation
   const requestId = generateRequestId();
   const contextLogger = logger.withRequestId(requestId);
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<GenerateP
       version: serializeVersion(result.version!),
     };
 
-    return NextResponse.json(response, { status: 201, headers: getCorsHeaders(request) });
+    return gzipJson(response, { status: 201, headers: { ...getCorsHeaders(request), 'X-Request-Id': requestId }, request });
 
   } catch (error) {
     contextLogger.error('Project generation failed', {

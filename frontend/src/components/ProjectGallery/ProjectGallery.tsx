@@ -18,6 +18,8 @@ export interface ProjectGalleryProps {
   onDeleteProject: (projectId: string) => void;
   isLoading?: boolean;
   onCreateProject?: () => void;
+  /** Optional callback fired when hovering a project card or CTA — used to preload the BuilderPage chunk. */
+  onPreloadBuilder?: () => void;
 }
 
 type SortOption = 'lastModified' | 'nameAsc' | 'oldestFirst';
@@ -44,6 +46,7 @@ interface VirtualizedOrNormalGridProps {
   onRenameProject: (projectId: string, newName: string) => void;
   onDuplicateProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
+  onPreloadBuilder?: () => void;
 }
 
 function VirtualizedOrNormalGrid({
@@ -52,6 +55,7 @@ function VirtualizedOrNormalGrid({
   onRenameProject,
   onDuplicateProject,
   onDeleteProject,
+  onPreloadBuilder,
 }: VirtualizedOrNormalGridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -78,6 +82,7 @@ function VirtualizedOrNormalGrid({
             onRename={onRenameProject}
             onDuplicate={onDuplicateProject}
             onDelete={onDeleteProject}
+            onPreload={onPreloadBuilder}
           />
         ))}
       </div>
@@ -126,6 +131,7 @@ function VirtualizedOrNormalGrid({
                   onRename={onRenameProject}
                   onDuplicate={onDuplicateProject}
                   onDelete={onDeleteProject}
+                  onPreload={onPreloadBuilder}
                 />
               </div>
             );
@@ -148,6 +154,7 @@ const ProjectGalleryComponent = function ProjectGallery({
   onDeleteProject,
   isLoading = false,
   onCreateProject,
+  onPreloadBuilder,
 }: ProjectGalleryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('lastModified');
@@ -232,6 +239,7 @@ const ProjectGalleryComponent = function ProjectGallery({
           <button
             className="project-gallery-empty-state-cta"
             onClick={onCreateProject}
+            onMouseEnter={onPreloadBuilder}
           >
             <Sparkles size={20} />
             Create Your First Project
@@ -318,6 +326,7 @@ const ProjectGalleryComponent = function ProjectGallery({
           onDeleteProject={onDeleteProject}
           onViewAll={() => setActiveTab('all')}
           totalProjectCount={projects.length}
+          onPreloadBuilder={onPreloadBuilder}
         />
       ) : (
         <>
@@ -328,6 +337,7 @@ const ProjectGalleryComponent = function ProjectGallery({
               onRenameProject={onRenameProject}
               onDuplicateProject={onDuplicateProject}
               onDeleteProject={onDeleteProject}
+              onPreloadBuilder={onPreloadBuilder}
             />
           ) : (
             <div className="project-gallery-empty-search">

@@ -146,3 +146,5 @@ export function BuilderPage() {
     </ErrorBoundary>
   );
 }
+
+export default BuilderPage;

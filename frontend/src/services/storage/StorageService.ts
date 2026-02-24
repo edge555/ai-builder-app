@@ -22,6 +22,10 @@ class StorageService {
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
 
+  // Write coalescing: prevents racing between auto-save and manual saves
+  private writeInFlight: Map<string, Promise<void>> = new Map();
+  private writePending: Map<string, StoredProject> = new Map();
+
   /**
    * Initializes the IndexedDB database.
    * Creates object stores and indexes if needed.
@@ -130,48 +134,103 @@ class StorageService {
   }
 
   /**
-   * Saves a project to IndexedDB with optimized chunked writes.
+   * Saves a project to IndexedDB with write coalescing.
+   * If a save for this project is already in-flight, the new data is buffered
+   * and written after the current save completes (latest wins).
    * Chat messages are stored separately for better performance.
    * Updates updatedAt timestamp automatically.
    */
   async saveProject(project: StoredProject): Promise<void> {
+    const projectId = project.id;
+
+    // If a write is already in-flight for this project, buffer this save (latest wins)
+    if (this.writeInFlight.has(projectId)) {
+      this.writePending.set(projectId, project);
+      // Wait for the in-flight write to finish, then the pending write will execute
+      await this.writeInFlight.get(projectId);
+      // If our data is still the pending one, wait for that too
+      if (this.writeInFlight.has(projectId)) {
+        await this.writeInFlight.get(projectId);
+      }
+      return;
+    }
+
+    await this.executeProjectSave(project);
+  }
+
+  /**
+   * Executes the actual project save and drains any pending writes.
+   */
+  private async executeProjectSave(project: StoredProject): Promise<void> {
+    const projectId = project.id;
+
+    const doSave = async (proj: StoredProject): Promise<void> => {
+      try {
+        await this.saveProjectImmediate(proj);
+      } catch (error) {
+        storageLogger.error('Failed to save project', { error });
+        // Swallow save errors per plan spec
+      }
+    };
+
+    // Create the in-flight promise
+    let currentProject = project;
+    const flightPromise = (async () => {
+      await doSave(currentProject);
+
+      // Drain pending writes (latest wins)
+      while (this.writePending.has(projectId)) {
+        currentProject = this.writePending.get(projectId)!;
+        this.writePending.delete(projectId);
+        await doSave(currentProject);
+      }
+    })();
+
+    this.writeInFlight.set(projectId, flightPromise);
+
     try {
-      const db = await this.ensureInitialized();
+      await flightPromise;
+    } finally {
+      this.writeInFlight.delete(projectId);
+    }
+  }
 
-      // Extract chat messages to save separately
-      const { chatMessages, ...projectWithoutMessages } = project;
+  /**
+   * Performs the actual IndexedDB write for a project (no coalescing).
+   */
+  private async saveProjectImmediate(project: StoredProject): Promise<void> {
+    const db = await this.ensureInitialized();
 
-      // Update the updatedAt timestamp
-      const updatedProject = {
-        ...projectWithoutMessages,
-        updatedAt: new Date().toISOString(),
-      };
+    // Extract chat messages to save separately
+    const { chatMessages, ...projectWithoutMessages } = project;
 
-      // Calculate project size to determine if chunking is needed
-      const projectSize = JSON.stringify(updatedProject).length;
+    // Update the updatedAt timestamp
+    const updatedProject = {
+      ...projectWithoutMessages,
+      updatedAt: new Date().toISOString(),
+    };
 
-      if (projectSize > this.CHUNK_SIZE) {
-        // Use chunked write for large projects
-        await this.saveProjectChunked(updatedProject);
-      } else {
-        // Standard write for small projects
-        const transaction = db.transaction([this.PROJECTS_STORE], 'readwrite');
-        const store = transaction.objectStore(this.PROJECTS_STORE);
+    // Calculate project size to determine if chunking is needed
+    const projectSize = JSON.stringify(updatedProject).length;
 
-        await new Promise<void>((resolve, reject) => {
-          const request = store.put(updatedProject);
-          request.onsuccess = () => resolve();
-          request.onerror = () => reject(request.error);
-        });
-      }
+    if (projectSize > this.CHUNK_SIZE) {
+      // Use chunked write for large projects
+      await this.saveProjectChunked(updatedProject);
+    } else {
+      // Standard write for small projects
+      const transaction = db.transaction([this.PROJECTS_STORE], 'readwrite');
+      const store = transaction.objectStore(this.PROJECTS_STORE);
 
-      // Save chat messages separately if provided
-      if (chatMessages && chatMessages.length > 0) {
-        await this.saveChatMessages(project.id, chatMessages);
-      }
-    } catch (error) {
-      storageLogger.error('Failed to save project', { error });
-      // Swallow save errors per plan spec
+      await new Promise<void>((resolve, reject) => {
+        const request = store.put(updatedProject);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    // Save chat messages separately if provided
+    if (chatMessages && chatMessages.length > 0) {
+      await this.saveChatMessages(project.id, chatMessages);
     }
   }
 

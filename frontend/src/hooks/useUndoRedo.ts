@@ -1,11 +1,9 @@
 import type { SerializedProjectState } from '@ai-app-builder/shared/types';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 const MAX_STACK_SIZE = 20;
 
 export interface UndoRedoState {
-  undoStack: SerializedProjectState[];
-  redoStack: SerializedProjectState[];
   canUndo: boolean;
   canRedo: boolean;
 }
@@ -21,12 +19,23 @@ export interface UndoRedoActions {
  * Hook for managing undo/redo state in memory.
  * Stores project states in a stack for instant restoration during the current session.
  *
+ * All action callbacks are stable (never change reference) by using refs
+ * to access latest state. This prevents cascading re-renders in consumers.
+ *
  * Note: Undo/redo stacks are ephemeral and not persisted across page reloads.
  * For persistent state restoration, use the version history system (VersionContext).
  */
 export function useUndoRedo(currentState: SerializedProjectState | null): UndoRedoState & UndoRedoActions {
   const [undoStack, setUndoStack] = useState<SerializedProjectState[]>([]);
   const [redoStack, setRedoStack] = useState<SerializedProjectState[]>([]);
+
+  // Refs for accessing latest values inside stable callbacks
+  const currentStateRef = useRef(currentState);
+  currentStateRef.current = currentState;
+  const undoStackRef = useRef(undoStack);
+  undoStackRef.current = undoStack;
+  const redoStackRef = useRef(redoStack);
+  redoStackRef.current = redoStack;
 
   const pushState = useCallback((state: SerializedProjectState) => {
     setUndoStack((prev) => {
@@ -38,36 +47,40 @@ export function useUndoRedo(currentState: SerializedProjectState | null): UndoRe
   }, []);
 
   const undo = useCallback((): SerializedProjectState | null => {
-    if (undoStack.length === 0) return null;
+    const stack = undoStackRef.current;
+    if (stack.length === 0) return null;
 
-    const previousState = undoStack[undoStack.length - 1];
+    const previousState = stack[stack.length - 1];
 
     // Move current state to redo stack
-    if (currentState) {
-      setRedoStack((prev) => [...prev, currentState].slice(-MAX_STACK_SIZE));
+    const current = currentStateRef.current;
+    if (current) {
+      setRedoStack((prev) => [...prev, current].slice(-MAX_STACK_SIZE));
     }
 
     // Remove from undo stack
     setUndoStack((prev) => prev.slice(0, -1));
 
     return previousState;
-  }, [undoStack, currentState]);
+  }, []);
 
   const redo = useCallback((): SerializedProjectState | null => {
-    if (redoStack.length === 0) return null;
+    const stack = redoStackRef.current;
+    if (stack.length === 0) return null;
 
-    const nextState = redoStack[redoStack.length - 1];
+    const nextState = stack[stack.length - 1];
 
     // Move current state to undo stack
-    if (currentState) {
-      setUndoStack((prev) => [...prev, currentState].slice(-MAX_STACK_SIZE));
+    const current = currentStateRef.current;
+    if (current) {
+      setUndoStack((prev) => [...prev, current].slice(-MAX_STACK_SIZE));
     }
 
     // Remove from redo stack
     setRedoStack((prev) => prev.slice(0, -1));
 
     return nextState;
-  }, [redoStack, currentState]);
+  }, []);
 
   const clear = useCallback(() => {
     setUndoStack([]);
@@ -75,8 +88,6 @@ export function useUndoRedo(currentState: SerializedProjectState | null): UndoRe
   }, []);
 
   return {
-    undoStack,
-    redoStack,
     canUndo: undoStack.length > 0,
     canRedo: redoStack.length > 0,
     pushState,
