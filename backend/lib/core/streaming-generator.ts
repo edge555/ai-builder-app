@@ -50,10 +50,15 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
 
   /**
    * Generates a project with streaming file emission.
+   * @param description - The project description
+   * @param callbacks - Streaming event callbacks
+   * @param options - Optional configuration
+   * @param options.requestId - Request ID for correlation across logs
    */
   async generateProjectStreaming(
     description: string,
-    callbacks: StreamingCallbacks
+    callbacks: StreamingCallbacks,
+    options?: { requestId?: string }
   ): Promise<StreamingGenerationResult> {
     if (!description || description.trim() === '') {
       return {
@@ -62,7 +67,9 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       };
     }
 
-    logger.debug('Starting streaming project generation', {
+    const contextLogger = options?.requestId ? logger.withRequestId(options.requestId) : logger;
+
+    contextLogger.debug('Starting streaming project generation', {
       descriptionLength: description.length,
     });
 
@@ -71,7 +78,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     // Build prompt with proper injection defense
     const systemInstruction = getGenerationPrompt(description);
 
-    logger.info('Sending streaming request to AI provider', {
+    contextLogger.info('Sending streaming request to AI provider', {
       systemInstructionLength: systemInstruction.length,
       temperature: 0.7,
       maxOutputTokens: getMaxOutputTokens('generation'),
@@ -91,6 +98,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       maxOutputTokens: getMaxOutputTokens('generation'),
       responseSchema: PROJECT_OUTPUT_SCHEMA,
       signal: callbacks.signal,
+      requestId: options?.requestId,
       onChunk: (chunk: string, accumulatedLength: number) => {
         accumulatedText += chunk;
         callbacks.onProgress?.(accumulatedLength);
@@ -182,11 +190,11 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     }
 
     // Validate the output (syntax validation)
-    logger.debug('Validating files', { files: Object.keys(prefixedFiles) });
+    contextLogger.debug('Validating files', { files: Object.keys(prefixedFiles) });
     const validationResult = this.validationPipeline.validate(prefixedFiles);
 
     if (!validationResult.valid) {
-      logger.error('Validation errors', { errors: validationResult.errors });
+      contextLogger.error('Validation errors', { errors: validationResult.errors });
       const error = 'AI output failed validation';
       callbacks.onError?.(error);
       return {
@@ -199,7 +207,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
 
     // If aborted, skip build-fix and downstream work
     if (callbacks.signal?.aborted) {
-      logger.info('Generation aborted by client before build-fix loop');
+      contextLogger.info('Generation aborted by client before build-fix loop');
       return {
         success: false,
         error: 'Generation cancelled by client',
@@ -215,7 +223,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
 
     // If aborted after build-fix, skip file emission
     if (callbacks.signal?.aborted) {
-      logger.info('Generation aborted by client after build-fix loop');
+      contextLogger.info('Generation aborted by client after build-fix loop');
       return {
         success: false,
         error: 'Generation cancelled by client',

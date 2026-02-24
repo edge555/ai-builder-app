@@ -212,6 +212,7 @@ export async function POST(request: NextRequest) {
           const result = await generator.generateProjectStreaming(body.description, {
             signal: request.signal,
 
+
             onStart: () => {
               // Start event has normal priority
               encoder.enqueueEvent(
@@ -296,7 +297,7 @@ export async function POST(request: NextRequest) {
               // Additional heartbeat callback if needed
               encoder.enqueueHeartbeat(controller);
             },
-          });
+          }, { requestId });
 
           // If already aborted, skip final messages
           if (isComplete) return;
@@ -354,6 +355,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'X-Request-Id': requestId,
       },
     });
 
@@ -366,7 +368,7 @@ export async function POST(request: NextRequest) {
       JSON.stringify({ error: 'Internal server error' }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
       }
     );
   }
