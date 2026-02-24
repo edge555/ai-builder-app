@@ -11,7 +11,7 @@ import type { TaskType } from './agent-config-types';
 import { createModalClient } from './modal-client';
 import { AgentRouter } from './agent-router';
 import { IntentDetector } from './intent-detector';
-import { config } from '../config';
+import { getEffectiveProvider } from './provider-config-store';
 import { createLogger } from '../logger';
 
 const logger = createLogger('ai-provider-factory');
@@ -22,10 +22,22 @@ let intentDetector: IntentDetector | null = null;
 let initPromise: Promise<void> | null = null;
 
 /**
+ * Resets provider singletons so they reinitialize on next use.
+ * Called when the provider setting changes at runtime.
+ */
+export function resetProviderSingletons(): void {
+  agentRouter = null;
+  intentDetector = null;
+  initPromise = null;
+  logger.info('Provider singletons reset');
+}
+
+/**
  * Ensures the AgentRouter is initialized (once). No-op in Modal mode.
  */
 async function ensureInitialized(): Promise<void> {
-  if (config.provider.name !== 'openrouter') return;
+  const provider = await getEffectiveProvider();
+  if (provider !== 'openrouter') return;
 
   if (!initPromise) {
     initPromise = (async () => {
@@ -44,9 +56,12 @@ async function ensureInitialized(): Promise<void> {
  *
  * - Modal mode: ignores taskType, returns a ModalClient
  * - OpenRouter mode: returns a FallbackAIProvider for the task type via AgentRouter
+ *
+ * Uses settings override if set, otherwise falls back to AI_PROVIDER env var.
  */
 export async function createAIProvider(taskType: TaskType = 'coding'): Promise<AIProvider> {
-  if (config.provider.name === 'modal') {
+  const provider = await getEffectiveProvider();
+  if (provider === 'modal') {
     logger.info('Initializing Modal AI Provider');
     return createModalClient();
   }
@@ -61,9 +76,12 @@ export async function createAIProvider(taskType: TaskType = 'coding'): Promise<A
  *
  * - Modal mode: always returns 'coding' (no intent detection)
  * - OpenRouter mode: classifies the prompt via IntentDetector
+ *
+ * Uses settings override if set, otherwise falls back to AI_PROVIDER env var.
  */
 export async function detectIntent(prompt: string, requestId?: string): Promise<TaskType> {
-  if (config.provider.name === 'modal') {
+  const provider = await getEffectiveProvider();
+  if (provider === 'modal') {
     return 'coding';
   }
 

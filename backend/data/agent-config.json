@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "tasks": {
+    "intent": {
+      "taskType": "intent",
+      "models": []
+    },
+    "planning": {
+      "taskType": "planning",
+      "models": []
+    },
+    "coding": {
+      "taskType": "coding",
+      "models": []
+    },
+    "debugging": {
+      "taskType": "debugging",
+      "models": []
+    },
+    "documentation": {
+      "taskType": "documentation",
+      "models": []
+    }
+  }
+}
