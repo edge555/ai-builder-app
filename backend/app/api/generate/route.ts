@@ -40,7 +40,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<GenerateP
     });
 
     // Generate project
-    const generator = createProjectGenerator();
+    const generator = await createProjectGenerator();
     // TODO: Pass requestId to generator when it supports it
     const result = await generator.generateProject(validatedRequest.description);
 

@@ -9,8 +9,6 @@
 
 import type { ProjectState } from '@ai-app-builder/shared';
 import type { AIProvider } from '../../ai/ai-provider';
-import { createAIProvider } from '../../ai/ai-provider-factory';
-import { config } from '../../config';
 import { getMaxOutputTokens } from '../../config';
 import { createLogger } from '../../logger';
 import type { ChunkIndex, CodeSlice, FilePlannerResult, PlanningResponse } from './types';
@@ -635,14 +633,7 @@ export function createFilePlanner(aiProvider?: AIProvider): FilePlanner {
     return new FilePlanner(aiProvider);
   }
 
-  // Try to create a provider from environment
-  try {
-    const provider = createAIProvider(config.ai.easyModel);
-    return new FilePlanner(provider);
-  } catch (error) {
-    logger.warn('Could not create AI provider, using fallback-only mode', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return new FilePlanner();
-  }
+  // No provider given — fallback-only mode
+  logger.warn('No AI provider given to createFilePlanner, using fallback-only mode');
+  return new FilePlanner();
 }

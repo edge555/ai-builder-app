@@ -110,10 +110,10 @@ export function getModificationPrompt(userPrompt: string, includeDesignSystem: b
 }
 
 import { ModificationOutputSchema } from '../../core/schemas';
-import { toGeminiSchema } from '../../core/gemini-schema-converter';
+import { toSimpleJsonSchema } from '../../core/zod-to-json-schema';
 
 /**
  * JSON Schema for diff-based modification output.
- * Forces Gemini to return properly structured JSON with edit operations.
+ * Forces the AI to return properly structured JSON with edit operations.
  */
-export const MODIFICATION_OUTPUT_SCHEMA = toGeminiSchema(ModificationOutputSchema);
+export const MODIFICATION_OUTPUT_SCHEMA = toSimpleJsonSchema(ModificationOutputSchema);

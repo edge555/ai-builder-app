@@ -6,7 +6,8 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared';
-import { AIProvider } from '../ai';
+import type { AIProvider } from '../ai';
+import { createAIProvider } from '../ai';
 import type { BuildError } from './build-validator';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
 import { buildFixPrompt } from './prompts/build-fix-prompt';
@@ -31,7 +32,7 @@ export type GenerationResult = OperationResult;
  * Includes build validation with auto-retry for fixing build errors.
  */
 export class ProjectGenerator extends BaseProjectGenerator {
-  constructor(aiProvider?: AIProvider) {
+  constructor(aiProvider: AIProvider) {
     super(aiProvider);
   }
 
@@ -207,8 +208,9 @@ export class ProjectGenerator extends BaseProjectGenerator {
 }
 
 /**
- * Creates a ProjectGenerator instance with default configuration.
+ * Creates a ProjectGenerator instance with the default AI provider for coding tasks.
  */
-export function createProjectGenerator(): ProjectGenerator {
-  return new ProjectGenerator();
+export async function createProjectGenerator(): Promise<ProjectGenerator> {
+  const aiProvider = await createAIProvider('coding');
+  return new ProjectGenerator(aiProvider);
 }

@@ -3,8 +3,9 @@ import { useState, useEffect, useRef } from 'react';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog/ConfirmDialog';
 import { ProjectGallery } from '@/components/ProjectGallery/ProjectGallery';
+import { SiteFooter } from '@/components/SiteFooter/SiteFooter';
+import { SiteHeader } from '@/components/SiteHeader/SiteHeader';
 import { TemplateGrid } from '@/components/TemplateGrid/TemplateGrid';
-import { ThemeToggle } from '@/components/ThemeToggle/ThemeToggle';
 import { starterTemplates } from '@/data/templates';
 import type { ProjectMetadata } from '@/services/storage';
 import './WelcomePage.css';
@@ -141,29 +142,21 @@ export function WelcomePage({
   return (
     <div className="welcome-page">
       {/* Header */}
-      <header className={`welcome-header ${isScrolled ? 'welcome-header-scrolled' : ''}`}>
-        <div className="welcome-header-content">
-          <div className="welcome-header-brand">
-            <div className="welcome-header-logo">
-              <Sparkles size={18} />
-            </div>
-            <span className="welcome-header-title">AI App Builder</span>
-          </div>
-          <div className="welcome-header-actions">
-            {hasProjects && (
-              <button
-                className="welcome-header-new-project-btn"
-                onClick={() => onEnterApp()}
-                aria-label="Create new project"
-              >
-                <Plus size={16} />
-                <span>New Project</span>
-              </button>
-            )}
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
+      <SiteHeader
+        scrolled={isScrolled}
+        actions={
+          hasProjects ? (
+            <button
+              className="welcome-header-new-project-btn"
+              onClick={() => onEnterApp()}
+              aria-label="Create new project"
+            >
+              <Plus size={16} />
+              <span>New Project</span>
+            </button>
+          ) : undefined
+        }
+      />
 
       {/* Hero Section */}
       <section ref={heroRef} className="welcome-hero ui-section">
@@ -266,20 +259,7 @@ export function WelcomePage({
       </section>
 
       {/* Footer */}
-      <footer className="welcome-footer">
-        <div className="welcome-footer-container">
-          <p className="welcome-footer-text">© 2026 AI App Builder</p>
-          <div className="welcome-footer-links">
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="welcome-footer-link">
-              GitHub
-            </a>
-            <span className="footer-dot">•</span>
-            <a href="#" className="welcome-footer-link">
-              Built with AI
-            </a>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

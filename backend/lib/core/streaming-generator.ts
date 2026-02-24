@@ -6,6 +6,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared/types';
 import type { AIProvider } from '../ai';
+import { createAIProvider } from '../ai';
 import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
 import { buildFixPrompt } from './prompts/build-fix-prompt';
 import { processFiles } from './file-processor';
@@ -43,7 +44,7 @@ export type StreamingGenerationResult = OperationResult;
  * Streaming Project Generator that emits files as they're generated.
  */
 export class StreamingProjectGenerator extends BaseProjectGenerator {
-  constructor(aiProvider?: AIProvider) {
+  constructor(aiProvider: AIProvider) {
     super(aiProvider);
   }
 
@@ -280,8 +281,9 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
 }
 
 /**
- * Creates a StreamingProjectGenerator instance.
+ * Creates a StreamingProjectGenerator instance with the default AI provider for coding tasks.
  */
-export function createStreamingProjectGenerator(): StreamingProjectGenerator {
-  return new StreamingProjectGenerator();
+export async function createStreamingProjectGenerator(): Promise<StreamingProjectGenerator> {
+  const aiProvider = await createAIProvider('coding');
+  return new StreamingProjectGenerator(aiProvider);
 }

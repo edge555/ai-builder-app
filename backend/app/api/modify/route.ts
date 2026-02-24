@@ -18,6 +18,7 @@ import {
   ModifyProjectRequestSchema,
 } from '@ai-app-builder/shared';
 import { createModificationEngine } from '../../../lib/diff';
+import { detectIntent } from '../../../lib/ai/ai-provider-factory';
 import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
@@ -59,8 +60,12 @@ export async function POST(
     // Extract skipPlanning option from request
     const { skipPlanning } = validatedRequest;
 
+    // Detect intent to route to the appropriate task-specific models
+    const detectedTaskType = await detectIntent(validatedRequest.prompt, requestId);
+    contextLogger.info('Intent detected for modification', { taskType: detectedTaskType });
+
     // Modify project with timeout
-    const engine = createModificationEngine();
+    const engine = await createModificationEngine(detectedTaskType);
     // TODO: Pass requestId to engine when it supports it
     const result = await withTimeout(
       engine.modifyProject(projectState, validatedRequest.prompt, { skipPlanning }),

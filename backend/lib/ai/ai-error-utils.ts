@@ -3,9 +3,9 @@
  * Provides common error categorization logic used by all AI provider clients.
  */
 
-import type { GeminiResponse } from './gemini-types';
+import type { AIResponse } from './ai-provider';
 
-type AIErrorType = GeminiResponse['errorType'];
+type AIErrorType = AIResponse['errorType'];
 
 /**
  * Categorizes an error into a type and code.

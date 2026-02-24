@@ -8,8 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:gemini": "tsx lib/__tests__/ai/gemini-client.test.ts"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@ai-app-builder/shared": "*",

@@ -19,13 +19,13 @@ import type {
 } from '@ai-app-builder/shared';
 import type { CodeSlice } from '../analysis/file-planner/types';
 import type { AIProvider } from '../ai';
-import { createAIProviderWithModel } from '../ai';
+import { createAIProvider } from '../ai';
+import type { TaskType } from '../ai';
 import { ValidationPipeline } from '../core/validation-pipeline';
 import { BuildValidator, createBuildValidator } from '../core/build-validator';
 import { getModificationPrompt, MODIFICATION_OUTPUT_SCHEMA } from './prompts/modification-prompt';
 import { formatCode } from '../prettier-config';
 import { createLogger } from '../logger';
-import { config } from '../config';
 import { getMaxOutputTokens } from '../config';
 import {
   FilePlanner,
@@ -52,9 +52,8 @@ export class ModificationEngine {
   private readonly buildValidator: BuildValidator;
   private readonly maxBuildRetries = 2;
 
-  constructor(aiProvider?: AIProvider) {
-    // Modification requires the most capable model (Pro or specialized Flash) for complex instruction following and code generation
-    this.aiProvider = aiProvider ?? createAIProviderWithModel(config.ai.hardModel);
+  constructor(aiProvider: AIProvider) {
+    this.aiProvider = aiProvider;
     this.validationPipeline = new ValidationPipeline();
     this.filePlanner = createFilePlanner(this.aiProvider);
     this.buildValidator = createBuildValidator();
@@ -640,8 +639,9 @@ export class ModificationEngine {
 }
 
 /**
- * Creates a ModificationEngine instance with default configuration.
+ * Creates a ModificationEngine instance with the AI provider for the given task type.
  */
-export function createModificationEngine(): ModificationEngine {
-  return new ModificationEngine();
+export async function createModificationEngine(taskType: TaskType = 'coding'): Promise<ModificationEngine> {
+  const aiProvider = await createAIProvider(taskType);
+  return new ModificationEngine(aiProvider);
 }
