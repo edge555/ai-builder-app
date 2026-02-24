@@ -23,6 +23,7 @@ export function useSubmitPrompt() {
 
     const isSubmittingRef = useRef(false);
     const apiRetryHistoryRef = useRef<RepairAttempt[]>([]);
+    const submitAbortRef = useRef<AbortController | null>(null);
 
     /**
      * Returns a random success message for project generation.
@@ -57,9 +58,14 @@ export function useSubmitPrompt() {
      * Includes API-level retry logic with failure history accumulation.
      */
     const submitPrompt = useCallback(async (prompt: string): Promise<void> => {
-        if (isSubmittingRef.current) {
-            return;
+        // Abort any in-flight request to prevent duplicate generation
+        if (isSubmittingRef.current && submitAbortRef.current) {
+            submitAbortRef.current.abort();
+            generation.abortCurrentRequest();
         }
+
+        const abortController = new AbortController();
+        submitAbortRef.current = abortController;
         isSubmittingRef.current = true;
         generation.clearError();
         generation.setIsLoading(true);
@@ -77,6 +83,7 @@ export function useSubmitPrompt() {
                 generation.setLoadingPhase('generating');
 
                 while (retryCount < MAX_API_RETRIES) {
+                    if (abortController.signal.aborted) break;
                     retryCount++;
 
                     // Show retry message if not first attempt
@@ -87,6 +94,7 @@ export function useSubmitPrompt() {
                     }
 
                     const result = await generation.generateProjectStreaming(prompt);
+                    if (abortController.signal.aborted) break;
 
                     generation.setLoadingPhase('validating');
                     if (result.success && result.projectState) {
@@ -153,6 +161,7 @@ export function useSubmitPrompt() {
                 generation.setLoadingPhase('modifying');
 
                 while (retryCount < MAX_API_RETRIES) {
+                    if (abortController.signal.aborted) break;
                     retryCount++;
 
                     // Show retry message if not first attempt
@@ -163,6 +172,7 @@ export function useSubmitPrompt() {
                     }
 
                     const result = await generation.modifyProject(projectState, prompt);
+                    if (abortController.signal.aborted) break;
 
                     generation.setLoadingPhase('validating');
                     if (result.success && result.projectState) {
@@ -212,6 +222,9 @@ export function useSubmitPrompt() {
                 }
             }
         } catch (err) {
+            // Don't show errors for aborted/superseded requests
+            if (abortController.signal.aborted) return;
+
             // Network/timeout/auth errors - don't retry these
             const errorMsg = err instanceof Error ? err.message : 'An unexpected error occurred';
             const errorType = detectErrorType(errorMsg);
@@ -225,9 +238,13 @@ export function useSubmitPrompt() {
                 chatMessages.addAssistantMessage(`Sorry, something went wrong: ${errorText}`);
             }
         } finally {
-            generation.setIsLoading(false);
-            generation.setLoadingPhase('idle');
-            isSubmittingRef.current = false;
+            // Only clean up if this is still the active request (not superseded by a new one)
+            if (submitAbortRef.current === abortController) {
+                generation.setIsLoading(false);
+                generation.setLoadingPhase('idle');
+                isSubmittingRef.current = false;
+                submitAbortRef.current = null;
+            }
         }
     }, [
         projectState,

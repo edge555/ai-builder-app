@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 
 import { FileTreeNode } from './FileTreeNode';
 import { buildFileTree, TreeNode } from './utils/buildFileTree';
@@ -22,6 +22,26 @@ interface FileTreeSidebarProps {
   onFileSelect: (path: string) => void;
 }
 
+/** Collect paths of depth-0 directories only (top-level). */
+function getTopLevelDirPaths(nodes: TreeNode[]): string[] {
+  return nodes.filter((n) => n.type === 'directory').map((n) => n.path);
+}
+
+/** Recursively collect ALL directory paths in the tree. */
+function getAllDirPaths(nodes: TreeNode[]): string[] {
+  const paths: string[] = [];
+  const traverse = (nodeList: TreeNode[]) => {
+    for (const node of nodeList) {
+      if (node.type === 'directory') {
+        paths.push(node.path);
+        if (node.children) traverse(node.children);
+      }
+    }
+  };
+  traverse(nodes);
+  return paths;
+}
+
 export function FileTreeSidebar({
   files,
   activeFile,
@@ -31,57 +51,56 @@ export function FileTreeSidebar({
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Function to get all directory paths from the tree
-  const getAllDirPaths = (nodes: TreeNode[]): string[] => {
-    const paths: string[] = [];
-    const traverse = (nodeList: TreeNode[]) => {
-      for (const node of nodeList) {
-        if (node.type === 'directory') {
-          paths.push(node.path);
-          if (node.children) {
-            traverse(node.children);
-          }
-        }
-      }
-    };
-    traverse(nodes);
-    return paths;
-  };
-
-  // Initialize with all directories expanded
+  // Initialize with only top-level (depth-0) directories expanded.
+  // Nested dirs start collapsed to keep the initial render lightweight.
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => {
-    return new Set(getAllDirPaths(tree));
+    return new Set(getTopLevelDirPaths(tree));
   });
 
-  // Update expanded dirs when tree changes (files added/removed)
+  // When the file tree changes (files added/removed during generation):
+  // - Keep existing expanded state untouched
+  // - Auto-expand only NEW top-level directories
+  // - Remove paths that no longer exist
+  // - Deeper new directories are intentionally left collapsed
   useEffect(() => {
     const allDirPaths = getAllDirPaths(tree);
+    const topLevelPaths = new Set(getTopLevelDirPaths(tree));
+    const validPaths = new Set(allDirPaths);
+
     setExpandedDirs((prev) => {
-      const newExpanded = new Set(prev);
-      // Add any new directories
-      allDirPaths.forEach((path) => newExpanded.add(path));
-      // Remove directories that no longer exist
-      const validPaths = new Set(allDirPaths);
-      Array.from(newExpanded).forEach((path) => {
-        if (!validPaths.has(path)) {
-          newExpanded.delete(path);
-        }
+      const next = new Set(prev);
+
+      // Auto-expand new top-level dirs only
+      topLevelPaths.forEach((path) => next.add(path));
+
+      // Prune stale paths
+      next.forEach((path) => {
+        if (!validPaths.has(path)) next.delete(path);
       });
-      return newExpanded;
+
+      return next;
     });
   }, [tree]);
 
-  const handleToggleDir = (path: string) => {
+  const handleToggleDir = useCallback((path: string) => {
     setExpandedDirs((prev) => {
-      const newExpanded = new Set(prev);
-      if (newExpanded.has(path)) {
-        newExpanded.delete(path);
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
       } else {
-        newExpanded.add(path);
+        next.add(path);
       }
-      return newExpanded;
+      return next;
     });
-  };
+  }, []);
+
+  const handleExpandAll = useCallback(() => {
+    setExpandedDirs(new Set(getAllDirPaths(tree)));
+  }, [tree]);
+
+  const handleCollapseAll = useCallback(() => {
+    setExpandedDirs(new Set());
+  }, []);
 
   // Flatten tree for easy navigation
   const flatNodes = useMemo(() => {
@@ -189,6 +208,13 @@ export function FileTreeSidebar({
     }
   };
 
+  const allExpanded = useMemo(() => {
+    const allPaths = getAllDirPaths(tree);
+    return allPaths.length > 0 && allPaths.every((p) => expandedDirs.has(p));
+  }, [tree, expandedDirs]);
+
+  const hasAnyDir = useMemo(() => getAllDirPaths(tree).length > 0, [tree]);
+
   return (
     <div
       style={{
@@ -204,16 +230,58 @@ export function FileTreeSidebar({
       {/* Header */}
       <div
         style={{
-          padding: '8px 12px',
-          fontSize: '11px',
-          fontWeight: 600,
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-          color: 'hsl(var(--pv-text-muted))',
+          padding: '6px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
           borderBottom: '1px solid hsl(var(--pv-border))',
+          minHeight: '32px',
         }}
       >
-        Files
+        <span
+          style={{
+            fontSize: '11px',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            color: 'hsl(var(--pv-text-muted))',
+          }}
+        >
+          Files
+        </span>
+
+        {hasAnyDir && (
+          <button
+            onClick={allExpanded ? handleCollapseAll : handleExpandAll}
+            title={allExpanded ? 'Collapse All' : 'Expand All'}
+            aria-label={allExpanded ? 'Collapse all directories' : 'Expand all directories'}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '2px 4px',
+              borderRadius: '3px',
+              color: 'hsl(var(--pv-text-muted))',
+              fontSize: '10px',
+              lineHeight: 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '3px',
+            }}
+          >
+            {allExpanded ? (
+              /* Collapse icon: chevrons pointing inward */
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M3 4l5 4-5 4V4zm10 0v8l-5-4 5-4z" />
+              </svg>
+            ) : (
+              /* Expand icon: chevrons pointing outward */
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M13 12L8 8l5-4v8zM3 4v8l5-4-5-4z" />
+              </svg>
+            )}
+          </button>
+        )}
       </div>
 
       <div

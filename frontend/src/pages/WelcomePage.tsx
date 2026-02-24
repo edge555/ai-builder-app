@@ -1,5 +1,5 @@
 import { ArrowRight, Sparkles, Plus, Eye, Zap, Download, Code } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog/ConfirmDialog';
 import { ProjectGallery } from '@/components/ProjectGallery/ProjectGallery';
@@ -78,6 +78,28 @@ export function WelcomePage({
   });
   const [isScrolled, setIsScrolled] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
+
+  // Preload BuilderPage chunk on hover/intent so navigation feels instant.
+  const preloadBuilderPage = useCallback(() => {
+    void import('./BuilderPage');
+  }, []);
+
+  // Also preload after the page settles via requestIdleCallback.
+  // This covers fast users who click without hovering.
+  useEffect(() => {
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(() => {
+        void import('./BuilderPage');
+      });
+      return () => window.cancelIdleCallback(id);
+    } else {
+      // Safari fallback
+      const id = setTimeout(() => {
+        void import('./BuilderPage');
+      }, 2000);
+      return () => clearTimeout(id);
+    }
+  }, []);
 
   // Detect when user has scrolled past the hero section
   useEffect(() => {
@@ -196,6 +218,7 @@ export function WelcomePage({
               className="welcome-hero-prompt-submit"
               aria-label="Start building"
               disabled={!promptInput.trim()}
+              onMouseEnter={preloadBuilderPage}
             >
               <ArrowRight size={20} />
             </button>
@@ -209,6 +232,7 @@ export function WelcomePage({
               key={suggestion}
               className="welcome-hero-suggestion-chip"
               onClick={() => handleSuggestionClick(suggestion)}
+              onMouseEnter={preloadBuilderPage}
               type="button"
             >
               {suggestion}
@@ -226,6 +250,7 @@ export function WelcomePage({
         onDeleteProject={handleDeleteRequest}
         isLoading={isLoadingProjects}
         onCreateProject={() => onEnterApp()}
+        onPreloadBuilder={preloadBuilderPage}
       />
 
       {/* Templates Section */}

@@ -13,6 +13,7 @@ export interface RecentProjectsProps {
     onDeleteProject: (projectId: string) => void;
     onViewAll: () => void;
     totalProjectCount: number;
+    onPreloadBuilder?: () => void;
 }
 
 /**
@@ -27,6 +28,7 @@ export function RecentProjects({
     onDeleteProject,
     onViewAll,
     totalProjectCount,
+    onPreloadBuilder,
 }: RecentProjectsProps) {
     const hasMoreProjects = totalProjectCount > 3;
 
@@ -41,6 +43,7 @@ export function RecentProjects({
                             onRename={onRenameProject}
                             onDuplicate={onDuplicateProject}
                             onDelete={onDeleteProject}
+                            onPreload={onPreloadBuilder}
                         />
                     </div>
                 ))}

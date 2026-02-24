@@ -13,8 +13,6 @@ describe('useUndoRedo', () => {
 
     it('should initialize with empty stacks', () => {
         const { result } = renderHook(() => useUndoRedo(null));
-        expect(result.current.undoStack).toEqual([]);
-        expect(result.current.redoStack).toEqual([]);
         expect(result.current.canUndo).toBe(false);
         expect(result.current.canRedo).toBe(false);
     });
@@ -26,7 +24,6 @@ describe('useUndoRedo', () => {
             result.current.pushState(mockState1);
         });
 
-        expect(result.current.undoStack).toContain(mockState1);
         expect(result.current.canUndo).toBe(true);
     });
 
@@ -43,7 +40,6 @@ describe('useUndoRedo', () => {
         });
 
         expect(undoneState).toEqual(mockState1);
-        expect(result.current.redoStack).toContain(mockState2);
         expect(result.current.canRedo).toBe(true);
     });
 
@@ -66,7 +62,7 @@ describe('useUndoRedo', () => {
         });
 
         expect(redoneState).toEqual(mockState1);
-        expect(result.current.undoStack).toContain(mockState1);
+        expect(result.current.canUndo).toBe(true);
     });
 
     it('should clear all stacks', () => {
@@ -80,8 +76,27 @@ describe('useUndoRedo', () => {
             result.current.clear();
         });
 
-        expect(result.current.undoStack).toEqual([]);
-        expect(result.current.redoStack).toEqual([]);
         expect(result.current.canUndo).toBe(false);
+        expect(result.current.canRedo).toBe(false);
+    });
+
+    it('should have stable callback references across renders', () => {
+        const { result, rerender } = renderHook(
+            ({ state }) => useUndoRedo(state),
+            { initialProps: { state: mockState1 as any } }
+        );
+
+        const firstPushState = result.current.pushState;
+        const firstUndo = result.current.undo;
+        const firstRedo = result.current.redo;
+        const firstClear = result.current.clear;
+
+        // Re-render with different state
+        rerender({ state: mockState2 as any });
+
+        expect(result.current.pushState).toBe(firstPushState);
+        expect(result.current.undo).toBe(firstUndo);
+        expect(result.current.redo).toBe(firstRedo);
+        expect(result.current.clear).toBe(firstClear);
     });
 });

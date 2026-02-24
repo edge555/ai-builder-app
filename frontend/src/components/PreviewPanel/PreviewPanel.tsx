@@ -21,6 +21,7 @@ import {
   getEntryFile,
 } from './previewUtils';
 import { SandpackErrorListener } from './SandpackErrorListener';
+import { SandpackRefresher } from './SandpackRefresher';
 import './PreviewPanel.css';
 
 /**
@@ -61,18 +62,20 @@ const PreviewPanelComponent = function PreviewPanel({
   const [showCode, setShowCode] = useState(false);
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
   const [isRotated, setIsRotated] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Use forceCodeView when provided (for mobile three-tab layout)
   const effectiveShowCode = forceCodeView || showCode;
+
+  // Dispatch-based refresh: SandpackRefresher provides this function once mounted.
+  const refreshFnRef = useRef<(() => void) | null>(null);
 
   // Refresh animation duration in milliseconds
   const REFRESH_ANIMATION_MS = 600;
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    setRefreshKey(prev => prev + 1);
+    refreshFnRef.current?.();
     setTimeout(() => setIsRefreshing(false), REFRESH_ANIMATION_MS);
   }, []);
 
@@ -145,7 +148,6 @@ const PreviewPanelComponent = function PreviewPanel({
       ) : (
         <div className="preview-content" role="tabpanel" id="tabpanel-preview">
           <SandpackProvider
-            key={refreshKey}
             files={Object.fromEntries(
               Object.entries(sandpackFiles).map(([path, code]) => [path, { code }])
             )}
@@ -176,6 +178,8 @@ const PreviewPanelComponent = function PreviewPanel({
               />
             )}
             <SandpackLayout>
+              {/* Dispatch-based refresh — no iframe remount */}
+              <SandpackRefresher onRefreshReady={(fn) => { refreshFnRef.current = fn; }} />
               {deviceMode === 'desktop' ? (
                 <SandpackPreview
                   showOpenInCodeSandbox={false}
