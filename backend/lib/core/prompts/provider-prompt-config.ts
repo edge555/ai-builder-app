@@ -14,10 +14,10 @@ export interface ProviderPromptConfig {
 }
 
 /**
- * Cached config computed once at module load time.
- * AI_PROVIDER does not change at runtime, so this is safe.
+ * Returns prompt configuration based on the active AI provider.
+ * Reads AI_PROVIDER from the environment on each call.
  */
-const _cachedConfig: ProviderPromptConfig = (() => {
+export function getProviderPromptConfig(): ProviderPromptConfig {
   const provider = (process.env.AI_PROVIDER ?? 'openrouter') as 'modal' | 'openrouter';
 
   if (provider === 'modal') {
@@ -33,12 +33,4 @@ const _cachedConfig: ProviderPromptConfig = (() => {
     outputBudgetTokens: 15000,
     includeDetailedGuidance: false,
   };
-})();
-
-/**
- * Returns prompt configuration based on the active AI provider.
- * Config is computed once at module load time since AI_PROVIDER is static.
- */
-export function getProviderPromptConfig(): ProviderPromptConfig {
-  return _cachedConfig;
 }

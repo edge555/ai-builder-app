@@ -56,14 +56,6 @@ const SENSITIVE_PATTERNS = [
   /client[_-]?secret/i,
 ];
 
-// Cached configuration at module load time
-const CACHED_LOG_LEVEL = (() => {
-  const envLevel = process.env.LOG_LEVEL?.toLowerCase();
-  if (envLevel && envLevel in LOG_LEVELS) {
-    return envLevel as LogLevel;
-  }
-  return 'info';
-})();
 
 const CACHED_LOG_FORMAT: LogFormat = (() => {
   const envFormat = process.env.LOG_FORMAT?.toLowerCase();
@@ -245,7 +237,9 @@ function shouldLogCategory(category: LogCategory): boolean {
  * Create a logger instance with the specified name and optional request ID
  */
 export function createLogger(name: string, requestId?: string): Logger {
-  const minLevel = LOG_LEVELS[CACHED_LOG_LEVEL];
+  const envLevel = process.env.LOG_LEVEL?.toLowerCase();
+  const activeLogLevel: LogLevel = (envLevel && envLevel in LOG_LEVELS) ? envLevel as LogLevel : 'info';
+  const minLevel = LOG_LEVELS[activeLogLevel];
 
   const shouldLog = (level: LogLevel): boolean => {
     return LOG_LEVELS[level] >= minLevel;

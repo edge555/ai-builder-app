@@ -1,10 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { StreamingProjectGenerator } from '../streaming-generator';
-import { GeminiClient } from '../../ai';
 import { ValidationPipeline } from '../validation-pipeline';
 import * as buildValidatorModule from '../build-validator';
 
-vi.mock('../../ai');
 vi.mock('../validation-pipeline');
 vi.mock('../build-validator');
 
@@ -27,7 +25,6 @@ describe('StreamingProjectGenerator', () => {
             formatErrorsForAI: vi.fn(),
         };
 
-        (GeminiClient as any).mockImplementation(function () { return mockGeminiClient; });
         (ValidationPipeline as any).mockImplementation(function () { return mockValidationPipeline; });
 
         // Mock both class and factory function

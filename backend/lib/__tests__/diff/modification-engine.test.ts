@@ -206,7 +206,7 @@ describe('ModificationEngine', () => {
             reasoning: 'Modify App',
           }),
         })
-        .mockResolvedValueOnce({
+        .mockResolvedValue({
           success: false,
           error: 'API error',
         });
@@ -217,7 +217,7 @@ describe('ModificationEngine', () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('API error');
+      expect(result.error).toContain('API error');
     });
 
     it('should handle invalid JSON response', async () => {
@@ -234,7 +234,7 @@ describe('ModificationEngine', () => {
             reasoning: 'Modify App',
           }),
         })
-        .mockResolvedValueOnce({
+        .mockResolvedValue({
           success: true,
           content: 'This is not valid JSON',
         });

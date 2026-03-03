@@ -63,60 +63,25 @@ export class ModalClient implements AIProvider {
    * Sends a request to the Modal endpoint with retry logic.
    */
   async generate(request: AIRequest): Promise<AIResponse> {
-    const timer = new OperationTimer('modal-generate', request.requestId);
-    const contextLogger = request.requestId ? logger.withRequestId(request.requestId) : logger;
-
-    let lastError: Error | null = null;
-    let retryCount = 0;
-
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      try {
-        const content = await this.makeRequest(request);
-
-        const metrics = timer.complete(true, { retryCount: attempt });
-        contextLogger.info('Modal generate completed', formatMetrics(metrics));
-
-        return {
-          success: true,
-          content,
-          retryCount: attempt,
-        };
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        retryCount = attempt;
-
-        if (!isRetryableError(lastError, 'modal api error')) {
-          break;
-        }
-
-        if (attempt < this.maxRetries) {
-          await this.delay(this.calculateBackoff(attempt));
-        }
-      }
-    }
-
-    const metrics = timer.complete(false, {
-      retryCount,
-      error: lastError?.message ?? 'Unknown error occurred',
-    });
-    contextLogger.error('Modal generate failed', formatMetrics(metrics));
-
-    const { errorType, errorCode } = categorizeError(lastError!, 'modal api error');
-
-    return {
-      success: false,
-      error: lastError?.message ?? 'Unknown error occurred',
-      errorType,
-      errorCode,
-      retryCount,
-    };
+    return this.executeWithRetry('modal-generate', request, () => this.makeRequest(request));
   }
 
   /**
    * Streaming implementation: calls makeStreamingRequest() with retry logic.
    */
   async generateStreaming(request: AIStreamingRequest): Promise<AIResponse> {
-    const timer = new OperationTimer('modal-generate-streaming', request.requestId);
+    return this.executeWithRetry('modal-generate-streaming', request, () => this.makeStreamingRequest(request));
+  }
+
+  /**
+   * Common retry logic for generate and generateStreaming.
+   */
+  private async executeWithRetry(
+    operationName: string,
+    request: AIRequest,
+    operation: () => Promise<string>
+  ): Promise<AIResponse> {
+    const timer = new OperationTimer(operationName, request.requestId);
     const contextLogger = request.requestId ? logger.withRequestId(request.requestId) : logger;
 
     let lastError: Error | null = null;
@@ -124,16 +89,12 @@ export class ModalClient implements AIProvider {
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
-        const content = await this.makeStreamingRequest(request);
+        const content = await operation();
 
         const metrics = timer.complete(true, { retryCount: attempt });
-        contextLogger.info('Modal streaming completed', formatMetrics(metrics));
+        contextLogger.info(`${operationName} completed`, formatMetrics(metrics));
 
-        return {
-          success: true,
-          content,
-          retryCount: attempt,
-        };
+        return { success: true, content, retryCount: attempt };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         retryCount = attempt;
@@ -142,7 +103,7 @@ export class ModalClient implements AIProvider {
           break;
         }
 
-        contextLogger.warn(`Modal streaming attempt ${attempt} failed, retrying...`, {
+        contextLogger.warn(`${operationName} attempt ${attempt} failed, retrying...`, {
           error: lastError.message,
         });
 
@@ -156,7 +117,7 @@ export class ModalClient implements AIProvider {
       retryCount,
       error: lastError?.message ?? 'Unknown error occurred',
     });
-    contextLogger.error('Modal streaming failed', formatMetrics(metrics));
+    contextLogger.error(`${operationName} failed`, formatMetrics(metrics));
 
     const { errorType, errorCode } = categorizeError(lastError!, 'modal api error');
 
@@ -173,43 +134,21 @@ export class ModalClient implements AIProvider {
    * Makes a single request to the Modal endpoint.
    */
   private async makeRequest(request: AIRequest): Promise<string> {
-    const prompt = this.formatPrompt(request);
-
-    const body = {
-      prompt,
-      system_instruction: this.getSystemInstruction(request) ?? '',
-      temperature: request.temperature ?? config.ai.temperature,
-      max_tokens: request.maxOutputTokens ?? config.ai.maxOutputTokens,
-      response_format: request.responseSchema ? 'json_object' : 'text',
-    };
+    const body = this.buildRequestBody(request);
 
     logger.debug('Modal API request', {
       url: this.apiUrl,
-      promptLength: prompt.length,
+      promptLength: body.prompt.length,
     });
 
-    const timeoutController = new AbortController();
-    const timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
-
-    const signal = request.signal
-      ? AbortSignal.any([request.signal, timeoutController.signal])
-      : timeoutController.signal;
+    const { response, timeoutId } = await this.fetchWithTimeout(
+      this.apiUrl,
+      this.buildHeaders(),
+      body,
+      request.signal
+    );
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (this.apiKey) {
-        headers['Authorization'] = `Bearer ${this.apiKey}`;
-      }
-
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal,
-      });
-
       clearTimeout(timeoutId);
 
       if (!response.ok) {
@@ -224,12 +163,8 @@ export class ModalClient implements AIProvider {
       const data = await response.json() as { content?: string;[key: string]: unknown };
       const rawContent = typeof data.content === 'string' ? data.content : JSON.stringify(data);
 
-      logger.debug('Modal API response received', {
-        contentLength: rawContent.length,
-      });
+      logger.debug('Modal API response received', { contentLength: rawContent.length });
 
-      // If a responseSchema was requested, we need to extract valid JSON
-      // since Modal can't enforce structured output like Gemini
       if (request.responseSchema) {
         const extracted = extractJsonFromResponse(rawContent);
         if (!extracted) {
@@ -241,18 +176,7 @@ export class ModalClient implements AIProvider {
       return rawContent;
     } catch (error) {
       clearTimeout(timeoutId);
-
-      if (error instanceof Error && error.name === 'AbortError') {
-        if (timeoutController.signal.aborted && !request.signal?.aborted) {
-          throw new Error(`Request timeout after ${this.timeout}ms`);
-        }
-        throw new Error('Request was cancelled');
-      }
-
-      logger.error('Modal API exception', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+      throw this.handleFetchError(error, request.signal);
     }
   }
 
@@ -262,98 +186,148 @@ export class ModalClient implements AIProvider {
    */
   private async makeStreamingRequest(request: AIStreamingRequest): Promise<string> {
     const url = this.streamApiUrl ?? (this.apiUrl.endsWith('/stream') ? this.apiUrl : `${this.apiUrl}/stream`);
-    const prompt = this.formatPrompt(request);
+    const body = this.buildRequestBody(request);
 
-    const body = {
-      prompt,
-      system_instruction: this.getSystemInstruction(request) ?? '',
-      temperature: request.temperature ?? config.ai.temperature,
-      max_tokens: request.maxOutputTokens ?? config.ai.maxOutputTokens,
-      response_format: request.responseSchema ? 'json_object' : 'text',
-    };
+    logger.debug('Modal SSE request', { url, promptLength: body.prompt.length });
 
-    logger.debug('Modal SSE request', {
-      url,
-      promptLength: prompt.length,
-    });
-
-    const timeoutController = new AbortController();
-    const timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
-
-    const signal = request.signal
-      ? AbortSignal.any([request.signal, timeoutController.signal])
-      : timeoutController.signal;
+    const headers = this.buildHeaders({ 'Accept': 'text/event-stream' });
+    const { response, timeoutId } = await this.fetchWithTimeout(url, headers, body, request.signal);
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
-      };
-      if (this.apiKey) {
-        headers['Authorization'] = `Bearer ${this.apiKey}`;
-      }
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal,
-      });
-
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Modal API error: ${response.status} - ${errorText}`);
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Response body is null');
-      }
+      const accumulated = await this.processSSEStream(response, (token, totalLength) => {
+        request.onChunk?.(token, totalLength);
+      });
 
-      const decoder = new TextDecoder();
-      let accumulated = '';
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? ''; // Keep the last incomplete line in the buffer
-
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine) continue;
-
-          if (trimmedLine.startsWith('data: ')) {
-            const dataStr = trimmedLine.slice(6);
-            if (dataStr === '[DONE]') {
-              continue;
-            }
-
-            try {
-              const data = JSON.parse(dataStr);
-              const token = data.token;
-              if (typeof token === 'string') {
-                accumulated += token;
-                request.onChunk?.(token, accumulated.length);
-              }
-            } catch (err) {
-              logger.warn('Failed to parse SSE data', { line: trimmedLine, error: err });
-            }
-          }
-        }
-      }
-
-      // Stream fully consumed — clear timeout now that we're done reading
       clearTimeout(timeoutId);
       return accumulated;
     } catch (error) {
       clearTimeout(timeoutId);
       throw error;
     }
+  }
+
+  /**
+   * Build the request body for Modal API calls.
+   */
+  private buildRequestBody(request: AIRequest): { prompt: string; system_instruction: string; temperature: number; max_tokens: number; response_format: string } {
+    return {
+      prompt: this.formatPrompt(request),
+      system_instruction: this.getSystemInstruction(request) ?? '',
+      temperature: request.temperature ?? config.ai.temperature,
+      max_tokens: request.maxOutputTokens ?? config.ai.maxOutputTokens,
+      response_format: request.responseSchema ? 'json_object' : 'text',
+    };
+  }
+
+  /**
+   * Build request headers, optionally merging additional headers.
+   */
+  private buildHeaders(extra?: Record<string, string>): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', ...extra };
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    return headers;
+  }
+
+  /**
+   * Execute a fetch with timeout and optional abort signal.
+   */
+  private async fetchWithTimeout(
+    url: string,
+    headers: Record<string, string>,
+    body: object,
+    requestSignal?: AbortSignal
+  ): Promise<{ response: Response; timeoutId: ReturnType<typeof setTimeout> }> {
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
+
+    const signal = requestSignal
+      ? AbortSignal.any([requestSignal, timeoutController.signal])
+      : timeoutController.signal;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal,
+      });
+      return { response, timeoutId };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw this.handleFetchError(error, requestSignal);
+    }
+  }
+
+  /**
+   * Process an SSE stream, calling onToken for each received token.
+   * Returns the full accumulated content.
+   */
+  private async processSSEStream(
+    response: Response,
+    onToken: (token: string, totalLength: number) => void
+  ): Promise<string> {
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Response body is null');
+    }
+
+    const decoder = new TextDecoder();
+    let accumulated = '';
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+
+        const dataStr = trimmedLine.slice(6);
+        if (dataStr === '[DONE]') continue;
+
+        try {
+          const data = JSON.parse(dataStr);
+          const token = data.token;
+          if (typeof token === 'string') {
+            accumulated += token;
+            onToken(token, accumulated.length);
+          }
+        } catch (err) {
+          logger.warn('Failed to parse SSE data', { line: trimmedLine, error: err });
+        }
+      }
+    }
+
+    return accumulated;
+  }
+
+  /**
+   * Handle fetch errors, converting AbortErrors to descriptive messages.
+   */
+  private handleFetchError(error: unknown, requestSignal?: AbortSignal): Error {
+    if (error instanceof Error && error.name === 'AbortError') {
+      if (!requestSignal?.aborted) {
+        return new Error(`Request timeout after ${this.timeout}ms`);
+      }
+      return new Error('Request was cancelled');
+    }
+
+    logger.error('Modal API exception', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return error instanceof Error ? error : new Error(String(error));
   }
 
   /**

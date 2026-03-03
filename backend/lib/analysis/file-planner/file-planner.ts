@@ -532,7 +532,6 @@ export class FilePlanner {
    * Uses LRU (Least Recently Used) eviction strategy.
    */
   private evictCacheIfNeeded(): void {
-    // Check if eviction is needed
     const needsEviction =
       this.chunkIndexCache.size > this.MAX_CACHE_ENTRIES ||
       this.currentCacheMemoryUsage > this.MAX_CACHE_MEMORY_BYTES;
@@ -541,54 +540,11 @@ export class FilePlanner {
       return;
     }
 
-    // Convert to array and sort by timestamp (oldest first)
-    const entries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]> = [];
-    this.chunkIndexCache.forEach((value, key) => {
-      entries.push([key, value]);
-    });
-    entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
-
-    // Determine how many to keep
-    const toKeep = entries.slice(0, this.MAX_CACHE_ENTRIES);
-
-    // Calculate new memory usage
-    let newMemoryUsage = 0;
-    const keysToKeep = new Set<string>();
-    const finalEntries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]> = [];
-
-    for (const [key, value] of toKeep) {
-      if (newMemoryUsage + value.estimatedSize <= this.MAX_CACHE_MEMORY_BYTES) {
-        finalEntries.push([key, value]);
-        keysToKeep.add(key);
-        newMemoryUsage += value.estimatedSize;
-      } else {
-        // Stop adding if it would exceed memory limit
-        break;
-      }
-    }
-
-    // Clear and rebuild cache
+    const { finalEntries, keysToKeep } = this.selectEntriesToKeep();
     const evictedCount = this.chunkIndexCache.size - finalEntries.length;
-    this.chunkIndexCache.clear();
-    this.currentCacheMemoryUsage = 0;
 
-    for (const [key, value] of finalEntries) {
-      this.chunkIndexCache.set(key, value);
-      this.currentCacheMemoryUsage += value.estimatedSize;
-    }
-
-    // Clean up corresponding symbol lookup caches
-    // IMPORTANT: Use the same key for symbolLookupCache
-    const symbolKeysToRemove: string[] = [];
-    this.symbolLookupCache.forEach((_, key) => {
-      if (!keysToKeep.has(key)) {
-        symbolKeysToRemove.push(key);
-      }
-    });
-
-    symbolKeysToRemove.forEach(key => {
-      this.symbolLookupCache.delete(key);
-    });
+    this.rebuildCache(finalEntries);
+    this.cleanupSymbolLookupCache(keysToKeep);
 
     if (evictedCount > 0) {
       logger.info('Evicted cache entries', {
@@ -598,6 +554,62 @@ export class FilePlanner {
         maxMemory: `${(this.MAX_CACHE_MEMORY_BYTES / 1024 / 1024).toFixed(2)}MB`,
       });
     }
+  }
+
+  /**
+   * Select cache entries to keep based on recency and memory budget.
+   */
+  private selectEntriesToKeep(): {
+    finalEntries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]>;
+    keysToKeep: Set<string>;
+  } {
+    const entries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]> = [];
+    this.chunkIndexCache.forEach((value, key) => {
+      entries.push([key, value]);
+    });
+    entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+
+    const toKeep = entries.slice(0, this.MAX_CACHE_ENTRIES);
+    let newMemoryUsage = 0;
+    const keysToKeep = new Set<string>();
+    const finalEntries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]> = [];
+
+    for (const [key, value] of toKeep) {
+      if (newMemoryUsage + value.estimatedSize > this.MAX_CACHE_MEMORY_BYTES) break;
+      finalEntries.push([key, value]);
+      keysToKeep.add(key);
+      newMemoryUsage += value.estimatedSize;
+    }
+
+    return { finalEntries, keysToKeep };
+  }
+
+  /**
+   * Rebuild the chunk index cache from selected entries.
+   */
+  private rebuildCache(
+    entries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]>
+  ): void {
+    this.chunkIndexCache.clear();
+    this.currentCacheMemoryUsage = 0;
+
+    for (const [key, value] of entries) {
+      this.chunkIndexCache.set(key, value);
+      this.currentCacheMemoryUsage += value.estimatedSize;
+    }
+  }
+
+  /**
+   * Remove symbol lookup entries that are no longer in the chunk index cache.
+   */
+  private cleanupSymbolLookupCache(keysToKeep: Set<string>): void {
+    const keysToRemove: string[] = [];
+    this.symbolLookupCache.forEach((_, key) => {
+      if (!keysToKeep.has(key)) {
+        keysToRemove.push(key);
+      }
+    });
+    keysToRemove.forEach(key => this.symbolLookupCache.delete(key));
   }
 
 
