@@ -11,8 +11,16 @@
     },
     "coding": {
       "taskType": "coding",
-      "models": []
+      "models": [
+        {
+          "id": "google/gemini-2.5-flash",
+          "label": "Gemini 2.5 Flash",
+          "active": true,
+          "priority": 0
+        }
+      ]
     },
+
     "debugging": {
       "taskType": "debugging",
       "models": []
