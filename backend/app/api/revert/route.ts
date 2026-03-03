@@ -73,6 +73,7 @@ export async function POST(
       });
       const timeoutError = AppError.network(
         'OPERATION_TIMEOUT',
+        // Convert milliseconds to seconds (1000ms = 1s) for human-readable message
         `Version revert timed out after ${error.timeoutMs / 1000} seconds`,
         { timeoutMs: error.timeoutMs },
         504

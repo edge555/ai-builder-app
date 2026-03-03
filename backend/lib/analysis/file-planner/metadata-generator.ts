@@ -8,10 +8,9 @@
  * Requirements: 2.1, 2.2, 2.3, 2.4
  */
 
-import type { ChunkIndex, FileMetadata, ExportInfo } from './types';
+import { CHARS_PER_TOKEN } from '../../constants';
 
-/** Characters per token approximation for budget estimation */
-const CHARS_PER_TOKEN = 4;
+import type { ChunkIndex, FileMetadata, ExportInfo } from './types';
 
 /** Target token budget for metadata */
 const METADATA_TOKEN_BUDGET = 1000;

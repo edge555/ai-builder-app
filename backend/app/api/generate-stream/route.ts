@@ -199,7 +199,8 @@ export async function POST(request: NextRequest) {
               encoder.enqueueEvent(
                 controller,
                 'error',
-                { error: 'Stream timeout after 120 seconds' },
+                // Convert ms to seconds: 960000ms / 1000 = 960 seconds (16 minutes)
+              { error: `Stream timeout after ${STREAM_TIMEOUT_MS / 1000} seconds` },
                 EventPriority.CRITICAL
               );
               controller.close();

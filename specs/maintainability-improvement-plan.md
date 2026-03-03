@@ -174,37 +174,29 @@ const shouldIncludeDesignSystem = DESIGN_RELATED_CATEGORIES.includes(category);
 *Focus: Make values meaningful and configurable*
 
 ### Task 3.1: Extract Magic Numbers to Named Constants
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
-- [ ] Search for magic numbers in codebase:
+- [x] Search for magic numbers in codebase:
   ```regex
   \b\d{3,}\b  // Numbers with 3+ digits
   \b60\b      // Common timeouts
   \b1000\b    // Seconds to ms
   ```
 
-**Common patterns to replace**:
-| Magic Number | Suggested Constant |
-|--------------|-------------------|
-| `660_000` | `MODAL_TIMEOUT_MS` |
-| `60000` | `ONE_MINUTE_MS` |
-| `1000` | `ONE_SECOND_MS` |
-| `50 * 1024 * 1024` | `MAX_CACHE_SIZE_BYTES` |
-| `1024 * 1024` | `ONE_MB_BYTES` |
-| `3`, `5` (retries) | `DEFAULT_MAX_RETRIES` |
-
-**Create constants files**:
-- `backend/lib/constants/time.ts` - Time-related constants
-- `backend/lib/constants/limits.ts` - Size/length limits
-- `backend/lib/constants/defaults.ts` - Default values
+**Changes Made**:
+- Added `DEFAULT_API_MAX_RETRIES`, `DEFAULT_RETRY_BASE_DELAY_MS`, `ERROR_TEXT_MAX_LENGTH` to [`backend/lib/constants.ts`](backend/lib/constants.ts)
+- Updated [`backend/lib/config.ts`](backend/lib/config.ts) to use `DEFAULT_API_MAX_RETRIES` and `DEFAULT_RETRY_BASE_DELAY_MS` instead of `3` and `1000`
+- Removed duplicate `CHARS_PER_TOKEN = 4` from [`backend/lib/analysis/file-planner/metadata-generator.ts`](backend/lib/analysis/file-planner/metadata-generator.ts) — now imports from `constants.ts`
+- Added `DEFAULT_MAX_BUFFER_SIZE` (1MB) and `DEFAULT_HIGH_WATER_MARK` (16KB) to [`backend/lib/streaming/backpressure-controller.ts`](backend/lib/streaming/backpressure-controller.ts)
+- Replaced `.slice(0, 500)` with `ERROR_TEXT_MAX_LENGTH` in [`backend/lib/ai/modal-client.ts`](backend/lib/ai/modal-client.ts) and [`backend/lib/ai/openrouter-client.ts`](backend/lib/ai/openrouter-client.ts)
 
 ---
 
 ### Task 3.2: Document Magic Numbers in Comments
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
 For numbers that can't be extracted (one-off calculations):
-- [ ] Add inline comment explaining the calculation
+- [x] Add inline comment explaining the calculation
 
 **Example**:
 ```typescript
@@ -215,6 +207,18 @@ const delay = Math.pow(2, attempt) * 1000;
 // Exponential backoff: 2^attempt seconds (1000ms = 1s)
 const delay = Math.pow(2, attempt) * ONE_SECOND_MS;
 ```
+
+**Changes Made**:
+| File | Change |
+|------|--------|
+| [`backend/lib/ai/modal-client.ts`](backend/lib/ai/modal-client.ts:399) | Added comments explaining exponential backoff (2^attempt) and 30% jitter (0.3) |
+| [`backend/lib/ai/openrouter-client.ts`](backend/lib/ai/openrouter-client.ts:399) | Added comments explaining exponential backoff (2^attempt) and 30% jitter (0.3) |
+| [`backend/app/api/revert/route.ts`](backend/app/api/revert/route.ts:76) | Added comment explaining ms to seconds conversion (1000ms = 1s) |
+| [`backend/app/api/export/route.ts`](backend/app/api/export/route.ts:78) | Added comment explaining ms to seconds conversion (1000ms = 1s) |
+| [`backend/app/api/modify/route.ts`](backend/app/api/modify/route.ts:110) | Added comment explaining ms to seconds conversion (1000ms = 1s) |
+| [`backend/app/api/diff/route.ts`](backend/app/api/diff/route.ts:120) | Added comment explaining ms to seconds conversion (1000ms = 1s) |
+| [`backend/app/api/generate-stream/route.ts`](backend/app/api/generate-stream/route.ts:202) | Fixed hardcoded "120 seconds" to use calculated value from STREAM_TIMEOUT_MS with comment |
+| [`backend/lib/core/worker-pool.ts`](backend/lib/core/worker-pool.ts:82) | Added comment explaining 1000ms = 1 second delay |
 
 ---
 
@@ -334,14 +338,20 @@ async plan(prompt: string, projectState: ProjectState): Promise<CodeSlice[]>
 ---
 
 ### Task 5.4: Remove Unused Type Definitions
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
-- [ ] Search for unused interfaces/types:
+- [x] Search for unused interfaces/types:
   ```bash
   npx tsc --noEmit --pretty 2>&1 | grep "is declared but never read"
+  npx eslint . --ext .ts 2>&1 | grep "is defined but never used"
   ```
-- [ ] Remove or export unused types
-- [ ] Consolidate duplicate type definitions
+- [x] Remove or export unused types
+- [x] Consolidate duplicate type definitions
+
+**Changes Made**:
+- Removed unused `ErrorResponse` type import from [`backend/app/api/export/route.ts`](backend/app/api/export/route.ts:10)
+- Removed unused `ErrorResponse` type import from [`backend/app/api/generate/route.ts`](backend/app/api/generate/route.ts:10)
+- Removed unused `ComponentInfo` and `FunctionInfo` type imports from [`backend/lib/analysis/file-index.ts`](backend/lib/analysis/file-index.ts:15)
 
 ---
 

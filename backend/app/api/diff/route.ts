@@ -117,6 +117,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ComputeDi
       });
       const timeoutError = AppError.network(
         'OPERATION_TIMEOUT',
+        // Convert milliseconds to seconds (1000ms = 1s) for human-readable message
         `Diff computation timed out after ${error.timeoutMs / 1000} seconds`,
         { timeoutMs: error.timeoutMs },
         504

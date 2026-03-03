@@ -9,6 +9,9 @@ import { createLogger } from '../logger';
 
 const logger = createLogger('backpressure-controller');
 
+const DEFAULT_MAX_BUFFER_SIZE = 1024 * 1024; // 1MB
+const DEFAULT_HIGH_WATER_MARK = 16 * 1024; // 16KB
+
 export interface BackpressureConfig {
     /** Maximum internal buffer size in bytes (default: 1MB) */
     maxBufferSize?: number;
@@ -64,8 +67,8 @@ export class BackpressureController {
     };
 
     constructor(config: BackpressureConfig = {}) {
-        this.maxBufferSize = config.maxBufferSize ?? 1024 * 1024; // 1MB default
-        this.highWaterMark = config.highWaterMark ?? 16 * 1024; // 16KB default
+        this.maxBufferSize = config.maxBufferSize ?? DEFAULT_MAX_BUFFER_SIZE;
+        this.highWaterMark = config.highWaterMark ?? DEFAULT_HIGH_WATER_MARK;
         this.debugEnabled = config.debug ?? false;
     }
 

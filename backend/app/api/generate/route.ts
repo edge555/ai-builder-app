@@ -7,7 +7,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import type { GenerateProjectResponse, ErrorResponse } from '@ai-app-builder/shared';
+import type { GenerateProjectResponse } from '@ai-app-builder/shared';
 import { serializeProjectState, serializeVersion, GenerateProjectRequestSchema } from '@ai-app-builder/shared';
 import { createProjectGenerator } from '../../../lib/core';
 import { getCorsHeaders, handleOptions, handleError, AppError, gzipJson } from '../../../lib/api';

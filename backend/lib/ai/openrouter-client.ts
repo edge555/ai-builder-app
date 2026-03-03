@@ -5,6 +5,7 @@
  */
 
 import { createLogger } from '../logger';
+import { ERROR_TEXT_MAX_LENGTH } from '../constants';
 import { OperationTimer, formatMetrics } from '../metrics';
 import type { AIProvider, AIRequest, AIStreamingRequest, AIResponse } from './ai-provider';
 import { categorizeError, isRetryableError } from './ai-error-utils';
@@ -262,7 +263,7 @@ export class OpenRouterClient implements AIProvider {
         logger.error('OpenRouter API error response', {
           status: response.status,
           model: this.model,
-          errorText: errorText.slice(0, 500),
+          errorText: errorText.slice(0, ERROR_TEXT_MAX_LENGTH),
         });
         throw new Error(`openrouter api error: ${response.status} - ${errorText}`);
       }
@@ -396,7 +397,9 @@ export class OpenRouterClient implements AIProvider {
   }
 
   private calculateBackoff(attempt: number): number {
+    // Exponential backoff: doubles the delay with each retry attempt (2^attempt)
     const exponentialDelay = this.retryBaseDelay * Math.pow(2, attempt);
+    // Add up to 30% random jitter (0.3) to prevent thundering herd problem
     const jitter = Math.random() * 0.3 * exponentialDelay;
     return exponentialDelay + jitter;
   }

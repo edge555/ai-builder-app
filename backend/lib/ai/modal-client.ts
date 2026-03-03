@@ -6,6 +6,7 @@
 
 import { createLogger } from '../logger';
 import { config } from '../config';
+import { ERROR_TEXT_MAX_LENGTH } from '../constants';
 import { OperationTimer, formatMetrics } from '../metrics';
 import { extractJsonFromResponse } from './modal-response-parser';
 import type { AIProvider, AIRequest, AIStreamingRequest, AIResponse } from './ai-provider';
@@ -215,7 +216,7 @@ export class ModalClient implements AIProvider {
         const errorText = await response.text();
         logger.error('Modal API error response', {
           status: response.status,
-          errorText: errorText.slice(0, 500),
+          errorText: errorText.slice(0, ERROR_TEXT_MAX_LENGTH),
         });
         throw new Error(`Modal API error: ${response.status} - ${errorText}`);
       }
@@ -395,7 +396,9 @@ export class ModalClient implements AIProvider {
    * Calculates exponential backoff delay with jitter.
    */
   private calculateBackoff(attempt: number): number {
+    // Exponential backoff: doubles the delay with each retry attempt (2^attempt)
     const exponentialDelay = this.retryBaseDelay * Math.pow(2, attempt);
+    // Add up to 30% random jitter (0.3) to prevent thundering herd problem
     const jitter = Math.random() * 0.3 * exponentialDelay;
     return exponentialDelay + jitter;
   }

@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { ErrorResponse } from '@ai-app-builder/shared';
+
 import { deserializeProjectState, ExportProjectRequestSchema } from '@ai-app-builder/shared';
 import { exportAsZipBuffer } from '../../../lib/core';
 import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError } from '../../../lib/api';
@@ -75,6 +75,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       });
       const timeoutError = AppError.network(
         'OPERATION_TIMEOUT',
+        // Convert milliseconds to seconds (1000ms = 1s) for human-readable message
         `Project export timed out after ${error.timeoutMs / 1000} seconds`,
         { timeoutMs: error.timeoutMs },
         504

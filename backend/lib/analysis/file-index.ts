@@ -12,8 +12,6 @@ import type {
   FileIndexEntry,
   ExportInfo,
   ImportInfo,
-  ComponentInfo,
-  FunctionInfo,
 } from '@ai-app-builder/shared';
 import type { ProjectState } from '@ai-app-builder/shared';
 import {

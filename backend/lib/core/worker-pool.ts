@@ -79,7 +79,7 @@ export class WorkerPool {
             this.createWorker(index);
             // After recreating, try to process queue
             this.processQueue();
-        }, 1000);
+        }, 1000); // 1000ms = 1 second delay
     }
 
     public runTask(data: any): Promise<any> {

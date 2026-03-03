@@ -1,3 +1,10 @@
+// API retry defaults
+export const DEFAULT_API_MAX_RETRIES = 3;
+export const DEFAULT_RETRY_BASE_DELAY_MS = 1000; // 1 second
+
+// Error logging
+export const ERROR_TEXT_MAX_LENGTH = 500;
+
 // Diff computation constants
 export const DIFF_CONTEXT_LINES = 3;
 

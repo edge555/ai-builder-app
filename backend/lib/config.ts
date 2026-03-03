@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { createLogger } from './logger';
 import {
+  DEFAULT_API_MAX_RETRIES,
+  DEFAULT_RETRY_BASE_DELAY_MS,
   DIFF_CONTEXT_LINES,
   MAX_COMPONENT_LINES,
   MAX_APP_LINES,
@@ -108,8 +110,8 @@ export const config: BackendConfig = {
   },
   api: {
     timeout: API_REQUEST_TIMEOUT,
-    maxRetries: 3,
-    retryBaseDelay: 1000,
+    maxRetries: DEFAULT_API_MAX_RETRIES,
+    retryBaseDelay: DEFAULT_RETRY_BASE_DELAY_MS,
   },
   provider: {
     name: env.AI_PROVIDER,
