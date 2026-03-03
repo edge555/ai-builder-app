@@ -91,21 +91,3 @@ export function isRetryableError(errorType?: ErrorType): boolean {
   // Retry rate limits and API errors
   return errorType === 'rate_limit' || errorType === 'api_error' || errorType === 'unknown';
 }
-
-/**
- * Gets a suggested action for the user based on error type
- */
-export function getSuggestedAction(errorType?: ErrorType): string | null {
-  switch (errorType) {
-    case 'timeout':
-      return 'Try breaking down your request into smaller steps or simplifying the requirements.';
-    case 'rate_limit':
-      return 'Wait a few moments before making another request.';
-    case 'api_error':
-      return 'Check your connection and try again. If the problem persists, contact support.';
-    case 'cancelled':
-      return null; // No action needed for user cancellation
-    default:
-      return 'Please try again. If the problem persists, contact support.';
-  }
-}

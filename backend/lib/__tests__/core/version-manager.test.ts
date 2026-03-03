@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { VersionManager, createVersionManager } from '../../core';
+import { VersionManager, createVersionManager } from '../../core/version-manager';
 import type { ProjectState, FileDiff } from '@ai-app-builder/shared';
 
 describe('VersionManager', () => {

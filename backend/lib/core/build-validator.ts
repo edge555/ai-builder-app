@@ -334,7 +334,7 @@ let buildValidatorInstance: BuildValidator | null = null;
 /**
  * Gets the singleton BuildValidator instance.
  */
-export function getBuildValidator(): BuildValidator {
+function getBuildValidator(): BuildValidator {
     if (!buildValidatorInstance) {
         buildValidatorInstance = new BuildValidator();
     }

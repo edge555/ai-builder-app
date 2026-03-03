@@ -81,14 +81,3 @@ export function usePreviewErrorActions(): PreviewErrorActions {
     return context;
 }
 
-/**
- * Hook to access preview error context (both state and actions).
- * @deprecated Use usePreviewErrorState or usePreviewErrorActions instead to reduce re-renders.
- */
-export function usePreviewError(): PreviewErrorContextValue {
-    const context = useContext(PreviewErrorContext);
-    if (!context) {
-        throw new Error('usePreviewError must be used within a PreviewErrorProvider');
-    }
-    return context;
-}

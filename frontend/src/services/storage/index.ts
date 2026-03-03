@@ -3,6 +3,5 @@ export type { StoredProject, ProjectMetadata, SerializedChatMessage } from './ty
 export {
   toStoredProject,
   toSerializedProjectState,
-  serializeChatMessages,
   deserializeChatMessages,
 } from './types';

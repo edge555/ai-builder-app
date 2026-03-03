@@ -263,14 +263,14 @@ export function parseFunctions(content: string): FunctionInfo[] {
 /**
  * Check if a name follows React component naming convention (PascalCase).
  */
-export function isComponentName(name: string): boolean {
+function isComponentName(name: string): boolean {
   return /^[A-Z][a-zA-Z0-9]*$/.test(name);
 }
 
 /**
  * Check if content contains JSX.
  */
-export function containsJSX(content: string): boolean {
+function containsJSX(content: string): boolean {
   // Look for JSX patterns: <Component, <div, etc.
   return /<[A-Za-z][^>]*>/.test(content) || /return\s*\(?\s*</.test(content);
 }
@@ -278,7 +278,7 @@ export function containsJSX(content: string): boolean {
 /**
  * Find the end line of a component or function.
  */
-export function findComponentEnd(lines: string[], startLine: number): number {
+function findComponentEnd(lines: string[], startLine: number): number {
   let braceCount = 0;
   let started = false;
 
@@ -305,14 +305,14 @@ export function findComponentEnd(lines: string[], startLine: number): number {
 /**
  * Find the end line of a function.
  */
-export function findFunctionEnd(lines: string[], startLine: number): number {
+function findFunctionEnd(lines: string[], startLine: number): number {
   return findComponentEnd(lines, startLine);
 }
 
 /**
  * Extract props from a component definition.
  */
-export function extractProps(line: string, lines: string[], lineIndex: number): string[] {
+function extractProps(line: string, lines: string[], lineIndex: number): string[] {
   // Look for destructured props: { prop1, prop2 }
   const propsMatch = line.match(/\(\s*\{\s*([^}]+)\s*\}/);
   if (propsMatch) {
@@ -334,7 +334,7 @@ export function extractProps(line: string, lines: string[], lineIndex: number): 
 /**
  * Parse function parameters.
  */
-export function parseParams(paramsStr: string): string[] {
+function parseParams(paramsStr: string): string[] {
   if (!paramsStr.trim()) return [];
 
   return paramsStr

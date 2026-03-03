@@ -335,5 +335,3 @@ export function createLogger(name: string, requestId?: string): Logger {
  */
 export const logger = createLogger('app');
 
-// Re-export for convenience
-export { CACHED_LOG_LEVEL, CACHED_LOG_FORMAT, CACHED_CATEGORIES };

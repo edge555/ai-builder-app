@@ -35,7 +35,7 @@ const envSchema = z.object({
  * Validates and returns environment variables.
  * Fails fast if required variables are missing or invalid.
  */
-export function validateEnv() {
+function validateEnv() {
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {
@@ -160,15 +160,3 @@ export function getMaxOutputTokens(
   }[operationType];
 }
 
-// Re-export constants for convenience
-export {
-  DIFF_CONTEXT_LINES,
-  MAX_PRIMARY_SLICES,
-  MAX_CONTEXT_SLICES,
-  MAX_COMPONENT_LINES,
-  MAX_APP_LINES,
-  API_REQUEST_TIMEOUT,
-  OPENROUTER_TIMEOUT,
-  VALID_CODE_EXTENSIONS,
-  VALID_STYLE_EXTENSIONS,
-} from './constants';

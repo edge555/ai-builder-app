@@ -62,14 +62,14 @@ export function computeDiffs(
 /**
  * Check if a file diff has real changes (not just whitespace).
  */
-export function hasRealChanges(fileDiff: FileDiff): boolean {
+function hasRealChanges(fileDiff: FileDiff): boolean {
     return sharedHasRealChanges(fileDiff.hunks);
 }
 
 /**
  * Create a diff for an added file.
  */
-export function createAddedFileDiff(filePath: string, content: string): FileDiff {
+function createAddedFileDiff(filePath: string, content: string): FileDiff {
     const lines = trimTrailingEmptyLines(content.split('\n').map(normalizeLine));
     return {
         filePath,
@@ -91,7 +91,7 @@ export function createAddedFileDiff(filePath: string, content: string): FileDiff
 /**
  * Create a diff for a deleted file.
  */
-export function createDeletedFileDiff(filePath: string, content: string): FileDiff {
+function createDeletedFileDiff(filePath: string, content: string): FileDiff {
     const lines = trimTrailingEmptyLines(content.split('\n').map(normalizeLine));
     return {
         filePath,

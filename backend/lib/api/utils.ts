@@ -11,7 +11,7 @@ import { gzip } from 'zlib';
 import { promisify } from 'util';
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
-import type { ErrorResponse, ApiError } from '@ai-app-builder/shared/types';
+import type { ErrorResponse } from '@ai-app-builder/shared/types';
 import { sanitizeError } from '@ai-app-builder/shared/utils';
 import { config } from '../config';
 import { AppError } from './error';
@@ -19,22 +19,6 @@ import { createLogger } from '../logger';
 
 const logger = createLogger('api/utils');
 const gzipAsync = promisify(gzip);
-
-/**
- * Options for creating an error response
- */
-export interface ErrorResponseOptions {
-  /** Category of the error */
-  type: ApiError['type'];
-  /** Error code for programmatic handling */
-  code: string;
-  /** Human-readable error message */
-  message: string;
-  /** Additional error details */
-  details?: Record<string, unknown>;
-  /** Whether the error is recoverable (user can retry) */
-  recoverable?: boolean;
-}
 
 /**
  * Gets CORS headers from configuration.
@@ -76,25 +60,6 @@ export function getCorsHeaders(request?: Request): Record<string, string> {
     'Access-Control-Allow-Methods': config.cors.methods.join(', '),
     'Access-Control-Allow-Headers': config.cors.headers.join(', '),
     'Access-Control-Allow-Credentials': 'true',
-  };
-}
-
-/**
- * Creates a standardized error response body.
- * 
- * @param options - Error response options
- * @returns Formatted error response object
- */
-export function createErrorResponse(options: ErrorResponseOptions): ErrorResponse {
-  return {
-    success: false,
-    error: {
-      type: options.type,
-      code: options.code,
-      message: options.message,
-      details: options.details,
-      recoverable: options.recoverable ?? true,
-    },
   };
 }
 
@@ -163,21 +128,9 @@ export function handleOptions(): NextResponse {
 }
 
 /**
- * Creates a JSON response with automatic CORS headers.
- *
- * @param data - Response data
- * @param status - HTTP status code (default: 200)
- * @param request - Optional request to validate CORS origin
- * @returns NextResponse with data and CORS headers
- */
-export function jsonResponse<T>(data: T, status = 200, request?: Request): NextResponse<T> {
-  return NextResponse.json(data, { status, headers: getCorsHeaders(request) });
-}
-
-/**
  * Options for gzipJson.
  */
-export interface GzipJsonOptions {
+interface GzipJsonOptions {
   /** HTTP status code (default: 200) */
   status?: number;
   /** Extra headers to include alongside CORS and compression headers */
@@ -253,7 +206,7 @@ export class TimeoutError extends Error {
 /**
  * Options for withTimeout
  */
-export interface WithTimeoutOptions {
+interface WithTimeoutOptions {
   /** Timeout duration in milliseconds */
   timeoutMs: number;
   /** Optional cleanup function to call on timeout */

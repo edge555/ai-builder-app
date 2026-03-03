@@ -56,7 +56,7 @@ export function validateJsonStructure(input: unknown): ValidationError[] {
 /**
  * Sanitizes a JSON string by fixing common issues from AI output.
  */
-export function sanitizeJsonString(input: string): string {
+function sanitizeJsonString(input: string): string {
     let result = input;
     result = result.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 

@@ -20,7 +20,7 @@ const logger = createLogger('validation-pipeline');
 /**
  * Main validation pipeline that runs all validators.
  */
-export function validate(aiOutput: unknown): ValidationResult {
+function validate(aiOutput: unknown): ValidationResult {
   const errors: ValidationError[] = [];
 
   // Step 1: Validate JSON structure

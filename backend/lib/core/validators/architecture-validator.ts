@@ -10,7 +10,7 @@ import { MAX_APP_LINES } from '../../constants';
  * Validates that the project follows modular architecture patterns.
  * Returns warnings (not errors) for poor structure to encourage better practices.
  */
-export function validateModularArchitecture(files: Record<string, string>): ValidationError[] {
+function validateModularArchitecture(files: Record<string, string>): ValidationError[] {
     const warnings: ValidationError[] = [];
     const filePaths = Object.keys(files);
 

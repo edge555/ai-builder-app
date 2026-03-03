@@ -94,15 +94,3 @@ export function useGenerationActions(): GenerationActionsValue {
     return context;
 }
 
-/**
- * Hook to access the full generation context (state + actions).
- * Must be used within a GenerationProvider.
- * @deprecated Prefer using useGenerationState() or useGenerationActions() to reduce re-renders.
- */
-export function useGeneration(): GenerationContextValue {
-    const context = useContext(GenerationContext);
-    if (!context) {
-        throw new Error('useGeneration must be used within a GenerationProvider');
-    }
-    return context;
-}

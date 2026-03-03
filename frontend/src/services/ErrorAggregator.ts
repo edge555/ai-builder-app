@@ -229,5 +229,4 @@ export class ErrorAggregator {
   }
 }
 
-// Removed singleton instance for React-friendly context pattern
-// export const errorAggregator = new ErrorAggregator();
+

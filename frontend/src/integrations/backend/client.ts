@@ -1,7 +1,4 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-
 import { config } from '@/config';
-import type { Database } from '@/integrations/supabase/types';
 import { createLogger } from '@/utils/logger';
 
 const backendClientLogger = createLogger('Backend');
@@ -24,7 +21,7 @@ if (!hasValidConfig) {
   );
 }
 
-export const SUPABASE_URL = SUPABASE_URL_ENV || PLACEHOLDER_URL;
+const SUPABASE_URL = SUPABASE_URL_ENV || PLACEHOLDER_URL;
 export const SUPABASE_ANON_KEY = SUPABASE_ANON_KEY_ENV || PLACEHOLDER_KEY;
 
 // API base URL from validated config
@@ -34,18 +31,3 @@ const API_BASE_URL = config.api.baseUrl;
 export const FUNCTIONS_BASE_URL = API_BASE_URL
   ? `${API_BASE_URL}/api`
   : `${SUPABASE_URL}/functions/v1`;
-
-// Flag to check if backend is properly configured
-export const isBackendConfigured = hasValidConfig;
-
-export const backend: SupabaseClient<Database> = createClient<Database>(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY,
-  {
-    auth: {
-      storage: typeof localStorage !== 'undefined' ? localStorage : undefined,
-      persistSession: true,
-      autoRefreshToken: true,
-    },
-  }
-);

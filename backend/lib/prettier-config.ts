@@ -3,7 +3,7 @@ import * as prettier from 'prettier';
 /**
  * Shared Prettier formatting options used across the application.
  */
-export const prettierOptions: prettier.Options = {
+const prettierOptions: prettier.Options = {
   semi: true,
   singleQuote: true,
   trailingComma: 'es5',
@@ -17,7 +17,7 @@ export const prettierOptions: prettier.Options = {
  * @param filePath - The path to the file to be formatted
  * @returns The parser name for Prettier, or undefined if no parser is available
  */
-export function getParserForFile(filePath: string): string | undefined {
+function getParserForFile(filePath: string): string | undefined {
   const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
 
   if (['.ts', '.tsx'].includes(ext)) return 'typescript';

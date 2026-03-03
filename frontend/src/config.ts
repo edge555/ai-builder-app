@@ -17,7 +17,7 @@ const envSchema = z.object({
  * Validates and returns environment variables.
  * Fails fast if required variables are missing or invalid.
  */
-export function validateEnv() {
+function validateEnv() {
   const result = envSchema.safeParse(import.meta.env);
 
   if (!result.success) {

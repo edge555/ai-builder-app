@@ -43,7 +43,7 @@ export const initialSuggestions: PromptSuggestion[] = [
 /**
  * Context-aware suggestions based on existing project features.
  */
-export const contextualSuggestions: Record<string, PromptSuggestion[]> = {
+const contextualSuggestions: Record<string, PromptSuggestion[]> = {
   // Suggestions when project has no authentication
   noAuth: [
     {

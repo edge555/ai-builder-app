@@ -1,26 +1,3 @@
-export { ChatInterface, type ChatInterfaceProps, type ChatMessage } from './ChatInterface';
-export { LoadingIndicator, type LoadingPhase } from './ChatInterface/LoadingIndicator';
-export { ChatInput, type ChatInputProps } from './ChatInterface/ChatInput';
-// PreviewPanel is lazy-loaded in AppLayout - not exported to enable code-splitting
-// export { PreviewPanel, type PreviewPanelProps } from './PreviewPanel';
-export { PreviewHeader, type PreviewHeaderProps } from './PreviewPanel/PreviewHeader';
-export { transformFilesForSandpack, hasRequiredFiles, getEntryFile, DEFAULT_FILES } from './PreviewPanel/previewUtils';
-export { ErrorBoundary, type ErrorBoundaryProps } from './ErrorBoundary';
-export { ComponentErrorBoundary, type ComponentErrorBoundaryProps } from './ComponentErrorBoundary';
-export { ErrorMessage, classifyError, type ErrorMessageProps, type ErrorType } from './ErrorMessage';
+export type { ChatMessage } from './ChatInterface';
+export { ErrorBoundary } from './ErrorBoundary';
 export { AppLayout } from './AppLayout';
-export { ChatPanel, type ChatPanelProps } from './AppLayout/ChatPanel';
-export { PreviewSection, type PreviewSectionProps } from './AppLayout/PreviewSection';
-export { ResizablePanel, type ResizablePanelProps } from './AppLayout/ResizablePanel';
-export { ExportButton } from './ExportButton';
-export { PanelToggle, type ActivePanel } from './PanelToggle';
-export { PromptSuggestions, type PromptSuggestionsProps } from './PromptSuggestions';
-export { UndoRedoButtons, type UndoRedoButtonsProps } from './UndoRedoButtons';
-export { StreamingIndicator, type StreamingIndicatorProps } from './StreamingIndicator';
-export { RepairStatus, type RepairStatusProps, type RepairPhase } from './RepairStatus';
-export { StatusIndicator } from './StatusIndicator';
-export { TabBar, type TabBarProps, type Tab } from './TabBar/TabBar';
-export { BrowserChrome, type BrowserChromeProps } from './BrowserChrome/BrowserChrome';
-export { MarkdownRenderer } from './MarkdownRenderer/MarkdownRenderer';
-export { FileChangeSummary, type FileChangeSummaryProps } from './FileChangeSummary/FileChangeSummary';
-export { QuickActions, type QuickActionsProps } from './QuickActions/QuickActions';

@@ -6,7 +6,7 @@
 import type { ValidationError } from '@ai-app-builder/shared';
 
 // Forbidden patterns in generated code
-export const FORBIDDEN_PATTERNS = [
+const FORBIDDEN_PATTERNS = [
     { pattern: /```[\s\S]*?```/g, name: 'markdown code blocks' },
     { pattern: /^\s*```\w*\s*$/gm, name: 'markdown code fence' },
     { pattern: /\/\/\s*TODO\b/gi, name: 'TODO comments' },

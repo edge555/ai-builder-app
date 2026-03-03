@@ -102,7 +102,3 @@ export function createLogger(name: string): Logger {
     };
 }
 
-/**
- * Default logger instance for general use
- */
-export const logger = createLogger('app');

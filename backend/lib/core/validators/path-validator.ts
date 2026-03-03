@@ -6,14 +6,14 @@
 import type { ValidationError } from '@ai-app-builder/shared';
 
 // Valid file extensions for generated projects
-export const VALID_EXTENSIONS = new Set([
+const VALID_EXTENSIONS = new Set([
     '.ts', '.tsx', '.js', '.jsx', '.json', '.css', '.scss', '.html', '.md', '.txt',
     '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp',
     '.yaml', '.yml', '.env', '.gitignore', '.eslintrc', '.prettierrc',
 ]);
 
 // Path traversal patterns
-export const PATH_TRAVERSAL_PATTERNS = [
+const PATH_TRAVERSAL_PATTERNS = [
     /\.\.\//,
     /\.\.\\/,
     /^\//, // absolute paths
@@ -21,7 +21,7 @@ export const PATH_TRAVERSAL_PATTERNS = [
 ];
 
 // Invalid path characters
-export const INVALID_PATH_CHARS = /[<>:"|?*\x00-\x1f]/;
+const INVALID_PATH_CHARS = /[<>:"|?*\x00-\x1f]/;
 
 /**
  * Validates file paths for security and correctness.

@@ -13,10 +13,6 @@ export const MAX_APP_LINES = 100;
 export const API_REQUEST_TIMEOUT = 300000; // 5 minutes
 export const OPENROUTER_TIMEOUT = 300000; // 5 minutes
 
-// Valid file extensions
-export const VALID_CODE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'];
-export const VALID_STYLE_EXTENSIONS = ['.css', '.scss'];
-
 // Token budget for AI context
 export const TOKEN_BUDGET = 4000;
 export const CHARS_PER_TOKEN = 4;

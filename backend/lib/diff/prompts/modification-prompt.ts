@@ -19,12 +19,6 @@ import {
 import { getProviderPromptConfig } from '../../core/prompts/provider-prompt-config';
 
 /**
- * Design system prompt for UI-related modifications.
- * Applied when the FilePlanner determines the modification involves UI changes.
- */
-export const DESIGN_SYSTEM_PROMPT = DESIGN_SYSTEM_CONSTANTS;
-
-/**
  * Builds the core modification prompt with user input properly wrapped.
  */
 function buildModificationPrompt(userPrompt: string, includeDesignSystem: boolean): string {

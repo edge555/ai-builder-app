@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import JSZip from 'jszip';
-import { exportAsZipBuffer, createExportService } from '../../core';
+import { exportAsZipBuffer, createExportService } from '../../core/export-service';
 import { ProjectState } from '@ai-app-builder/shared';
 
 describe('Export Service', () => {
