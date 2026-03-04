@@ -1,10 +1,12 @@
 /**
- * Logging Service
+ * @module logger
+ * @description Structured logging service for the backend.
+ * Provides configurable log levels (debug/info/warn/error), ISO timestamps,
+ * request correlation IDs for distributed tracing, JSON and text output formats,
+ * category-based filtering (ai/api/core/diff/analysis/streaming), and
+ * automatic redaction of sensitive fields (API keys, tokens, secrets).
  *
- * Provides structured logging with configurable log levels.
- * Supports debug, info, warn, and error levels with ISO timestamps.
- * Includes request correlation ID support for distributed tracing.
- * Supports JSON output format and sensitive data redaction.
+ * @requires No external runtime dependencies — uses Node.js console only.
  */
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';

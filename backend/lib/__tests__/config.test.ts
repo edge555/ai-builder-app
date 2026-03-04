@@ -100,7 +100,7 @@ describe('config - environment validation', () => {
 
     await expect(async () => {
       await import('../config');
-    }).rejects.toThrow('OPENROUTER_API_KEY is required');
+    }).rejects.toThrow('Invalid OPENROUTER_API_KEY');
   });
 
   it('should accept valid configuration', async () => {

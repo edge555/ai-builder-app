@@ -1,10 +1,15 @@
 /**
- * Slice Selector Service
- * 
- * Selects relevant code slices for modification requests based on
- * the file index and dependency graph.
- * 
- * Requirements: 3.4, 3.5, 3.6
+ * @module analysis/slice-selector
+ * @description Selects relevant code slices for modification requests.
+ * Combines file-index search with dependency-graph traversal to select
+ * primary files (full content) and context files (outline only) based
+ * on intent classification. Context files use outline extraction to
+ * reduce token usage while preserving structural information.
+ *
+ * @requires ./file-index - FileIndex for symbol/path search
+ * @requires ./dependency-graph - DependencyGraph for transitive file resolution
+ * @requires ../constants - MAX_PRIMARY_SLICES, MAX_CONTEXT_SLICES limits
+ * @requires @ai-app-builder/shared - IntentClassification, ProjectState, CodeSlice types
  */
 
 import type { IntentClassification, ProjectState, CodeSlice } from '@ai-app-builder/shared';

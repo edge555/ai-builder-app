@@ -1,11 +1,12 @@
 /**
- * File Tree Metadata Generator
+ * @module analysis/file-planner/metadata-generator
+ * @description Generates compact file-tree metadata for the AI planning call.
+ * Renders a hierarchical text representation showing file paths, line counts,
+ * file types, and exported symbol names — but no code content.
+ * Also provides token estimation and token-budget checking utilities.
  *
- * Generates compact file tree metadata for the AI planning call.
- * Shows file paths, line counts, file types, and exported symbol names.
- * No code content is included in the output.
- *
- * Requirements: 2.1, 2.2, 2.3, 2.4
+ * @requires ./types - ChunkIndex, FileMetadata, ExportInfo types
+ * @requires ../../constants - CHARS_PER_TOKEN constant
  */
 
 import { CHARS_PER_TOKEN } from '../../constants';

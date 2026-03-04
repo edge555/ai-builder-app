@@ -1,3 +1,16 @@
+/**
+ * @module ai/provider-config-store
+ * @description Persists and loads the runtime AI provider override.
+ * Allows the settings page to switch between `openrouter` and `modal`
+ * without restarting the server. The override is stored at
+ * `data/provider-config.json`; when absent the `AI_PROVIDER` env var
+ * is used as the default.
+ *
+ * @requires fs/promises - Async filesystem read/write
+ * @requires ../config - Env-var-based provider default
+ * @requires ../logger - Structured logging
+ */
+
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { createLogger } from '../logger';

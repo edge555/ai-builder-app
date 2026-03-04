@@ -1,4 +1,5 @@
 import { createLogger } from '@/utils/logger';
+import { stateError, notFoundError } from '@ai-app-builder/shared/utils';
 
 import type { StoredProject, ProjectMetadata, SerializedChatMessage } from './types';
 
@@ -128,7 +129,7 @@ class StorageService {
       await this.initialize();
     }
     if (!this.db) {
-      throw new Error('Failed to initialize database');
+      throw new Error(stateError('Database', 'failed to initialize'));
     }
     return this.db;
   }
@@ -603,7 +604,7 @@ class StorageService {
       );
 
       if (!record) {
-        throw new Error(`Project ${id} not found`);
+        throw new Error(notFoundError('Project', id));
       }
 
       await new Promise<void>((resolve, reject) => {
@@ -628,7 +629,7 @@ class StorageService {
     try {
       const project = await this.getProject(id);
       if (!project) {
-        throw new Error(`Project ${id} not found`);
+        throw new Error(notFoundError('Project', id));
       }
 
       const newId = crypto.randomUUID();

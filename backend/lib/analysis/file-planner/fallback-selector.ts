@@ -1,10 +1,12 @@
 /**
- * Fallback Selector
+ * @module analysis/file-planner/fallback-selector
+ * @description Heuristic-based file selection when AI planning fails or is unavailable.
+ * Combines four scoring strategies: keyword symbol matching, file name matching,
+ * intent-based pattern matching, and content keyword scanning. Results are merged
+ * and ranked to select primary and context files. Always guarantees at least one file.
  *
- * Heuristic-based file selection when AI planning fails.
- * Uses keyword matching, file name matching, and intent patterns.
- *
- * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
+ * @requires ./types - ChunkIndex, FilePlannerResult, ScoredFile types
+ * @requires @ai-app-builder/shared - ProjectState type
  */
 
 import type { ProjectState } from '@ai-app-builder/shared';
@@ -16,42 +18,42 @@ const INTENT_PATTERNS: Array<{
   targetPatterns: string[];
   fileTypes: string[];
 }> = [
-  {
-    keywords: ['add', 'create', 'new', 'component'],
-    targetPatterns: ['App.tsx', 'App.jsx', 'index.tsx', 'index.jsx'],
-    fileTypes: ['.tsx', '.jsx'],
-  },
-  {
-    keywords: ['style', 'css', 'color', 'layout', 'design', 'theme'],
-    targetPatterns: ['.css', '.scss', '.less', 'styles'],
-    fileTypes: ['.css', '.scss', '.less'],
-  },
-  {
-    keywords: ['api', 'endpoint', 'route', 'fetch', 'request'],
-    targetPatterns: ['route.ts', 'route.js', '/api/'],
-    fileTypes: ['.ts', '.js'],
-  },
-  {
-    keywords: ['type', 'interface', 'types'],
-    targetPatterns: ['types.ts', 'types/index.ts', 'types.d.ts'],
-    fileTypes: ['.ts'],
-  },
-  {
-    keywords: ['config', 'configuration', 'settings'],
-    targetPatterns: ['.config.', 'config.ts', 'config.js'],
-    fileTypes: ['.ts', '.js', '.json'],
-  },
-  {
-    keywords: ['hook', 'use'],
-    targetPatterns: ['hooks/', 'use'],
-    fileTypes: ['.ts', '.tsx'],
-  },
-  {
-    keywords: ['util', 'helper', 'utility'],
-    targetPatterns: ['utils/', 'helpers/', 'lib/'],
-    fileTypes: ['.ts', '.js'],
-  },
-];
+    {
+      keywords: ['add', 'create', 'new', 'component'],
+      targetPatterns: ['App.tsx', 'App.jsx', 'index.tsx', 'index.jsx'],
+      fileTypes: ['.tsx', '.jsx'],
+    },
+    {
+      keywords: ['style', 'css', 'color', 'layout', 'design', 'theme'],
+      targetPatterns: ['.css', '.scss', '.less', 'styles'],
+      fileTypes: ['.css', '.scss', '.less'],
+    },
+    {
+      keywords: ['api', 'endpoint', 'route', 'fetch', 'request'],
+      targetPatterns: ['route.ts', 'route.js', '/api/'],
+      fileTypes: ['.ts', '.js'],
+    },
+    {
+      keywords: ['type', 'interface', 'types'],
+      targetPatterns: ['types.ts', 'types/index.ts', 'types.d.ts'],
+      fileTypes: ['.ts'],
+    },
+    {
+      keywords: ['config', 'configuration', 'settings'],
+      targetPatterns: ['.config.', 'config.ts', 'config.js'],
+      fileTypes: ['.ts', '.js', '.json'],
+    },
+    {
+      keywords: ['hook', 'use'],
+      targetPatterns: ['hooks/', 'use'],
+      fileTypes: ['.ts', '.tsx'],
+    },
+    {
+      keywords: ['util', 'helper', 'utility'],
+      targetPatterns: ['utils/', 'helpers/', 'lib/'],
+      fileTypes: ['.ts', '.js'],
+    },
+  ];
 
 /**
  * FallbackSelector provides heuristic-based file selection
@@ -208,7 +210,7 @@ export class FallbackSelector {
   ): ScoredFile[] {
     const scores: ScoredFile[] = [];
     const promptWords = this.extractWords(prompt.toLowerCase());
-    
+
     // Skip if no meaningful words
     if (promptWords.length === 0) {
       return scores;

@@ -1,5 +1,20 @@
+/**
+ * @module config
+ * @description Backend configuration loaded and validated at startup.
+ * Reads environment variables via Zod, validates provider-specific
+ * requirements, and exports a typed `config` object consumed across
+ * the backend. Also exports `getMaxOutputTokens` for provider-aware
+ * token limit selection.
+ *
+ * @requires zod - Schema validation for environment variables
+ * @requires ./logger - Startup logging
+ * @requires ./constants - Named constant values
+ * @requires @ai-app-builder/shared/utils - Error message helpers
+ */
+
 import { z } from 'zod';
 import { createLogger } from './logger';
+import { validationError, envVarError } from '@ai-app-builder/shared/utils';
 import {
   DEFAULT_API_MAX_RETRIES,
   DEFAULT_RETRY_BASE_DELAY_MS,
@@ -45,17 +60,17 @@ function validateEnv() {
     result.error.issues.forEach((issue) => {
       console.error(`   - ${issue.path.join('.')}: ${issue.message}`);
     });
-    throw new Error('Invalid environment configuration');
+    throw new Error(validationError('environment configuration', result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')));
   }
 
   const data = result.data;
 
   // Conditional validation: require provider-specific vars
   if (data.AI_PROVIDER === 'openrouter' && !data.OPENROUTER_API_KEY) {
-    throw new Error('OPENROUTER_API_KEY is required when AI_PROVIDER=openrouter');
+    throw new Error(envVarError('OPENROUTER_API_KEY', 'required when AI_PROVIDER=openrouter'));
   }
   if (data.AI_PROVIDER === 'modal' && !data.MODAL_API_URL) {
-    throw new Error('MODAL_API_URL is required when AI_PROVIDER=modal');
+    throw new Error(envVarError('MODAL_API_URL', 'required when AI_PROVIDER=modal'));
   }
 
   return data;

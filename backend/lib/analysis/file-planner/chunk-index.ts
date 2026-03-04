@@ -1,10 +1,12 @@
 /**
- * Chunk Index Builder
+ * @module analysis/file-planner/chunk-index
+ * @description Parses project source files into discrete typed code chunks.
+ * Extracts functions, arrow functions, React components, classes, interfaces,
+ * type aliases, and constants using regex patterns. Non-code files get metadata
+ * only (no chunks).
  *
- * Parses project files into discrete code chunks using regex patterns.
- * Extracts functions, components, classes, interfaces, types, and constants.
- *
- * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 10.3, 10.4
+ * @requires ./types - CodeChunk, ChunkIndex, ChunkType, FileMetadata types
+ * @requires @ai-app-builder/shared - ProjectState type
  */
 
 import type { ProjectState } from '@ai-app-builder/shared';

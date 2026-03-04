@@ -2,6 +2,7 @@ import { forwardRef, useState, useCallback } from 'react';
 
 
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
+import { validationError, serviceError } from '@ai-app-builder/shared/utils';
 import { createLogger } from '@/utils/logger';
 
 import { useProjectState } from '../../context';
@@ -26,7 +27,7 @@ export const ExportButton = forwardRef<HTMLButtonElement, Record<string, never>>
 
         try {
             if (!FUNCTIONS_BASE_URL || !SUPABASE_ANON_KEY) {
-                throw new Error('Export is not configured');
+                throw new Error(validationError('export', 'not configured', 'FUNCTIONS_BASE_URL and SUPABASE_ANON_KEY'));
             }
 
             const response = await fetch(`${FUNCTIONS_BASE_URL}/export`, {
@@ -41,7 +42,7 @@ export const ExportButton = forwardRef<HTMLButtonElement, Record<string, never>>
             });
 
             if (!response.ok) {
-                throw new Error(`Export failed: ${response.status} ${response.statusText}`);
+                throw new Error(serviceError('Export', `${response.status} ${response.statusText}`));
             }
 
             // Get the blob from the response

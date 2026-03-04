@@ -1,11 +1,20 @@
 /**
- * Agent Router
+ * @module ai/agent-router
+ * @description Task-specific AI provider routing for the OpenRouter backend.
+ * `AgentRouter` reads the persisted agent config and builds `FallbackAIProvider`
+ * instances that try models in priority order. If one model fails, the next is tried.
+ * Only used in OpenRouter mode — Modal mode bypasses this entirely.
  *
- * Creates task-specific AI providers that try models in priority order.
- * Used only in OpenRouter mode — Modal mode bypasses this entirely.
+ * @requires ./agent-config-store - Persisted model configuration loader
+ * @requires ./openrouter-client - Individual model clients
+ * @requires ./ai-provider - AIProvider interface
+ * @requires ./agent-config-types - TaskType and AgentConfig types
+ * @requires ../metrics - Operation timing
+ * @requires ../logger - Structured logging
  */
 
 import { createLogger } from '../logger';
+import { stateError, notFoundError, envVarError } from '@ai-app-builder/shared/utils';
 import { config } from '../config';
 import { load, getActiveModelsForTask } from './agent-config-store';
 import { OpenRouterClient } from './openrouter-client';
@@ -34,18 +43,18 @@ export class AgentRouter {
 
   createProviderForTask(taskType: TaskType): AIProvider {
     if (!this.agentConfig) {
-      throw new Error('AgentRouter not initialized — call init() first');
+      throw new Error(stateError('AgentRouter', 'not initialized — call init() first'));
     }
 
     const models = getActiveModelsForTask(this.agentConfig, taskType);
 
     if (models.length === 0) {
-      throw new Error(`No active models configured for task type: ${taskType}`);
+      throw new Error(notFoundError('Active models', `task type ${taskType}`));
     }
 
     const apiKey = config.provider.openrouterApiKey;
     if (!apiKey) {
-      throw new Error('OPENROUTER_API_KEY is not configured');
+      throw new Error(envVarError('OPENROUTER_API_KEY', 'required for OpenRouter provider'));
     }
 
     const clients = models.map(

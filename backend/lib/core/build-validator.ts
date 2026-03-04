@@ -1,12 +1,11 @@
 /**
- * Build Validator Service
- * 
- * Validates generated code for common build issues:
- * - Missing dependencies (imports not in package.json)
- * - Broken local imports (files that don't exist)
- * - Basic syntax validation
- * 
- * Used for auto-retry loop when build errors are detected.
+ * @module core/build-validator
+ * @description Validates AI-generated code for common build issues before delivery.
+ * Checks for missing package.json dependencies, broken relative imports, and
+ * Node.js built-in modules used in browser code. Provides formatted error messages
+ * for AI auto-correction.
+ *
+ * @requires ../logger - Error logging for unparseable package.json
  */
 
 import { createLogger } from '../logger';

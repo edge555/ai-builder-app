@@ -1,11 +1,15 @@
 /**
- * Intent Detector
- *
- * Classifies a user prompt into a TaskType using the 'intent' models
- * configured in the agent config. Uses low temperature and few tokens
- * for fast, deterministic classification.
- *
+ * @module ai/intent-detector
+ * @description Classifies user prompts into `TaskType` values for model routing.
+ * Calls the `intent` task models configured in agent config with a low-token,
+ * low-temperature request for fast deterministic classification.
+ * Falls back to `coding` when no intent models are configured or on any failure.
  * Only used in OpenRouter mode.
+ *
+ * @requires ./agent-router - AgentRouter for obtaining intent provider
+ * @requires ./agent-config-types - TaskType
+ * @requires ../metrics - Operation timing
+ * @requires ../logger - Structured logging
  */
 
 import { createLogger } from '../logger';

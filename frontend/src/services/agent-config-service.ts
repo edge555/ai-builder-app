@@ -1,4 +1,5 @@
 import { FUNCTIONS_BASE_URL } from '@/integrations/backend/client';
+import { serviceError } from '@ai-app-builder/shared/utils';
 
 export type TaskType = 'intent' | 'planning' | 'coding' | 'debugging' | 'documentation';
 
@@ -30,7 +31,7 @@ export interface ProviderConfigResponse {
 export async function fetchAgentConfig(): Promise<AgentConfig> {
   const response = await fetch(`${FUNCTIONS_BASE_URL}/agent-config`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch agent config: ${response.status} ${response.statusText}`);
+    throw new Error(serviceError('Agent config API', `${response.status} ${response.statusText}`));
   }
   return response.json() as Promise<AgentConfig>;
 }
@@ -42,7 +43,7 @@ export async function saveAgentConfig(config: AgentConfig): Promise<AgentConfig>
     body: JSON.stringify(config),
   });
   if (!response.ok) {
-    throw new Error(`Failed to save agent config: ${response.status} ${response.statusText}`);
+    throw new Error(serviceError('Agent config API', `${response.status} ${response.statusText}`));
   }
   return response.json() as Promise<AgentConfig>;
 }
@@ -50,7 +51,7 @@ export async function saveAgentConfig(config: AgentConfig): Promise<AgentConfig>
 export async function fetchProviderConfig(): Promise<ProviderConfigResponse> {
   const response = await fetch(`${FUNCTIONS_BASE_URL}/provider-config`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch provider config: ${response.status} ${response.statusText}`);
+    throw new Error(serviceError('Provider config API', `${response.status} ${response.statusText}`));
   }
   return response.json() as Promise<ProviderConfigResponse>;
 }
@@ -64,7 +65,7 @@ export async function saveProviderConfig(
     body: JSON.stringify({ aiProvider }),
   });
   if (!response.ok) {
-    throw new Error(`Failed to save provider config: ${response.status} ${response.statusText}`);
+    throw new Error(serviceError('Provider config API', `${response.status} ${response.statusText}`));
   }
   return response.json() as Promise<ProviderConfigResponse>;
 }

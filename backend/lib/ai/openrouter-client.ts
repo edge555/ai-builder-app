@@ -1,7 +1,16 @@
 /**
- * OpenRouter AI Client
- * Communicates with OpenRouter's OpenAI-compatible API.
- * Implements the AIProvider interface for drop-in replacement.
+ * @module ai/openrouter-client
+ * @description AI client for OpenRouter's OpenAI-compatible chat completions API.
+ * Implements the `AIProvider` interface with retry/backoff logic and SSE streaming.
+ * Supports structured output via `json_schema` response format.
+ *
+ * @requires ./ai-provider - AIProvider interface
+ * @requires ./ai-error-utils - Error categorization and retry helpers
+ * @requires ./openrouter-types - OpenRouter request/response type definitions
+ * @requires ../logger - Structured logging
+ * @requires ../metrics - Operation timing
+ * @requires ../constants - ERROR_TEXT_MAX_LENGTH
+ * @requires @ai-app-builder/shared/utils - Error message constructors
  */
 
 import { createLogger } from '../logger';
@@ -9,6 +18,7 @@ import { ERROR_TEXT_MAX_LENGTH } from '../constants';
 import { OperationTimer, formatMetrics } from '../metrics';
 import type { AIProvider, AIRequest, AIStreamingRequest, AIResponse } from './ai-provider';
 import { categorizeError, isRetryableError } from './ai-error-utils';
+import { serviceError, stateError, envVarError } from '@ai-app-builder/shared/utils';
 import type {
   OpenRouterClientConfig,
   OpenRouterRequest,
@@ -33,7 +43,7 @@ export class OpenRouterClient implements AIProvider {
 
   constructor(model: string, clientConfig: OpenRouterClientConfig) {
     if (!clientConfig.apiKey) {
-      throw new Error('OpenRouter API key is required');
+      throw new Error(envVarError('OpenRouter API key', 'required for OpenRouter provider'));
     }
     this.apiKey = clientConfig.apiKey;
     this.model = model;
@@ -102,7 +112,7 @@ export class OpenRouterClient implements AIProvider {
         lastError = error instanceof Error ? error : new Error(String(error));
         retryCount = attempt;
 
-        if (!isRetryableError(lastError, 'openrouter api error')) {
+        if (!isRetryableError(lastError, 'openrouter request failed')) {
           break;
         }
 
@@ -125,7 +135,7 @@ export class OpenRouterClient implements AIProvider {
       model: this.model,
     });
 
-    const { errorType, errorCode } = categorizeError(lastError!, 'openrouter api error');
+    const { errorType, errorCode } = categorizeError(lastError!, 'openrouter request failed');
 
     return {
       success: false,
@@ -212,18 +222,18 @@ export class OpenRouterClient implements AIProvider {
           model: this.model,
           errorText: errorText.slice(0, ERROR_TEXT_MAX_LENGTH),
         });
-        throw new Error(`openrouter api error: ${response.status} - ${errorText}`);
+        throw new Error(serviceError('OpenRouter', `${response.status} - ${errorText}`));
       }
 
       const data = (await response.json()) as OpenRouterResponse;
 
       if (data.error) {
-        throw new Error(`openrouter api error: ${data.error.message}`);
+        throw new Error(serviceError('OpenRouter', data.error.message));
       }
 
       const content = data.choices?.[0]?.message?.content;
       if (!content) {
-        throw new Error('openrouter api error: empty response content');
+        throw new Error(serviceError('OpenRouter', 'empty response content'));
       }
 
       return { content, usage: data.usage };
@@ -248,7 +258,7 @@ export class OpenRouterClient implements AIProvider {
     try {
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`openrouter api error: ${response.status} - ${errorText}`);
+        throw new Error(serviceError('OpenRouter', `${response.status} - ${errorText}`));
       }
 
       const accumulated = await this.processSSEStream(response, (delta, totalLength) => {
@@ -272,7 +282,7 @@ export class OpenRouterClient implements AIProvider {
   ): Promise<string> {
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('Response body is null');
+      throw new Error(stateError('OpenRouter', 'response body is null'));
     }
 
     const decoder = new TextDecoder();

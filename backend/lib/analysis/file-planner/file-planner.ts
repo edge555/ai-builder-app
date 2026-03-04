@@ -1,10 +1,19 @@
 /**
- * File Planner
- *
- * Main orchestrator for AI-powered file planning.
+ * @module analysis/file-planner/file-planner
+ * @description Orchestrates AI-powered file selection for code modifications.
  * Uses a two-phase approach:
- * 1. Planning Phase: AI receives compact file tree metadata and selects relevant files
- * 2. Context Assembly: Selected files are assembled into CodeSlices for execution
+ * 1. Planning Phase: AI receives compact file tree metadata and selects relevant files.
+ * 2. Context Assembly: Selected files are assembled into CodeSlices trimmed to budget.
+ * Falls back to heuristic selection (`FallbackSelector`) on AI failures.
+ *
+ * @requires ./chunk-index - AST-based code chunk extraction
+ * @requires ./metadata-generator - File tree metadata serialization
+ * @requires ./planning-prompt - System prompt and response parsing
+ * @requires ./fallback-selector - Heuristic file selection fallback
+ * @requires ./token-budget - Token budget trimming
+ * @requires ./types - FilePlannerResult, CodeSlice types
+ * @requires ../../ai/ai-provider - AIProvider interface
+ * @requires ../../logger - Structured logging
  */
 
 import type { ProjectState } from '@ai-app-builder/shared';

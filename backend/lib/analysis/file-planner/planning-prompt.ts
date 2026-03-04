@@ -1,11 +1,15 @@
 /**
- * Planning Prompt Module
+ * @module analysis/file-planner/planning-prompt
+ * @description System prompt, user prompt builder, and response parser for the AI planning call.
+ * The planning call receives compact file-tree metadata (no code content) and returns
+ * which files should be included as primary or context for modification.
+ * Handles provider-specific prompt enrichments (extra instructions for Modal).
  *
- * Defines the system prompt and utilities for the AI planning call.
- * The planning call receives compact file tree metadata (no code) and
- * returns which files should be included for modification.
- *
- * Requirements: 9.1, 9.2, 9.3, 9.4
+ * @requires ./types - PlanningResponse type
+ * @requires ../../core/schemas - PlanningResponseSchema for Zod validation
+ * @requires ../../core/zod-to-json-schema - JSON Schema conversion for AI response format
+ * @requires ../../core/prompts/provider-prompt-config - Provider-specific prompt configuration
+ * @requires ../../ai/modal-response-parser - JSON extraction from raw AI responses
  */
 
 import type { PlanningResponse } from './types';

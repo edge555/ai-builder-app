@@ -1,8 +1,11 @@
 /**
- * Backpressure Controller for SSE Streaming
+ * @module streaming/backpressure-controller
+ * @description Flow controller for SSE streaming to prevent memory exhaustion.
+ * Implements internal buffering and priority-based event dropping when clients
+ * consume data slower than the server produces. Three priority levels:
+ * CRITICAL (never dropped), NORMAL (buffered then dropped if full), LOW (dropped first).
  *
- * Handles flow control to prevent memory exhaustion when clients
- * consume data slower than the server produces it.
+ * @requires ../logger - Debug/error logging for backpressure events
  */
 
 import { createLogger } from '../logger';

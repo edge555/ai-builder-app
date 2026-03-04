@@ -1,8 +1,10 @@
 /**
- * File Index Parsers
+ * @module analysis/file-index-parsers
+ * @description Regex-based parsers for extracting code metadata from TypeScript/JavaScript files.
+ * Extracts named exports, imports, React components (JSX-containing functions), and
+ * plain function declarations. Results feed into `FileIndex` entries.
  *
- * Utility functions for parsing TypeScript/JavaScript files to extract
- * exports, imports, components, and functions.
+ * @requires @ai-app-builder/shared - ExportInfo, ImportInfo, ComponentInfo, FunctionInfo types
  */
 
 import type {

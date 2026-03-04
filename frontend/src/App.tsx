@@ -1,3 +1,19 @@
+/**
+ * @module App
+ * @description Root application component with route-level code splitting.
+ * Routes:
+ * - `/` – Welcome page (project gallery)
+ * - `/project/:projectId` – Builder page (new or existing project)
+ * - `/settings/agents` – Agent model configuration settings
+ *
+ * Manages global storage initialization and project list refresh.
+ *
+ * @requires react - Lazy, Suspense, useState, useEffect hooks
+ * @requires react-router-dom - Routes, Route, useNavigate
+ * @requires @/services/storage - storageService, ProjectMetadata
+ * @requires @/components/PageSkeleton - Loading placeholder
+ * @requires @/utils/logger - Structured logging
+ */
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 

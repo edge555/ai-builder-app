@@ -1,7 +1,18 @@
 /**
- * Modal AI Client
- * Communicates with a Modal-hosted model (e.g. Qwen) via a FastAPI endpoint.
- * Implements the AIProvider interface so it can be swapped in for GeminiClient.
+ * @module ai/modal-client
+ * @description AI client for Modal-hosted models (e.g. Qwen via FastAPI endpoint).
+ * Implements the `AIProvider` interface with retry/backoff logic and SSE streaming.
+ * `generateStreaming` delegates to the `/stream` SSE endpoint and emits tokens
+ * via the `onChunk` callback.
+ *
+ * @requires ./ai-provider - AIProvider interface
+ * @requires ./ai-error-utils - Error categorization and retry helpers
+ * @requires ./modal-response-parser - JSON extraction from raw Modal responses
+ * @requires ../logger - Structured logging
+ * @requires ../metrics - Operation timing
+ * @requires ../config - AI generation settings
+ * @requires ../constants - ERROR_TEXT_MAX_LENGTH
+ * @requires @ai-app-builder/shared/utils - Error message constructors
  */
 
 import { createLogger } from '../logger';
@@ -11,6 +22,7 @@ import { OperationTimer, formatMetrics } from '../metrics';
 import { extractJsonFromResponse } from './modal-response-parser';
 import type { AIProvider, AIRequest, AIStreamingRequest, AIResponse } from './ai-provider';
 import { categorizeError, isRetryableError } from './ai-error-utils';
+import { serviceError, stateError, envVarError } from '@ai-app-builder/shared/utils';
 
 const logger = createLogger('modal-client');
 
@@ -49,7 +61,7 @@ export class ModalClient implements AIProvider {
   private readonly retryBaseDelay: number;
   constructor(clientConfig: ModalClientConfig) {
     if (!clientConfig.apiUrl) {
-      throw new Error('Modal API URL is required');
+      throw new Error(envVarError('Modal API URL', 'a valid Modal FastAPI endpoint URL'));
     }
     this.apiUrl = clientConfig.apiUrl;
     this.streamApiUrl = clientConfig.streamApiUrl;
@@ -99,7 +111,7 @@ export class ModalClient implements AIProvider {
         lastError = error instanceof Error ? error : new Error(String(error));
         retryCount = attempt;
 
-        if (!isRetryableError(lastError, 'modal api error')) {
+        if (!isRetryableError(lastError, 'modal request failed')) {
           break;
         }
 
@@ -119,7 +131,7 @@ export class ModalClient implements AIProvider {
     });
     contextLogger.error(`${operationName} failed`, formatMetrics(metrics));
 
-    const { errorType, errorCode } = categorizeError(lastError!, 'modal api error');
+    const { errorType, errorCode } = categorizeError(lastError!, 'modal request failed');
 
     return {
       success: false,
@@ -157,7 +169,7 @@ export class ModalClient implements AIProvider {
           status: response.status,
           errorText: errorText.slice(0, ERROR_TEXT_MAX_LENGTH),
         });
-        throw new Error(`Modal API error: ${response.status} - ${errorText}`);
+        throw new Error(serviceError('Modal', `${response.status} - ${errorText}`));
       }
 
       const data = await response.json() as { content?: string;[key: string]: unknown };
@@ -168,7 +180,7 @@ export class ModalClient implements AIProvider {
       if (request.responseSchema) {
         const extracted = extractJsonFromResponse(rawContent);
         if (!extracted) {
-          throw new Error('Failed to extract valid JSON from Modal response');
+          throw new Error(serviceError('Modal', 'failed to extract valid JSON from response'));
         }
         return extracted;
       }
@@ -196,7 +208,7 @@ export class ModalClient implements AIProvider {
     try {
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Modal API error: ${response.status} - ${errorText}`);
+        throw new Error(serviceError('Modal', `${response.status} - ${errorText}`));
       }
 
       const accumulated = await this.processSSEStream(response, (token, totalLength) => {
@@ -275,7 +287,7 @@ export class ModalClient implements AIProvider {
   ): Promise<string> {
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('Response body is null');
+      throw new Error(stateError('Modal', 'response body is null'));
     }
 
     const decoder = new TextDecoder();
@@ -397,7 +409,7 @@ export class ModalClient implements AIProvider {
 export function createModalClient(model?: string): ModalClient {
   const apiUrl = process.env.MODAL_API_URL;
   if (!apiUrl) {
-    throw new Error('MODAL_API_URL environment variable is not set');
+    throw new Error(envVarError('MODAL_API_URL', 'required for Modal provider'));
   }
 
   return new ModalClient({

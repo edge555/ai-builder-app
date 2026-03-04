@@ -1,6 +1,13 @@
 /**
- * Shared AI error utilities.
- * Provides common error categorization logic used by all AI provider clients.
+ * @module ai/ai-error-utils
+ * @description Shared AI error categorization and retry logic.
+ * Used by all AI provider clients (Modal, OpenRouter) to consistently
+ * classify errors into typed categories and determine retryability.
+ *
+ * Error categories: `timeout`, `cancelled`, `rate_limit`, `api_error`, `unknown`.
+ * Only `rate_limit` and `api_error` errors trigger retries.
+ *
+ * @requires ./ai-provider - AIResponse error type reference
  */
 
 import type { AIResponse } from './ai-provider';

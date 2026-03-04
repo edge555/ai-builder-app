@@ -12,7 +12,7 @@ import { promisify } from 'util';
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import type { ErrorResponse } from '@ai-app-builder/shared/types';
-import { sanitizeError } from '@ai-app-builder/shared/utils';
+import { sanitizeError, stateError } from '@ai-app-builder/shared/utils';
 import { config } from '../config';
 import { AppError } from './error';
 import { createLogger } from '../logger';
@@ -246,7 +246,7 @@ export async function withTimeout<T>(
 
   // If external signal is already aborted, reject immediately
   if (signal?.aborted) {
-    throw new Error(`${operationName} was aborted before starting`);
+    throw new Error(stateError(operationName, 'was aborted before starting'));
   }
 
   let timeoutId: NodeJS.Timeout | null = null;

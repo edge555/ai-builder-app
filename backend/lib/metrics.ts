@@ -1,6 +1,10 @@
 /**
- * Metrics and Timing Utilities
- * Tracks performance metrics for AI operations and API calls.
+ * @module metrics
+ * @description Lightweight performance metrics for AI operations and API calls.
+ * Provides `OperationTimer` for timing any operation and `formatMetrics` for
+ * structuring results for log output.
+ *
+ * @requires No runtime dependencies.
  */
 
 /**

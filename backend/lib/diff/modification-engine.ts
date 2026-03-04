@@ -1,13 +1,18 @@
 /**
- * Modification Engine Service
- * 
- * Orchestrates context-aware code modifications by:
+ * @module diff/modification-engine
+ * @description Orchestrates context-aware code modifications by:
  * 1. Classifying user intent
- * 2. Selecting relevant code slices
- * 3. Sending only relevant context to Gemini
- * 4. Validating and applying changes
- * 
- * Requirements: 3.5, 4.6, 4.7
+ * 2. Selecting relevant code slices via file-planner
+ * 3. Sending only relevant context to the AI provider
+ * 4. Validating and applying changes (with build-error auto-retry)
+ *
+ * Supports multiple modification types: full file replacement, JSON patch,
+ * unified diff, and search/replace.
+ *
+ * @requires ../ai/ai-provider - AIProvider interface for generation and correction
+ * @requires ../core/build-validator - Build error detection
+ * @requires ../logger - Structured logging
+ * @requires @ai-app-builder/shared - ProjectState, ModificationResult types
  */
 
 import { v4 as uuidv4 } from 'uuid';
