@@ -1,12 +1,13 @@
 /**
- * Dependency Graph Service
+ * @module analysis/dependency-graph
+ * @description Builds and queries a directed dependency graph from a file index.
+ * Used to determine which files are transitively affected by a change.
+ * Optimized with an O(1) pre-computed path lookup map and SHA-256 change detection
+ * to avoid unnecessary rebuilds.
  *
- * Builds and queries a dependency graph from the file index.
- * Used to determine which files are affected by changes.
- *
- * Optimized with caching and O(1) import resolution.
- *
- * Requirements: 3.2
+ * @requires ./file-index - FileIndex as the graph data source
+ * @requires path - Path resolution for relative imports
+ * @requires crypto - SHA-256 cache key generation
  */
 
 import type { FileIndex } from './file-index';
@@ -107,13 +108,13 @@ export class DependencyGraph {
 
     while (queue.length > 0) {
       const current = queue.shift()!;
-      
+
       if (affected.has(current)) {
         continue;
       }
-      
+
       affected.add(current);
-      
+
       // Add all dependents to the queue
       const dependents = this.getDependents(current);
       for (const dependent of dependents) {
@@ -220,9 +221,9 @@ export class DependencyGraph {
 }
 
 /**
- * Build a dependency graph from a file index.
+ * Create a dependency graph from a file index.
  */
-export function buildDependencyGraph(fileIndex: FileIndex): DependencyGraph {
+export function createDependencyGraph(fileIndex: FileIndex): DependencyGraph {
   const graph = new DependencyGraph();
   graph.build(fileIndex);
   return graph;

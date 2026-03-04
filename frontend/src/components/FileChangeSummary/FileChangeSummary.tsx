@@ -70,7 +70,7 @@ export function FileChangeSummary({
         return changes;
     }, [changeSummary, diffsByFile]);
 
-    const toggleFileDiff = (filePath: string) => {
+    const handleToggleFileDiff = (filePath: string) => {
         setExpandedFiles((prev) => {
             const next = new Set(prev);
             if (next.has(filePath)) {
@@ -170,7 +170,7 @@ export function FileChangeSummary({
                                         className="file-expand-toggle"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            toggleFileDiff(change.path);
+                                            handleToggleFileDiff(change.path);
                                         }}
                                         disabled={!hasDiff}
                                         aria-label={`${isExpanded ? 'Collapse' : 'Expand'} diff for ${change.path}`}

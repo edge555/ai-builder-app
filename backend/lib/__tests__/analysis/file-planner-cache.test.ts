@@ -79,6 +79,7 @@ describe('FilePlanner Cache Management', () => {
 
       const cache = (planner as any).chunkIndexCache;
       const cacheKeys = Array.from(cache.keys());
+      const cacheSize = cache.size;
 
       // proj1 and proj4 should be in cache, proj2 might be evicted
       expect(cacheSize).toBeLessThanOrEqual(3);

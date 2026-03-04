@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { TokenBudgetManager, createTokenBudgetManager } from '../../analysis/file-planner/token-budget';
-import { buildChunkIndex } from '../../analysis/file-planner/chunk-index';
+import { createChunkIndex } from '../../analysis/file-planner/chunk-index';
 import type { CodeSlice, ChunkIndex } from '../../analysis/file-planner/types';
 import type { ProjectState } from '@ai-app-builder/shared';
 
@@ -52,7 +52,7 @@ describe('TokenBudgetManager', () => {
       const projectState = createProjectState({
         'src/App.tsx': 'export function App() { return <div />; }',
       });
-      const chunkIndex = buildChunkIndex(projectState);
+      const chunkIndex = createChunkIndex(projectState);
 
       const slices: CodeSlice[] = [
         { filePath: 'src/App.tsx', content: 'short content', relevance: 'primary' },
@@ -82,7 +82,7 @@ describe('TokenBudgetManager', () => {
       const projectState = createProjectState({
         'src/App.tsx': 'export function App() { return <div>Hello World</div>; }',
       });
-      const chunkIndex = buildChunkIndex(projectState);
+      const chunkIndex = createChunkIndex(projectState);
 
       const slices: CodeSlice[] = [
         {
@@ -116,7 +116,7 @@ describe('TokenBudgetManager', () => {
         'src/utils.ts': longContent,
         'src/App.tsx': 'export function App() { return <div />; }',
       });
-      const chunkIndex = buildChunkIndex(projectState);
+      const chunkIndex = createChunkIndex(projectState);
 
       const slices: CodeSlice[] = [
         { filePath: 'src/App.tsx', content: 'export function App() { return <div />; }', relevance: 'primary' },
@@ -138,7 +138,7 @@ describe('TokenBudgetManager', () => {
       const projectState = createProjectState({
         'src/App.tsx': 'export function App() { return <div />; }',
       });
-      const chunkIndex = buildChunkIndex(projectState);
+      const chunkIndex = createChunkIndex(projectState);
 
       const slices: CodeSlice[] = [
         { filePath: 'src/App.tsx', content: 'export function App() { return <div />; }', relevance: 'primary' },
@@ -165,7 +165,7 @@ describe('TokenBudgetManager', () => {
         'src/small.ts': smallContent,
         'src/large.ts': largeContent,
       });
-      const chunkIndex = buildChunkIndex(projectState);
+      const chunkIndex = createChunkIndex(projectState);
 
       const slices: CodeSlice[] = [
         { filePath: 'src/large.ts', content: largeContent, relevance: 'primary' },

@@ -1,6 +1,11 @@
 /**
- * AI Provider Interface
- * Defines the contract that all AI providers (OpenRouter, Modal, etc.) must implement.
+ * @module ai/ai-provider
+ * @description Provider-agnostic AI interface contract.
+ * Defines `AIRequest`, `AIStreamingRequest`, `AIResponse`, and the `AIProvider`
+ * interface that all AI clients (Modal, OpenRouter) must implement.
+ * This abstraction allows providers to be swapped without changing call sites.
+ *
+ * @requires No runtime dependencies — type definitions only.
  */
 
 /** Provider-agnostic request type */

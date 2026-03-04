@@ -1,10 +1,12 @@
 /**
- * File Index Service
- * 
- * Indexes project files to track components, functions, exports, and imports.
- * Used for context-aware code slicing during modifications.
- * 
- * Requirements: 3.1
+ * @module analysis/file-index
+ * @description Incrementally indexes project files for context-aware code selection.
+ * Tracks components, functions, exports, and imports using regex-based parsers.
+ * Uses SHA-256 content hashing to skip unchanged files on re-indexing.
+ *
+ * @requires ./file-index-parsers - Regex parsers for exports, imports, components, functions
+ * @requires crypto - Content hashing for incremental indexing
+ * @requires @ai-app-builder/shared - FileIndexEntry, ExportInfo, ImportInfo, ProjectState types
  */
 
 import { createHash } from 'crypto';

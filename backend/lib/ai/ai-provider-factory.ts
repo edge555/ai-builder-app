@@ -1,9 +1,19 @@
 /**
- * AI Provider Factory
+ * @module ai/ai-provider-factory
+ * @description Factory for creating the active AI provider.
+ * Reads the effective provider (settings override or env var) and returns
+ * the appropriate `AIProvider` implementation:
+ * - `modal` → `ModalClient` (direct FastAPI endpoint)
+ * - `openrouter` → `FallbackAIProvider` via `AgentRouter` (task-specific model routing)
  *
- * Creates the appropriate AIProvider based on the AI_PROVIDER environment variable.
- * - Modal mode: returns a simple ModalClient (existing behavior)
- * - OpenRouter mode: uses AgentRouter for task-specific model routing with fallback
+ * Singletons for `AgentRouter` and `IntentDetector` are lazily initialized
+ * on first use and reset when the provider setting changes.
+ *
+ * @requires ./modal-client - Modal provider implementation
+ * @requires ./agent-router - OpenRouter routing logic
+ * @requires ./intent-detector - Prompt task classification
+ * @requires ./provider-config-store - Runtime provider override
+ * @requires ../logger - Structured logging
  */
 
 import type { AIProvider } from './ai-provider';

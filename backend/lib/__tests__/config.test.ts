@@ -100,7 +100,7 @@ describe('config - environment validation', () => {
 
     await expect(async () => {
       await import('../config');
-    }).rejects.toThrow('Invalid environment configuration');
+    }).rejects.toThrow('Invalid OPENROUTER_API_KEY');
   });
 
   it('should accept valid configuration', async () => {
@@ -109,9 +109,7 @@ describe('config - environment validation', () => {
     process.env.ALLOWED_ORIGINS = 'http://localhost:8080';
     process.env.LOG_LEVEL = 'info';
 
-    await expect(async () => {
-      await import('../config');
-    }).resolves.not.toThrow();
+    await expect(import('../config')).resolves.toBeDefined();
   });
 
   it('should validate LOG_LEVEL enum values', async () => {

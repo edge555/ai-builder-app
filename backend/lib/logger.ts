@@ -1,10 +1,12 @@
 /**
- * Logging Service
+ * @module logger
+ * @description Structured logging service for the backend.
+ * Provides configurable log levels (debug/info/warn/error), ISO timestamps,
+ * request correlation IDs for distributed tracing, JSON and text output formats,
+ * category-based filtering (ai/api/core/diff/analysis/streaming), and
+ * automatic redaction of sensitive fields (API keys, tokens, secrets).
  *
- * Provides structured logging with configurable log levels.
- * Supports debug, info, warn, and error levels with ISO timestamps.
- * Includes request correlation ID support for distributed tracing.
- * Supports JSON output format and sensitive data redaction.
+ * @requires No external runtime dependencies — uses Node.js console only.
  */
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -56,14 +58,6 @@ const SENSITIVE_PATTERNS = [
   /client[_-]?secret/i,
 ];
 
-// Cached configuration at module load time
-const CACHED_LOG_LEVEL = (() => {
-  const envLevel = process.env.LOG_LEVEL?.toLowerCase();
-  if (envLevel && envLevel in LOG_LEVELS) {
-    return envLevel as LogLevel;
-  }
-  return 'info';
-})();
 
 const CACHED_LOG_FORMAT: LogFormat = (() => {
   const envFormat = process.env.LOG_FORMAT?.toLowerCase();
@@ -245,7 +239,9 @@ function shouldLogCategory(category: LogCategory): boolean {
  * Create a logger instance with the specified name and optional request ID
  */
 export function createLogger(name: string, requestId?: string): Logger {
-  const minLevel = LOG_LEVELS[CACHED_LOG_LEVEL];
+  const envLevel = process.env.LOG_LEVEL?.toLowerCase();
+  const activeLogLevel: LogLevel = (envLevel && envLevel in LOG_LEVELS) ? envLevel as LogLevel : 'info';
+  const minLevel = LOG_LEVELS[activeLogLevel];
 
   const shouldLog = (level: LogLevel): boolean => {
     return LOG_LEVELS[level] >= minLevel;

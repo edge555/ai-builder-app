@@ -1,7 +1,16 @@
 /**
- * OpenRouter AI Client
- * Communicates with OpenRouter's OpenAI-compatible API.
- * Implements the AIProvider interface for drop-in replacement.
+ * @module ai/openrouter-client
+ * @description AI client for OpenRouter's OpenAI-compatible chat completions API.
+ * Implements the `AIProvider` interface with retry/backoff logic and SSE streaming.
+ * Supports structured output via `json_schema` response format.
+ *
+ * @requires ./ai-provider - AIProvider interface
+ * @requires ./ai-error-utils - Error categorization and retry helpers
+ * @requires ./openrouter-types - OpenRouter request/response type definitions
+ * @requires ../logger - Structured logging
+ * @requires ../metrics - Operation timing
+ * @requires ../constants - ERROR_TEXT_MAX_LENGTH
+ * @requires @ai-app-builder/shared/utils - Error message constructors
  */
 
 import { createLogger } from '../logger';
@@ -9,6 +18,7 @@ import { ERROR_TEXT_MAX_LENGTH } from '../constants';
 import { OperationTimer, formatMetrics } from '../metrics';
 import type { AIProvider, AIRequest, AIStreamingRequest, AIResponse } from './ai-provider';
 import { categorizeError, isRetryableError } from './ai-error-utils';
+import { serviceError, stateError, envVarError } from '@ai-app-builder/shared/utils';
 import type {
   OpenRouterClientConfig,
   OpenRouterRequest,
@@ -33,7 +43,7 @@ export class OpenRouterClient implements AIProvider {
 
   constructor(model: string, clientConfig: OpenRouterClientConfig) {
     if (!clientConfig.apiKey) {
-      throw new Error('OpenRouter API key is required');
+      throw new Error(envVarError('OpenRouter API key', 'required for OpenRouter provider'));
     }
     this.apiKey = clientConfig.apiKey;
     this.model = model;
@@ -43,7 +53,38 @@ export class OpenRouterClient implements AIProvider {
   }
 
   async generate(request: AIRequest): Promise<AIResponse> {
-    const timer = new OperationTimer('openrouter-generate', request.requestId);
+    return this.executeWithRetry('openrouter-generate', request, async () => {
+      const { content, usage } = await this.makeRequest(request, false);
+      return {
+        content,
+        extraResponse: usage ? {
+          usage: {
+            inputTokens: usage.prompt_tokens,
+            outputTokens: usage.completion_tokens,
+            totalTokens: usage.total_tokens,
+          },
+        } : undefined,
+        extraLog: usage ? { inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens } : undefined,
+      };
+    });
+  }
+
+  async generateStreaming(request: AIStreamingRequest): Promise<AIResponse> {
+    return this.executeWithRetry('openrouter-generate-streaming', request, async () => {
+      const content = await this.makeStreamingRequest(request);
+      return { content };
+    });
+  }
+
+  /**
+   * Common retry logic for generate and generateStreaming.
+   */
+  private async executeWithRetry(
+    operationName: string,
+    request: AIRequest,
+    operation: () => Promise<{ content: string; extraResponse?: Record<string, unknown>; extraLog?: Record<string, unknown> }>
+  ): Promise<AIResponse> {
+    const timer = new OperationTimer(operationName, request.requestId);
     const contextLogger = request.requestId ? logger.withRequestId(request.requestId) : logger;
 
     let lastError: Error | null = null;
@@ -51,38 +92,32 @@ export class OpenRouterClient implements AIProvider {
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
-        const { content, usage } = await this.makeRequest(request, false);
+        const result = await operation();
 
         const metrics = timer.complete(true, { retryCount: attempt });
-        contextLogger.info(`[openrouter-client] Request to ${this.model} | Tokens: ${usage?.prompt_tokens ?? 0}/${usage?.completion_tokens ?? 0} | Latency: ${metrics.durationMs}ms`, {
+        contextLogger.info(`[openrouter-client] ${operationName} to ${this.model} | Latency: ${metrics.durationMs}ms`, {
           ...formatMetrics(metrics),
           model: this.model,
-          ...(usage && { inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens }),
+          ...result.extraLog,
         });
 
         return {
           success: true,
-          content,
+          content: result.content,
           modelId: this.model,
           retryCount: attempt,
-          ...(usage && {
-            usage: {
-              inputTokens: usage.prompt_tokens,
-              outputTokens: usage.completion_tokens,
-              totalTokens: usage.total_tokens,
-            },
-          }),
+          ...result.extraResponse,
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         retryCount = attempt;
 
-        if (!isRetryableError(lastError, 'openrouter api error')) {
+        if (!isRetryableError(lastError, 'openrouter request failed')) {
           break;
         }
 
         if (attempt < this.maxRetries) {
-          contextLogger.warn(`OpenRouter attempt ${attempt} failed, retrying...`, {
+          contextLogger.warn(`OpenRouter ${operationName} attempt ${attempt} failed, retrying...`, {
             error: lastError.message,
             model: this.model,
           });
@@ -95,75 +130,12 @@ export class OpenRouterClient implements AIProvider {
       retryCount,
       error: lastError?.message ?? 'Unknown error occurred',
     });
-    contextLogger.error('OpenRouter generate failed', {
+    contextLogger.error(`OpenRouter ${operationName} failed`, {
       ...formatMetrics(metrics),
       model: this.model,
     });
 
-    const { errorType, errorCode } = categorizeError(lastError!, 'openrouter api error');
-
-    return {
-      success: false,
-      modelId: this.model,
-      error: lastError?.message ?? 'Unknown error occurred',
-      errorType,
-      errorCode,
-      retryCount,
-    };
-  }
-
-  async generateStreaming(request: AIStreamingRequest): Promise<AIResponse> {
-    const timer = new OperationTimer('openrouter-generate-streaming', request.requestId);
-    const contextLogger = request.requestId ? logger.withRequestId(request.requestId) : logger;
-
-    let lastError: Error | null = null;
-    let retryCount = 0;
-
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      try {
-        const content = await this.makeStreamingRequest(request);
-
-        const metrics = timer.complete(true, { retryCount: attempt });
-        contextLogger.info(`[openrouter-client] Request to ${this.model} | Streaming | Latency: ${metrics.durationMs}ms`, {
-          ...formatMetrics(metrics),
-          model: this.model,
-        });
-
-        return {
-          success: true,
-          content,
-          modelId: this.model,
-          retryCount: attempt,
-        };
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        retryCount = attempt;
-
-        if (!isRetryableError(lastError, 'openrouter api error')) {
-          break;
-        }
-
-        contextLogger.warn(`OpenRouter streaming attempt ${attempt} failed, retrying...`, {
-          error: lastError.message,
-          model: this.model,
-        });
-
-        if (attempt < this.maxRetries) {
-          await this.delay(this.calculateBackoff(attempt));
-        }
-      }
-    }
-
-    const metrics = timer.complete(false, {
-      retryCount,
-      error: lastError?.message ?? 'Unknown error occurred',
-    });
-    contextLogger.error('OpenRouter streaming failed', {
-      ...formatMetrics(metrics),
-      model: this.model,
-    });
-
-    const { errorType, errorCode } = categorizeError(lastError!, 'openrouter api error');
+    const { errorType, errorCode } = categorizeError(lastError!, 'openrouter request failed');
 
     return {
       success: false,
@@ -238,24 +210,9 @@ export class OpenRouterClient implements AIProvider {
       promptLength: request.prompt.length,
     });
 
-    const timeoutController = new AbortController();
-    const timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
-
-    const signal = request.signal
-      ? AbortSignal.any([request.signal, timeoutController.signal])
-      : timeoutController.signal;
+    const { response, timeoutId } = await this.fetchWithTimeout(body, {}, request.signal);
 
     try {
-      const response = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify(body),
-        signal,
-      });
-
       clearTimeout(timeoutId);
 
       if (!response.ok) {
@@ -265,32 +222,24 @@ export class OpenRouterClient implements AIProvider {
           model: this.model,
           errorText: errorText.slice(0, ERROR_TEXT_MAX_LENGTH),
         });
-        throw new Error(`openrouter api error: ${response.status} - ${errorText}`);
+        throw new Error(serviceError('OpenRouter', `${response.status} - ${errorText}`));
       }
 
       const data = (await response.json()) as OpenRouterResponse;
 
       if (data.error) {
-        throw new Error(`openrouter api error: ${data.error.message}`);
+        throw new Error(serviceError('OpenRouter', data.error.message));
       }
 
       const content = data.choices?.[0]?.message?.content;
       if (!content) {
-        throw new Error('openrouter api error: empty response content');
+        throw new Error(serviceError('OpenRouter', 'empty response content'));
       }
 
       return { content, usage: data.usage };
     } catch (error) {
       clearTimeout(timeoutId);
-
-      if (error instanceof Error && error.name === 'AbortError') {
-        if (timeoutController.signal.aborted && !request.signal?.aborted) {
-          throw new Error(`Request timeout after ${this.timeout}ms`);
-        }
-        throw new Error('Request was cancelled');
-      }
-
-      throw error;
+      throw this.handleFetchError(error, request.signal);
     }
   }
 
@@ -302,83 +251,82 @@ export class OpenRouterClient implements AIProvider {
       promptLength: request.prompt.length,
     });
 
-    const timeoutController = new AbortController();
-    const timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
-
-    const signal = request.signal
-      ? AbortSignal.any([request.signal, timeoutController.signal])
-      : timeoutController.signal;
+    const { response, timeoutId } = await this.fetchWithTimeout(
+      body, { 'Accept': 'text/event-stream' }, request.signal
+    );
 
     try {
-      const response = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Accept': 'text/event-stream',
-        },
-        body: JSON.stringify(body),
-        signal,
-      });
-
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`openrouter api error: ${response.status} - ${errorText}`);
+        throw new Error(serviceError('OpenRouter', `${response.status} - ${errorText}`));
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Response body is null');
-      }
-
-      const decoder = new TextDecoder();
-      let accumulated = '';
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine || trimmedLine.startsWith(':')) continue;
-
-          if (trimmedLine.startsWith('data: ')) {
-            const dataStr = trimmedLine.slice(6);
-            if (dataStr === '[DONE]') continue;
-
-            try {
-              const chunk = JSON.parse(dataStr) as OpenRouterStreamChunk;
-              const delta = chunk.choices?.[0]?.delta?.content;
-              if (typeof delta === 'string') {
-                accumulated += delta;
-                request.onChunk?.(delta, accumulated.length);
-              }
-            } catch (err) {
-              logger.warn('Failed to parse SSE data', { line: trimmedLine, error: err });
-            }
-          }
-        }
-      }
+      const accumulated = await this.processSSEStream(response, (delta, totalLength) => {
+        request.onChunk?.(delta, totalLength);
+      });
 
       clearTimeout(timeoutId);
       return accumulated;
     } catch (error) {
       clearTimeout(timeoutId);
-
-      if (error instanceof Error && error.name === 'AbortError') {
-        if (timeoutController.signal.aborted && !request.signal?.aborted) {
-          throw new Error(`Request timeout after ${this.timeout}ms`);
-        }
-        throw new Error('Request was cancelled');
-      }
-
       throw error;
+    }
+  }
+
+  /**
+   * Process an SSE stream, calling onToken for each received delta.
+   */
+  private async processSSEStream(
+    response: Response,
+    onToken: (delta: string, totalLength: number) => void
+  ): Promise<string> {
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error(stateError('OpenRouter', 'response body is null'));
+    }
+
+    const decoder = new TextDecoder();
+    let accumulated = '';
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const delta = this.parseSSEDelta(line);
+        if (delta !== null) {
+          accumulated += delta;
+          onToken(delta, accumulated.length);
+        }
+      }
+    }
+
+    return accumulated;
+  }
+
+  /**
+   * Parse a single SSE line and extract the content delta, or null if not applicable.
+   */
+  private parseSSEDelta(line: string): string | null {
+    const trimmedLine = line.trim();
+    if (!trimmedLine || trimmedLine.startsWith(':')) return null;
+    if (!trimmedLine.startsWith('data: ')) return null;
+
+    const dataStr = trimmedLine.slice(6);
+    if (dataStr === '[DONE]') return null;
+
+    try {
+      const chunk = JSON.parse(dataStr) as OpenRouterStreamChunk;
+      const delta = chunk.choices?.[0]?.delta?.content;
+      return typeof delta === 'string' ? delta : null;
+    } catch (error) {
+      logger.warn('Failed to parse SSE data', { line: trimmedLine, error });
+      return null;
     }
   }
 
@@ -396,10 +344,54 @@ export class OpenRouterClient implements AIProvider {
     return request.systemInstruction;
   }
 
+  /**
+   * Execute a fetch with timeout and optional abort signal.
+   */
+  private async fetchWithTimeout(
+    body: OpenRouterRequest,
+    extraHeaders: Record<string, string>,
+    requestSignal?: AbortSignal
+  ): Promise<{ response: Response; timeoutId: ReturnType<typeof setTimeout> }> {
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
+
+    const signal = requestSignal
+      ? AbortSignal.any([requestSignal, timeoutController.signal])
+      : timeoutController.signal;
+
+    try {
+      const response = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+          ...extraHeaders,
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+      return { response, timeoutId };
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw this.handleFetchError(error, requestSignal);
+    }
+  }
+
+  /**
+   * Handle fetch errors, converting AbortErrors to descriptive messages.
+   */
+  private handleFetchError(error: unknown, requestSignal?: AbortSignal): Error {
+    if (error instanceof Error && error.name === 'AbortError') {
+      if (!requestSignal?.aborted) {
+        return new Error(`Request timeout after ${this.timeout}ms`);
+      }
+      return new Error('Request was cancelled');
+    }
+    return error instanceof Error ? error : new Error(String(error));
+  }
+
   private calculateBackoff(attempt: number): number {
-    // Exponential backoff: doubles the delay with each retry attempt (2^attempt)
     const exponentialDelay = this.retryBaseDelay * Math.pow(2, attempt);
-    // Add up to 30% random jitter (0.3) to prevent thundering herd problem
     const jitter = Math.random() * 0.3 * exponentialDelay;
     return exponentialDelay + jitter;
   }

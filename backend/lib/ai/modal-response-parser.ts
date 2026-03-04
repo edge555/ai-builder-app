@@ -1,7 +1,11 @@
 /**
- * Modal Response Parser
- * Extracts JSON from Modal API responses which, unlike Gemini's responseSchema,
- * may return raw JSON, markdown-wrapped JSON, or JSON embedded in other text.
+ * @module ai/modal-response-parser
+ * @description Extracts valid JSON from raw Modal API responses.
+ * Unlike Gemini's `responseSchema`, Modal may return raw JSON, markdown-fenced
+ * JSON, or JSON embedded within surrounding text. Three strategies are attempted
+ * in order: direct parse → markdown extraction → brace matching.
+ *
+ * @requires ../logger - Warning logs for unparseable responses
  */
 
 import { createLogger } from '../logger';

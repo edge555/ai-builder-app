@@ -42,9 +42,9 @@ export class WorkerPool {
             this.completeTask(index, message);
         });
 
-        worker.on('error', (err) => {
-            logger.error(`Worker ${index} error`, { error: err.message });
-            this.abortTaskOnWorker(index, `Worker error: ${err.message}`);
+        worker.on('error', (error) => {
+            logger.error(`Worker ${index} error`, { error: error.message });
+            this.abortTaskOnWorker(index, `Worker error: ${error.message}`);
             worker.terminate().catch(() => { });
             this.replaceWorker(index);
         });

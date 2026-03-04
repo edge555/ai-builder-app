@@ -1,11 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BaseProjectGenerator } from '../../core/base-project-generator';
-import { GeminiClient } from '../../ai';
 import { createBuildValidator } from '../../core/build-validator';
 import { ValidationPipeline } from '../../core/validation-pipeline';
 
 // Mock dependencies
-vi.mock('../../ai');
 vi.mock('../../core/build-validator');
 vi.mock('../../core/validation-pipeline');
 vi.mock('../../core/file-processor', () => ({
@@ -46,7 +44,7 @@ describe('BaseProjectGenerator', () => {
         // ValidationPipeline is constructed in the constructor, so we need to mock its prototype if we want to control it per-instance easily,
         // or just let the constructor create a real one that we then mock methods on if possible.
         // Actually, let's just use the real mock instance.
-        vi.mocked(ValidationPipeline).mockImplementation(() => mockValidationPipeline);
+        vi.mocked(ValidationPipeline).mockImplementation(function() { return mockValidationPipeline; });
 
         generator = new TestProjectGenerator(mockGeminiClient);
     });

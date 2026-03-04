@@ -38,7 +38,7 @@ export const GenerateProjectRequestSchema = z.object({
 export const ModifyProjectRequestSchema = z.object({
     projectState: SerializedProjectStateSchema,
     prompt: z.string().min(1, 'Modification prompt is required').max(50000, 'Modification prompt is too long (max 50,000 characters)'),
-    skipPlanning: z.boolean().optional(),
+    shouldSkipPlanning: z.boolean().optional(),
     runtimeError: z.any().optional(), // RuntimeError type is complex, using any for now or skipping detailed validation
 });
 

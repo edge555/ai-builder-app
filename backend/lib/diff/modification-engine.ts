@@ -1,13 +1,18 @@
 /**
- * Modification Engine Service
- * 
- * Orchestrates context-aware code modifications by:
+ * @module diff/modification-engine
+ * @description Orchestrates context-aware code modifications by:
  * 1. Classifying user intent
- * 2. Selecting relevant code slices
- * 3. Sending only relevant context to Gemini
- * 4. Validating and applying changes
- * 
- * Requirements: 3.5, 4.6, 4.7
+ * 2. Selecting relevant code slices via file-planner
+ * 3. Sending only relevant context to the AI provider
+ * 4. Validating and applying changes (with build-error auto-retry)
+ *
+ * Supports multiple modification types: full file replacement, JSON patch,
+ * unified diff, and search/replace.
+ *
+ * @requires ../ai/ai-provider - AIProvider interface for generation and correction
+ * @requires ../core/build-validator - Build error detection
+ * @requires ../logger - Structured logging
+ * @requires @ai-app-builder/shared - ProjectState, ModificationResult types
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -18,11 +23,11 @@ import type {
   ModificationResult,
 } from '@ai-app-builder/shared';
 import type { CodeSlice } from '../analysis/file-planner/types';
-import type { AIProvider } from '../ai';
+import type { AIProvider, AIResponse } from '../ai';
 import { createAIProvider } from '../ai';
 import type { TaskType } from '../ai';
 import { ValidationPipeline } from '../core/validation-pipeline';
-import { BuildValidator, createBuildValidator } from '../core/build-validator';
+import { BuildValidator, createBuildValidator, type BuildValidationResult } from '../core/build-validator';
 import { getModificationPrompt, MODIFICATION_OUTPUT_SCHEMA } from './prompts/modification-prompt';
 import { formatCode } from '../prettier-config';
 import { createLogger } from '../logger';
@@ -40,6 +45,8 @@ import { createChangeSummary } from './change-summarizer';
 import { buildModificationPrompt, buildSlicesFromFiles } from './prompt-builder';
 
 const logger = createLogger('ModificationEngine');
+
+const DESIGN_SYSTEM_CATEGORIES = new Set(['ui', 'style', 'mixed']);
 
 /**
  * Modification Engine service for modifying existing projects.
@@ -64,12 +71,12 @@ export class ModificationEngine {
    * Modify an existing project based on a user prompt.
    * @param projectState - The current project state with files
    * @param prompt - The modification prompt
-   * @param options - Optional configuration (e.g., skipPlanning to bypass FilePlanner)
+   * @param options - Optional configuration (e.g., shouldSkipPlanning to bypass FilePlanner)
    */
   async modifyProject(
     projectState: ProjectState,
     prompt: string,
-    options?: { skipPlanning?: boolean; requestId?: string }
+    options?: { shouldSkipPlanning?: boolean; requestId?: string }
   ): Promise<ModificationResult> {
     if (!prompt || prompt.trim() === '') {
       return {
@@ -90,18 +97,18 @@ export class ModificationEngine {
 
     try {
       // Step 1: Select code slices and determine category
-      const { slices, category } = await this.selectCodeSlices(projectState, prompt, options?.skipPlanning);
+      const { slices, category } = await this.selectCodeSlices(projectState, prompt, options?.shouldSkipPlanning);
 
       // Step 2: Determine if design system should be included based on category
-      const includeDesignSystem = category === 'ui' || category === 'style' || category === 'mixed';
-      contextLogger.debug('System instruction determined', { category, includeDesignSystem });
+      const shouldIncludeDesignSystem = DESIGN_SYSTEM_CATEGORIES.has(category);
+      contextLogger.debug('System instruction determined', { category, shouldIncludeDesignSystem });
 
       // Step 3: Generate modifications with retry logic
       const modificationResult = await this.generateModifications(
         prompt,
         slices,
         projectState,
-        includeDesignSystem,
+        shouldIncludeDesignSystem,
         requestId
       );
 
@@ -128,7 +135,7 @@ export class ModificationEngine {
         updatedFiles,
         prompt,
         slices,
-        includeDesignSystem,
+        shouldIncludeDesignSystem,
         requestId
       );
 
@@ -151,13 +158,13 @@ export class ModificationEngine {
   private async selectCodeSlices(
     projectState: ProjectState,
     prompt: string,
-    skipPlanning?: boolean
+    shouldSkipPlanning?: boolean
   ): Promise<{ slices: CodeSlice[]; category: 'ui' | 'logic' | 'style' | 'mixed' }> {
     let slices: CodeSlice[];
     let category: 'ui' | 'logic' | 'style' | 'mixed' = 'mixed';
 
-    if (skipPlanning) {
-      // When skipPlanning is true, treat all provided files as primary files
+    if (shouldSkipPlanning) {
+      // When shouldSkipPlanning is true, treat all provided files as primary files
       // Build slices directly without calling FilePlanner
       slices = buildSlicesFromFiles(projectState);
       logger.info('Skipping FilePlanner, using all files as primary', {
@@ -185,7 +192,7 @@ export class ModificationEngine {
     prompt: string,
     slices: CodeSlice[],
     projectState: ProjectState,
-    includeDesignSystem: boolean,
+    shouldIncludeDesignSystem: boolean,
     requestId?: string
   ): Promise<{
     success: boolean;
@@ -197,198 +204,44 @@ export class ModificationEngine {
 
     const MAX_ATTEMPTS = 4;
     let lastEditError: string | null = null;
-    let updatedFiles: Record<string, string | null> = {};
-    let deletedFiles: string[] = [];
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       logger.info('Modification attempt', { attempt, maxAttempts: MAX_ATTEMPTS });
 
       // Build prompt with error feedback if this is a retry
-      let userRequest = prompt;
-      if (lastEditError) {
-        userRequest += `\n\n[PREVIOUS ATTEMPT FAILED]\nError: ${lastEditError}\n\nPlease fix your edit. Make sure the "search" string EXACTLY matches the existing code (including whitespace and newlines). Try using a smaller, more unique search pattern.`;
-      }
+      const userRequest = lastEditError
+        ? `${prompt}\n\n[PREVIOUS ATTEMPT FAILED]\nError: ${lastEditError}\n\nPlease fix your edit. Make sure the "search" string EXACTLY matches the existing code (including whitespace and newlines). Try using a smaller, more unique search pattern.`
+        : prompt;
 
-      // Build system instruction with proper injection defense
-      const systemInstruction = getModificationPrompt(userRequest, includeDesignSystem);
-      const fullPrompt = contextPrompt;
-
-      // Log what we're sending to Gemini
-      logger.info('Sending modification request to Gemini', {
-        attempt,
-        promptLength: fullPrompt.length,
-        systemInstructionLength: systemInstruction.length,
-        temperature: 0.7,
-        isRetry: !!lastEditError,
-        includeDesignSystem,
-      });
-      logger.debug('Gemini modification request details', {
-        prompt: fullPrompt,
-        systemInstruction: systemInstruction,
-        responseSchema: MODIFICATION_OUTPUT_SCHEMA,
-      });
-
-      // Call Gemini API with structured output
-      const response = await this.aiProvider.generate({
-        prompt: fullPrompt,
-        systemInstruction: systemInstruction,
-        temperature: 0.7,
-        maxOutputTokens: getMaxOutputTokens('modification'),
-        responseSchema: MODIFICATION_OUTPUT_SCHEMA,
-        requestId,
-      });
-
-      // Log what we received from Gemini
-      logger.info('Received modification response from Gemini', {
-        success: response.success,
-        contentLength: response.content?.length ?? 0,
-        hasError: !!response.error,
-      });
-      logger.debug('Gemini modification response content', {
-        content: response.content,
-        error: response.error,
-      });
+      const response = await this.callModificationAI(userRequest, contextPrompt, shouldIncludeDesignSystem, attempt, lastEditError, requestId);
 
       if (!response.success || !response.content) {
         logger.error('Gemini error', { error: response.error });
         lastEditError = response.error ?? 'Failed to get modification from AI';
-        logger.info('Retrying due to AI error', { error: lastEditError });
         continue;
       }
 
-      logger.debug('AI Response content preview', { contentLength: response.content.length });
-
-      // Parse and validate the structured output
-      let parsedData: unknown;
-      try {
-        parsedData = JSON.parse(response.content);
-      } catch (e) {
-        logger.error('Failed to parse AI output as JSON', {
-          error: e instanceof Error ? e.message : String(e),
-        });
-        lastEditError = `Failed to parse AI response: ${e instanceof Error ? e.message : 'Invalid JSON'}`;
-        logger.info('Retrying due to JSON parse error', { error: lastEditError });
+      const parseResult = this.parseModificationResponse(response.content);
+      if (!parseResult.success) {
+        lastEditError = parseResult.error!;
         continue;
       }
 
-      const zodResult = ModificationOutputSchema.safeParse(parsedData);
-      if (!zodResult.success) {
-        logger.error('Zod validation failed on modification response', {
-          errors: zodResult.error.issues,
-        });
-        lastEditError = `Schema validation failed: ${zodResult.error.message}`;
-        logger.info('Retrying due to schema validation error', { error: lastEditError });
+      const aiFilesArray = parseResult.files!;
+
+      const pathError = this.validateFilePaths(aiFilesArray);
+      if (pathError) {
+        lastEditError = pathError;
         continue;
       }
 
-      const parsedOutput = zodResult.data;
-
-      // Extract files from the structured response
-      const aiFilesArray = parsedOutput.files;
-      logger.debug('Processing file edits', { fileCount: aiFilesArray?.length ?? 0 });
-      if (!aiFilesArray || !Array.isArray(aiFilesArray)) {
-        logger.error('AI response missing files array');
-        lastEditError = 'AI response missing files array';
-        logger.info('Retrying due to missing files array', { error: lastEditError });
-        continue;
-      }
-
-      // Validate all file paths for security
-      let hasUnsafePath = false;
-      for (const fileEdit of aiFilesArray) {
-        if (fileEdit.path && !isSafePath(fileEdit.path)) {
-          logger.error('Unsafe file path detected', { path: fileEdit.path });
-          lastEditError = `Unsafe file path detected: ${fileEdit.path}`;
-          hasUnsafePath = true;
-          break;
-        }
-      }
-
-      if (hasUnsafePath) {
-        logger.info('Retrying due to unsafe file path', { error: lastEditError });
-        continue;
-      }
-
-      // Apply the modifications
-      updatedFiles = {};
-      deletedFiles = [];
-      let editFailed = false;
-      lastEditError = null;
-
-      for (const fileEdit of aiFilesArray) {
-        if (!fileEdit.path) {
-          logger.warn('Skipping file entry without path');
-          continue;
-        }
-
-        // Sanitize path: remove any accidental spaces
-        fileEdit.path = fileEdit.path.replace(/\s+/g, '');
-
-        switch (fileEdit.operation) {
-          case 'delete':
-            deletedFiles.push(fileEdit.path);
-            updatedFiles[fileEdit.path] = null;
-            break;
-
-          case 'create':
-            if (!fileEdit.content) {
-              logger.warn('Create operation missing content', { path: fileEdit.path });
-              continue;
-            }
-            let createContent = fileEdit.content;
-            // Normalize newlines and tabs
-            if (createContent.includes('\\n')) createContent = createContent.replace(/\\n/g, '\n');
-            if (createContent.includes('\\t')) createContent = createContent.replace(/\\t/g, '\t');
-            // Format with Prettier
-            try {
-              createContent = await formatCode(createContent, fileEdit.path);
-            } catch (e) {
-              logger.warn('Failed to format file', { path: fileEdit.path, error: e instanceof Error ? e.message : 'Unknown error' });
-            }
-            updatedFiles[fileEdit.path] = createContent;
-            break;
-
-          case 'modify':
-            if (!fileEdit.edits || fileEdit.edits.length === 0) {
-              logger.warn('Modify operation missing edits', { path: fileEdit.path });
-              continue;
-            }
-            const originalContent = projectState.files[fileEdit.path];
-            if (originalContent === undefined) {
-              logger.warn('Cannot modify non-existent file', { path: fileEdit.path });
-              continue;
-            }
-            // Apply the edits
-            const editResult = applyEdits(originalContent, fileEdit.edits);
-            if (!editResult.success) {
-              logger.warn('Failed to apply edits', { path: fileEdit.path, error: editResult.error });
-              lastEditError = `File: ${fileEdit.path} - ${editResult.error}`;
-              editFailed = true;
-              break;
-            }
-            // Format the modified content
-            let modifiedContent = editResult.content!;
-            try {
-              modifiedContent = await formatCode(modifiedContent, fileEdit.path);
-            } catch (e) {
-              logger.warn('Failed to format file', { path: fileEdit.path, error: e instanceof Error ? e.message : 'Unknown error' });
-            }
-            updatedFiles[fileEdit.path] = modifiedContent;
-            break;
-
-          default:
-            logger.warn('Unknown operation type', { path: (fileEdit as any).path });
-        }
-
-        if (editFailed) break;
-      }
-
-      // If edits succeeded, break out of retry loop
-      if (!editFailed) {
+      const editResult = await this.applyFileEdits(aiFilesArray, projectState);
+      if (editResult.success) {
         logger.info('Modification succeeded', { attempt });
-        return { success: true, updatedFiles, deletedFiles };
+        return { success: true, updatedFiles: editResult.updatedFiles, deletedFiles: editResult.deletedFiles };
       }
 
+      lastEditError = editResult.error!;
       logger.info('Retrying due to error', { error: lastEditError });
     }
 
@@ -396,6 +249,182 @@ export class ModificationEngine {
       success: false,
       error: `Failed after ${MAX_ATTEMPTS} attempts. Last error: ${lastEditError}`,
     };
+  }
+
+  /**
+   * Call AI provider for modification generation.
+   */
+  private async callModificationAI(
+    userRequest: string,
+    contextPrompt: string,
+    shouldIncludeDesignSystem: boolean,
+    attempt: number,
+    lastEditError: string | null,
+    requestId?: string
+  ): Promise<AIResponse> {
+    const systemInstruction = getModificationPrompt(userRequest, shouldIncludeDesignSystem);
+
+    logger.info('Sending modification request to Gemini', {
+      attempt,
+      promptLength: contextPrompt.length,
+      systemInstructionLength: systemInstruction.length,
+      temperature: 0.7,
+      isRetry: !!lastEditError,
+      shouldIncludeDesignSystem,
+    });
+    logger.debug('Gemini modification request details', {
+      prompt: contextPrompt,
+      systemInstruction,
+      responseSchema: MODIFICATION_OUTPUT_SCHEMA,
+    });
+
+    const response = await this.aiProvider.generate({
+      prompt: contextPrompt,
+      systemInstruction,
+      temperature: 0.7,
+      maxOutputTokens: getMaxOutputTokens('modification'),
+      responseSchema: MODIFICATION_OUTPUT_SCHEMA,
+      requestId,
+    });
+
+    logger.info('Received modification response from Gemini', {
+      success: response.success,
+      contentLength: response.content?.length ?? 0,
+      hasError: !!response.error,
+    });
+    logger.debug('Gemini modification response content', {
+      content: response.content,
+      error: response.error,
+    });
+
+    return response;
+  }
+
+  /**
+   * Parse and validate AI response content into file edits.
+   */
+  private parseModificationResponse(content: string): {
+    success: boolean;
+    files?: Array<{ path: string; operation: string; content?: string; edits?: Array<{ search: string; replace: string }> }>;
+    error?: string;
+  } {
+    let parsedData: unknown;
+    try {
+      parsedData = JSON.parse(content);
+    } catch (e) {
+      const error = `Failed to parse AI response: ${e instanceof Error ? e.message : 'Invalid JSON'}`;
+      logger.error('Failed to parse AI output as JSON', { error });
+      return { success: false, error };
+    }
+
+    const zodResult = ModificationOutputSchema.safeParse(parsedData);
+    if (!zodResult.success) {
+      const error = `Schema validation failed: ${zodResult.error.message}`;
+      logger.error('Zod validation failed on modification response', { errors: zodResult.error.issues });
+      return { success: false, error };
+    }
+
+    const aiFilesArray = zodResult.data.files;
+    if (!aiFilesArray || !Array.isArray(aiFilesArray)) {
+      logger.error('AI response missing files array');
+      return { success: false, error: 'AI response missing files array' };
+    }
+
+    logger.debug('Processing file edits', { fileCount: aiFilesArray.length });
+    return { success: true, files: aiFilesArray };
+  }
+
+  /**
+   * Validate all file paths for security. Returns error message if unsafe, null if all safe.
+   */
+  private validateFilePaths(aiFilesArray: Array<{ path: string }>): string | null {
+    for (const fileEdit of aiFilesArray) {
+      if (fileEdit.path && !isSafePath(fileEdit.path)) {
+        logger.error('Unsafe file path detected', { path: fileEdit.path });
+        return `Unsafe file path detected: ${fileEdit.path}`;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Apply file edits (create, modify, delete) from AI response.
+   */
+  private async applyFileEdits(
+    aiFilesArray: Array<{ path: string; operation: string; content?: string; edits?: Array<{ search: string; replace: string }> }>,
+    projectState: ProjectState
+  ): Promise<{
+    success: boolean;
+    updatedFiles?: Record<string, string | null>;
+    deletedFiles?: string[];
+    error?: string;
+  }> {
+    const updatedFiles: Record<string, string | null> = {};
+    const deletedFiles: string[] = [];
+
+    for (const fileEdit of aiFilesArray) {
+      if (!fileEdit.path) {
+        logger.warn('Skipping file entry without path');
+        continue;
+      }
+
+      // Sanitize path: remove any accidental spaces
+      fileEdit.path = fileEdit.path.replace(/\s+/g, '');
+
+      switch (fileEdit.operation) {
+        case 'delete':
+          deletedFiles.push(fileEdit.path);
+          updatedFiles[fileEdit.path] = null;
+          break;
+
+        case 'create': {
+          if (!fileEdit.content) {
+            logger.warn('Create operation missing content', { path: fileEdit.path });
+            continue;
+          }
+          let createContent = fileEdit.content;
+          if (createContent.includes('\\n')) createContent = createContent.replace(/\\n/g, '\n');
+          if (createContent.includes('\\t')) createContent = createContent.replace(/\\t/g, '\t');
+          try {
+            createContent = await formatCode(createContent, fileEdit.path);
+          } catch (e) {
+            logger.warn('Failed to format file', { path: fileEdit.path, error: e instanceof Error ? e.message : 'Unknown error' });
+          }
+          updatedFiles[fileEdit.path] = createContent;
+          break;
+        }
+
+        case 'modify': {
+          if (!fileEdit.edits || fileEdit.edits.length === 0) {
+            logger.warn('Modify operation missing edits', { path: fileEdit.path });
+            continue;
+          }
+          const originalContent = projectState.files[fileEdit.path];
+          if (originalContent === undefined) {
+            logger.warn('Cannot modify non-existent file', { path: fileEdit.path });
+            continue;
+          }
+          const editResult = applyEdits(originalContent, fileEdit.edits);
+          if (!editResult.success) {
+            logger.warn('Failed to apply edits', { path: fileEdit.path, error: editResult.error });
+            return { success: false, error: `File: ${fileEdit.path} - ${editResult.error}` };
+          }
+          let modifiedContent = editResult.content!;
+          try {
+            modifiedContent = await formatCode(modifiedContent, fileEdit.path);
+          } catch (e) {
+            logger.warn('Failed to format file', { path: fileEdit.path, error: e instanceof Error ? e.message : 'Unknown error' });
+          }
+          updatedFiles[fileEdit.path] = modifiedContent;
+          break;
+        }
+
+        default:
+          logger.warn('Unknown operation type', { path: (fileEdit as any).path });
+      }
+    }
+
+    return { success: true, updatedFiles, deletedFiles };
   }
 
   /**
@@ -422,20 +451,11 @@ export class ModificationEngine {
     updatedFiles: Record<string, string | null>,
     prompt: string,
     slices: CodeSlice[],
-    includeDesignSystem: boolean,
+    shouldIncludeDesignSystem: boolean,
     requestId?: string
   ): Promise<{ updatedFiles: Record<string, string | null> }> {
-    // Create a temporary view of what the project will look like
-    const tempFiles = { ...projectState.files };
-    for (const [path, content] of Object.entries(updatedFiles)) {
-      if (content === null) {
-        delete tempFiles[path];
-      } else {
-        tempFiles[path] = content;
-      }
-    }
+    const tempFiles = this.buildProjectView(projectState, updatedFiles);
 
-    // Run build validation with failure history accumulation
     let buildResult = this.buildValidator.validate(tempFiles);
     let buildRetryCount = 0;
     const buildFailureHistory: RepairAttempt[] = [];
@@ -450,134 +470,16 @@ export class ModificationEngine {
         hasFailureHistory: buildFailureHistory.length > 0,
       });
 
-      // Format errors for AI
-      const errorContext = this.buildValidator.formatErrorsForAI(buildResult.errors);
+      const fixResult = await this.attemptBuildFix(
+        buildResult, buildRetryCount, buildFailureHistory,
+        prompt, slices, projectState, shouldIncludeDesignSystem,
+        mutableUpdatedFiles, tempFiles, requestId
+      );
 
-      // Request AI to fix the errors with failure history
-      const fixUserRequest = buildFixPrompt({
-        mode: 'modification',
-        errorContext,
-        originalPrompt: prompt,
-        failureHistory: buildFailureHistory.length > 0 ? buildFailureHistory : undefined,
-      });
-      const fixSystemInstruction = getModificationPrompt(fixUserRequest, includeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
-      const fixContextPrompt = buildModificationPrompt(fixUserRequest, slices, projectState);
-
-      const fixResponse = await this.aiProvider.generate({
-        prompt: fixContextPrompt,
-        systemInstruction: fixSystemInstruction,
-        temperature: 0.5,
-        maxOutputTokens: getMaxOutputTokens('modification'),
-        responseSchema: MODIFICATION_OUTPUT_SCHEMA,
-        requestId,
-      });
-
-      if (!fixResponse.success || !fixResponse.content) {
-        logger.error('Failed to get fix response from AI');
-        // Record this failure
-        buildFailureHistory.push({
-          attempt: buildRetryCount,
-          error: fixResponse.error || 'AI failed to generate fix',
-          timestamp: new Date().toISOString(),
-        });
-        break;
-      }
-
-      // Parse and process the fix
-      try {
-        if (typeof fixResponse.content !== 'string') {
-          throw new Error('Fix response content is missing');
-        }
-
-        // With responseSchema, Gemini returns guaranteed valid JSON
-        let parsedFixData: unknown;
-        try {
-          parsedFixData = JSON.parse(fixResponse.content);
-        } catch (parseError) {
-          logger.error('Failed to parse fix response JSON', {
-            error: parseError instanceof Error ? parseError.message : String(parseError),
-          });
-          // Record this failure
-          buildFailureHistory.push({
-            attempt: buildRetryCount,
-            error: parseError instanceof Error ? parseError.message : 'JSON parse error',
-            strategy: 'Attempted to fix build errors but returned invalid JSON',
-            timestamp: new Date().toISOString(),
-          });
-          continue;
-        }
-
-        // Validate with Zod schema
-        const fixZodResult = ModificationOutputSchema.safeParse(parsedFixData);
-        if (!fixZodResult.success) {
-          logger.error('Fix response failed Zod validation', {
-            errors: fixZodResult.error.issues,
-          });
-          // Record this failure
-          buildFailureHistory.push({
-            attempt: buildRetryCount,
-            error: `Schema validation failed: ${fixZodResult.error.message}`,
-            strategy: 'Attempted to fix build errors but returned invalid schema',
-            timestamp: new Date().toISOString(),
-          });
-          continue;
-        }
-
-        const fixOutput = fixZodResult.data;
-        if (!fixOutput.files || !Array.isArray(fixOutput.files)) {
-          // Record this failure
-          buildFailureHistory.push({
-            attempt: buildRetryCount,
-            error: 'Fix response missing files array',
-            timestamp: new Date().toISOString(),
-          });
-          continue;
-        }
-
-        // Apply fixes to our updatedFiles map
-        for (const fileEdit of fixOutput.files) {
-          if (fileEdit.operation === 'modify' && fileEdit.edits) {
-            // We need to apply edits to the content in tempFiles (which has previous mods applied)
-            const currentContent = tempFiles[fileEdit.path];
-            if (currentContent) {
-              const editResult = applyEdits(currentContent, fileEdit.edits);
-              if (editResult.success) {
-                mutableUpdatedFiles[fileEdit.path] = editResult.content!; // Update the modifications map
-                tempFiles[fileEdit.path] = editResult.content!;    // Update temp view
-              }
-            }
-          } else if (fileEdit.operation === 'create' && fileEdit.content) {
-            mutableUpdatedFiles[fileEdit.path] = fileEdit.content;
-            tempFiles[fileEdit.path] = fileEdit.content;
-          }
-        }
-
-        // Re-validate
-        const previousErrors = buildResult.errors.map(e => e.message).join('; ');
-        buildResult = this.buildValidator.validate(tempFiles);
-        if (buildResult.valid) {
-          logger.info('Modification build errors fixed successfully');
-        } else {
-          // Record this failure for next iteration
-          buildFailureHistory.push({
-            attempt: buildRetryCount,
-            error: buildResult.errors.map(e => e.message).join('; '),
-            strategy: `Tried to fix: ${previousErrors}`,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      } catch (e) {
-        logger.error('Error applying fixes', { error: e instanceof Error ? e.message : 'Unknown error' });
-        // Record this failure
-        buildFailureHistory.push({
-          attempt: buildRetryCount,
-          error: e instanceof Error ? e.message : 'Unknown error',
-          timestamp: new Date().toISOString(),
-        });
-      }
+      if (fixResult.shouldBreak) break;
+      buildResult = fixResult.buildResult ?? buildResult;
     }
 
-    // Log warning if still has errors
     if (!buildResult.valid) {
       logger.warn('Build warnings after retries', {
         errors: buildResult.errors.map(e => ({ message: e.message, file: e.file })),
@@ -585,6 +487,177 @@ export class ModificationEngine {
     }
 
     return { updatedFiles: mutableUpdatedFiles };
+  }
+
+  /**
+   * Build a temporary view of the project with modifications applied.
+   */
+  private buildProjectView(
+    projectState: ProjectState,
+    updatedFiles: Record<string, string | null>
+  ): Record<string, string> {
+    const tempFiles = { ...projectState.files };
+    for (const [path, content] of Object.entries(updatedFiles)) {
+      if (content === null) {
+        delete tempFiles[path];
+      } else {
+        tempFiles[path] = content;
+      }
+    }
+    return tempFiles;
+  }
+
+  /**
+   * Attempt a single build fix iteration.
+   */
+  private async attemptBuildFix(
+    buildResult: BuildValidationResult,
+    buildRetryCount: number,
+    buildFailureHistory: RepairAttempt[],
+    prompt: string,
+    slices: CodeSlice[],
+    projectState: ProjectState,
+    shouldIncludeDesignSystem: boolean,
+    mutableUpdatedFiles: Record<string, string | null>,
+    tempFiles: Record<string, string>,
+    requestId?: string
+  ): Promise<{ shouldBreak: boolean; buildResult?: BuildValidationResult }> {
+    const errorContext = this.buildValidator.formatErrorsForAI(buildResult.errors);
+    const fixUserRequest = buildFixPrompt({
+      mode: 'modification',
+      errorContext,
+      originalPrompt: prompt,
+      failureHistory: buildFailureHistory.length > 0 ? buildFailureHistory : undefined,
+    });
+    const fixSystemInstruction = getModificationPrompt(fixUserRequest, shouldIncludeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
+    const fixContextPrompt = buildModificationPrompt(fixUserRequest, slices, projectState);
+
+    const fixResponse = await this.aiProvider.generate({
+      prompt: fixContextPrompt,
+      systemInstruction: fixSystemInstruction,
+      temperature: 0.5,
+      maxOutputTokens: getMaxOutputTokens('modification'),
+      responseSchema: MODIFICATION_OUTPUT_SCHEMA,
+      requestId,
+    });
+
+    if (!fixResponse.success || !fixResponse.content) {
+      logger.error('Failed to get fix response from AI');
+      buildFailureHistory.push({
+        attempt: buildRetryCount,
+        error: fixResponse.error || 'AI failed to generate fix',
+        timestamp: new Date().toISOString(),
+      });
+      return { shouldBreak: true };
+    }
+
+    return this.parseBuildFixAndApply(
+      fixResponse.content, buildRetryCount, buildFailureHistory,
+      buildResult, mutableUpdatedFiles, tempFiles
+    );
+  }
+
+  /**
+   * Parse a build fix response and apply the fixes.
+   */
+  private parseBuildFixAndApply(
+    content: string,
+    buildRetryCount: number,
+    buildFailureHistory: RepairAttempt[],
+    buildResult: BuildValidationResult,
+    mutableUpdatedFiles: Record<string, string | null>,
+    tempFiles: Record<string, string>
+  ): { shouldBreak: boolean; buildResult?: BuildValidationResult } {
+    try {
+      let parsedFixData: unknown;
+      try {
+        parsedFixData = JSON.parse(content);
+      } catch (parseError) {
+        logger.error('Failed to parse fix response JSON', {
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+        });
+        buildFailureHistory.push({
+          attempt: buildRetryCount,
+          error: parseError instanceof Error ? parseError.message : 'JSON parse error',
+          strategy: 'Attempted to fix build errors but returned invalid JSON',
+          timestamp: new Date().toISOString(),
+        });
+        return { shouldBreak: false };
+      }
+
+      const fixZodResult = ModificationOutputSchema.safeParse(parsedFixData);
+      if (!fixZodResult.success) {
+        logger.error('Fix response failed Zod validation', { errors: fixZodResult.error.issues });
+        buildFailureHistory.push({
+          attempt: buildRetryCount,
+          error: `Schema validation failed: ${fixZodResult.error.message}`,
+          strategy: 'Attempted to fix build errors but returned invalid schema',
+          timestamp: new Date().toISOString(),
+        });
+        return { shouldBreak: false };
+      }
+
+      const fixOutput = fixZodResult.data;
+      if (!fixOutput.files || !Array.isArray(fixOutput.files)) {
+        buildFailureHistory.push({
+          attempt: buildRetryCount,
+          error: 'Fix response missing files array',
+          timestamp: new Date().toISOString(),
+        });
+        return { shouldBreak: false };
+      }
+
+      // Apply fixes
+      for (const fileEdit of fixOutput.files) {
+        this.applyBuildFix(fileEdit, mutableUpdatedFiles, tempFiles);
+      }
+
+      // Re-validate
+      const previousErrors = buildResult.errors.map(e => e.message).join('; ');
+      const newBuildResult = this.buildValidator.validate(tempFiles);
+      if (newBuildResult.valid) {
+        logger.info('Modification build errors fixed successfully');
+      } else {
+        buildFailureHistory.push({
+          attempt: buildRetryCount,
+          error: newBuildResult.errors.map(e => e.message).join('; '),
+          strategy: `Tried to fix: ${previousErrors}`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      return { shouldBreak: false, buildResult: newBuildResult };
+    } catch (e) {
+      logger.error('Error applying fixes', { error: e instanceof Error ? e.message : 'Unknown error' });
+      buildFailureHistory.push({
+        attempt: buildRetryCount,
+        error: e instanceof Error ? e.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+      });
+      return { shouldBreak: false };
+    }
+  }
+
+  /**
+   * Apply a single build fix edit to the mutable file maps.
+   */
+  private applyBuildFix(
+    fileEdit: { path: string; operation: string; content?: string; edits?: Array<{ search: string; replace: string }> },
+    mutableUpdatedFiles: Record<string, string | null>,
+    tempFiles: Record<string, string>
+  ): void {
+    if (fileEdit.operation === 'modify' && fileEdit.edits) {
+      const currentContent = tempFiles[fileEdit.path];
+      if (!currentContent) return;
+      const editResult = applyEdits(currentContent, fileEdit.edits);
+      if (editResult.success) {
+        mutableUpdatedFiles[fileEdit.path] = editResult.content!;
+        tempFiles[fileEdit.path] = editResult.content!;
+      }
+    } else if (fileEdit.operation === 'create' && fileEdit.content) {
+      mutableUpdatedFiles[fileEdit.path] = fileEdit.content;
+      tempFiles[fileEdit.path] = fileEdit.content;
+    }
   }
 
   /**

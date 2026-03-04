@@ -51,14 +51,14 @@ export async function POST(
 
     contextLogger.info('Modifying project', {
       promptLength: validatedRequest.prompt.length,
-      skipPlanning: validatedRequest.skipPlanning,
+      shouldSkipPlanning: validatedRequest.shouldSkipPlanning,
     });
 
     // Deserialize project state
     const projectState = deserializeProjectState(validatedRequest.projectState as any);
 
-    // Extract skipPlanning option from request
-    const { skipPlanning } = validatedRequest;
+    // Extract shouldSkipPlanning option from request
+    const { shouldSkipPlanning } = validatedRequest;
 
     // Detect intent to route to the appropriate task-specific models
     const detectedTaskType = await detectIntent(validatedRequest.prompt, requestId);
@@ -67,7 +67,7 @@ export async function POST(
     // Modify project with timeout
     const engine = await createModificationEngine(detectedTaskType);
     const result = await withTimeout(
-      engine.modifyProject(projectState, validatedRequest.prompt, { skipPlanning, requestId }),
+      engine.modifyProject(projectState, validatedRequest.prompt, { shouldSkipPlanning, requestId }),
       {
         timeoutMs: MODIFY_TIMEOUT_MS,
         operationName: 'project modification',

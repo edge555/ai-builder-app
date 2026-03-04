@@ -45,7 +45,7 @@ export function buildModificationPrompt(
 /**
  * Build code slices directly from project files without using FilePlanner.
  * All files are treated as primary files (full content included).
- * Used when skipPlanning option is true.
+ * Used when shouldSkipPlanning option is true.
  */
 export function buildSlicesFromFiles(projectState: ProjectState): CodeSlice[] {
     const slices: CodeSlice[] = [];

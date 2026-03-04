@@ -1,7 +1,10 @@
 /**
- * AI File Planner Types
- * 
- * Core type definitions for the AST-based code chunking and AI-powered file planning system.
+ * @module analysis/file-planner/types
+ * @description Core type definitions for the AST-based code chunking and AI file planning system.
+ * Defines `CodeChunk`, `ChunkIndex`, `FileMetadata`, `FilePlannerResult`, `PlanningResponse`,
+ * and `ScoredFile`. Several types re-export shared types from `@ai-app-builder/shared`.
+ *
+ * @requires @ai-app-builder/shared - CodeSlice and FileType base types
  */
 
 import type { CodeSlice as SharedCodeSlice, FileType as SharedFileType } from '@ai-app-builder/shared';

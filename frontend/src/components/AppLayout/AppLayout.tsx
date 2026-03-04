@@ -138,7 +138,7 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
     }, [maxSidePanelWidth]);
 
     // Toggle sidebar collapse
-    const toggleSidebar = useCallback(() => {
+    const handleToggleSidebar = useCallback(() => {
         setIsSidebarCollapsed((prev) => !prev);
     }, []);
 
@@ -153,7 +153,7 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
     useKeyboardShortcuts({
         onUndo: undo,
         onRedo: redo,
-        onToggleSidebar: toggleSidebar,
+        onToggleSidebar: handleToggleSidebar,
     });
 
     // Format save indicator text
@@ -169,7 +169,7 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                 <div className="app-header-left">
                     <button
                         className="sidebar-toggle-button"
-                        onClick={toggleSidebar}
+                        onClick={handleToggleSidebar}
                         aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                         title={isSidebarCollapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
                     >
@@ -259,7 +259,7 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                         <div className="sidebar-collapsed-rail">
                             <button
                                 className="sidebar-rail-toggle"
-                                onClick={toggleSidebar}
+                                onClick={handleToggleSidebar}
                                 aria-label="Expand sidebar"
                                 title="Expand sidebar (Ctrl+B)"
                             >

@@ -1,10 +1,13 @@
 /**
- * Token Budget Manager
+ * @module analysis/file-planner/token-budget
+ * @description Token budget manager for AI context assembly.
+ * Ensures the assembled code slices stay within the configured token limit.
+ * Trimming strategy: convert oversized primary slices to outlines first;
+ * then drop context slices by size; always keeps at least one primary slice in full.
  *
- * Manages token budget for AI context assembly.
- * Ensures context stays within limits by trimming slices.
- *
- * Requirements: 7.1, 7.2, 7.3, 7.4
+ * @requires ./types - CodeSlice, ChunkIndex types
+ * @requires ../../constants - TOKEN_BUDGET, CHARS_PER_TOKEN
+ * @requires ../../logger - Info logging for trim events
  */
 
 import { TOKEN_BUDGET, CHARS_PER_TOKEN } from '../../constants';

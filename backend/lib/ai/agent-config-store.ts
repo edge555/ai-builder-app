@@ -1,3 +1,15 @@
+/**
+ * @module ai/agent-config-store
+ * @description Persists and loads the per-task agent configuration (model lists).
+ * Configuration is stored as JSON at `data/agent-config.json` relative to
+ * the process working directory. Falls back to a default empty config when
+ * the file does not exist.
+ *
+ * @requires fs/promises - Async filesystem operations
+ * @requires ./agent-config-types - AgentConfig, TaskType, ModelEntry types
+ * @requires ../logger - Structured logging
+ */
+
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { createLogger } from '../logger';
@@ -29,12 +41,12 @@ export async function load(): Promise<AgentConfig> {
     }
     logger.info('Agent config loaded from disk');
     return parsed;
-  } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
       logger.info('No agent config found, using defaults');
       return createDefaultConfig();
     }
-    logger.error('Failed to load agent config, using defaults', { error: err });
+    logger.error('Failed to load agent config, using defaults', { error });
     return createDefaultConfig();
   }
 }

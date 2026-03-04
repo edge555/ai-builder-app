@@ -1,8 +1,13 @@
 /**
- * OpenRouter API Type Definitions
- *
- * OpenRouter uses the OpenAI-compatible chat completions API format.
+ * @module ai/openrouter-types
+ * @description TypeScript type definitions for the OpenRouter API.
+ * OpenRouter uses the OpenAI chat completions format.
  * Endpoint: https://openrouter.ai/api/v1/chat/completions
+ *
+ * Covers request bodies, non-streaming responses, SSE streaming deltas,
+ * and client configuration.
+ *
+ * @requires No runtime dependencies — type definitions only.
  */
 
 // ---- Request ----

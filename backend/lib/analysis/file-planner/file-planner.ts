@@ -1,10 +1,19 @@
 /**
- * File Planner
- *
- * Main orchestrator for AI-powered file planning.
+ * @module analysis/file-planner/file-planner
+ * @description Orchestrates AI-powered file selection for code modifications.
  * Uses a two-phase approach:
- * 1. Planning Phase: AI receives compact file tree metadata and selects relevant files
- * 2. Context Assembly: Selected files are assembled into CodeSlices for execution
+ * 1. Planning Phase: AI receives compact file tree metadata and selects relevant files.
+ * 2. Context Assembly: Selected files are assembled into CodeSlices trimmed to budget.
+ * Falls back to heuristic selection (`FallbackSelector`) on AI failures.
+ *
+ * @requires ./chunk-index - AST-based code chunk extraction
+ * @requires ./metadata-generator - File tree metadata serialization
+ * @requires ./planning-prompt - System prompt and response parsing
+ * @requires ./fallback-selector - Heuristic file selection fallback
+ * @requires ./token-budget - Token budget trimming
+ * @requires ./types - FilePlannerResult, CodeSlice types
+ * @requires ../../ai/ai-provider - AIProvider interface
+ * @requires ../../logger - Structured logging
  */
 
 import type { ProjectState } from '@ai-app-builder/shared';
@@ -75,11 +84,11 @@ export class FilePlanner {
     logger.info('Starting file planning', { prompt: prompt.substring(0, 100) });
 
     // Step 1: Build or retrieve cached chunk index
-    const { index: chunkIndex, fromCache } = this.getCachedChunkIndex(projectState);
+    const { index: chunkIndex, isFromCache } = this.getCachedChunkIndex(projectState);
     logger.debug('Chunk index ready', {
       chunkCount: chunkIndex.chunks.size,
       fileCount: chunkIndex.fileMetadata.size,
-      fromCache,
+      isFromCache,
     });
 
     // Step 2: Generate file tree metadata for planning call
@@ -328,13 +337,11 @@ export class FilePlanner {
       }
 
       // Include exports and declarations
-      if (
+      const isTopLevelDeclaration =
         trimmed.startsWith('export ') ||
-        trimmed.match(/^(async\s+)?function\s+\w+/) ||
-        trimmed.match(/^class\s+\w+/) ||
-        trimmed.match(/^interface\s+\w+/) ||
-        trimmed.match(/^type\s+\w+/)
-      ) {
+        /^(?:async\s+)?function\s+\w+/.test(trimmed) ||
+        /^(?:class|interface|type)\s+\w+/.test(trimmed);
+      if (isTopLevelDeclaration) {
         outlineLines.push(line);
         outlineLines.push('  // ... implementation ...');
       }
@@ -487,7 +494,7 @@ export class FilePlanner {
    * Caches based on file count and total content length to detect changes.
    * Implements memory-based eviction to prevent unbounded growth.
    */
-  private getCachedChunkIndex(projectState: ProjectState): { index: ChunkIndex; fromCache: boolean } {
+  private getCachedChunkIndex(projectState: ProjectState): { index: ChunkIndex; isFromCache: boolean } {
     const cacheKey = this.getProjectStateCacheKey(projectState);
 
     // Set current cache key for consistent usage across methods
@@ -501,7 +508,7 @@ export class FilePlanner {
         cacheKey,
         estimatedSize: `${(cached.estimatedSize / 1024 / 1024).toFixed(2)}MB`,
       });
-      return { index: cached.index, fromCache: true };
+      return { index: cached.index, isFromCache: true };
     }
 
     // Build new index
@@ -524,7 +531,7 @@ export class FilePlanner {
     // Evict based on both count and memory limits
     this.evictCacheIfNeeded();
 
-    return { index, fromCache: false };
+    return { index, isFromCache: false };
   }
 
   /**
@@ -532,7 +539,6 @@ export class FilePlanner {
    * Uses LRU (Least Recently Used) eviction strategy.
    */
   private evictCacheIfNeeded(): void {
-    // Check if eviction is needed
     const needsEviction =
       this.chunkIndexCache.size > this.MAX_CACHE_ENTRIES ||
       this.currentCacheMemoryUsage > this.MAX_CACHE_MEMORY_BYTES;
@@ -541,54 +547,11 @@ export class FilePlanner {
       return;
     }
 
-    // Convert to array and sort by timestamp (oldest first)
-    const entries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]> = [];
-    this.chunkIndexCache.forEach((value, key) => {
-      entries.push([key, value]);
-    });
-    entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
-
-    // Determine how many to keep
-    const toKeep = entries.slice(0, this.MAX_CACHE_ENTRIES);
-
-    // Calculate new memory usage
-    let newMemoryUsage = 0;
-    const keysToKeep = new Set<string>();
-    const finalEntries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]> = [];
-
-    for (const [key, value] of toKeep) {
-      if (newMemoryUsage + value.estimatedSize <= this.MAX_CACHE_MEMORY_BYTES) {
-        finalEntries.push([key, value]);
-        keysToKeep.add(key);
-        newMemoryUsage += value.estimatedSize;
-      } else {
-        // Stop adding if it would exceed memory limit
-        break;
-      }
-    }
-
-    // Clear and rebuild cache
+    const { finalEntries, keysToKeep } = this.selectEntriesToKeep();
     const evictedCount = this.chunkIndexCache.size - finalEntries.length;
-    this.chunkIndexCache.clear();
-    this.currentCacheMemoryUsage = 0;
 
-    for (const [key, value] of finalEntries) {
-      this.chunkIndexCache.set(key, value);
-      this.currentCacheMemoryUsage += value.estimatedSize;
-    }
-
-    // Clean up corresponding symbol lookup caches
-    // IMPORTANT: Use the same key for symbolLookupCache
-    const symbolKeysToRemove: string[] = [];
-    this.symbolLookupCache.forEach((_, key) => {
-      if (!keysToKeep.has(key)) {
-        symbolKeysToRemove.push(key);
-      }
-    });
-
-    symbolKeysToRemove.forEach(key => {
-      this.symbolLookupCache.delete(key);
-    });
+    this.rebuildCache(finalEntries);
+    this.cleanupSymbolLookupCache(keysToKeep);
 
     if (evictedCount > 0) {
       logger.info('Evicted cache entries', {
@@ -598,6 +561,62 @@ export class FilePlanner {
         maxMemory: `${(this.MAX_CACHE_MEMORY_BYTES / 1024 / 1024).toFixed(2)}MB`,
       });
     }
+  }
+
+  /**
+   * Select cache entries to keep based on recency and memory budget.
+   */
+  private selectEntriesToKeep(): {
+    finalEntries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]>;
+    keysToKeep: Set<string>;
+  } {
+    const entries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]> = [];
+    this.chunkIndexCache.forEach((value, key) => {
+      entries.push([key, value]);
+    });
+    entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+
+    const toKeep = entries.slice(0, this.MAX_CACHE_ENTRIES);
+    let newMemoryUsage = 0;
+    const keysToKeep = new Set<string>();
+    const finalEntries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]> = [];
+
+    for (const [key, value] of toKeep) {
+      if (newMemoryUsage + value.estimatedSize > this.MAX_CACHE_MEMORY_BYTES) break;
+      finalEntries.push([key, value]);
+      keysToKeep.add(key);
+      newMemoryUsage += value.estimatedSize;
+    }
+
+    return { finalEntries, keysToKeep };
+  }
+
+  /**
+   * Rebuild the chunk index cache from selected entries.
+   */
+  private rebuildCache(
+    entries: Array<[string, { index: ChunkIndex; timestamp: number; estimatedSize: number }]>
+  ): void {
+    this.chunkIndexCache.clear();
+    this.currentCacheMemoryUsage = 0;
+
+    for (const [key, value] of entries) {
+      this.chunkIndexCache.set(key, value);
+      this.currentCacheMemoryUsage += value.estimatedSize;
+    }
+  }
+
+  /**
+   * Remove symbol lookup entries that are no longer in the chunk index cache.
+   */
+  private cleanupSymbolLookupCache(keysToKeep: Set<string>): void {
+    const keysToRemove: string[] = [];
+    this.symbolLookupCache.forEach((_, key) => {
+      if (!keysToKeep.has(key)) {
+        keysToRemove.push(key);
+      }
+    });
+    keysToRemove.forEach(key => this.symbolLookupCache.delete(key));
   }
 
 

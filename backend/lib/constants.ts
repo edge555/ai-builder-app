@@ -1,3 +1,18 @@
+/**
+ * @module constants
+ * @description Shared backend constants used across the application.
+ * Centralizes magic numbers and threshold values to avoid duplication
+ * and make tuning easier.
+ *
+ * Categories:
+ * - API retry/timeout defaults
+ * - Error logging limits
+ * - Diff and slice selection limits
+ * - Validation line-count limits
+ * - Token budget for AI context
+ * - Max output tokens per operation type and AI provider
+ */
+
 // API retry defaults
 export const DEFAULT_API_MAX_RETRIES = 3;
 export const DEFAULT_RETRY_BASE_DELAY_MS = 1000; // 1 second

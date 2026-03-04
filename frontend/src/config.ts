@@ -1,3 +1,13 @@
+/**
+ * @module config
+ * @description Frontend configuration validated from Vite environment variables.
+ * Validates required variables (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`)
+ * at startup using Zod. Exports a typed `config` object with API and Supabase settings.
+ * Missing variables are logged but do not crash the app (errors surface at point of use).
+ *
+ * @requires zod - Environment variable schema validation
+ * @requires ./utils/logger - Startup validation logging
+ */
 import { z } from 'zod';
 
 import { createLogger } from './utils/logger';
