@@ -14,7 +14,6 @@ interface WelcomePageProps {
   onEnterApp: (initialPrompt?: string) => void;
   onOpenProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
-  onRenameProject: (projectId: string, newName: string) => void;
   onDuplicateProject: (projectId: string) => void;
   savedProjects: ProjectMetadata[];
   isLoadingProjects?: boolean;
@@ -63,7 +62,6 @@ export function WelcomePage({
   onEnterApp,
   onOpenProject,
   onDeleteProject,
-  onRenameProject,
   onDuplicateProject,
   savedProjects,
   isLoadingProjects = false,
@@ -245,7 +243,6 @@ export function WelcomePage({
       <ProjectGallery
         projects={savedProjects}
         onOpenProject={onOpenProject}
-        onRenameProject={onRenameProject}
         onDuplicateProject={onDuplicateProject}
         onDeleteProject={handleDeleteRequest}
         isLoading={isLoadingProjects}

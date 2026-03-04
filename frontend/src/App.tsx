@@ -156,14 +156,6 @@ function WelcomePageWrapper({
     }
   };
 
-  const handleRenameProject = async (projectId: string, newName: string) => {
-    try {
-      await storageService.renameProject(projectId, newName);
-      await onProjectsChanged();
-    } catch (error) {
-      appLogger.error('Failed to rename project', { error });
-    }
-  };
 
   const handleDuplicateProject = async (projectId: string) => {
     try {
@@ -179,7 +171,6 @@ function WelcomePageWrapper({
       onEnterApp={handleEnterApp}
       onOpenProject={handleOpenProject}
       onDeleteProject={handleDeleteProject}
-      onRenameProject={handleRenameProject}
       onDuplicateProject={handleDuplicateProject}
       savedProjects={savedProjects}
     />

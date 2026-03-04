@@ -3,12 +3,9 @@ import { type MouseEvent, type CSSProperties } from 'react';
 
 import type { ProjectMetadata } from '@/services/storage';
 
-import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
-
 export interface ProjectCardProps {
   project: ProjectMetadata;
   onOpen: (projectId: string) => void;
-  onRename: (projectId: string, newName: string) => void;
   onDuplicate: (projectId: string) => void;
   onDelete: (projectId: string) => void;
   /** Called on mouseenter — used to preload the BuilderPage chunk before click. */
@@ -69,18 +66,13 @@ function getProjectAccentColor(id: string): string {
 export function ProjectCard({
   project,
   onOpen,
-  onRename,
   onDuplicate,
   onDelete,
   onPreload,
 }: ProjectCardProps) {
   const handleCardClick = (e: MouseEvent) => {
-    // Don't trigger open if clicking on action buttons or editable name
-    if (
-      (e.target as HTMLElement).closest('.project-card-action') ||
-      (e.target as HTMLElement).closest('.editable-project-name') ||
-      (e.target as HTMLElement).closest('input')
-    ) {
+    // Don't trigger open if clicking on action buttons
+    if ((e.target as HTMLElement).closest('.project-card-action')) {
       return;
     }
     onOpen(project.id);
@@ -121,11 +113,7 @@ export function ProjectCard({
 
       <div className="project-card-header">
         <div className="project-card-title-wrapper">
-          <EditableProjectName
-            name={project.name}
-            onRename={(newName) => onRename(project.id, newName)}
-            className="project-card-title-input"
-          />
+          <span className="project-card-title-input">{project.name}</span>
         </div>
         <div className="project-card-actions">
           <button

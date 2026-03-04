@@ -60,7 +60,7 @@ export const ERROR_TYPE_PRIORITY: Record<RuntimeErrorType, ErrorPriority> = {
     CSS_ERROR: 'medium',
     HYDRATION_ERROR: 'medium',
     PROMISE_ERROR: 'medium',
-    UNKNOWN_ERROR: 'low',
+    UNKNOWN_ERROR: 'medium',
 };
 
 /**

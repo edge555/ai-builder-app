@@ -1,4 +1,5 @@
 import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState } from '@ai-app-builder/shared/types';
+import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { createContext, useContext } from 'react';
 
 import type { LoadingPhase } from '../components/ChatInterface';
@@ -52,8 +53,9 @@ export interface GenerationStateValue {
 export interface GenerationActionsValue {
     generateProject: (description: string) => Promise<GenerateProjectResponse>;
     generateProjectStreaming: (description: string) => Promise<GenerateProjectResponse>;
-    modifyProject: (currentState: SerializedProjectState, prompt: string, runtimeError?: RuntimeError) => Promise<ModifyProjectResponse>;
-    autoRepair: (runtimeError: RuntimeError, projectState: SerializedProjectState | null) => Promise<boolean>;
+    modifyProject: (currentState: SerializedProjectState, prompt: string, runtimeError?: RuntimeError, options?: { shouldSkipPlanning?: boolean }) => Promise<ModifyProjectResponse>;
+    modifyProjectStreaming: (currentState: SerializedProjectState, prompt: string, runtimeError?: RuntimeError, options?: { shouldSkipPlanning?: boolean }) => Promise<ModifyProjectResponse>;
+    autoRepair: (runtimeError: RuntimeError, projectState: SerializedProjectState | null, aggregatedErrors?: AggregatedErrors | null) => Promise<boolean>;
     resetAutoRepair: () => void;
     setIsLoading: (loading: boolean) => void;
     setLoadingPhase: (phase: LoadingPhase) => void;

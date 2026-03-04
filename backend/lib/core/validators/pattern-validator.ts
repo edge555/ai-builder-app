@@ -12,6 +12,17 @@ const FORBIDDEN_PATTERNS = [
     { pattern: /\/\/\s*TODO\b/gi, name: 'TODO comments' },
     { pattern: /\/\*\s*TODO\b/gi, name: 'TODO block comments' },
     { pattern: /{\s*\/\*\s*TODO\b/gi, name: 'TODO JSX comments' },
+
+    // Partial-generation stubs — AI leaving placeholder content instead of real code
+    { pattern: /\/\/\s*\.\.\.\s*(rest|remaining|previous|existing|unchanged|omitted|implementation|code|content|etc\.?)\b/gi, name: 'partial-generation stub' },
+    { pattern: /\/\/\s*\.\.\.\s*$/gm, name: 'trailing ellipsis stub' },
+    { pattern: /\/\*[\s\S]*?\.\.\.\s*(rest|remaining|previous|existing|unchanged|omitted|implementation|code|content)[\s\S]*?\*\//gi, name: 'partial-generation block stub' },
+    { pattern: /\{\/\*\s*\.\.\.\s*\*\/\}/g, name: 'JSX ellipsis stub' },
+    { pattern: /\/\/\s*\.\.\.\s*(add|insert|put|write|place|include)\b/gi, name: 'instruction stub' },
+
+    // Suppression directives — AI papering over errors it cannot fix
+    { pattern: /\/\/\s*@ts-nocheck\b/gi, name: '@ts-nocheck directive' },
+    { pattern: /\/\/\s*eslint-disable\s*$/gm, name: 'blanket eslint-disable' },
 ];
 
 /**

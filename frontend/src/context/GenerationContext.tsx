@@ -1,4 +1,5 @@
 import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState, RepairAttempt } from '@ai-app-builder/shared/types';
+import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { useState, useCallback, useMemo, useRef, useEffect, type ReactNode } from 'react';
 
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
@@ -298,7 +299,8 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
   const modifyProject = useCallback(async (
     currentState: SerializedProjectState,
     prompt: string,
-    runtimeError?: RuntimeError
+    runtimeError?: RuntimeError,
+    options?: { shouldSkipPlanning?: boolean }
   ): Promise<ModifyProjectResponse> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), appConfig.api.timeout);
@@ -312,7 +314,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'apikey': SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ projectState: currentState, prompt, runtimeError }),
+        body: JSON.stringify({ projectState: currentState, prompt, runtimeError, shouldSkipPlanning: options?.shouldSkipPlanning }),
         signal: controller.signal,
       });
 
@@ -337,11 +339,177 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /**
+   * Calls the streaming modify project API via SSE.
+   * Mirrors generateProjectStreaming but POSTs to /modify-stream.
+   */
+  const modifyProjectStreaming = useCallback(async (
+    currentState: SerializedProjectState,
+    prompt: string,
+    runtimeError?: RuntimeError,
+    options?: { shouldSkipPlanning?: boolean }
+  ): Promise<ModifyProjectResponse> => {
+    streamAbortRef.current?.abort();
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+
+    const maxTimeoutId = setTimeout(() => {
+      controller.abort();
+    }, STREAMING_MAX_TIMEOUT_MS);
+
+    let inactivityTimeoutId: ReturnType<typeof setTimeout>;
+    const resetInactivityTimeout = () => {
+      clearTimeout(inactivityTimeoutId);
+      inactivityTimeoutId = setTimeout(() => {
+        controller.abort();
+      }, STREAMING_INACTIVITY_TIMEOUT_MS);
+    };
+    resetInactivityTimeout();
+
+    setIsStreaming(true);
+    setStreamingState({
+      phase: 'connecting',
+      files: {},
+      currentFile: null,
+      filesReceived: 0,
+      totalFiles: 0,
+      textLength: 0,
+      error: null,
+      lastHeartbeat: Date.now(),
+      warnings: [],
+      summary: null,
+    });
+
+    // Capture modify-specific fields from the complete event
+    let modifyDiffs: ModifyProjectResponse['diffs'];
+    let modifyChangeSummary: ModifyProjectResponse['changeSummary'];
+
+    try {
+      const response = await fetch(`${FUNCTIONS_BASE_URL}/modify-stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          projectState: currentState,
+          prompt,
+          runtimeError,
+          shouldSkipPlanning: options?.shouldSkipPlanning,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const result = await parseSSEStream(reader, {
+        onStart: () => {
+          resetInactivityTimeout();
+          setStreamingState(prev => prev ? { ...prev, phase: 'generating', lastHeartbeat: Date.now() } : null);
+        },
+        onProgress: (length: number) => {
+          resetInactivityTimeout();
+          setStreamingState(prev => prev ? { ...prev, textLength: length, lastHeartbeat: Date.now() } : null);
+        },
+        onFile: (data: StreamFileData, files: Record<string, string>) => {
+          resetInactivityTimeout();
+          setStreamingState(prev => prev ? {
+            ...prev,
+            phase: 'processing',
+            files: { ...files },
+            currentFile: data.path,
+            filesReceived: data.index + 1,
+            totalFiles: data.total,
+            lastHeartbeat: Date.now(),
+          } : null);
+        },
+        onWarning: (warning) => {
+          resetInactivityTimeout();
+          setStreamingState(prev => prev ? {
+            ...prev,
+            warnings: [...prev.warnings, warning],
+            lastHeartbeat: Date.now(),
+          } : null);
+        },
+        onStreamEnd: (summary) => {
+          resetInactivityTimeout();
+          setStreamingState(prev => prev ? {
+            ...prev,
+            summary,
+            lastHeartbeat: Date.now(),
+          } : null);
+        },
+        onComplete: (data: StreamCompleteData, files: Record<string, string>) => {
+          resetInactivityTimeout();
+          // Capture diffs and changeSummary from the modify-stream complete payload
+          modifyDiffs = (data as any).diffs;
+          modifyChangeSummary = (data as any).changeSummary;
+          setStreamingState(prev => prev ? {
+            ...prev,
+            phase: 'complete',
+            files: data.projectState?.files || files,
+            currentFile: null,
+            lastHeartbeat: Date.now(),
+          } : null);
+        },
+        onError: (errorData) => {
+          resetInactivityTimeout();
+          const userMessage = getUserFriendlyErrorMessage({
+            errorType: errorData.errorType,
+            errorCode: errorData.errorCode,
+            partialContent: errorData.partialContent,
+            originalMessage: errorData.error,
+          });
+          setStreamingState(prev => prev ? {
+            ...prev,
+            phase: 'error',
+            error: userMessage,
+            lastHeartbeat: Date.now(),
+          } : null);
+        },
+        onHeartbeat: () => {
+          resetInactivityTimeout();
+          setStreamingState(prev => prev ? { ...prev, lastHeartbeat: Date.now() } : null);
+        },
+      });
+
+      clearTimeout(inactivityTimeoutId);
+      clearTimeout(maxTimeoutId);
+
+      // Merge modify-specific fields into the result
+      return {
+        ...result,
+        diffs: modifyDiffs,
+        changeSummary: modifyChangeSummary,
+      } as ModifyProjectResponse;
+    } catch (e) {
+      clearTimeout(inactivityTimeoutId);
+      clearTimeout(maxTimeoutId);
+      if (e instanceof Error && e.name === 'AbortError') {
+        if (controller.signal.aborted) {
+          return { success: false, error: 'Request was cancelled' };
+        }
+        return { success: false, error: 'Modification timed out or was cancelled' };
+      }
+      throw e;
+    } finally {
+      setIsStreaming(false);
+      streamAbortRef.current = null;
+    }
+  }, []);
+
+  /**
    * Triggers auto-repair for a runtime error.
    * Returns true if repair was successful.
    * Accumulates failure history across attempts to help AI avoid repeating mistakes.
    */
-  const autoRepair = useCallback(async (runtimeError: RuntimeError, projectState: SerializedProjectState | null): Promise<boolean> => {
+  const autoRepair = useCallback(async (runtimeError: RuntimeError, projectState: SerializedProjectState | null, aggregatedErrors?: AggregatedErrors | null): Promise<boolean> => {
     // Prevent duplicate repairs for the same error
     const errorKey = `${runtimeError.message}:${runtimeError.filePath}`;
     if (lastRepairErrorRef.current === errorKey) {
@@ -380,7 +548,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     );
 
     try {
-      const result = await modifyProject(projectState, repairPrompt, runtimeError);
+      const result = await modifyProjectStreaming(projectState, repairPrompt, runtimeError, { shouldSkipPlanning: true });
 
       setIsAutoRepairing(false);
       setLoadingPhase('idle');
@@ -417,7 +585,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       setLoadingPhase('idle');
       return false;
     }
-  }, [isAutoRepairing, modifyProject, errorAggregator]);
+  }, [isAutoRepairing, modifyProjectStreaming, errorAggregator]);
 
   // Split context into state and actions to reduce re-renders
   const stateValue = useMemo<GenerationStateValue>(() => ({
@@ -444,6 +612,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     generateProject,
     generateProjectStreaming,
     modifyProject,
+    modifyProjectStreaming,
     autoRepair,
     resetAutoRepair,
     setIsLoading,
@@ -454,6 +623,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     generateProject,
     generateProjectStreaming,
     modifyProject,
+    modifyProjectStreaming,
     autoRepair,
     resetAutoRepair,
     clearError,

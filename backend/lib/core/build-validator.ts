@@ -77,21 +77,39 @@ const IMPORT_PATTERNS = [
 ];
 
 /**
- * Extract imports from a TypeScript/JavaScript file
+ * Extract imports from a TypeScript/JavaScript file.
+ * Handles multi-line static imports by joining continuation lines before pattern matching.
  */
 function extractImports(content: string): Array<{ module: string; line: number }> {
     const imports: Array<{ module: string; line: number }> = [];
     const lines = content.split('\n');
 
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
+    // Returns true once the line contains a quoted module path (e.g. 'react' or "lodash")
+    const hasQuotedString = (s: string) => /['"][^'"]+['"]/.test(s);
+
+    let i = 0;
+    while (i < lines.length) {
+        let line = lines[i];
+        const startLine = i + 1;
+
+        // Join multi-line static imports: `import { X,\n  Y\n} from 'module'`
+        // Triggered when the line starts with `import` but has no quoted module path yet.
+        if (/^\s*import\s/.test(line) && !hasQuotedString(line)) {
+            while (i + 1 < lines.length && !hasQuotedString(line)) {
+                i++;
+                line = line.trimEnd() + ' ' + lines[i].trimStart();
+            }
+        }
+
         for (const pattern of IMPORT_PATTERNS) {
             const match = line.match(pattern);
             if (match) {
-                imports.push({ module: match[1], line: i + 1 });
+                imports.push({ module: match[1], line: startLine });
                 break;
             }
         }
+
+        i++;
     }
 
     return imports;
@@ -270,8 +288,15 @@ export class BuildValidator {
                         });
                     }
                 } else {
+                    // Path-alias imports (e.g. @/ or ~) are resolved by the bundler — skip
+                    if (importPath.startsWith('@/') || importPath.startsWith('~/')) {
+                        continue;
+                    }
+
                     // External package import
-                    const packageName = getPackageName(importPath);
+                    // Strip `node:` prefix (e.g. `node:fs` → `fs`) before classification
+                    const rawImport = importPath.startsWith('node:') ? importPath.slice(5) : importPath;
+                    const packageName = getPackageName(rawImport);
 
                     // Check if it's a Node.js built-in (not usable in browser)
                     if (NODE_BUILT_INS.has(packageName)) {

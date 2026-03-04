@@ -51,10 +51,9 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
     // Start the repair
     previewErrorActions.startAutoRepair();
 
-    // Get the error to repair (prefer aggregated, fallback to current)
-    const errorToRepair = previewErrorState.aggregatedErrors?.totalCount
-      ? previewErrorState.currentError // Use current as representative
-      : previewErrorState.currentError;
+    // Get the error to repair (prefer highest-priority from aggregated set)
+    const errorToRepair = previewErrorState.aggregatedErrors?.errors[0]
+      ?? previewErrorState.currentError;
 
     if (errorToRepair && projectState) {
       // Show repair attempt number
@@ -63,7 +62,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
         `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
       );
 
-      generationActions.autoRepair(errorToRepair, projectState)
+      generationActions.autoRepair(errorToRepair, projectState, previewErrorState.aggregatedErrors)
         .then(success => {
           if (success) {
             // Repair succeeded
@@ -119,7 +118,8 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
    * Manually trigger auto-repair.
    */
   const triggerAutoRepair = useCallback(async (): Promise<boolean> => {
-    const errorToRepair = previewErrorState.currentError;
+    const errorToRepair = previewErrorState.aggregatedErrors?.errors[0]
+      ?? previewErrorState.currentError;
     if (!errorToRepair || !projectState) {
       return false;
     }
@@ -140,7 +140,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
         `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
       );
 
-      const success = await generationActions.autoRepair(errorToRepair, projectState);
+      const success = await generationActions.autoRepair(errorToRepair, projectState, previewErrorState.aggregatedErrors);
 
       if (success) {
         previewErrorActions.completeAutoRepair(true);

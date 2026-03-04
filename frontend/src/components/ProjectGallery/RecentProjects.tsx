@@ -8,7 +8,6 @@ import './RecentProjects.css';
 export interface RecentProjectsProps {
     projects: ProjectMetadata[];
     onOpenProject: (projectId: string) => void;
-    onRenameProject: (projectId: string, newName: string) => void;
     onDuplicateProject: (projectId: string) => void;
     onDeleteProject: (projectId: string) => void;
     onViewAll: () => void;
@@ -23,7 +22,6 @@ export interface RecentProjectsProps {
 export function RecentProjects({
     projects,
     onOpenProject,
-    onRenameProject,
     onDuplicateProject,
     onDeleteProject,
     onViewAll,
@@ -40,7 +38,6 @@ export function RecentProjects({
                         <ProjectCard
                             project={project}
                             onOpen={onOpenProject}
-                            onRename={onRenameProject}
                             onDuplicate={onDuplicateProject}
                             onDelete={onDeleteProject}
                             onPreload={onPreloadBuilder}

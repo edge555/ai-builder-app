@@ -95,6 +95,23 @@ export abstract class BaseProjectGenerator {
         const failureHistory: RepairAttempt[] = [];
 
         while (!buildResult.valid && buildRetryCount < this.maxBuildRetries) {
+            // Early termination: skip retries if all errors are unfixable (e.g. Node.js built-ins)
+            const fixableErrors = buildResult.errors.filter(e => e.severity === 'fixable');
+            const unfixableErrors = buildResult.errors.filter(e => e.severity === 'unfixable');
+
+            if (unfixableErrors.length > 0 && fixableErrors.length === 0) {
+                logger.warn('All build errors are unfixable, skipping retry loop', {
+                    unfixableErrors: unfixableErrors.map(e => ({ message: e.message, file: e.file })),
+                });
+                break;
+            }
+
+            if (unfixableErrors.length > 0) {
+                logger.warn('Some build errors are unfixable and will persist after retries', {
+                    unfixableErrors: unfixableErrors.map(e => ({ message: e.message, file: e.file })),
+                });
+            }
+
             buildRetryCount++;
             logger.info('Build validation retry', {
                 attempt: buildRetryCount,
@@ -151,6 +168,7 @@ export abstract class BaseProjectGenerator {
                 failureHistory.push({
                     attempt: buildRetryCount,
                     error: fixResponse.error || 'AI failed to generate fix',
+                    strategy: `AI generation failed when asked to fix: ${buildResult.errors.map(e => e.message).join('; ')}`,
                     timestamp: new Date().toISOString(),
                 });
                 break;
@@ -217,6 +235,7 @@ export abstract class BaseProjectGenerator {
                 failureHistory.push({
                     attempt: buildRetryCount,
                     error: e instanceof Error ? e.message : 'Unknown parsing error',
+                    strategy: `AI returned unparseable response when asked to fix: ${buildResult.errors.map(e => e.message).join('; ')}`,
                     timestamp: new Date().toISOString(),
                 });
                 break;

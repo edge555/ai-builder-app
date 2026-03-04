@@ -13,7 +13,6 @@ import './ProjectGallery.css';
 export interface ProjectGalleryProps {
   projects: ProjectMetadata[];
   onOpenProject: (projectId: string) => void;
-  onRenameProject: (projectId: string, newName: string) => void;
   onDuplicateProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   isLoading?: boolean;
@@ -43,7 +42,6 @@ const ESTIMATED_CARD_HEIGHT = 200;
 interface VirtualizedOrNormalGridProps {
   projects: ProjectMetadata[];
   onOpenProject: (projectId: string) => void;
-  onRenameProject: (projectId: string, newName: string) => void;
   onDuplicateProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   onPreloadBuilder?: () => void;
@@ -52,7 +50,6 @@ interface VirtualizedOrNormalGridProps {
 function VirtualizedOrNormalGrid({
   projects,
   onOpenProject,
-  onRenameProject,
   onDuplicateProject,
   onDeleteProject,
   onPreloadBuilder,
@@ -79,7 +76,6 @@ function VirtualizedOrNormalGrid({
             key={project.id}
             project={project}
             onOpen={onOpenProject}
-            onRename={onRenameProject}
             onDuplicate={onDuplicateProject}
             onDelete={onDeleteProject}
             onPreload={onPreloadBuilder}
@@ -128,8 +124,7 @@ function VirtualizedOrNormalGrid({
                 <ProjectCard
                   project={project}
                   onOpen={onOpenProject}
-                  onRename={onRenameProject}
-                  onDuplicate={onDuplicateProject}
+                        onDuplicate={onDuplicateProject}
                   onDelete={onDeleteProject}
                   onPreload={onPreloadBuilder}
                 />
@@ -149,7 +144,6 @@ function VirtualizedOrNormalGrid({
 const ProjectGalleryComponent = function ProjectGallery({
   projects,
   onOpenProject,
-  onRenameProject,
   onDuplicateProject,
   onDeleteProject,
   isLoading = false,
@@ -321,7 +315,6 @@ const ProjectGalleryComponent = function ProjectGallery({
         <RecentProjects
           projects={recentProjects}
           onOpenProject={onOpenProject}
-          onRenameProject={onRenameProject}
           onDuplicateProject={onDuplicateProject}
           onDeleteProject={onDeleteProject}
           onViewAll={() => setActiveTab('all')}
@@ -334,7 +327,6 @@ const ProjectGalleryComponent = function ProjectGallery({
             <VirtualizedOrNormalGrid
               projects={filteredAndSortedProjects}
               onOpenProject={onOpenProject}
-              onRenameProject={onRenameProject}
               onDuplicateProject={onDuplicateProject}
               onDeleteProject={onDeleteProject}
               onPreloadBuilder={onPreloadBuilder}
@@ -378,7 +370,6 @@ function areProjectGalleryPropsEqual(
   // Compare callbacks (reference equality for stable callbacks)
   if (
     prevProps.onOpenProject !== nextProps.onOpenProject ||
-    prevProps.onRenameProject !== nextProps.onRenameProject ||
     prevProps.onDuplicateProject !== nextProps.onDuplicateProject ||
     prevProps.onDeleteProject !== nextProps.onDeleteProject ||
     prevProps.onCreateProject !== nextProps.onCreateProject
