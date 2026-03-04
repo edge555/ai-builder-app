@@ -220,9 +220,9 @@ export class DependencyGraph {
 }
 
 /**
- * Build a dependency graph from a file index.
+ * Create a dependency graph from a file index.
  */
-export function buildDependencyGraph(fileIndex: FileIndex): DependencyGraph {
+export function createDependencyGraph(fileIndex: FileIndex): DependencyGraph {
   const graph = new DependencyGraph();
   graph.build(fileIndex);
   return graph;

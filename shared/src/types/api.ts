@@ -43,7 +43,7 @@ export interface ModifyProjectRequest {
   /** Natural language modification prompt */
   prompt: string;
   /** Skip FilePlanner - use provided files directly (when client has already done planning via /api/plan) */
-  skipPlanning?: boolean;
+  shouldSkipPlanning?: boolean;
   /** Runtime error context for auto-repair (if applicable) */
   runtimeError?: RuntimeError;
 }

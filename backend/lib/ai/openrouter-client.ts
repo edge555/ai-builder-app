@@ -314,8 +314,8 @@ export class OpenRouterClient implements AIProvider {
       const chunk = JSON.parse(dataStr) as OpenRouterStreamChunk;
       const delta = chunk.choices?.[0]?.delta?.content;
       return typeof delta === 'string' ? delta : null;
-    } catch (err) {
-      logger.warn('Failed to parse SSE data', { line: trimmedLine, error: err });
+    } catch (error) {
+      logger.warn('Failed to parse SSE data', { line: trimmedLine, error });
       return null;
     }
   }

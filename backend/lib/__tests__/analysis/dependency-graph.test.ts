@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DependencyGraph, buildDependencyGraph } from '../../analysis/dependency-graph';
+import { DependencyGraph, createDependencyGraph } from '../../analysis/dependency-graph';
 import { FileIndex } from '../../analysis/file-index';
 import type { ProjectState } from '@ai-app-builder/shared';
 
@@ -228,7 +228,7 @@ export function b() { return a(); }`,
     });
   });
 
-  describe('buildDependencyGraph helper', () => {
+  describe('createDependencyGraph helper', () => {
     it('should create and build a DependencyGraph', () => {
       const projectState = createProjectState({
         'src/App.tsx': `import { helper } from './utils';
@@ -237,7 +237,7 @@ export default function App() { return <div>{helper()}</div>; }`,
       });
 
       fileIndex.index(projectState);
-      const graph = buildDependencyGraph(fileIndex);
+      const graph = createDependencyGraph(fileIndex);
 
       expect(graph.getDependents('src/utils.ts')).toContain('src/App.tsx');
     });

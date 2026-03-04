@@ -21,9 +21,9 @@ import { getProviderPromptConfig } from '../../core/prompts/provider-prompt-conf
 /**
  * Builds the core modification prompt with user input properly wrapped.
  */
-function buildModificationPrompt(userPrompt: string, includeDesignSystem: boolean): string {
+function buildModificationPrompt(userPrompt: string, shouldIncludeDesignSystem: boolean): string {
   const config = getProviderPromptConfig();
-  const designSystemSection = includeDesignSystem ? `\n${DESIGN_SYSTEM_CONSTANTS}\n\n${ACCESSIBILITY_GUIDANCE}\n` : '';
+  const designSystemSection = shouldIncludeDesignSystem ? `\n${DESIGN_SYSTEM_CONSTANTS}\n\n${ACCESSIBILITY_GUIDANCE}\n` : '';
 
   return `You are a SENIOR full-stack developer modifying an existing web application.
 
@@ -97,10 +97,10 @@ ${wrapUserInput(userPrompt)}
 /**
  * Builds a modification prompt with user input properly wrapped for injection defense.
  * @param userPrompt The user's modification request
- * @param includeDesignSystem Whether to include design system guidance (for UI-related changes)
+ * @param shouldIncludeDesignSystem Whether to include design system guidance (for UI-related changes)
  */
-export function getModificationPrompt(userPrompt: string, includeDesignSystem: boolean = false): string {
-  return buildModificationPrompt(userPrompt, includeDesignSystem);
+export function getModificationPrompt(userPrompt: string, shouldIncludeDesignSystem: boolean = false): string {
+  return buildModificationPrompt(userPrompt, shouldIncludeDesignSystem);
 }
 
 import { ModificationOutputSchema } from '../../core/schemas';

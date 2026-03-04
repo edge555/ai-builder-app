@@ -780,7 +780,7 @@ export class ChunkIndexBuilder {
 /**
  * Create a chunk index from project state.
  */
-export function buildChunkIndex(projectState: ProjectState): ChunkIndex {
+export function createChunkIndex(projectState: ProjectState): ChunkIndex {
   const builder = new ChunkIndexBuilder();
   return builder.build(projectState);
 }

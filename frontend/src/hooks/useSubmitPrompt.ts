@@ -221,12 +221,12 @@ export function useSubmitPrompt() {
                     }
                 }
             }
-        } catch (err) {
+        } catch (error) {
             // Don't show errors for aborted/superseded requests
             if (abortController.signal.aborted) return;
 
             // Network/timeout/auth errors - don't retry these
-            const errorMsg = err instanceof Error ? err.message : 'An unexpected error occurred';
+            const errorMsg = error instanceof Error ? error.message : 'An unexpected error occurred';
             const errorType = detectErrorType(errorMsg);
 
             // Don't show error message for user-initiated cancellation

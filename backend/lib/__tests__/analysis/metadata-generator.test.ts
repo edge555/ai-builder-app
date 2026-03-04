@@ -10,7 +10,7 @@ import {
   estimateTokens,
   isWithinTokenBudget,
 } from '../../analysis/file-planner/metadata-generator';
-import { buildChunkIndex } from '../../analysis/file-planner/chunk-index';
+import { createChunkIndex } from '../../analysis/file-planner/chunk-index';
 import type { ProjectState } from '@ai-app-builder/shared';
 
 const createProjectState = (files: Record<string, string>): ProjectState => ({
@@ -30,7 +30,7 @@ describe('generateFileTreeMetadata', () => {
       'src/utils.ts': 'export function helper() { return 42; }',
     });
 
-    const chunkIndex = buildChunkIndex(projectState);
+    const chunkIndex = createChunkIndex(projectState);
     const metadata = generateFileTreeMetadata(chunkIndex);
 
     expect(metadata).toContain('src/');
@@ -44,7 +44,7 @@ describe('generateFileTreeMetadata', () => {
       'index.ts': 'line1\nline2\nline3',
     });
 
-    const chunkIndex = buildChunkIndex(projectState);
+    const chunkIndex = createChunkIndex(projectState);
     const metadata = generateFileTreeMetadata(chunkIndex);
 
     expect(metadata).toContain('(3 lines)');
@@ -57,7 +57,7 @@ describe('generateFileTreeMetadata', () => {
       'styles.css': '.app { color: red; }',
     });
 
-    const chunkIndex = buildChunkIndex(projectState);
+    const chunkIndex = createChunkIndex(projectState);
     const metadata = generateFileTreeMetadata(chunkIndex);
 
     expect(metadata).toContain('[component]');
@@ -71,7 +71,7 @@ describe('generateFileTreeMetadata', () => {
 export type Status = 'active' | 'inactive';`,
     });
 
-    const chunkIndex = buildChunkIndex(projectState);
+    const chunkIndex = createChunkIndex(projectState);
     const metadata = generateFileTreeMetadata(chunkIndex);
 
     expect(metadata).toContain('exports:');
@@ -87,7 +87,7 @@ export type Status = 'active' | 'inactive';`,
 }`,
     });
 
-    const chunkIndex = buildChunkIndex(projectState);
+    const chunkIndex = createChunkIndex(projectState);
     const metadata = generateFileTreeMetadata(chunkIndex);
 
     // Should not contain function bodies or JSX
@@ -105,7 +105,7 @@ export type Status = 'active' | 'inactive';`,
       'src/utils/format.ts': 'export function format() { return ""; }',
     });
 
-    const chunkIndex = buildChunkIndex(projectState);
+    const chunkIndex = createChunkIndex(projectState);
     const metadata = generateFileTreeMetadata(chunkIndex);
 
     // Check directory structure
@@ -172,7 +172,7 @@ describe('Property 4: Metadata No-Code Invariant', () => {
 }`,
     });
 
-    const chunkIndex = buildChunkIndex(projectState);
+    const chunkIndex = createChunkIndex(projectState);
     const metadata = generateFileTreeMetadata(chunkIndex);
 
     // Should not contain variable declarations from function bodies
@@ -190,7 +190,7 @@ describe('Property 4: Metadata No-Code Invariant', () => {
 }`,
     });
 
-    const chunkIndex = buildChunkIndex(projectState);
+    const chunkIndex = createChunkIndex(projectState);
     const metadata = generateFileTreeMetadata(chunkIndex);
 
     // Should not contain JSX
@@ -221,7 +221,7 @@ export interface Component${i}Props {
     }
 
     const projectState = createProjectState(files);
-    const chunkIndex = buildChunkIndex(projectState);
+    const chunkIndex = createChunkIndex(projectState);
     const metadata = generateFileTreeMetadata(chunkIndex);
 
     const tokens = estimateTokens(metadata);
@@ -236,7 +236,7 @@ export interface Component${i}Props {
     }
 
     const projectState = createProjectState(files);
-    const chunkIndex = buildChunkIndex(projectState);
+    const chunkIndex = createChunkIndex(projectState);
     const metadata = generateFileTreeMetadata(chunkIndex);
 
     const tokens = estimateTokens(metadata);

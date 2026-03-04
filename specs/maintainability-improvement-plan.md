@@ -25,14 +25,14 @@ This plan focuses on **code-level maintainability improvements** to make the cod
 *Focus: Make code self-documenting through clear naming*
 
 ### Task 1.1: Standardize Boolean Variable Naming
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
-- [ ] Rename boolean variables to use `is`, `has`, `should`, `can` prefixes
+- [x] Rename boolean variables to use `is`, `has`, `should`, `can` prefixes
   - `fromCache` → `isFromCache`
   - `skipPlanning` → `shouldSkipPlanning`
   - `includeDesignSystem` → `shouldIncludeDesignSystem`
-- [ ] Search pattern: `\b(private |readonly )?(\w+)(Cache|Flag|Enabled|Disabled|Skip|Include)\b`
-- [ ] Update in: `backend/lib/**/*.ts`, `frontend/src/**/*.ts`
+- [x] Search pattern: `\b(private |readonly )?(\w+)(Cache|Flag|Enabled|Disabled|Skip|Include)\b`
+- [x] Update in: `backend/lib/**/*.ts`, `frontend/src/**/*.ts`
 
 **Example**:
 ```typescript
@@ -46,17 +46,17 @@ const isFromCache = this.cache.has(key);
 ---
 
 ### Task 1.2: Rename Ambiguous Abbreviations
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
-- [ ] Replace single-letter and unclear abbreviations:
-  - `e` → `error` (in catch blocks)
-  - `err` → `error`
-  - `res` → `response`
-  - `req` → `request`
-  - `ctx` → `context`
-  - `opts` → `options`
-  - `cfg` → `config`
-- [ ] Keep widely accepted: `id`, `url`, `api`, `src`, `dest`
+- [x] Replace single-letter and unclear abbreviations:
+  - `e` → `error` (in catch blocks) — none found
+  - `err` → `error` — fixed in 11 files
+  - `res` → `response` — none found
+  - `req` → `request` — none found
+  - `ctx` → `context` — none found
+  - `opts` → `options` — none found
+  - `cfg` → `config` — none found
+- [x] Keep widely accepted: `id`, `url`, `api`, `src`, `dest`
 
 **Search patterns**:
 ```regexcatch \((\w+)\)  // Find single-letter catch params
@@ -66,13 +66,18 @@ const isFromCache = this.cache.has(key);
 ---
 
 ### Task 1.3: Standardize Handler/Callback Naming
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
-- [ ] Use `handle` prefix for event handlers: `handleClick`, `handleSubmit`
-- [ ] Use `on` prefix for callback props: `onChange`, `onComplete`
-- [ ] Use `get` prefix for computed values: `getCacheKey`, `getFileMetadata`
-- [ ] Use `create` prefix for factories: `createLogger`, `createAIProvider`
-- [ ] Use `is` prefix for type guards: `isRetryableError`, `isValidPath`
+- [x] Use `handle` prefix for event handlers: `handleClick`, `handleSubmit`
+  - `toggleSidebar` → `handleToggleSidebar` in AppLayout.tsx
+  - `toggleTheme` → `handleToggleTheme` in ThemeToggle.tsx
+  - `toggleFileDiff` → `handleToggleFileDiff` in FileChangeSummary.tsx
+- [x] Use `on` prefix for callback props: `onChange`, `onComplete` — all callback props already compliant
+- [x] Use `get` prefix for computed values: `getCacheKey`, `getFileMetadata` — already compliant
+- [x] Use `create` prefix for factories: `createLogger`, `createAIProvider`
+  - `buildDependencyGraph` → `createDependencyGraph` in dependency-graph.ts + tests
+  - `buildChunkIndex` → `createChunkIndex` in chunk-index.ts + tests
+- [x] Use `is` prefix for type guards: `isRetryableError`, `isValidPath` — already compliant
 
 ---
 

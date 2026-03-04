@@ -56,10 +56,10 @@ export const ExportButton = forwardRef<HTMLButtonElement, Record<string, never>>
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
-        } catch (err) {
-            const errorMsg = err instanceof Error ? err.message : 'Export failed';
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Export failed';
             setExportError(errorMsg);
-            exportLogger.error('Export error', { error: err });
+            exportLogger.error('Export error', { error });
         } finally {
             setIsExporting(false);
         }

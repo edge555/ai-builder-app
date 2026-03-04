@@ -42,10 +42,10 @@ export class IntentDetector {
     let provider;
     try {
       provider = this.agentRouter.createProviderForTask('intent');
-    } catch (err) {
+    } catch (error) {
       // No intent models configured — skip detection and default
       contextLogger.warn('Intent detection skipped: no active intent models', {
-        error: err instanceof Error ? err.message : String(err),
+        error: error instanceof Error ? error.message : String(error),
       });
       return FALLBACK_TASK;
     }
@@ -79,9 +79,9 @@ export class IntentDetector {
       });
 
       return detected;
-    } catch (err) {
+    } catch (error) {
       const metrics = timer.complete(false, {
-        error: err instanceof Error ? err.message : String(err),
+        error: error instanceof Error ? error.message : String(error),
       });
       contextLogger.warn('Intent detection threw, defaulting to coding', formatMetrics(metrics));
       return FALLBACK_TASK;

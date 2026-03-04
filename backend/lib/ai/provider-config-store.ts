@@ -27,12 +27,12 @@ async function load(): Promise<ProviderConfig> {
     const raw = await readFile(CONFIG_PATH, 'utf-8');
     cached = JSON.parse(raw) as ProviderConfig;
     return cached;
-  } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
       cached = { aiProvider: null };
       return cached;
     }
-    logger.error('Failed to load provider config, using env default', { error: err });
+    logger.error('Failed to load provider config, using env default', { error });
     cached = { aiProvider: null };
     return cached;
   }

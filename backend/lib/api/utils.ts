@@ -179,9 +179,9 @@ export async function gzipJson<T>(
           'Vary': 'Accept-Encoding',
         },
       });
-    } catch (err) {
+    } catch (error) {
       logger.warn('gzip compression failed, falling back to uncompressed', {
-        error: err instanceof Error ? err.message : String(err),
+        error: error instanceof Error ? error.message : String(error),
       });
     }
   }

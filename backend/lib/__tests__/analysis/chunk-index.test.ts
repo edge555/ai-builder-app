@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ChunkIndexBuilder, buildChunkIndex } from '../../analysis/file-planner/chunk-index';
+import { ChunkIndexBuilder, createChunkIndex } from '../../analysis/file-planner/chunk-index';
 import type { ProjectState } from '@ai-app-builder/shared';
 
 const createProjectState = (files: Record<string, string>): ProjectState => ({
@@ -286,13 +286,13 @@ export function MyComponent() {
     });
   });
 
-  describe('buildChunkIndex helper', () => {
+  describe('createChunkIndex helper', () => {
     it('should create and build a ChunkIndex', () => {
       const projectState = createProjectState({
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
-      const index = buildChunkIndex(projectState);
+      const index = createChunkIndex(projectState);
 
       expect(index.chunksByFile.has('src/App.tsx')).toBe(true);
     });

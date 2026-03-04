@@ -402,13 +402,13 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
 
         return false;
       }
-    } catch (err) {
-      genLogger.error('Repair threw error', { error: err });
+    } catch (error) {
+      genLogger.error('Repair threw error', { error });
 
       // Record this failure in history
       repairHistoryRef.current.push({
         attempt: autoRepairAttemptRef.current,
-        error: err instanceof Error ? err.message : 'Unknown error',
+        error: error instanceof Error ? error.message : 'Unknown error',
         strategy: `Attempted to fix ${runtimeError.type}: ${runtimeError.message}`,
         timestamp: new Date().toISOString(),
       });

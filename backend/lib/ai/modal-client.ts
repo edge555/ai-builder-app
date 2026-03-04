@@ -316,8 +316,8 @@ export class ModalClient implements AIProvider {
       const data = JSON.parse(dataStr);
       const token = data.token;
       return typeof token === 'string' ? token : null;
-    } catch (err) {
-      logger.warn('Failed to parse SSE data', { line: trimmedLine, error: err });
+    } catch (error) {
+      logger.warn('Failed to parse SSE data', { line: trimmedLine, error });
       return null;
     }
   }

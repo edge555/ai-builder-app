@@ -69,8 +69,8 @@ export function PreviewSection({ activePanel }: PreviewSectionProps) {
     try {
       const success = await autoRepair(runtimeError, projectStateRef.current);
       errorHandlers.completeAutoRepair(success);
-    } catch (err) {
-      logger.error('Auto-repair failed', { err });
+    } catch (error) {
+      logger.error('Auto-repair failed', { error });
       errorHandlers.completeAutoRepair(false);
     }
   }, [autoRepair, errorHandlers]);

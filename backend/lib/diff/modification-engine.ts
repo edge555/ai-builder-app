@@ -66,12 +66,12 @@ export class ModificationEngine {
    * Modify an existing project based on a user prompt.
    * @param projectState - The current project state with files
    * @param prompt - The modification prompt
-   * @param options - Optional configuration (e.g., skipPlanning to bypass FilePlanner)
+   * @param options - Optional configuration (e.g., shouldSkipPlanning to bypass FilePlanner)
    */
   async modifyProject(
     projectState: ProjectState,
     prompt: string,
-    options?: { skipPlanning?: boolean; requestId?: string }
+    options?: { shouldSkipPlanning?: boolean; requestId?: string }
   ): Promise<ModificationResult> {
     if (!prompt || prompt.trim() === '') {
       return {
@@ -92,18 +92,18 @@ export class ModificationEngine {
 
     try {
       // Step 1: Select code slices and determine category
-      const { slices, category } = await this.selectCodeSlices(projectState, prompt, options?.skipPlanning);
+      const { slices, category } = await this.selectCodeSlices(projectState, prompt, options?.shouldSkipPlanning);
 
       // Step 2: Determine if design system should be included based on category
-      const includeDesignSystem = DESIGN_SYSTEM_CATEGORIES.has(category);
-      contextLogger.debug('System instruction determined', { category, includeDesignSystem });
+      const shouldIncludeDesignSystem = DESIGN_SYSTEM_CATEGORIES.has(category);
+      contextLogger.debug('System instruction determined', { category, shouldIncludeDesignSystem });
 
       // Step 3: Generate modifications with retry logic
       const modificationResult = await this.generateModifications(
         prompt,
         slices,
         projectState,
-        includeDesignSystem,
+        shouldIncludeDesignSystem,
         requestId
       );
 
@@ -130,7 +130,7 @@ export class ModificationEngine {
         updatedFiles,
         prompt,
         slices,
-        includeDesignSystem,
+        shouldIncludeDesignSystem,
         requestId
       );
 
@@ -153,13 +153,13 @@ export class ModificationEngine {
   private async selectCodeSlices(
     projectState: ProjectState,
     prompt: string,
-    skipPlanning?: boolean
+    shouldSkipPlanning?: boolean
   ): Promise<{ slices: CodeSlice[]; category: 'ui' | 'logic' | 'style' | 'mixed' }> {
     let slices: CodeSlice[];
     let category: 'ui' | 'logic' | 'style' | 'mixed' = 'mixed';
 
-    if (skipPlanning) {
-      // When skipPlanning is true, treat all provided files as primary files
+    if (shouldSkipPlanning) {
+      // When shouldSkipPlanning is true, treat all provided files as primary files
       // Build slices directly without calling FilePlanner
       slices = buildSlicesFromFiles(projectState);
       logger.info('Skipping FilePlanner, using all files as primary', {
@@ -187,7 +187,7 @@ export class ModificationEngine {
     prompt: string,
     slices: CodeSlice[],
     projectState: ProjectState,
-    includeDesignSystem: boolean,
+    shouldIncludeDesignSystem: boolean,
     requestId?: string
   ): Promise<{
     success: boolean;
@@ -208,7 +208,7 @@ export class ModificationEngine {
         ? `${prompt}\n\n[PREVIOUS ATTEMPT FAILED]\nError: ${lastEditError}\n\nPlease fix your edit. Make sure the "search" string EXACTLY matches the existing code (including whitespace and newlines). Try using a smaller, more unique search pattern.`
         : prompt;
 
-      const response = await this.callModificationAI(userRequest, contextPrompt, includeDesignSystem, attempt, lastEditError, requestId);
+      const response = await this.callModificationAI(userRequest, contextPrompt, shouldIncludeDesignSystem, attempt, lastEditError, requestId);
 
       if (!response.success || !response.content) {
         logger.error('Gemini error', { error: response.error });
@@ -252,12 +252,12 @@ export class ModificationEngine {
   private async callModificationAI(
     userRequest: string,
     contextPrompt: string,
-    includeDesignSystem: boolean,
+    shouldIncludeDesignSystem: boolean,
     attempt: number,
     lastEditError: string | null,
     requestId?: string
   ): Promise<AIResponse> {
-    const systemInstruction = getModificationPrompt(userRequest, includeDesignSystem);
+    const systemInstruction = getModificationPrompt(userRequest, shouldIncludeDesignSystem);
 
     logger.info('Sending modification request to Gemini', {
       attempt,
@@ -265,7 +265,7 @@ export class ModificationEngine {
       systemInstructionLength: systemInstruction.length,
       temperature: 0.7,
       isRetry: !!lastEditError,
-      includeDesignSystem,
+      shouldIncludeDesignSystem,
     });
     logger.debug('Gemini modification request details', {
       prompt: contextPrompt,
@@ -446,7 +446,7 @@ export class ModificationEngine {
     updatedFiles: Record<string, string | null>,
     prompt: string,
     slices: CodeSlice[],
-    includeDesignSystem: boolean,
+    shouldIncludeDesignSystem: boolean,
     requestId?: string
   ): Promise<{ updatedFiles: Record<string, string | null> }> {
     const tempFiles = this.buildProjectView(projectState, updatedFiles);
@@ -467,7 +467,7 @@ export class ModificationEngine {
 
       const fixResult = await this.attemptBuildFix(
         buildResult, buildRetryCount, buildFailureHistory,
-        prompt, slices, projectState, includeDesignSystem,
+        prompt, slices, projectState, shouldIncludeDesignSystem,
         mutableUpdatedFiles, tempFiles, requestId
       );
 
@@ -512,7 +512,7 @@ export class ModificationEngine {
     prompt: string,
     slices: CodeSlice[],
     projectState: ProjectState,
-    includeDesignSystem: boolean,
+    shouldIncludeDesignSystem: boolean,
     mutableUpdatedFiles: Record<string, string | null>,
     tempFiles: Record<string, string>,
     requestId?: string
@@ -524,7 +524,7 @@ export class ModificationEngine {
       originalPrompt: prompt,
       failureHistory: buildFailureHistory.length > 0 ? buildFailureHistory : undefined,
     });
-    const fixSystemInstruction = getModificationPrompt(fixUserRequest, includeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
+    const fixSystemInstruction = getModificationPrompt(fixUserRequest, shouldIncludeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
     const fixContextPrompt = buildModificationPrompt(fixUserRequest, slices, projectState);
 
     const fixResponse = await this.aiProvider.generate({

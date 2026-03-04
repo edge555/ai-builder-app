@@ -75,11 +75,11 @@ export class FilePlanner {
     logger.info('Starting file planning', { prompt: prompt.substring(0, 100) });
 
     // Step 1: Build or retrieve cached chunk index
-    const { index: chunkIndex, fromCache } = this.getCachedChunkIndex(projectState);
+    const { index: chunkIndex, isFromCache } = this.getCachedChunkIndex(projectState);
     logger.debug('Chunk index ready', {
       chunkCount: chunkIndex.chunks.size,
       fileCount: chunkIndex.fileMetadata.size,
-      fromCache,
+      isFromCache,
     });
 
     // Step 2: Generate file tree metadata for planning call
@@ -485,7 +485,7 @@ export class FilePlanner {
    * Caches based on file count and total content length to detect changes.
    * Implements memory-based eviction to prevent unbounded growth.
    */
-  private getCachedChunkIndex(projectState: ProjectState): { index: ChunkIndex; fromCache: boolean } {
+  private getCachedChunkIndex(projectState: ProjectState): { index: ChunkIndex; isFromCache: boolean } {
     const cacheKey = this.getProjectStateCacheKey(projectState);
 
     // Set current cache key for consistent usage across methods
@@ -499,7 +499,7 @@ export class FilePlanner {
         cacheKey,
         estimatedSize: `${(cached.estimatedSize / 1024 / 1024).toFixed(2)}MB`,
       });
-      return { index: cached.index, fromCache: true };
+      return { index: cached.index, isFromCache: true };
     }
 
     // Build new index
@@ -522,7 +522,7 @@ export class FilePlanner {
     // Evict based on both count and memory limits
     this.evictCacheIfNeeded();
 
-    return { index, fromCache: false };
+    return { index, isFromCache: false };
   }
 
   /**
