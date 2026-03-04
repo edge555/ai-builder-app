@@ -18,6 +18,8 @@ export interface BuildError {
     file: string;
     line?: number;
     suggestion?: string;
+    /** Whether this error can be fixed by AI retry. Node.js built-in usage is unfixable. */
+    severity: 'fixable' | 'unfixable';
 }
 
 export interface BuildValidationResult {
@@ -247,6 +249,7 @@ export class BuildValidator {
                                 file: filePath,
                                 line,
                                 suggestion: `Create the CSS file or remove the import`,
+                                severity: 'fixable',
                             });
                         }
                     }
@@ -263,6 +266,7 @@ export class BuildValidator {
                             file: filePath,
                             line,
                             suggestion: `Check if the file exists or fix the import path`,
+                            severity: 'fixable',
                         });
                     }
                 } else {
@@ -277,6 +281,7 @@ export class BuildValidator {
                             file: filePath,
                             line,
                             suggestion: `Use a browser-compatible alternative`,
+                            severity: 'unfixable',
                         });
                         continue;
                     }
@@ -292,6 +297,7 @@ export class BuildValidator {
                             file: filePath,
                             line,
                             suggestion,
+                            severity: 'fixable',
                         });
                     }
                 }

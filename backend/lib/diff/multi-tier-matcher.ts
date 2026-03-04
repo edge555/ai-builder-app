@@ -71,6 +71,63 @@ function calculateLineSimilarity(text1: string, text2: string): number {
   return matches / maxLen;
 }
 
+export interface ClosestRegionResult {
+  /** The text of the closest matching region */
+  regionText: string;
+  /** 1-indexed start line number */
+  startLine: number;
+  /** 1-indexed end line number */
+  endLine: number;
+  /** Similarity score (0-1) */
+  similarity: number;
+}
+
+/**
+ * Find the most similar ~10-line region in content when no exact match is found.
+ * Uses a sliding window over content lines, scoring each window against the search
+ * string with `calculateLineSimilarity`. Returns the best-scoring region.
+ */
+export function findClosestRegion(content: string, search: string): ClosestRegionResult | null {
+  const contentLines = content.split('\n');
+  const searchLines = search.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  if (searchLines.length === 0 || contentLines.length === 0) return null;
+
+  // Window size: match the search line count, but clamp to [3, 15] for readability
+  const windowSize = Math.max(3, Math.min(searchLines.length, 15));
+
+  let bestSimilarity = 0;
+  let bestStart = 0;
+  let bestEnd = 0;
+
+  const searchJoined = searchLines.join('\n');
+
+  for (let i = 0; i <= contentLines.length - windowSize; i++) {
+    const windowLines = contentLines.slice(i, i + windowSize).map(l => l.trim()).filter(l => l.length > 0);
+    if (windowLines.length === 0) continue;
+
+    const similarity = calculateLineSimilarity(windowLines.join('\n'), searchJoined);
+
+    if (similarity > bestSimilarity) {
+      bestSimilarity = similarity;
+      bestStart = i;
+      bestEnd = i + windowSize - 1;
+    }
+  }
+
+  // If nothing scored above 0, there's no meaningful region to show
+  if (bestSimilarity === 0) return null;
+
+  const regionText = contentLines.slice(bestStart, bestEnd + 1).join('\n');
+
+  return {
+    regionText,
+    startLine: bestStart + 1,
+    endLine: bestEnd + 1,
+    similarity: bestSimilarity,
+  };
+}
+
 /**
  * Find all occurrences of a search string in content using exact matching.
  */
@@ -388,9 +445,16 @@ export function applySearchReplace(
 
   if (!matchResult.found) {
     const searchPreview = search.length > 200 ? search.substring(0, 200) + '...' : search;
+    let errorMsg = `Search text not found (occurrence ${occurrence}). Search preview: ${searchPreview}`;
+
+    const closest = findClosestRegion(content, search);
+    if (closest) {
+      errorMsg += `\n\nClosest matching region (lines ${closest.startLine}-${closest.endLine}, ${Math.round(closest.similarity * 100)}% similar):\n${closest.regionText}`;
+    }
+
     return {
       success: false,
-      error: `Search text not found (occurrence ${occurrence}). Search preview: ${searchPreview}`,
+      error: errorMsg,
     };
   }
 

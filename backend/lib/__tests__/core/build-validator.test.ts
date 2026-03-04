@@ -95,7 +95,8 @@ describe('BuildValidator', () => {
                     message: "Package 'lodash' missing",
                     file: 'App.tsx',
                     line: 5,
-                    suggestion: "Add lodash to package.json"
+                    suggestion: "Add lodash to package.json",
+                    severity: 'fixable' as const,
                 }
             ];
 

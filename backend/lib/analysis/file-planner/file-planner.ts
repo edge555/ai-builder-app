@@ -621,12 +621,24 @@ export class FilePlanner {
 
 
   /**
-   * Generate a cache key for project state based on file count and content hash.
+   * Generate a content-aware cache key for project state.
+   * Uses a DJB2 hash over sorted "path:contentLength" pairs to avoid collisions
+   * between different file sets that happen to share the same count and total length.
    */
   private getProjectStateCacheKey(projectState: ProjectState): string {
-    const fileCount = Object.keys(projectState.files).length;
-    const totalLength = Object.values(projectState.files).reduce((sum, content) => sum + content.length, 0);
-    return `${projectState.id}_${fileCount}_${totalLength}`;
+    const entries = Object.entries(projectState.files)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([path, content]) => `${path}:${content.length}`)
+      .join('|');
+
+    // DJB2 hash
+    let hash = 5381;
+    for (let i = 0; i < entries.length; i++) {
+      hash = ((hash << 5) + hash) ^ entries.charCodeAt(i);
+      hash = hash >>> 0; // keep unsigned 32-bit
+    }
+
+    return `${projectState.id}_${hash.toString(16)}`;
   }
 
   /**

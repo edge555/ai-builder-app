@@ -4,672 +4,270 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an AI-powered app builder monorepo that generates web applications from natural language prompts. The system uses a pluggable AI provider layer (Google Gemini by default, Modal-hosted models as an alternative) to generate complete React projects with live preview, code editing (Monaco), and version control.
+AI-powered app builder monorepo that generates web applications from natural language prompts. Uses a pluggable AI provider layer (OpenRouter by default, Modal as alternative) to generate complete React projects with live preview (Sandpack), code editing (Monaco), and version control.
 
 ## Monorepo Structure
 
 Three workspaces managed via npm workspaces:
-- **frontend**: React/Vite SPA with Monaco editor and Sandpack preview
-- **backend**: Next.js API server handling AI generation and streaming
-- **shared**: Common types, schemas (Zod), and utilities
+- **frontend**: React 18/Vite SPA with Monaco editor and Sandpack preview
+- **backend**: Next.js 14 API server handling AI generation and streaming
+- **shared**: Common types, Zod schemas, and utilities (dual ESM/CJS via tsup)
 
-### Frontend File Structure
+Additionally: `supabase/` (edge functions + config), `modal-code-ai/` (Python Modal app).
+
+### Frontend Structure
 ```
 frontend/src/
-├── components/         # React components
-│   ├── AppLayout/     # Main layout with sidebar/resizing
+├── components/         # 27 component directories
+│   ├── AppLayout/     # Main layout (ChatPanel, PreviewSection, ResizablePanel, ErrorOverlay)
 │   ├── ChatInterface/ # Chat UI with virtualization
-│   ├── CodeEditor/    # Monaco editor + file tree
+│   ├── CodeEditor/    # Monaco editor + file tree sidebar
 │   ├── PreviewPanel/  # Sandpack preview + error handling
-│   └── ...
-├── context/           # React Context providers
-│   ├── *.context.ts   # Context interface definitions
-│   └── *.tsx          # Provider implementations
-├── hooks/             # Custom React hooks
-├── pages/             # Route components (WelcomePage, BuilderPage)
-├── services/          # Business logic
-│   └── storage/       # IndexedDB persistence
-├── utils/             # Utility functions
-├── data/              # Static data (templates)
-├── integrations/      # External API clients
+│   ├── ProjectGallery/# Saved projects with virtualization
+│   ├── SiteHeader/    # Global header with theme toggle
+│   ├── ThemeToggle/   # Light/dark mode toggle
+│   └── ...            # TemplateGrid, ConfirmDialog, ErrorBoundary, etc.
+├── context/           # React Context providers (split state/actions pattern)
+├── hooks/             # Custom hooks (useSubmitPrompt, useAutoSave, useUndoRedo, etc.)
+├── pages/             # WelcomePage, BuilderPage, AgentSettingsPage (all lazy-loaded)
+├── services/          # StorageService (IndexedDB), ErrorAggregator, agent-config-service
+├── utils/             # Logger, SSE parser, repair prompts, error messages
+├── data/              # Starter templates, prompt suggestions
+├── integrations/      # Backend API client config
 └── styles/            # Global CSS
-
 ```
 
-### Backend File Structure
+### Backend Structure
 ```
 backend/
 ├── app/api/           # Next.js API routes
-│   ├── generate-stream/  # Initial generation
-│   ├── modify-stream/    # Project modification
-│   ├── plan/            # Modification planning
-│   ├── diff/            # Diff calculation
-│   └── export/          # ZIP export
-├── lib/               # Core business logic
-│   ├── ai/           # AI provider abstraction (Gemini + Modal clients)
-│   ├── core/         # Generation + file processing + build validation
-│   ├── analysis/     # Dependency graph + file indexing + file planner
-│   ├── diff/         # Smart diff generation
-│   ├── streaming/    # SSE backpressure controller
-│   └── utils/        # Utilities (parser, validation)
-└── scripts/          # Development/testing scripts
+│   ├── generate-stream/  # Streaming generation (SSE)
+│   ├── modify-stream/    # Streaming modification (SSE)
+│   ├── generate/         # Non-streaming generation (gzipped JSON)
+│   ├── modify/           # Non-streaming modification (gzipped JSON)
+│   ├── plan/             # Modification planning
+│   ├── diff/             # Diff calculation
+│   ├── export/           # ZIP export
+│   ├── revert/           # Version revert
+│   ├── versions/         # Version listing
+│   ├── health/           # Health check
+│   ├── agent-config/     # Per-task model config (GET/PUT)
+│   └── provider-config/  # Runtime provider override (GET/PUT)
+├── lib/
+│   ├── ai/            # Multi-provider AI abstraction
+│   │   ├── ai-provider.ts          # AIProvider interface
+│   │   ├── ai-provider-factory.ts  # Factory (reads AI_PROVIDER env + runtime override)
+│   │   ├── openrouter-client.ts    # OpenRouter API client (primary)
+│   │   ├── modal-client.ts         # Modal client (alternative)
+│   │   ├── agent-router.ts         # Task-specific provider routing + FallbackAIProvider
+│   │   ├── intent-detector.ts      # Prompt classification for model routing
+│   │   ├── agent-config-store.ts   # Per-task model config persistence
+│   │   ├── provider-config-store.ts# Runtime provider override persistence
+│   │   └── ai-error-utils.ts       # Error categorization and retry logic
+│   ├── core/          # Generation, validation, formatting
+│   │   ├── streaming-generator.ts  # SSE streaming orchestrator
+│   │   ├── build-validator.ts      # Missing deps, broken imports, syntax errors
+│   │   ├── file-processor.ts       # File validation + Prettier formatting
+│   │   ├── validation-pipeline.ts  # Multi-stage validation workflow
+│   │   ├── validators/             # Composable validators (path, syntax, JSON, pattern, architecture)
+│   │   ├── prompts/                # Provider-specific prompt assembly
+│   │   └── version-manager.ts      # FIFO/LRU version eviction
+│   ├── analysis/      # Dependency graph, file indexing, AI-powered file planner
+│   ├── diff/          # Modification engine, multi-tier matcher, prompt builder
+│   ├── streaming/     # SSE backpressure controller (CRITICAL/NORMAL/LOW priority)
+│   ├── utils/         # Incremental JSON parser (O(n)), path security
+│   ├── api/           # CORS, gzip, request ID, error helpers
+│   ├── logger.ts      # Structured logging with redaction and category filtering
+│   ├── metrics.ts     # AI operation timing and token tracking
+│   ├── config.ts      # Zod-validated env vars with provider-aware defaults
+│   └── constants.ts   # Centralized magic numbers and thresholds
+└── data/              # Runtime config (agent-config.json, provider-config.json)
 ```
 
-### Lazy Loading Strategy
-
-The app uses React lazy loading for code splitting:
-
-**Lazy-Loaded Components**:
-- `CodeEditorView`: Monaco editor (large bundle ~2MB)
-- Heavy imports deferred until needed
-
-**Loading Pattern**:
-```tsx
-const CodeEditorView = lazy(() => import('./components/CodeEditor/CodeEditorView'));
-
-<ComponentErrorBoundary componentName="Code Editor">
-  <Suspense fallback={<SkeletonLoader />}>
-    <CodeEditorView />
-  </Suspense>
-</ComponentErrorBoundary>
+### Shared Package
 ```
-
-**Benefits**:
-- Faster initial page load (main bundle smaller)
-- Monaco editor only loaded when entering BuilderPage
-- Error boundary prevents app crash if lazy load fails
-- Skeleton loaders provide visual feedback during loading
-
-### Critical CSS Inlining
-
-`frontend/index.html` includes inlined critical CSS in the `<head>` to prevent Flash Of Unstyled Content (FOUC):
-- CSS reset (`box-sizing`, margin/padding)
-- CSS custom properties for light/dark mode (`--background`, `--foreground`, etc.)
-- Layout foundations (`html, body, #root` at 100% height)
-- `.page-skeleton` and `.page-skeleton-spinner` loading indicator styles
-- This CSS is intentionally duplicated from `index.css` and `PageSkeleton.css` so the loading state renders before any JS/external CSS loads
+shared/src/
+├── types/     # API contracts, project state, versions, diffs, errors, plans
+├── schemas/   # Zod validation for all API endpoints
+└── utils/     # sanitizeError(), error messages, text diff
+```
 
 ## Common Commands
 
-### Development
 ```bash
-npm run dev                    # Start both frontend and backend
+# Development
+npm run dev                    # Start all (frontend + backend + shared watch)
 npm run dev:frontend           # Frontend only (port 8080)
 npm run dev:backend            # Backend only (port 4000)
-```
 
-### Building
-```bash
-npm run build                  # Build frontend for production
-npm run build:dev              # Build frontend in development mode
-```
+# Building
+npm run build                  # Build all (shared → frontend → backend)
+npm run build:dev              # Frontend dev build
 
-### Testing
-```bash
-npm test                       # Run all tests in all workspaces
-npm run test:watch             # Watch mode (frontend only)
-npm run test --workspace=frontend          # Frontend tests only
-npm run test --workspace=@ai-app-builder/backend  # Backend tests only
-```
+# Testing
+npm test                       # All workspaces
+npm run test --workspace=frontend
+npm run test --workspace=@ai-app-builder/backend
 
-### Linting
-```bash
-npm run lint                   # Lint all workspaces
-npm run lint --workspace=frontend          # Frontend only
-npm run lint --workspace=@ai-app-builder/backend  # Backend only
+# Linting
+npm run lint                   # All workspaces
 ```
 
 ## Architecture Overview
 
-### User Experience Flow
-
-1. **Landing** → User lands on WelcomePage (`/`)
-2. **Project Start** → User can:
-   - Click "Get Started" / "New Project" for blank project
-   - Select a starter template (auto-fills prompt)
-   - Open a saved project from gallery
-3. **Building** → User enters BuilderPage with:
-   - Chat interface for prompts
-   - Monaco code editor (file tree + editor)
-   - Live Sandpack preview
-4. **Auto-Save** → Projects automatically save to IndexedDB
-5. **Project Management** → Users can:
-   - Rename projects (inline editing)
-   - Duplicate projects
-   - Delete projects (with confirmation)
-   - Return to dashboard
-
 ### Routing
 
-The frontend uses React Router with the following routes:
-- `/`: Welcome page with templates and saved projects
-- `/project/new`: Create new project (optional `?prompt=` query param)
-- `/project/:id`: Open existing project from IndexedDB
+- `/`: WelcomePage — templates grid, saved projects gallery
+- `/project/new`: BuilderPage — new project (optional `?prompt=` query param)
+- `/project/:id`: BuilderPage — existing project from IndexedDB
+- `/settings/agents`: AgentSettingsPage — AI model/provider configuration
 
 ### Request Flow
-1. User enters prompt in **frontend** ChatInterface (or selects a starter template)
-2. **frontend** sends request to **backend** `/api/generate-stream` or `/api/modify-stream`
-3. **backend** uses the active AI provider (Gemini or Modal, selected by `AI_PROVIDER` env var) to stream AI responses via SSE with backpressure control
-4. Incremental JSON parser extracts files as they arrive
-5. Files are validated and processed, then streamed back to frontend
-6. **frontend** updates ProjectContext and renders in PreviewPanel (Sandpack)
-7. Project auto-saves to IndexedDB via `useAutoSave` hook
-8. If preview errors detected, auto-repair system may trigger (see Auto-Repair Flow below)
+
+1. User prompt → frontend ChatInterface → backend `/api/generate-stream` or `/api/modify-stream`
+2. Backend resolves AI provider (env var or runtime override from `provider-config.json`)
+3. In OpenRouter mode: `IntentDetector` classifies prompt → `AgentRouter` selects models per task type
+4. AI provider streams response via SSE with backpressure control
+5. Incremental JSON parser extracts files as they arrive
+6. Files validated, formatted, streamed back to frontend
+7. Frontend updates ProjectContext → PreviewPanel (Sandpack) re-renders
+8. Auto-save to IndexedDB; auto-repair triggers if preview errors detected (max 3 attempts)
+
+### AI Provider System
+
+Multi-provider architecture with runtime switching:
+
+- **`AIProvider` interface**: `generate()` and `generateStreaming()` — all providers implement this
+- **`AIProviderFactory`**: Reads `AI_PROVIDER` env var + runtime override, returns singleton
+- **OpenRouter** (default): OpenAI-compatible API with retry/backoff, structured output, SSE streaming
+- **Modal**: Self-hosted models (e.g., Qwen) with SSE streaming
+- **`AgentRouter`** (OpenRouter only): Task-specific routing with `FallbackAIProvider` (tries models in priority order)
+- **`IntentDetector`** (OpenRouter only): Classifies prompts into task types (intent, planning, coding, debugging, documentation)
+- **Runtime config**: `provider-config-store.ts` persists overrides to `data/provider-config.json`; `agent-config-store.ts` persists per-task model config to `data/agent-config.json`
 
 ### Auto-Repair Flow
 
-The app includes an intelligent auto-repair system that detects and fixes preview errors:
+1. `SandpackErrorListener` catches runtime errors → `ErrorAggregatorProvider` deduplicates
+2. `AutoRepairProvider` evaluates: error count > 0, not generating, attempts < 3
+3. Sends error details + current files to `/api/modify-stream`
+4. Modified files streamed back; `RepairStatus` + `ErrorOverlay` show progress
 
-1. **Error Detection**: `SandpackErrorListener` catches runtime errors from preview
-2. **Error Aggregation**: `ErrorAggregatorProvider` collects and deduplicates errors
-3. **Auto-Repair Trigger**: `AutoRepairProvider` evaluates whether to auto-repair:
-   - Triggers only if: error count > 0, not already generating, not in repair phase, attempts < max (3)
-   - Uses stable hooks pattern to avoid infinite effect loops
-4. **Repair Request**: Sends error details + current files to `/api/modify-stream`
-5. **Streaming Update**: Modified files streamed back and applied to project
-6. **Status Display**: `RepairStatus` component shows phase, attempt count, and error summary
-7. **Error Overlay**: `ErrorOverlay` displays repair progress in preview panel
+### State Management
 
-**Key Features**:
-- Automatic (no user intervention required)
-- Maximum 3 repair attempts to prevent infinite loops
-- Debounced error collection to avoid repairing transient errors
-- Visual feedback during repair process
-- Manual repair trigger available via RepairStatus component
+**Split Context Pattern** (performance-critical contexts):
+- Separate `XxxStateContext` (frequent changes) from `XxxActionsContext` (stable callbacks)
+- Components subscribe selectively: `useXxxState()` or `useXxxActions()`
+- Applied to: GenerationContext, PreviewErrorContext, ChatMessagesContext, VersionContext
 
-**Implementation Files**:
-- `frontend/src/context/AutoRepairContext.tsx`: Orchestrates auto-repair logic
-- `frontend/src/context/ErrorAggregatorContext.tsx`: Collects and deduplicates errors
-- `frontend/src/context/PreviewErrorContext.tsx`: Detects and manages preview errors
-- `frontend/src/components/PreviewPanel/SandpackErrorListener.tsx`: Listens to Sandpack errors
-- `frontend/src/utils/repair-prompt.ts`: Generates repair prompt from errors
+**Context Providers**: ProjectContext, ChatMessagesContext, GenerationContext, VersionContext, AutoRepairProvider, PreviewErrorProvider, ErrorAggregatorProvider
 
-### Key Backend Components
+### Storage
 
-**API Routes** (`backend/app/api/`):
-- `generate/`: Non-streaming project generation (returns gzipped JSON with `X-Request-Id`)
-- `generate-stream/`: Initial project generation with streaming (SSE with `X-Request-Id`)
-- `modify/`: Non-streaming project modification (returns gzipped JSON with `X-Request-Id`)
-- `modify-stream/`: Project modification with streaming
-- `plan/`: Generate modification plan without executing
-- `diff/`: Calculate diffs between versions
-- `revert/`: Revert to previous version
-- `export/`: Export project as ZIP
+- **IndexedDB** via `StorageService`: Local-first project persistence (files, chat, versions, metadata)
+- **Auto-save** with debouncing; **write coalescing** prevents race conditions (latest wins)
+- CRUD: create, read, update, delete, rename, duplicate projects
 
-**Core Logic** (`backend/lib/`):
-- `ai/ai-provider.ts`: `AIProvider` interface — contract all providers implement (`generate`, `generateStreaming`)
-- `ai/ai-provider-factory.ts`: Factory that reads `AI_PROVIDER` env var and instantiates the correct provider
-- `ai/gemini-client.ts`: Google Gemini API integration with streaming and caching
-- `ai/modal-client.ts`: Modal-hosted AI model client (e.g., Qwen) with SSE streaming and retry logic
-- `ai/modal-response-parser.ts`: Extracts valid JSON from free-form Modal model responses
-- `api/utils.ts`: Shared API utilities — `gzipJson()` for gzip-compressed JSON responses, CORS helpers, request ID generation
-- `core/streaming-generator.ts`: Orchestrates SSE streaming of generated files (supports `requestId` propagation)
-- `core/file-processor.ts`: Validates and processes generated files with Prettier formatting
-- `core/build-validator.ts`: Validates generated code for missing dependencies, broken imports, and syntax errors — used in the auto-retry loop
-- `core/prompts/provider-prompt-config.ts`: Controls prompt assembly per provider (Modal uses 30k token budget + detailed guidance; Gemini uses 15k)
-- `analysis/dependency-graph.ts`: **Performance-optimized** dependency graph with content-based caching (152x speedup on cache hits) and O(1) import resolution
-- `analysis/file-index.ts`: File indexing for modification context
-- `analysis/file-planner/`: AI-powered file selection for modifications (two-phase: planning then context assembly) with chunk-index caching and memory management
-- `diff/modification-engine.ts`: Smart diff generation for modifications (supports `requestId` propagation through planning and build validation loops)
-- `streaming/backpressure-controller.ts`: SSE backpressure controller with `EventPriority` (CRITICAL/NORMAL/LOW) — drops low-priority events under load
-- `utils/incremental-json-parser.ts`: **Performance-optimized** streaming JSON parser with O(n) complexity (was O(n²)), processes 10MB in ~23ms
+### Observability
 
-**Backend Performance Optimizations**:
-- **Incremental JSON Parser**: Optimized from O(n²) to O(n) using single-pass character scanning instead of repeated `indexOf()` calls. Achieves 403 MB/s throughput.
-- **Dependency Graph Caching**: Content-based cache using SHA-256 hash of file paths + content hashes. Cache hits provide 152x speedup (10.56ms → 0.07ms). Pre-computed path lookup map for O(1) import resolution instead of trying 8 extensions per import.
-- **SSE Backpressure**: `BackpressureController` drops heartbeat (LOW) and progress (NORMAL) events when buffer is under pressure; file and complete events (CRITICAL) are never dropped.
-- **Gemini Client**: Context caching support for reducing API costs on repeated requests with same context
-- **VersionManager**: Bounded memory via FIFO per-project eviction (max 50 versions) and LRU global project eviction (max 500 projects)
-- **Gzip Compression**: `gzipJson()` utility compresses JSON API responses when client accepts gzip. Next.js `compress: true` doesn't apply to App Router Route Handlers, so this fills the gap. Used in `generate/` and `modify/` routes.
-- **Request ID Propagation**: All API routes generate a `requestId` via `generateRequestId()`, propagated through streaming generator → AI provider calls → modification engine → build validation loop. All logs carry request ID via `logger.withRequestId()`. Response includes `X-Request-Id` header.
-
-### Key Frontend Components
-
-**Pages** (`frontend/src/pages/`):
-- `WelcomePage`: Landing page with hero section, features showcase, starter templates grid, and saved projects gallery
-- `BuilderPage`: Main builder interface with project routing (`/project/new` for new projects, `/project/:id` for existing)
-
-**Context Providers** (`frontend/src/context/`):
-- `ProjectContext`: Manages current project state (files, versions)
-- `ChatMessagesContext`: Chat message history with split state/actions contexts
-- `GenerationContext`: Tracks ongoing AI generation/modification with split state/actions contexts
-- `VersionContext`: Version history and undo/redo with split state/actions contexts
-- `AutoRepairProvider`: Automatic error repair system
-- `PreviewErrorProvider`: Runtime error detection from preview with split state/actions contexts
-- `ErrorAggregatorProvider`: Aggregates errors from multiple sources
-
-**Performance Pattern - Split Contexts**: Major contexts use split state/actions pattern to reduce re-renders:
-- `GenerationStateContext` + `GenerationActionsContext`: Separate state (changes frequently) from actions (stable callbacks)
-- `PreviewErrorStateContext` + `PreviewErrorActionsContext`: Error state separate from error handlers
-- Components subscribe only to what they need via dedicated hooks
-- Example: `useGenerationState()` for read-only state, `useGenerationActions()` for callbacks
-
-**Core Hooks** (`frontend/src/hooks/`):
-- `useSubmitPrompt`: Handles prompt submission and streaming response
-- `useAutoSave`: Automatic project persistence to IndexedDB with debouncing
-- `useErrorMonitor`: Monitors and aggregates preview errors
-- `usePreviewErrorHandlers`: Provides stable error handler callbacks using refs (prevents re-renders)
-- `useKeyboardShortcuts`: Global keyboard shortcuts (Ctrl+Z undo, Ctrl+Y/Shift+Z redo, Ctrl+B toggle sidebar)
-- `useCollapsibleMessages`: Message collapse/expand state management
-- `useUndoRedo`: Version control undo/redo functionality
-
-**Components** (`frontend/src/components/`):
-- `ChatInterface/`: Chat UI with message list, collapsible messages, virtualization for 20+ messages
-- `CodeEditor/`: Monaco-based code editor with file tree sidebar, virtualization for 50+ files, skeleton loading states
-- `PreviewPanel/`: Sandpack preview with runtime error detection, memoized to prevent unnecessary re-renders
-- `ProjectGallery/`: Saved projects browser with virtualization for 20+ projects, debounced search, sort/filter
-- `TemplateGrid/`: Grid of starter templates (Analytics Dashboard, Landing Page, Task Manager, etc.) with categories
-- `EditableProjectName/`: Inline editable project name component with pencil icon
-- `ConfirmDialog/`: Reusable confirmation dialog for destructive actions (delete, etc.)
-- `ComponentErrorBoundary/`: Generic error boundary for lazy-loaded components with retry functionality
-- `AppLayout/`: Main layout wrapper with collapsible sidebar, responsive breakpoints, and header (48px height)
-  - `ErrorOverlay`: Extracted sub-component that displays repair status and error count in preview panel
-  - Coordinates auto-save, error monitoring, and keyboard shortcuts
-  - Uses ResizablePanel pattern for sidebar drag-to-resize
-- `RepairStatus/`: Visual feedback for auto-repair process (phase, attempt count, error summary)
-
-**Performance-Optimized Components**: Following components wrapped in `React.memo` with custom comparators:
-- `PreviewPanel`: Deep-compares files object, uses refs to cache transformed Sandpack files
-- `ChatInterface`: Compares messages by id and content, shallow compares streaming state
-- `CodeEditorView`: Deep-compares files object to prevent Monaco re-initialization
-- `ProjectGallery`: Compares projects by id, updatedAt, and name
-
-### Layout System & Responsive Design
-
-**AppLayout Component** provides a modern, responsive two-panel layout:
-
-**Desktop (1024px+)**:
-- Collapsible chat sidebar (default: 340px, collapsed: 48px)
-- Resizable sidebar (min 300px, max 60% viewport width)
-- Smooth 200ms transitions for collapse/expand
-- Resizer with keyboard navigation support
-- Sidebar state persisted to localStorage
-
-**Tablet (768px - 1023px)**:
-- Sidebar defaults to collapsed (48px rail)
-- When expanded, sidebar overlays content as fixed panel (380px, max 85vw)
-- Semi-transparent backdrop with 4px blur effect
-- Click backdrop or toggle button to dismiss
-- Slide-in animation (200ms) for sidebar appearance
-
-**Mobile (<768px)**:
-- Full-screen panel switching (Chat/Preview tabs)
-- Bottom tab bar for navigation
-- Active panel takes entire viewport
-- Sidebar collapse state maintained
-
-**Keyboard Shortcuts**:
-- `Ctrl+B` / `Cmd+B`: Toggle sidebar collapse/expand
-- `Ctrl+Z` / `Cmd+Z`: Undo
-- `Ctrl+Y` / `Ctrl+Shift+Z`: Redo
-
-**CSS Architecture**:
-- **Global Variables** (`index.css`): CSS custom properties for theming and layout
-- **Component-Scoped CSS**: Each component has its own `.css` file (e.g., `ChatInterface.css`)
-- **No CSS-in-JS**: Vanilla CSS for better performance and separation of concerns
-- **CSS Modules**: Not used; components use BEM-like naming conventions
-- **Responsive Design**: Media queries in component CSS for mobile/tablet/desktop breakpoints
-
-**CSS Variables** (`index.css`):
-- **Layout**: `--sidebar-width: 340px`, `--sidebar-collapsed-width: 48px`, `--header-height: 48px`
-- **Browser Chrome**: `--chrome-bg`, `--chrome-border`, `--chrome-url-bg`
-- **File Changes**: `--file-created`, `--file-modified`, `--file-deleted`
-- **Messages**: `--msg-user-bg`, `--msg-ai-bg`, `--msg-error-bg`
-- **Z-Index Layers**: `--z-sidebar-backdrop`, `--z-sidebar-overlay`, `--z-error-overlay`
-- **Theme Colors**: Supports light/dark mode via CSS custom properties
-
-### State Management Pattern
-
-**Split Context Pattern** (for performance-critical contexts):
-1. Define THREE contexts in `.context.ts` file:
-   - `XxxStateContext`: Read-only state values that change frequently
-   - `XxxActionsContext`: Stable callbacks wrapped in `useCallback`
-   - `XxxContext`: Combined context (for backward compatibility)
-2. Implement provider in `.tsx` file:
-   - Create separate `stateValue` and `actionsValue` objects
-   - Wrap all action callbacks in `useCallback` with proper dependencies
-   - Provide all three contexts (state, actions, combined)
-3. Export dedicated hooks:
-   - `useXxxState()`: Subscribe to state only (no re-render on action changes)
-   - `useXxxActions()`: Subscribe to actions only (no re-render on state changes)
-   - `useXxx()`: Subscribe to both (deprecated, use sparingly)
-4. Component subscribes only to what it needs
-
-**Example - GenerationContext**:
-```typescript
-// State changes frequently (isGenerating, phase, progress)
-export const GenerationStateContext = createContext<GenerationStateValue | null>(null);
-
-// Actions are stable (startGeneration, stopGeneration)
-export const GenerationActionsContext = createContext<GenerationActionsValue | null>(null);
-
-// Hooks for selective subscription
-export function useGenerationState() { /* ... */ }
-export function useGenerationActions() { /* ... */ }
-```
-
-**Standard Context Pattern** (for simple contexts):
-1. Define context interface in `.context.ts` file
-2. Implement provider in corresponding `.tsx` file
-3. Export both context and provider from `index.ts`
-4. Wrap App in nested providers (see `App.tsx`)
-
-**Contexts Using Split Pattern**: GenerationContext, PreviewErrorContext, ChatMessagesContext, VersionContext
-
-**AI Provider Abstraction Pattern**:
-- All AI calls go through `AIProvider` interface (`generate` / `generateStreaming`)
-- `createAIProvider()` factory reads `AI_PROVIDER` env var at startup and returns the appropriate client
-- Provider-specific prompt tuning via `getProviderPromptConfig()` — controls token budget and guidance verbosity
-- `ModalClient` aggregates streaming SSE chunks internally and calls `onChunk` progressively; its `generateStreaming()` returns the full accumulated content just like `GeminiClient`
-
-### Storage System
-
-**frontend** uses `storageService` (`frontend/src/services/storage/`) for:
-- **IndexedDB**: Primary local storage for projects (no server required)
-  - Projects are saved to browser's IndexedDB with auto-save
-  - Stores project files, chat history, versions, and metadata
-  - Projects indexed by ID and sorted by last modified date
-- **Project Management**: CRUD operations (create, read, update, delete, rename, duplicate)
-- **Auto-save**: Automatic persistence with debouncing to prevent excessive writes
-- **Write Coalescing**: `StorageService.saveProject()` coalesces concurrent writes per project ID — tracks in-flight promises, buffers pending writes (latest wins), and drains pending queue after each write completes. Prevents race conditions between rapid auto-save and manual save.
-- **Serialization**: Projects serialized to `StoredProject` format with timestamps
-
-### Starter Templates System
-
-The app includes a curated collection of starter templates (`frontend/src/data/templates.ts`) to help users quickly generate common app types:
-
-**Available Templates**:
-- **Analytics Dashboard**: Charts, metrics cards, data tables with glassmorphism effects
-- **Landing Page**: Hero section, features grid, testimonials, pricing, FAQ
-- **Task Manager**: Task lists, categories, completion tracking, priority indicators
-- **E-Commerce Store**: Product grid, filters, shopping cart, checkout flow
-- **Portfolio Website**: Projects gallery, skills, contact form
-- **Social Media Feed**: Posts, comments, likes, user interactions
-- **Weather App**: Location search, forecasts, conditions display
-- **Blog/CMS**: Article editor, categories, rich formatting
-
-Each template includes:
-- Pre-written detailed prompt for AI generation
-- Category classification (Dashboard, Marketing, Productivity, etc.)
-- Icon and description for UI display
-
-Templates are displayed on the WelcomePage and can be selected to instantly start a new project with a pre-filled prompt.
-
-### Shared Package
-
-The `@ai-app-builder/shared` package exports:
-- TypeScript types for API contracts
-- Zod schemas for validation
-- Utility functions for diffs and errors
-- `sanitizeError()`: Redacts sensitive data (API keys, secrets, tokens) from error messages — used by both backend and Supabase edge functions
-- Built with tsup for dual ESM/CJS support
-
-Supabase edge functions (`supabase/functions/_shared/`) import shared utilities directly from this package (e.g., `diff-utils.ts` and `error-utils.ts` delegate to `@ai-app-builder/shared`).
+- **Structured logging** (`logger.ts`): Configurable levels (LOG_LEVEL), category filtering (LOG_CATEGORIES), text/JSON output (LOG_FORMAT), automatic sensitive field redaction, request ID correlation
+- **Metrics** (`metrics.ts`): `OperationTimer` for AI operation timing, token counts, retry tracking
+- **Request ID propagation**: Generated at route entry, carried through all layers, returned in `X-Request-Id` header
 
 ## Environment Variables
 
-Copy `.env.example` to create environment files:
+**Backend** (`.env`):
+- `AI_PROVIDER`: `openrouter` (default) or `modal`
+- `OPENROUTER_API_KEY`: OpenRouter API key (required when using openrouter)
+- `MODAL_API_URL` / `MODAL_STREAM_API_URL`: Modal endpoints (required when using modal)
+- `MODAL_TIMEOUT`: Request timeout in ms (default: 900,000 — 15 min)
+- `MAX_OUTPUT_TOKENS`: Token limit (default: 16384)
+- `ALLOWED_ORIGINS`: Comma-separated CORS origins (default: http://localhost:8080)
+- `LOG_LEVEL`: debug/info/warn/error (default: info)
+- `LOG_FORMAT`: text/json (default: text)
+- `LOG_CATEGORIES`: ai,api,core,diff,analysis,streaming
 
-**Backend** (`.env` or inline):
-- `AI_PROVIDER`: AI backend to use — `gemini` (default) or `modal`
-- `GEMINI_API_KEY`: Google Gemini API key (required when `AI_PROVIDER=gemini`)
-- `GEMINI_MODEL`: Gemini model to use (default: gemini-2.5-flash)
-- `MODAL_API_URL`: Modal FastAPI endpoint URL (required when `AI_PROVIDER=modal`)
-- `MODAL_STREAM_API_URL`: Optional Modal SSE streaming endpoint (falls back to `MODAL_API_URL/stream`)
-- `MODAL_API_KEY`: Optional bearer token for Modal endpoint authentication
-- `MODAL_TIMEOUT`: Optional request timeout in ms for Modal (default: 300,000 — 5 minutes)
-- `CORS_ORIGIN`: Frontend URL (default: http://localhost:8080)
-
-**Frontend** (`.env` or inline):
+**Frontend** (`.env`):
 - `VITE_API_BASE_URL`: Backend URL (default: http://localhost:4000)
-- `VITE_SUPABASE_URL`: Supabase project URL (optional, for future cloud sync)
-- `VITE_SUPABASE_PUBLISHABLE_KEY`: Supabase anon key (optional, for future cloud sync)
+- `VITE_SUPABASE_URL`: Supabase project URL (optional)
+- `VITE_SUPABASE_PUBLISHABLE_KEY`: Supabase anon key (optional)
 
 ## Key Dependencies
 
-**Frontend**:
-- `react` + `react-dom`: Core React library
-- `react-router-dom`: Client-side routing
-- `@codesandbox/sandpack-react`: Live preview with bundling
-- `@monaco-editor/react`: Code editor component
-- `@tanstack/react-virtual`: List virtualization for performance
-- `lucide-react`: Icon library
-- `react-markdown` + `remark-gfm`: Markdown rendering with GitHub Flavored Markdown
-- `react-syntax-highlighter`: Code syntax highlighting in messages
+**Frontend**: react 18, react-router-dom 7, @codesandbox/sandpack-react, @monaco-editor/react, @tanstack/react-virtual, lucide-react, react-markdown + remark-gfm, react-syntax-highlighter, zod
 
-**Backend**:
-- `next`: Next.js framework for API routes
-- `zod`: Schema validation
-- `prettier`: Code formatting
-- Google Gemini AI SDK for generation
+**Backend**: next 14, zod, prettier, jszip, uuid
 
-**Shared**:
-- `zod`: Schema validation shared between frontend/backend
-- `tsup`: Bundle shared package for dual ESM/CJS support
+**Shared**: zod, tsup (dual ESM/CJS build)
 
 ## Path Aliases
 
-Both frontend and backend use path aliases:
-- `@/`: Workspace src directory
-- `@/shared`: Shared package (`../shared/src`)
+- `@/`: Workspace src directory (frontend: `./src/*`, backend: `./*`)
+- `@/shared`: Shared package
 
-## Testing Strategy
+## Testing
 
-- **Backend**: Vitest with Node environment, tests in `lib/**/*.test.ts`
-  - Unit tests for core logic (parsing, generation, diff, formatting)
-  - Performance tests for critical paths (incremental parser, dependency graph)
-  - Integration tests for API routes
-- **Frontend**: Vitest with jsdom + React Testing Library, tests in `src/**/*.{test,spec}.{ts,tsx}`
-  - Component tests with React Testing Library
-  - Hook tests for custom hooks
-  - Context provider tests
-  - Integration tests for key user flows
-- **Shared**: Vitest with Node environment
-  - Schema validation tests
-  - Utility function tests
-
-**Performance Testing**:
-- `backend/scripts/verify-formatting-perf.ts`: Validates Prettier formatting performance
-- Benchmark tests in `incremental-json-parser.test.ts` and `dependency-graph.test.ts`
-- Performance targets documented in test files and optimization docs
+- **Backend**: Vitest + Node env, 34 test files in `lib/**/*.test.ts` (unit, perf, integration)
+- **Frontend**: Vitest + jsdom + React Testing Library, tests in `src/**/*.{test,spec}.{ts,tsx}`
+- **Shared**: Vitest + Node env
 
 ## Key Design Patterns
 
 ### Core Patterns
-1. **Streaming First**: All AI operations use SSE streaming for incremental updates
-2. **Error Aggregation**: Errors from preview are aggregated and can trigger auto-repair
-3. **Immutable Versions**: Each generation/modification creates a new immutable version
-4. **Context Composition**: Heavy use of React Context for global state
-5. **Type Safety**: Shared Zod schemas ensure frontend/backend contract safety
-6. **Local-First Storage**: IndexedDB for client-side project persistence (no server/auth required)
-7. **Template-Driven Generation**: Curated starter templates with pre-written prompts for common use cases
-8. **Progressive Enhancement**: Skeleton loading states for better perceived performance
-9. **Responsive Layout**: Mobile-first responsive design with collapsible sidebar, overlay panels on tablet, and full resizable layout on desktop
-10. **Request ID Tracing**: Every API request gets a unique ID propagated through all layers (route → generator → AI provider → logs → response headers)
-11. **Write Coalescing**: Concurrent IndexedDB writes to the same entity are coalesced (latest wins) to prevent race conditions
-12. **Critical CSS Inlining**: Above-the-fold CSS inlined in `index.html` to prevent FOUC before JS loads
+1. **Streaming First**: All AI operations use SSE for incremental updates
+2. **Multi-Provider AI**: Pluggable providers with runtime switching and task-specific routing
+3. **Immutable Versions**: Each generation/modification creates a new version
+4. **Split Contexts**: Separate state from actions to minimize re-renders
+5. **Type Safety**: Shared Zod schemas enforce frontend/backend contracts
+6. **Local-First**: IndexedDB persistence, no server required for storage
+7. **Request ID Tracing**: Unique ID per request, propagated through all layers
+8. **Auto-Repair**: Automatic error detection and fix with bounded retries
 
-### Performance Patterns
+### Frontend Performance
+- **Split Context Pattern**: Subscribe only to state OR actions, not both
+- **React.memo with deep comparators**: PreviewPanel, ChatInterface, CodeEditorView, ProjectGallery
+- **List virtualization** (`@tanstack/react-virtual`): ProjectGallery (20+), ChatInterface (20+), FileTreeSidebar (50+)
+- **Lazy loading**: All pages + Monaco editor code-split with Suspense + skeleton fallbacks
+- **Stable callbacks via refs**: `usePreviewErrorHandlers` prevents re-render cascades
+- **Write coalescing**: StorageService deduplicates concurrent IndexedDB writes
 
-**Frontend Performance**:
-1. **Split Context Pattern**: Separate state and actions contexts to prevent unnecessary re-renders
-   - Components subscribe only to state OR actions, not both
-   - Actions wrapped in `useCallback` remain stable across renders
-   - Applied to: GenerationContext, PreviewErrorContext, ChatMessagesContext, VersionContext
+### Backend Performance
+- **O(n) streaming parser**: Single-pass character scanning (403 MB/s, 10MB in ~23ms)
+- **Content-based caching**: SHA-256 hash keys for dependency graph (152x speedup on cache hits)
+- **SSE backpressure**: CRITICAL events never dropped; NORMAL/LOW dropped under pressure
+- **Gzip compression**: `gzipJson()` for Route Handler responses
+- **Concurrent processing**: `Promise.all()` for parallel file formatting/validation
 
-2. **React.memo with Custom Comparators**: Prevent expensive component re-renders
-   - Deep-compare critical props (files objects) instead of shallow comparison
-   - Use refs to cache transformed data and avoid recomputation
-   - Applied to: PreviewPanel (Sandpack), ChatInterface, CodeEditorView (Monaco), ProjectGallery
+### CSS Architecture
+- Vanilla CSS with BEM-like naming (no CSS-in-JS, no CSS Modules)
+- Component-scoped `.css` files + global variables in `index.css`
+- Light/dark theme via CSS custom properties + `data-theme` attribute
+- Critical CSS inlined in `index.html` to prevent FOUC
+- Responsive: mobile (<768px) → tablet (768-1023px) → desktop (1024px+)
 
-3. **List Virtualization**: Render only visible items for large lists using `@tanstack/react-virtual`
-   - ProjectGallery: Virtualizes when > 20 projects
-   - ChatInterface: Virtualizes when > 20 messages
-   - FileTreeSidebar: Virtualizes when > 50 files
-   - Reduces DOM nodes and improves scroll performance
+### Layout System
+- **Desktop**: Resizable chat sidebar (340px default, min 300px, max 60vw) + content area
+- **Tablet**: Collapsible overlay sidebar (380px) with backdrop
+- **Mobile**: Full-screen panel switching via tab bar (Chat/Preview/Code)
+- **Keyboard**: Ctrl+B toggle sidebar, Ctrl+Z undo, Ctrl+Y redo
 
-4. **Debounced Search**: Use `useDeferredValue` to prevent UI blocking during typing
-   - Search input remains responsive (no typing lag)
-   - Filter operations deferred until user stops typing
-   - Visual loading indicator when search is processing
-
-5. **Error Boundaries**: Graceful degradation for component failures
-   - `ComponentErrorBoundary`: Generic boundary with retry functionality
-   - `PreviewErrorBoundary`: Specialized boundary with auto-repair integration
-   - Prevents app crashes when lazy-loaded components fail
-
-6. **Stable Callbacks with Refs**: Use `useRef` to provide stable callbacks without dependencies
-   - Pattern: `usePreviewErrorHandlers` hook
-   - Callbacks access latest state via refs, preventing re-render cascades
-   - Essential for AutoRepairProvider to avoid infinite effect loops
-
-7. **Storage Write Coalescing**: Prevent race conditions in IndexedDB writes
-   - Track in-flight promises per entity ID (`writeInFlight` map)
-   - Buffer pending writes (latest wins) while write is in-flight (`writePending` map)
-   - Drain pending queue after each write completes
-   - All callers' promises resolve after coalesced write completes
-
-**Backend Performance**:
-1. **O(n) Streaming Parser**: Single-pass character scanning instead of repeated string searches
-   - Eliminates O(n²) complexity from `indexOf()` calls
-   - Processes 10MB in ~23ms (403 MB/s throughput)
-   - Memory proportional to largest file, not total response
-
-2. **Content-Based Caching**: Cache expensive operations with deterministic keys
-   - SHA-256 hash of file paths + content hashes as cache key
-   - 152x speedup on cache hits for dependency graph building
-   - Pre-computed lookup maps for O(1) import resolution
-
-3. **Concurrent Processing**: Use `Promise.all()` for parallel operations where possible
-   - File formatting, validation, and processing in parallel
-   - Multiple API calls processed concurrently
-
-4. **Gzip Response Compression**: `gzipJson()` compresses Route Handler JSON responses
-   - Next.js `compress: true` doesn't cover App Router Route Handlers
-   - Checks `Accept-Encoding` header, falls back to uncompressed
-   - Always sets `Vary: Accept-Encoding` for correct caching
-
-5. **Request ID Propagation**: Structured logging with request context
-   - `generateRequestId()` creates unique ID per API request
-   - `logger.withRequestId(id)` creates scoped logger carrying ID
-   - `X-Request-Id` returned in response headers (both SSE and JSON)
-
-**Key Lessons**:
-- **Avoid `indexOf()` in loops**: Use state machines with single-pass scanning
-- **Cache with content hashes**: Compare hash before expensive rebuild operations
-- **Split contexts by update frequency**: Separate rarely-changing actions from frequently-changing state
-- **Inline logic in useEffect**: Avoid function dependencies that cause unstable deps
-- **Use refs for latest state in callbacks**: Prevents re-render cascades while accessing current values
-
-### Common Performance Pitfalls to Avoid
+## Pitfalls to Avoid
 
 **Frontend**:
-1. **Unstable useEffect dependencies**: Functions as dependencies cause infinite loops
-   - ❌ Bad: `useEffect(() => { if (shouldAutoRepair()) { ... } }, [shouldAutoRepair])`
-   - ✅ Good: `useEffect(() => { if (errorCount > 0 && phase === 'error') { ... } }, [errorCount, phase])`
-
-2. **Over-subscribing to context**: Components re-render on any context change
-   - ❌ Bad: `const { state, actions } = useGeneration()` (re-renders on every state change)
-   - ✅ Good: `const actions = useGenerationActions()` (only re-renders if actions change)
-
-3. **Non-memoized expensive computations**: Same computation runs every render
-   - ❌ Bad: `const sandpackFiles = transformFiles(files)` (transforms on every render)
-   - ✅ Good: `const sandpackFiles = useMemo(() => transformFiles(files), [files])`
-
-4. **Shallow comparison in React.memo**: Objects always fail shallow equality
-   - ❌ Bad: `React.memo(Component)` with object props
-   - ✅ Good: `React.memo(Component, (prev, next) => deepEqual(prev.files, next.files))`
-
-5. **Rendering large lists without virtualization**: DOM nodes proportional to items
-   - ❌ Bad: `{projects.map(p => <Card />)}` with 500+ projects
-   - ✅ Good: Use `@tanstack/react-virtual` with conditional threshold
+- Don't use functions as `useEffect` deps — inline the logic with primitive deps
+- Don't use `useXxx()` combined hook — prefer `useXxxState()` or `useXxxActions()`
+- Don't skip `useMemo` for expensive transforms (e.g., Sandpack file conversion)
+- Don't use bare `React.memo` with object props — provide custom deep comparator
+- Don't render large lists without virtualization
 
 **Backend**:
-1. **Repeated string scanning**: `indexOf()` or `slice()` in loops creates O(n²) complexity
-   - ❌ Bad: `while (i < text.length) { const idx = text.indexOf(pattern, i); ... }`
-   - ✅ Good: Character-by-character scanning with state machine
-
-2. **No caching for expensive operations**: Same computation repeated with same input
-   - ❌ Bad: `build(fileIndex) { this.clear(); // rebuild everything ... }`
-   - ✅ Good: `build(fileIndex) { if (cacheKey === newKey) return; ... }`
-
-3. **Synchronous CPU-intensive tasks**: Blocks event loop
-   - ❌ Bad: `prettier.format()` for 50 files synchronously
-   - ✅ Good: Worker pool with batching and timeouts
-
-4. **No size limits on inputs**: Allows memory exhaustion or DOS
-   - ❌ Bad: No validation on prompt length or file count
-   - ✅ Good: Zod schemas with `.max()` constraints, Next.js body size limits
+- Don't use `indexOf()` in loops — use state machines for O(n) scanning
+- Don't rebuild cached structures without checking content hash first
+- Don't run CPU-intensive tasks synchronously — use worker pool
+- Don't accept unbounded inputs — validate with Zod `.max()` constraints
 
 ## Troubleshooting
 
-### Common Issues
-
-**Frontend Build Failures**:
-- **Issue**: TypeScript errors about missing types
-- **Solution**: Run `npm install` in root and ensure shared package is built: `npm run build --workspace=@ai-app-builder/shared`
-
-**Preview Not Loading**:
-- **Issue**: Sandpack shows blank screen or loading indefinitely
-- **Solution**: Check browser console for errors. Common causes:
-  - Missing dependencies in generated `package.json`
-  - Syntax errors in generated files
-  - Sandpack bundler timeout (increase timeout in PreviewPanel)
-  - When using Modal provider, generation can take 10–15 minutes — stream timeout is set to 16 minutes; ensure proxies don't cut the connection earlier (heartbeats keep the SSE alive)
-
-**Auto-Repair Infinite Loop**:
-- **Issue**: Auto-repair keeps triggering repeatedly
-- **Solution**: Check AutoRepairProvider dependencies. Ensure:
-  - `shouldAutoRepair` logic is inlined in useEffect
-  - No function dependencies in useEffect deps array
-  - `isEvaluatingRef` is used to prevent concurrent evaluations
-
-**Context Re-render Cascade**:
-- **Issue**: Component re-renders excessively, causing performance issues
-- **Solution**:
-  - Use split context pattern (state + actions)
-  - Subscribe only to needed context: `useXxxActions()` instead of `useXxx()`
-  - Wrap callbacks in `useCallback` with correct dependencies
-  - Use React DevTools Profiler to identify re-render sources
-
-**Incremental Parser Fails**:
-- **Issue**: Files not parsing from streaming response
-- **Solution**: Check that response format matches expected JSON structure:
-  ```json
-  {"path": "src/App.tsx", "content": "..."}
-  ```
-  - Ensure proper brace balancing in response
-  - Check for escaped quotes in file content
-
-**Tests Failing After Optimization**:
-- **Issue**: Tests fail after adding React.memo or split contexts
-- **Solution**:
-  - Update test mocks to provide both state and actions contexts
-  - Use `waitFor` for async updates after context changes
-  - Check that custom comparators in React.memo don't break test assumptions
-
-### Development Tips
-
-**Performance Debugging**:
-1. Use React DevTools Profiler to identify slow renders
-2. Check "Highlight updates when components render" in React DevTools
-3. Use Performance tab in Chrome DevTools to identify event loop blocking
-4. Add performance marks: `performance.mark('start')` / `performance.measure()`
-
-**Working with Context**:
-1. Always use dedicated hooks (`useXxxState`, `useXxxActions`) instead of raw context
-2. When adding new context, consider split pattern if updates are frequent
-3. Wrap all callbacks in `useCallback` before adding to actions context
-4. Use refs for accessing latest state in stable callbacks
-
-**Code Organization**:
-1. Keep components under 200 lines (split if larger)
-2. Extract sub-components when component has multiple responsibilities
-3. Co-locate related files (component + CSS + tests in same directory)
-4. Use barrel exports (`index.ts`) for cleaner imports
-
-**Testing Strategy**:
-1. Test hooks independently before testing components that use them
-2. Mock contexts with realistic data to avoid test brittleness
-3. Test error boundaries with intentionally failing components
-4. Use `waitFor` for async state updates, not arbitrary timeouts
+- **Build failures**: Run `npm install` at root, then `npm run build --workspace=@ai-app-builder/shared`
+- **Preview blank**: Check console for missing deps in generated `package.json` or syntax errors
+- **Auto-repair loop**: Ensure `shouldAutoRepair` logic is inlined in useEffect, not a function dep
+- **Re-render cascade**: Use split context hooks, wrap callbacks in `useCallback`, check React DevTools Profiler

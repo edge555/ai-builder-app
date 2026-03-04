@@ -42,11 +42,13 @@ import { buildFixPrompt } from '../core/prompts/build-fix-prompt';
 import { applyEdits } from './edit-applicator';
 import { computeDiffs, createModifiedFileDiff } from './diff-computer';
 import { createChangeSummary } from './change-summarizer';
-import { buildModificationPrompt, buildSlicesFromFiles } from './prompt-builder';
+import { buildModificationPrompt, buildBuildFixPrompt, buildSlicesFromFiles } from './prompt-builder';
 
 const logger = createLogger('ModificationEngine');
 
 const DESIGN_SYSTEM_CATEGORIES = new Set(['ui', 'style', 'mixed']);
+
+const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Modification Engine service for modifying existing projects.
@@ -134,7 +136,6 @@ export class ModificationEngine {
         projectState,
         updatedFiles,
         prompt,
-        slices,
         shouldIncludeDesignSystem,
         requestId
       );
@@ -204,13 +205,19 @@ export class ModificationEngine {
 
     const MAX_ATTEMPTS = 4;
     let lastEditError: string | null = null;
+    const editErrors: string[] = [];
+    const startTime = Date.now();
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      if (attempt > 1) await delay(attempt * 500);
       logger.info('Modification attempt', { attempt, maxAttempts: MAX_ATTEMPTS });
 
-      // Build prompt with error feedback if this is a retry
+      // Build prompt with error feedback if this is a retry.
+      // lastEditError may contain a closest-region hint from the multi-tier matcher,
+      // e.g. "Closest matching region (lines 12-18, 60% similar):\n<code>"
+      // Surface this directly so the AI can correct its search string.
       const userRequest = lastEditError
-        ? `${prompt}\n\n[PREVIOUS ATTEMPT FAILED]\nError: ${lastEditError}\n\nPlease fix your edit. Make sure the "search" string EXACTLY matches the existing code (including whitespace and newlines). Try using a smaller, more unique search pattern.`
+        ? `${prompt}\n\n[PREVIOUS ATTEMPT FAILED]\n${lastEditError}\n\nUpdate your "search" string so it exactly matches the code shown above (including indentation and newlines). Use a smaller, more unique anchor if needed.`
         : prompt;
 
       const response = await this.callModificationAI(userRequest, contextPrompt, shouldIncludeDesignSystem, attempt, lastEditError, requestId);
@@ -218,12 +225,14 @@ export class ModificationEngine {
       if (!response.success || !response.content) {
         logger.error('Gemini error', { error: response.error });
         lastEditError = response.error ?? 'Failed to get modification from AI';
+        editErrors.push(lastEditError);
         continue;
       }
 
       const parseResult = this.parseModificationResponse(response.content);
       if (!parseResult.success) {
         lastEditError = parseResult.error!;
+        editErrors.push(lastEditError);
         continue;
       }
 
@@ -232,19 +241,33 @@ export class ModificationEngine {
       const pathError = this.validateFilePaths(aiFilesArray);
       if (pathError) {
         lastEditError = pathError;
+        editErrors.push(lastEditError);
         continue;
       }
 
       const editResult = await this.applyFileEdits(aiFilesArray, projectState);
       if (editResult.success) {
         logger.info('Modification succeeded', { attempt });
+        logger.info('generateModifications summary', {
+          totalAttempts: attempt,
+          successAttempt: attempt,
+          editErrors,
+          totalDurationMs: Date.now() - startTime,
+        });
         return { success: true, updatedFiles: editResult.updatedFiles, deletedFiles: editResult.deletedFiles };
       }
 
       lastEditError = editResult.error!;
+      editErrors.push(lastEditError);
       logger.info('Retrying due to error', { error: lastEditError });
     }
 
+    logger.info('generateModifications summary', {
+      totalAttempts: MAX_ATTEMPTS,
+      successAttempt: null,
+      editErrors,
+      totalDurationMs: Date.now() - startTime,
+    });
     return {
       success: false,
       error: `Failed after ${MAX_ATTEMPTS} attempts. Last error: ${lastEditError}`,
@@ -450,11 +473,11 @@ export class ModificationEngine {
     projectState: ProjectState,
     updatedFiles: Record<string, string | null>,
     prompt: string,
-    slices: CodeSlice[],
     shouldIncludeDesignSystem: boolean,
     requestId?: string
   ): Promise<{ updatedFiles: Record<string, string | null> }> {
     const tempFiles = this.buildProjectView(projectState, updatedFiles);
+    const buildStartTime = Date.now();
 
     let buildResult = this.buildValidator.validate(tempFiles);
     let buildRetryCount = 0;
@@ -462,7 +485,25 @@ export class ModificationEngine {
     const mutableUpdatedFiles = { ...updatedFiles };
 
     while (!buildResult.valid && buildRetryCount < this.maxBuildRetries) {
+      // Early termination: skip retries if all errors are unfixable
+      const fixableErrors = buildResult.errors.filter(e => e.severity === 'fixable');
+      const unfixableErrors = buildResult.errors.filter(e => e.severity === 'unfixable');
+
+      if (unfixableErrors.length > 0 && fixableErrors.length === 0) {
+        logger.warn('All build errors are unfixable, skipping retry loop', {
+          unfixableErrors: unfixableErrors.map(e => ({ message: e.message, file: e.file })),
+        });
+        break;
+      }
+
+      if (unfixableErrors.length > 0) {
+        logger.warn('Some build errors are unfixable and will persist after retries', {
+          unfixableErrors: unfixableErrors.map(e => ({ message: e.message, file: e.file })),
+        });
+      }
+
       buildRetryCount++;
+      await delay(buildRetryCount * 1000);
       logger.info('Modification build retry', {
         attempt: buildRetryCount,
         maxRetries: this.maxBuildRetries,
@@ -472,7 +513,7 @@ export class ModificationEngine {
 
       const fixResult = await this.attemptBuildFix(
         buildResult, buildRetryCount, buildFailureHistory,
-        prompt, slices, projectState, shouldIncludeDesignSystem,
+        prompt, shouldIncludeDesignSystem,
         mutableUpdatedFiles, tempFiles, requestId
       );
 
@@ -480,11 +521,21 @@ export class ModificationEngine {
       buildResult = fixResult.buildResult ?? buildResult;
     }
 
-    if (!buildResult.valid) {
+    const buildFixed = buildResult.valid;
+    const unfixableErrors = buildResult.errors.filter(e => e.severity === 'unfixable');
+
+    if (!buildFixed) {
       logger.warn('Build warnings after retries', {
         errors: buildResult.errors.map(e => ({ message: e.message, file: e.file })),
       });
     }
+
+    logger.info('validateAndFixBuild summary', {
+      buildRetries: buildRetryCount,
+      buildFixed,
+      unfixableErrors: unfixableErrors.map(e => ({ message: e.message, file: e.file })),
+      totalDurationMs: Date.now() - buildStartTime,
+    });
 
     return { updatedFiles: mutableUpdatedFiles };
   }
@@ -515,8 +566,6 @@ export class ModificationEngine {
     buildRetryCount: number,
     buildFailureHistory: RepairAttempt[],
     prompt: string,
-    slices: CodeSlice[],
-    projectState: ProjectState,
     shouldIncludeDesignSystem: boolean,
     mutableUpdatedFiles: Record<string, string | null>,
     tempFiles: Record<string, string>,
@@ -530,7 +579,10 @@ export class ModificationEngine {
       failureHistory: buildFailureHistory.length > 0 ? buildFailureHistory : undefined,
     });
     const fixSystemInstruction = getModificationPrompt(fixUserRequest, shouldIncludeDesignSystem) + '\n\nIMPORTANT: Fix ALL build errors. Adding missing dependencies to package.json is usually the solution.';
-    const fixContextPrompt = buildModificationPrompt(fixUserRequest, slices, projectState);
+
+    // Use current post-edit file contents (tempFiles) instead of stale slices/projectState
+    const errorFiles = new Set(buildResult.errors.map(e => e.file));
+    const fixContextPrompt = buildBuildFixPrompt(fixUserRequest, errorFiles, tempFiles);
 
     const fixResponse = await this.aiProvider.generate({
       prompt: fixContextPrompt,

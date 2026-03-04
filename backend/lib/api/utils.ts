@@ -246,7 +246,7 @@ export async function withTimeout<T>(
 
   // If external signal is already aborted, reject immediately
   if (signal?.aborted) {
-    throw new Error(stateError(operationName, 'was aborted before starting'));
+    throw new Error(`${operationName} was aborted before starting`);
   }
 
   let timeoutId: NodeJS.Timeout | null = null;

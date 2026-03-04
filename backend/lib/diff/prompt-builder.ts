@@ -43,6 +43,38 @@ export function buildModificationPrompt(
 }
 
 /**
+ * Build a focused prompt for build-fix retries using current (post-edit) file contents.
+ * Includes only the files referenced in build errors plus package.json,
+ * so the AI sees the actual state it needs to fix — not stale pre-edit slices.
+ */
+export function buildBuildFixPrompt(
+    userPrompt: string,
+    errorFiles: Set<string>,
+    allFiles: Record<string, string>
+): string {
+    // Always include package.json if it exists (dependency fixes are common)
+    const filesToInclude = new Set(errorFiles);
+    if (allFiles['package.json']) {
+        filesToInclude.add('package.json');
+    }
+
+    let prompt = `User Request: ${userPrompt}\n\n`;
+    prompt += `=== FILES WITH BUILD ERRORS (current content) ===\n\n`;
+
+    for (const filePath of filesToInclude) {
+        const content = allFiles[filePath];
+        if (content !== undefined) {
+            prompt += `--- ${filePath} ---\n`;
+            prompt += `${content}\n\n`;
+        }
+    }
+
+    prompt += `Based on the user request, output ONLY the JSON with modified/new files.`;
+
+    return prompt;
+}
+
+/**
  * Build code slices directly from project files without using FilePlanner.
  * All files are treated as primary files (full content included).
  * Used when shouldSkipPlanning option is true.
