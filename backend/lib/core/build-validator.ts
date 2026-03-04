@@ -37,6 +37,22 @@ const BUILT_IN_MODULES = new Set([
 ]);
 
 /**
+ * File extensions treated as static assets (CSS, images, data files)
+ */
+const ASSET_EXTENSIONS = ['.css', '.scss', '.png', '.svg', '.jpg', '.json'];
+
+/**
+ * Specific suggestions for common packages that have browser-native alternatives
+ */
+const PACKAGE_SUGGESTIONS: Record<string, string> = {
+    uuid: 'Use crypto.randomUUID() instead of uuid package, or add uuid to package.json',
+    lodash: 'Use native JavaScript methods instead, or add lodash to package.json',
+    underscore: 'Use native JavaScript methods instead, or add underscore to package.json',
+    moment: 'Use native Date or Intl.DateTimeFormat instead, or add moment to package.json',
+    axios: 'Use native fetch() instead, or add axios to package.json',
+};
+
+/**
  * Node.js built-in modules (shouldn't be used in browser code)
  */
 const NODE_BUILT_INS = new Set([
@@ -220,9 +236,8 @@ export class BuildValidator {
 
             for (const { module: importPath, line } of imports) {
                 // Skip CSS/asset imports
-                if (importPath.endsWith('.css') || importPath.endsWith('.scss') ||
-                    importPath.endsWith('.png') || importPath.endsWith('.svg') ||
-                    importPath.endsWith('.jpg') || importPath.endsWith('.json')) {
+                const isAssetImport = ASSET_EXTENSIONS.some(ext => importPath.endsWith(ext));
+                if (isAssetImport) {
                     // For CSS imports, check if the file exists
                     if (importPath.endsWith('.css') && isRelativeImport(importPath)) {
                         const resolved = resolveRelativeImport(filePath, importPath, normalizedFilesSet);
@@ -270,17 +285,7 @@ export class BuildValidator {
                     // Check if package is declared in dependencies
                     if (!declaredDeps.has(packageName)) {
                         // Provide specific suggestions for common packages
-                        let suggestion = `Add '${packageName}' to package.json dependencies`;
-
-                        if (packageName === 'uuid') {
-                            suggestion = `Use crypto.randomUUID() instead of uuid package, or add uuid to package.json`;
-                        } else if (packageName === 'lodash' || packageName === 'underscore') {
-                            suggestion = `Use native JavaScript methods instead, or add ${packageName} to package.json`;
-                        } else if (packageName === 'moment') {
-                            suggestion = `Use native Date or Intl.DateTimeFormat instead, or add moment to package.json`;
-                        } else if (packageName === 'axios') {
-                            suggestion = `Use native fetch() instead, or add axios to package.json`;
-                        }
+                        const suggestion = PACKAGE_SUGGESTIONS[packageName] ?? `Add '${packageName}' to package.json dependencies`;
 
                         errors.push({
                             type: 'missing_dependency',

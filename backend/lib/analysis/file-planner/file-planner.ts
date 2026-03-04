@@ -328,13 +328,11 @@ export class FilePlanner {
       }
 
       // Include exports and declarations
-      if (
+      const isTopLevelDeclaration =
         trimmed.startsWith('export ') ||
-        trimmed.match(/^(async\s+)?function\s+\w+/) ||
-        trimmed.match(/^class\s+\w+/) ||
-        trimmed.match(/^interface\s+\w+/) ||
-        trimmed.match(/^type\s+\w+/)
-      ) {
+        /^(?:async\s+)?function\s+\w+/.test(trimmed) ||
+        /^(?:class|interface|type)\s+\w+/.test(trimmed);
+      if (isTopLevelDeclaration) {
         outlineLines.push(line);
         outlineLines.push('  // ... implementation ...');
       }

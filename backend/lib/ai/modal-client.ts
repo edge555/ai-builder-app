@@ -291,26 +291,35 @@ export class ModalClient implements AIProvider {
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
-
-        const dataStr = trimmedLine.slice(6);
-        if (dataStr === '[DONE]') continue;
-
-        try {
-          const data = JSON.parse(dataStr);
-          const token = data.token;
-          if (typeof token === 'string') {
-            accumulated += token;
-            onToken(token, accumulated.length);
-          }
-        } catch (err) {
-          logger.warn('Failed to parse SSE data', { line: trimmedLine, error: err });
+        const token = this.parseSSEToken(line);
+        if (token !== null) {
+          accumulated += token;
+          onToken(token, accumulated.length);
         }
       }
     }
 
     return accumulated;
+  }
+
+  /**
+   * Parse a single SSE line and extract the token string, or null if not applicable.
+   */
+  private parseSSEToken(line: string): string | null {
+    const trimmedLine = line.trim();
+    if (!trimmedLine || !trimmedLine.startsWith('data: ')) return null;
+
+    const dataStr = trimmedLine.slice(6);
+    if (dataStr === '[DONE]') return null;
+
+    try {
+      const data = JSON.parse(dataStr);
+      const token = data.token;
+      return typeof token === 'string' ? token : null;
+    } catch (err) {
+      logger.warn('Failed to parse SSE data', { line: trimmedLine, error: err });
+      return null;
+    }
   }
 
   /**

@@ -41,6 +41,8 @@ import { buildModificationPrompt, buildSlicesFromFiles } from './prompt-builder'
 
 const logger = createLogger('ModificationEngine');
 
+const DESIGN_SYSTEM_CATEGORIES = new Set(['ui', 'style', 'mixed']);
+
 /**
  * Modification Engine service for modifying existing projects.
  * Includes build validation with auto-retry.
@@ -93,7 +95,7 @@ export class ModificationEngine {
       const { slices, category } = await this.selectCodeSlices(projectState, prompt, options?.skipPlanning);
 
       // Step 2: Determine if design system should be included based on category
-      const includeDesignSystem = category === 'ui' || category === 'style' || category === 'mixed';
+      const includeDesignSystem = DESIGN_SYSTEM_CATEGORIES.has(category);
       contextLogger.debug('System instruction determined', { category, includeDesignSystem });
 
       // Step 3: Generate modifications with retry logic
@@ -602,19 +604,7 @@ export class ModificationEngine {
 
       // Apply fixes
       for (const fileEdit of fixOutput.files) {
-        if (fileEdit.operation === 'modify' && fileEdit.edits) {
-          const currentContent = tempFiles[fileEdit.path];
-          if (currentContent) {
-            const editResult = applyEdits(currentContent, fileEdit.edits);
-            if (editResult.success) {
-              mutableUpdatedFiles[fileEdit.path] = editResult.content!;
-              tempFiles[fileEdit.path] = editResult.content!;
-            }
-          }
-        } else if (fileEdit.operation === 'create' && fileEdit.content) {
-          mutableUpdatedFiles[fileEdit.path] = fileEdit.content;
-          tempFiles[fileEdit.path] = fileEdit.content;
-        }
+        this.applyBuildFix(fileEdit, mutableUpdatedFiles, tempFiles);
       }
 
       // Re-validate
@@ -640,6 +630,28 @@ export class ModificationEngine {
         timestamp: new Date().toISOString(),
       });
       return { shouldBreak: false };
+    }
+  }
+
+  /**
+   * Apply a single build fix edit to the mutable file maps.
+   */
+  private applyBuildFix(
+    fileEdit: { path: string; operation: string; content?: string; edits?: Array<{ search: string; replace: string }> },
+    mutableUpdatedFiles: Record<string, string | null>,
+    tempFiles: Record<string, string>
+  ): void {
+    if (fileEdit.operation === 'modify' && fileEdit.edits) {
+      const currentContent = tempFiles[fileEdit.path];
+      if (!currentContent) return;
+      const editResult = applyEdits(currentContent, fileEdit.edits);
+      if (editResult.success) {
+        mutableUpdatedFiles[fileEdit.path] = editResult.content!;
+        tempFiles[fileEdit.path] = editResult.content!;
+      }
+    } else if (fileEdit.operation === 'create' && fileEdit.content) {
+      mutableUpdatedFiles[fileEdit.path] = fileEdit.content;
+      tempFiles[fileEdit.path] = fileEdit.content;
     }
   }
 

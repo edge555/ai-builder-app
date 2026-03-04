@@ -117,14 +117,14 @@ async modifyProject(projectState, prompt, options) {
 ---
 
 ### Task 2.2: Reduce Nesting Depth
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
-- [ ] Identify deeply nested code (>3 levels):
+- [x] Identify deeply nested code (>3 levels):
   ```bash
   npx eslint . --rule 'max-depth: [warn, 3]'
   ```
-- [ ] Apply early return pattern (guard clauses)
-- [ ] Extract nested conditionals into named variables
+- [x] Apply early return pattern (guard clauses)
+- [x] Extract nested conditionals into named variables
 
 **Example**:
 ```typescript
@@ -147,13 +147,20 @@ if (isRateLimited) throw new RateLimitError();
 return await callProvider();
 ```
 
+**Changes Made**:
+| File | Before | After | Method |
+|------|--------|-------|--------|
+| [`backend/lib/ai/modal-client.ts`](backend/lib/ai/modal-client.ts) | 5 levels (while→for→if→try→if) in `processSSEStream` | 2 levels | Extracted `parseSSEToken()` helper with early returns |
+| [`backend/lib/ai/openrouter-client.ts`](backend/lib/ai/openrouter-client.ts) | 6 levels (while→for→if→if→try→if) in `processSSEStream` | 2 levels | Extracted `parseSSEDelta()` helper with early returns |
+| [`backend/lib/diff/modification-engine.ts`](backend/lib/diff/modification-engine.ts) | 4 levels (try→for→if→if) in `parseBuildFixAndApply` | 2 levels | Extracted `applyBuildFix()` helper with early return |
+
 ---
 
 ### Task 2.3: Simplify Complex Conditionals
-**Status**: [ ] Pending
+**Status**: [x] Completed
 
-- [ ] Extract complex conditions into named boolean variables
-- [ ] Replace conditional chains with lookup objects/maps
+- [x] Extract complex conditions into named boolean variables
+- [x] Replace conditional chains with lookup objects/maps
 
 **Example**:
 ```typescript
@@ -166,6 +173,14 @@ if (category === 'ui' || category === 'style' || category === 'mixed') {
 const DESIGN_RELATED_CATEGORIES = ['ui', 'style', 'mixed'] as const;
 const shouldIncludeDesignSystem = DESIGN_RELATED_CATEGORIES.includes(category);
 ```
+
+**Changes Made**:
+| File | Before | After |
+|------|--------|-------|
+| [`backend/lib/diff/modification-engine.ts`](backend/lib/diff/modification-engine.ts) | `category === 'ui' \|\| ...` (3-part OR) | `DESIGN_SYSTEM_CATEGORIES.has(category)` (module-level `Set`) |
+| [`backend/lib/core/build-validator.ts`](backend/lib/core/build-validator.ts) | 6-part `.endsWith()` OR chain | `ASSET_EXTENSIONS.some(ext => importPath.endsWith(ext))` (named array constant) |
+| [`backend/lib/core/build-validator.ts`](backend/lib/core/build-validator.ts) | `if/else if` chain for 5 packages | `PACKAGE_SUGGESTIONS[packageName] ?? default` (lookup object) |
+| [`backend/lib/analysis/file-planner/file-planner.ts`](backend/lib/analysis/file-planner/file-planner.ts) | 5-part OR with separate `.match()` calls | `isTopLevelDeclaration` named boolean + consolidated regex |
 
 ---
 

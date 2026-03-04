@@ -288,28 +288,36 @@ export class OpenRouterClient implements AIProvider {
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine || trimmedLine.startsWith(':')) continue;
-
-        if (trimmedLine.startsWith('data: ')) {
-          const dataStr = trimmedLine.slice(6);
-          if (dataStr === '[DONE]') continue;
-
-          try {
-            const chunk = JSON.parse(dataStr) as OpenRouterStreamChunk;
-            const delta = chunk.choices?.[0]?.delta?.content;
-            if (typeof delta === 'string') {
-              accumulated += delta;
-              onToken(delta, accumulated.length);
-            }
-          } catch (err) {
-            logger.warn('Failed to parse SSE data', { line: trimmedLine, error: err });
-          }
+        const delta = this.parseSSEDelta(line);
+        if (delta !== null) {
+          accumulated += delta;
+          onToken(delta, accumulated.length);
         }
       }
     }
 
     return accumulated;
+  }
+
+  /**
+   * Parse a single SSE line and extract the content delta, or null if not applicable.
+   */
+  private parseSSEDelta(line: string): string | null {
+    const trimmedLine = line.trim();
+    if (!trimmedLine || trimmedLine.startsWith(':')) return null;
+    if (!trimmedLine.startsWith('data: ')) return null;
+
+    const dataStr = trimmedLine.slice(6);
+    if (dataStr === '[DONE]') return null;
+
+    try {
+      const chunk = JSON.parse(dataStr) as OpenRouterStreamChunk;
+      const delta = chunk.choices?.[0]?.delta?.content;
+      return typeof delta === 'string' ? delta : null;
+    } catch (err) {
+      logger.warn('Failed to parse SSE data', { line: trimmedLine, error: err });
+      return null;
+    }
   }
 
   private getSystemInstruction(request: AIRequest): string | undefined {
