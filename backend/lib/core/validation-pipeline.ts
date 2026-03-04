@@ -12,6 +12,8 @@ import {
   detectForbiddenPatterns,
   validateSyntax,
   validateProjectQuality,
+  validateFileSizes,
+  validateProjectStructure,
   parseAIOutput
 } from './validators';
 
@@ -34,8 +36,14 @@ function validate(aiOutput: unknown): ValidationResult {
 
   const files = aiOutput as Record<string, string>;
 
+  // Step 1.5: Validate project structure
+  errors.push(...validateProjectStructure(files));
+
   // Step 2: Validate file paths
   errors.push(...validateFilePaths(files));
+
+  // Step 2.5: Validate file sizes
+  errors.push(...validateFileSizes(files));
 
   // Step 3: Detect forbidden patterns
   errors.push(...detectForbiddenPatterns(files));
@@ -62,7 +70,8 @@ function validate(aiOutput: unknown): ValidationResult {
 
   return {
     valid: true,
-    errors: qualityWarnings, // Include as informational warnings
+    errors: [],
+    warnings: qualityWarnings.length > 0 ? qualityWarnings : undefined,
     sanitizedOutput: files,
   };
 }

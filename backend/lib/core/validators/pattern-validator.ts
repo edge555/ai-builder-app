@@ -22,11 +22,10 @@ export function detectForbiddenPatterns(files: Record<string, string>): Validati
 
     for (const [filePath, content] of Object.entries(files)) {
         for (const { pattern, name } of FORBIDDEN_PATTERNS) {
-            // Reset regex state
+            // Reset regex state and report ALL occurrences
             pattern.lastIndex = 0;
-            const match = pattern.exec(content);
-            if (match) {
-                // Find line number
+            let match: RegExpExecArray | null;
+            while ((match = pattern.exec(content)) !== null) {
                 const beforeMatch = content.slice(0, match.index);
                 const lineNumber = (beforeMatch.match(/\n/g) || []).length + 1;
 

@@ -10,6 +10,14 @@ const VALID_EXTENSIONS = new Set([
     '.ts', '.tsx', '.js', '.jsx', '.json', '.css', '.scss', '.html', '.md', '.txt',
     '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp',
     '.yaml', '.yml', '.env', '.gitignore', '.eslintrc', '.prettierrc',
+    // JS/TS variants
+    '.mts', '.mjs', '.cjs', '.d.ts',
+    // Source maps
+    '.map',
+    // Fonts
+    '.woff', '.woff2', '.ttf', '.otf', '.eot',
+    // Config
+    '.toml', '.editorconfig', '.browserslistrc',
 ]);
 
 // Path traversal patterns

@@ -30,6 +30,8 @@ export const MAX_CONTEXT_SLICES = 15;
 // Validation limits
 export const MAX_COMPONENT_LINES = 80;
 export const MAX_APP_LINES = 100;
+export const MAX_SINGLE_FILE_BYTES = 100 * 1024; // 100 KB per file
+export const MAX_PROJECT_BYTES = 1024 * 1024;    // 1 MB total
 
 // Timeouts (in milliseconds)
 export const API_REQUEST_TIMEOUT = 300000; // 5 minutes
