@@ -1,6 +1,8 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Search, X, FolderSearch, ArrowUpDown, FolderPlus, Sparkles, Loader2 } from 'lucide-react';
-import { useState, useMemo, memo, useRef, useDeferredValue } from 'react';
+import { useState, useMemo, memo, useRef, useDeferredValue, useCallback } from 'react';
+
+import { ConfirmDialog } from '@/components/ConfirmDialog/ConfirmDialog';
 
 import type { ProjectMetadata } from '@/services/storage';
 
@@ -153,6 +155,29 @@ const ProjectGalleryComponent = function ProjectGallery({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('lastModified');
   const [activeTab, setActiveTab] = useState<'recent' | 'all'>('recent');
+  const [duplicateConfirm, setDuplicateConfirm] = useState<{
+    isOpen: boolean;
+    projectId: string | null;
+    projectName: string | null;
+  }>({ isOpen: false, projectId: null, projectName: null });
+
+  const handleDuplicateRequest = useCallback((projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      setDuplicateConfirm({ isOpen: true, projectId, projectName: project.name });
+    }
+  }, [projects]);
+
+  const handleDuplicateConfirm = useCallback(() => {
+    if (duplicateConfirm.projectId) {
+      onDuplicateProject(duplicateConfirm.projectId);
+    }
+    setDuplicateConfirm({ isOpen: false, projectId: null, projectName: null });
+  }, [duplicateConfirm.projectId, onDuplicateProject]);
+
+  const handleDuplicateCancel = useCallback(() => {
+    setDuplicateConfirm({ isOpen: false, projectId: null, projectName: null });
+  }, []);
 
   // Use deferred value for search query to prevent blocking UI during typing
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -315,7 +340,7 @@ const ProjectGalleryComponent = function ProjectGallery({
         <RecentProjects
           projects={recentProjects}
           onOpenProject={onOpenProject}
-          onDuplicateProject={onDuplicateProject}
+          onDuplicateProject={handleDuplicateRequest}
           onDeleteProject={onDeleteProject}
           onViewAll={() => setActiveTab('all')}
           totalProjectCount={projects.length}
@@ -327,7 +352,7 @@ const ProjectGalleryComponent = function ProjectGallery({
             <VirtualizedOrNormalGrid
               projects={filteredAndSortedProjects}
               onOpenProject={onOpenProject}
-              onDuplicateProject={onDuplicateProject}
+              onDuplicateProject={handleDuplicateRequest}
               onDeleteProject={onDeleteProject}
               onPreloadBuilder={onPreloadBuilder}
             />
@@ -350,6 +375,16 @@ const ProjectGalleryComponent = function ProjectGallery({
           )}
         </>
       )}
+
+      <ConfirmDialog
+        isOpen={duplicateConfirm.isOpen}
+        title="Duplicate Project"
+        message={`Duplicate "${duplicateConfirm.projectName}"? A copy will be created with the same files and chat history.`}
+        confirmLabel="Duplicate"
+        confirmVariant="primary"
+        onConfirm={handleDuplicateConfirm}
+        onCancel={handleDuplicateCancel}
+      />
     </section>
   );
 };

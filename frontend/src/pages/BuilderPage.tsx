@@ -1,6 +1,6 @@
 import type { SerializedProjectState } from '@/shared';
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 
 import type { ChatMessage } from '@/components';
 import { ErrorBoundary, AppLayout } from '@/components';
@@ -51,6 +51,7 @@ export function BuilderPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [isLoading, setIsLoading] = useState(true);
   const [initialState, setInitialState] = useState<SerializedProjectState | null>(null);
@@ -61,10 +62,24 @@ export function BuilderPage() {
   useEffect(() => {
     const loadProject = async () => {
       if (projectId === 'new') {
-        // New project mode
-        const prompt = searchParams.get('prompt') || undefined;
-        setInitialPrompt(prompt);
-        setInitialState(null);
+        // New project mode — may have template files from router state
+        const locationState = location.state as { files?: Record<string, string>; name?: string } | null;
+        if (locationState?.files) {
+          setInitialState({
+            id: crypto.randomUUID(),
+            name: locationState.name || 'My Template',
+            description: '',
+            files: locationState.files,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            currentVersionId: '',
+          });
+          setInitialPrompt(undefined);
+        } else {
+          const prompt = searchParams.get('prompt') || undefined;
+          setInitialPrompt(prompt);
+          setInitialState(null);
+        }
         setInitialMessages([]);
         setIsLoading(false);
       } else if (projectId) {
@@ -90,7 +105,7 @@ export function BuilderPage() {
     };
 
     loadProject();
-  }, [projectId, searchParams, navigate]);
+  }, [projectId, searchParams, navigate, location.state]);
 
   const handleBackToDashboard = () => {
     navigate('/');

@@ -1,0 +1,4 @@
+.stackblitz-button--loading {
+    opacity: 0.6;
+    cursor: wait;
+}

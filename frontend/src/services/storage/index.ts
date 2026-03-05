@@ -5,3 +5,4 @@ export {
   toSerializedProjectState,
   deserializeChatMessages,
 } from './types';
+export type { UserTemplate } from './template-types';

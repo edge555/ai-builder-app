@@ -182,7 +182,7 @@ const PreviewPanelComponent = function PreviewPanel({
               <SandpackRefresher onRefreshReady={(fn) => { refreshFnRef.current = fn; }} />
               {deviceMode === 'desktop' ? (
                 <SandpackPreview
-                  showOpenInCodeSandbox={false}
+                  showOpenInCodeSandbox={true}
                   showRefreshButton
                   style={{ height: '100%' }}
                 />
@@ -190,7 +190,7 @@ const PreviewPanelComponent = function PreviewPanel({
                 <div className="device-simulation-container">
                   <div className={`device-frame ${deviceMode} ${isRotated ? 'rotated' : ''}`}>
                     <SandpackPreview
-                      showOpenInCodeSandbox={false}
+                      showOpenInCodeSandbox={true}
                       showRefreshButton
                       style={{ height: '100%' }}
                     />

@@ -7,11 +7,11 @@ import { SiteFooter } from '@/components/SiteFooter/SiteFooter';
 import { SiteHeader } from '@/components/SiteHeader/SiteHeader';
 import { TemplateGrid } from '@/components/TemplateGrid/TemplateGrid';
 import { starterTemplates } from '@/data/templates';
-import type { ProjectMetadata } from '@/services/storage';
+import { storageService, type ProjectMetadata, type UserTemplate } from '@/services/storage';
 import './WelcomePage.css';
 
 interface WelcomePageProps {
-  onEnterApp: (initialPrompt?: string) => void;
+  onEnterApp: (initialPrompt?: string, files?: Record<string, string>, name?: string) => void;
   onOpenProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   onDuplicateProject: (projectId: string) => void;
@@ -69,6 +69,11 @@ export function WelcomePage({
   const hasProjects = savedProjects.length > 0;
 
   const [promptInput, setPromptInput] = useState('');
+  const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
+
+  useEffect(() => {
+    storageService.getAllTemplates().then(setUserTemplates).catch(() => {});
+  }, []);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>({
     isOpen: false,
     projectId: null,
@@ -157,6 +162,19 @@ export function WelcomePage({
 
   const handleSuggestionClick = (suggestion: string) => {
     setPromptInput(suggestion);
+  };
+
+  const handleSelectUserTemplate = (template: UserTemplate) => {
+    onEnterApp(undefined, template.files, template.name);
+  };
+
+  const handleDeleteUserTemplate = async (id: string) => {
+    try {
+      await storageService.deleteTemplate(id);
+      setUserTemplates((prev) => prev.filter((t) => t.id !== id));
+    } catch {
+      // Silently ignore delete errors
+    }
   };
 
   return (
@@ -256,6 +274,9 @@ export function WelcomePage({
         <TemplateGrid
           templates={starterTemplates}
           onSelect={(template) => onEnterApp(template.prompt)}
+          userTemplates={userTemplates}
+          onSelectUserTemplate={handleSelectUserTemplate}
+          onDeleteUserTemplate={handleDeleteUserTemplate}
         />
       </section>
 

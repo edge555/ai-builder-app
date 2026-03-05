@@ -135,8 +135,10 @@ function WelcomePageWrapper({
 }) {
   const navigate = useNavigate();
 
-  const handleEnterApp = (prompt?: string) => {
-    if (prompt) {
+  const handleEnterApp = (prompt?: string, files?: Record<string, string>, name?: string) => {
+    if (files) {
+      navigate('/project/new', { state: { files, name } });
+    } else if (prompt) {
       navigate(`/project/new?prompt=${encodeURIComponent(prompt)}`);
     } else {
       navigate('/project/new');

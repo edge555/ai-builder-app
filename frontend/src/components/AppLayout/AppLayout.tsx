@@ -1,4 +1,4 @@
-import { Sparkles, ArrowLeft, PanelLeftClose, PanelLeft, Settings } from 'lucide-react';
+import { Sparkles, ArrowLeft, PanelLeftClose, PanelLeft, Settings, History } from 'lucide-react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -6,9 +6,12 @@ import { useAutoSave } from '@/hooks/useAutoSave';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 import { useProjectState, useProjectActions, useChatMessages, useGenerationState } from '../../context';
+import { VersionHistoryDrawer } from '../VersionHistory';
 import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
 import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
 import { ExportButton } from '../ExportButton';
+import { SaveTemplateButton } from '../SaveTemplateButton';
+import { StackBlitzButton } from '../StackBlitzButton';
 import { PanelToggle, type ActivePanel } from '../PanelToggle';
 import { StatusIndicator } from '../StatusIndicator';
 import { UndoRedoButtons } from '../UndoRedoButtons';
@@ -68,7 +71,8 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
     const navigate = useNavigate();
     const { undo, redo, submitPrompt } = useSubmitPrompt();
     const { projectState, canUndo, canRedo } = useProjectState();
-    const { renameProject } = useProjectActions();
+    const { renameProject, setProjectState } = useProjectActions();
+    const [isVersionDrawerOpen, setIsVersionDrawerOpen] = useState(false);
     const { messages } = useChatMessages();
     const { isLoading, loadingPhase } = useGenerationState();
 
@@ -217,6 +221,17 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                             />
                         </div>
                         <ExportButton />
+                        <StackBlitzButton />
+                        <SaveTemplateButton />
+                        <button
+                            className="settings-button"
+                            onClick={() => setIsVersionDrawerOpen(true)}
+                            disabled={!projectState}
+                            aria-label="Version history"
+                            title="Version history"
+                        >
+                            <History size={18} />
+                        </button>
                         <button
                             className="settings-button"
                             onClick={() => navigate('/settings/agents')}
@@ -273,6 +288,16 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                     <PreviewSection activePanel={activePanel} />
                 </section>
             </main>
+
+            <VersionHistoryDrawer
+                isOpen={isVersionDrawerOpen}
+                onClose={() => setIsVersionDrawerOpen(false)}
+                projectId={projectState?.id ?? ''}
+                onRevert={(newState) => {
+                    setProjectState(newState, true);
+                    setIsVersionDrawerOpen(false);
+                }}
+            />
         </div>
     );
 }

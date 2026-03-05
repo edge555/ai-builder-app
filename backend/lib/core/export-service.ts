@@ -3,15 +3,62 @@ import { ProjectState } from '@ai-app-builder/shared';
 
 /**
  * Export Service
- * 
+ *
  * Handles exporting ProjectState to downloadable ZIP files.
  * Preserves folder structure and includes all project files.
- * 
+ *
  * Requirements: 7.1, 7.2, 7.3
  */
 
 export interface ExportService {
   exportAsZip(projectState: ProjectState): Promise<Blob>;
+}
+
+function generateReadme(projectState: ProjectState): string {
+  const { name, description, files } = projectState;
+
+  const hasTypeScript = Object.keys(files).some(f => f.endsWith('.ts') || f.endsWith('.tsx'));
+  const hasTailwind = Object.values(files).some(c => c.includes('tailwind')) ||
+    Object.keys(files).some(f => f.includes('tailwind'));
+
+  const techStack = ['React'];
+  if (hasTypeScript) techStack.push('TypeScript');
+  if (hasTailwind) techStack.push('Tailwind CSS');
+
+  const fileTree = Object.keys(files)
+    .sort()
+    .map(f => `  ${f}`)
+    .join('\n');
+
+  return `# ${name}
+
+${description || 'A web application generated with AI App Builder.'}
+
+## Tech Stack
+
+${techStack.map(t => `- ${t}`).join('\n')}
+
+## Getting Started
+
+\`\`\`bash
+npm install
+npm run dev
+\`\`\`
+
+## File Structure
+
+\`\`\`
+${fileTree}
+\`\`\`
+`;
+}
+
+function generateEnvExample(): string {
+  return `# Environment Variables
+# Copy this file to .env and fill in the values
+
+# VITE_API_BASE_URL=http://localhost:4000
+`;
 }
 
 /**
@@ -33,6 +80,13 @@ export async function exportAsZip(projectState: ProjectState): Promise<Blob> {
   for (const [filePath, content] of Object.entries(projectState.files)) {
     // JSZip automatically creates folder structure from paths
     zip.file(filePath, content);
+  }
+
+  if (!projectState.files['README.md']) {
+    zip.file('README.md', generateReadme(projectState));
+  }
+  if (!projectState.files['.env.example']) {
+    zip.file('.env.example', generateEnvExample());
   }
 
   // Generate the ZIP file as a Blob
@@ -59,6 +113,13 @@ export async function exportAsZipBuffer(projectState: ProjectState): Promise<Buf
   // Add all files from ProjectState to ZIP
   for (const [filePath, content] of Object.entries(projectState.files)) {
     zip.file(filePath, content);
+  }
+
+  if (!projectState.files['README.md']) {
+    zip.file('README.md', generateReadme(projectState));
+  }
+  if (!projectState.files['.env.example']) {
+    zip.file('.env.example', generateEnvExample());
   }
 
   // Generate the ZIP file as a Node.js Buffer

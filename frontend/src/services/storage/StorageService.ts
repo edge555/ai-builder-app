@@ -2,6 +2,7 @@ import { createLogger } from '@/utils/logger';
 import { stateError, notFoundError } from '@ai-app-builder/shared/utils';
 
 import type { StoredProject, ProjectMetadata, SerializedChatMessage } from './types';
+import type { UserTemplate } from './template-types';
 
 const storageLogger = createLogger('Storage');
 
@@ -11,10 +12,11 @@ const storageLogger = createLogger('Storage');
  */
 class StorageService {
   private readonly DB_NAME = 'ai_app_builder_db';
-  private readonly DB_VERSION = 2; // Bumped for chat messages store
+  private readonly DB_VERSION = 3; // Bumped for user_templates store
   private readonly PROJECTS_STORE = 'projects';
   private readonly CHAT_MESSAGES_STORE = 'chat_messages';
   private readonly METADATA_STORE = 'metadata';
+  private readonly TEMPLATES_STORE = 'user_templates';
 
   // Performance tuning constants
   private readonly CHUNK_SIZE = 50_000; // ~50KB chunks for writes
@@ -88,7 +90,7 @@ class StorageService {
           }
 
           // Migrate existing chat messages from projects to separate store
-          const transaction = (event.target as IDBOpenDBRequest).transaction;
+          const transaction = (event.target as IDBOpenDBRequest).transaction as IDBTransaction;
           if (transaction) {
             const projectsStore = transaction.objectStore(this.PROJECTS_STORE);
             const chatStore = transaction.objectStore(this.CHAT_MESSAGES_STORE);
@@ -113,6 +115,14 @@ class StorageService {
                 cursor.continue();
               }
             };
+          }
+        }
+
+        // Version 3: Create user_templates store
+        if (oldVersion < 3) {
+          if (!db.objectStoreNames.contains(this.TEMPLATES_STORE)) {
+            const templatesStore = db.createObjectStore(this.TEMPLATES_STORE, { keyPath: 'id' });
+            templatesStore.createIndex('by-createdAt', 'createdAt', { unique: false });
           }
         }
       };
@@ -687,6 +697,78 @@ class StorageService {
       });
     } catch (error) {
       storageLogger.error('Failed to set metadata', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Saves a user template to IndexedDB.
+   */
+  async saveTemplate(template: UserTemplate): Promise<void> {
+    try {
+      const db = await this.ensureInitialized();
+      const transaction = db.transaction([this.TEMPLATES_STORE], 'readwrite');
+      const store = transaction.objectStore(this.TEMPLATES_STORE);
+
+      await new Promise<void>((resolve, reject) => {
+        const request = store.put(template);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      storageLogger.error('Failed to save template', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Retrieves all user templates, sorted by createdAt (most recent first).
+   */
+  async getAllTemplates(): Promise<UserTemplate[]> {
+    try {
+      const db = await this.ensureInitialized();
+      const transaction = db.transaction([this.TEMPLATES_STORE], 'readonly');
+      const store = transaction.objectStore(this.TEMPLATES_STORE);
+      const index = store.index('by-createdAt');
+
+      return await new Promise<UserTemplate[]>((resolve, reject) => {
+        const request = index.openCursor(null, 'prev');
+        const results: UserTemplate[] = [];
+
+        request.onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest).result;
+          if (cursor) {
+            results.push(cursor.value as UserTemplate);
+            cursor.continue();
+          } else {
+            resolve(results);
+          }
+        };
+
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      storageLogger.error('Failed to get templates', { error });
+      return [];
+    }
+  }
+
+  /**
+   * Deletes a user template by ID.
+   */
+  async deleteTemplate(id: string): Promise<void> {
+    try {
+      const db = await this.ensureInitialized();
+      const transaction = db.transaction([this.TEMPLATES_STORE], 'readwrite');
+      const store = transaction.objectStore(this.TEMPLATES_STORE);
+
+      await new Promise<void>((resolve, reject) => {
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      storageLogger.error('Failed to delete template', { error });
       throw error;
     }
   }
