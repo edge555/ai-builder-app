@@ -61,7 +61,8 @@ export const ACCESSIBILITY_GUIDANCE = `=== ACCESSIBILITY & QUALITY ===
 1. SEMANTIC HTML: Use landmarks (<header>, <nav>, <main>, <section>, <footer>), <button> for actions, <a> for links. Respect heading hierarchy (h1→h2→h3).
 2. ARIA: aria-label on icon-only buttons, labels for all inputs, aria-describedby for helpers, role="alert" for errors.
 3. KEYBOARD: All interactive elements reachable via keyboard. Visible focus states, logical tab order.
-4. STATES: Error boundaries with fallback UI. Loading indicators/skeletons for async. Helpful empty states with guidance or CTAs.`;
+4. STATES: Error boundaries with fallback UI. Loading indicators/skeletons for async. Helpful empty states with guidance or CTAs.
+5. DATES: The current year is ${new Date().getFullYear()}. Use it for copyright notices, footer years, and any date defaults.`;
 
 /**
  * Prompt injection defense wrapper.
