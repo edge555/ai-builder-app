@@ -82,7 +82,8 @@ export const SEARCH_REPLACE_GUIDANCE = `=== SEARCH/REPLACE RULES (CRITICAL) ===
 2. EXACT MATCH: The "search" string must exactly match existing code including whitespace/newlines. Include 3–5 lines of context for uniqueness.
 3. ORDERING: Edits run top-to-bottom; later edits see earlier results. Don't let one replacement break a later search.
 4. IMPORTS: Add imports for new components/utilities at top. Remove unused imports; group logically (framework, third-party, local).
-5. FALLBACKS: If target file doesn't exist, create it. If search can't match reliably, create a new file with full correct implementation.`;
+5. FALLBACKS: If target file doesn't exist, create it. If search can't match reliably, create a new file with full correct implementation.
+6. WHOLE-FILE REPLACEMENT: When a file needs extensive changes (>5 edits or >60% rewrite), use "replace_file" operation with complete new content instead of fragile multi-edit "modify". This avoids cascading search/replace failures.`;
 
 /**
  * Output budget guidance.
@@ -197,6 +198,32 @@ export const DETAILED_JSON_OUTPUT_GUIDANCE = `=== JSON OUTPUT RULES (CRITICAL �
    - Do NOT use single quotes for JSON keys or values — JSON requires double quotes.
    - Do NOT include JavaScript comments (// or /* */) inside JSON — they are not valid JSON.
    - Ensure JSX with className="..." has the quotes properly escaped in the JSON string.`;
+
+/**
+ * Dependency guidance — blocklist of packages to avoid + allowlist of Sandpack-safe packages.
+ */
+export const DEPENDENCY_GUIDANCE = `=== DEPENDENCY RULES (CRITICAL) ===
+NEVER import these packages — use native browser APIs instead:
+- uuid / nanoid → crypto.randomUUID()
+- axios / node-fetch / isomorphic-fetch → fetch()
+- moment / dayjs / date-fns → Intl.DateTimeFormat + Date methods
+- lodash / underscore → native array/object methods (map, filter, reduce, Object.entries, structuredClone)
+- classnames / clsx → template literals (\`class1 \${condition ? 'active' : ''}\`)
+- path / fs / os → these are Node.js built-ins, unavailable in the browser
+
+SANDPACK-SAFE PACKAGES (known to work — prefer these when a dependency is truly needed):
+- Icons: lucide-react, react-icons
+- Charts: recharts, chart.js + react-chartjs-2
+- Animation: framer-motion, react-spring
+- State: zustand, jotai, immer
+- Forms: react-hook-form, zod
+- Data fetching: @tanstack/react-query
+- Routing: react-router-dom
+- Markdown: react-markdown
+- UI kits: @radix-ui/*, @mui/material + @emotion/react + @emotion/styled
+- Drag & drop: @dnd-kit/core, @dnd-kit/sortable
+
+Only use packages listed in package.json. If you add a package, also add it to "dependencies" with a semver version (never "latest").`;
 
 /**
  * Syntax integrity rules shared across prompts.

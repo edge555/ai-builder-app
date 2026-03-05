@@ -13,7 +13,7 @@ import { createLogger } from '../logger';
 const logger = createLogger('build-validator');
 
 export interface BuildError {
-    type: 'missing_dependency' | 'broken_import' | 'syntax_error' | 'missing_file';
+    type: 'missing_dependency' | 'broken_import' | 'syntax_error' | 'missing_file' | 'import_export_mismatch';
     message: string;
     file: string;
     line?: number;
@@ -113,6 +113,69 @@ function extractImports(content: string): Array<{ module: string; line: number }
     }
 
     return imports;
+}
+
+/**
+ * Check if a file has a default export.
+ * Matches: export default function/class/X, export { X as default }
+ */
+function hasDefaultExport(content: string): boolean {
+    const lines = content.split('\n');
+    for (const line of lines) {
+        const trimmed = line.trim();
+        // Skip comments
+        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) continue;
+
+        // export default function/class/expression
+        if (/^export\s+default\s+/.test(trimmed)) return true;
+        // export { X as default } or export { default }
+        if (/^export\s*\{[^}]*\bdefault\b/.test(trimmed)) return true;
+    }
+    return false;
+}
+
+/**
+ * Extract default import targets from a file.
+ * Returns pairs of { importedName, module, line } for default imports from relative paths.
+ * Matches: import Foo from './Bar'
+ * Does NOT match: import { Foo } from './Bar' or import * as Foo from './Bar'
+ */
+function extractDefaultImports(content: string): Array<{ importedName: string; module: string; line: number }> {
+    const results: Array<{ importedName: string; module: string; line: number }> = [];
+    const lines = content.split('\n');
+
+    const hasQuotedString = (s: string) => /['"][^'"]+['"]/.test(s);
+
+    let i = 0;
+    while (i < lines.length) {
+        let line = lines[i];
+        const startLine = i + 1;
+
+        // Join multi-line imports
+        if (/^\s*import\s/.test(line) && !hasQuotedString(line)) {
+            while (i + 1 < lines.length && !hasQuotedString(line)) {
+                i++;
+                line = line.trimEnd() + ' ' + lines[i].trimStart();
+            }
+        }
+
+        // Match: import DefaultName from './path'
+        // Must NOT start with { or * (those are named/namespace imports)
+        const match = line.match(/^\s*import\s+([A-Z_$][\w$]*)\s+from\s+['"](\.[^'"]+)['"]/);
+        if (match) {
+            results.push({ importedName: match[1], module: match[2], line: startLine });
+        }
+
+        // Also match: import DefaultName, { named } from './path'
+        const comboMatch = line.match(/^\s*import\s+([A-Z_$][\w$]*)\s*,\s*\{[^}]*\}\s+from\s+['"](\.[^'"]+)['"]/);
+        if (comboMatch && !match) {
+            results.push({ importedName: comboMatch[1], module: comboMatch[2], line: startLine });
+        }
+
+        i++;
+    }
+
+    return results;
 }
 
 /**
@@ -329,6 +392,34 @@ export class BuildValidator {
             }
         }
 
+        // Check default import/export consistency
+        for (const [filePath, content] of Object.entries(files)) {
+            const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
+            if (!['.ts', '.tsx', '.js', '.jsx'].includes(ext)) continue;
+
+            const defaultImports = extractDefaultImports(content);
+            for (const { importedName, module: importPath, line } of defaultImports) {
+                const resolved = resolveRelativeImport(filePath, importPath, normalizedFilesSet);
+                if (!resolved) continue; // Already caught by broken_import check
+
+                // Find the actual file content (case-insensitive match via normalized path)
+                const actualPath = allFilePaths.find(p => normalizePath(p) === resolved);
+                if (!actualPath) continue;
+
+                const targetContent = files[actualPath];
+                if (!hasDefaultExport(targetContent)) {
+                    errors.push({
+                        type: 'import_export_mismatch',
+                        message: `'${actualPath}' has no default export, but '${filePath}' imports it as default (import ${importedName})`,
+                        file: filePath,
+                        line,
+                        suggestion: `Add 'export default ${importedName}' to '${actualPath}', or change to a named import: import { ${importedName} } from '${importPath}'`,
+                        severity: 'fixable',
+                    });
+                }
+            }
+        }
+
         return {
             valid: errors.length === 0,
             errors,
@@ -363,22 +454,8 @@ export class BuildValidator {
     }
 }
 
-// Singleton instance
-let buildValidatorInstance: BuildValidator | null = null;
-
-/**
- * Gets the singleton BuildValidator instance.
- */
-function getBuildValidator(): BuildValidator {
-    if (!buildValidatorInstance) {
-        buildValidatorInstance = new BuildValidator();
-    }
-    return buildValidatorInstance;
-}
-
 /**
  * Creates a new BuildValidator instance.
- * Use this for testing to get isolated instances.
  */
 export function createBuildValidator(): BuildValidator {
     return new BuildValidator();

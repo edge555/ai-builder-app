@@ -21,6 +21,7 @@ export interface StreamingSummary {
 
 export interface StreamingState {
     phase: StreamingPhase;
+    progressLabel: string | null;
     files: Record<string, string>;
     currentFile: string | null;
     filesReceived: number;

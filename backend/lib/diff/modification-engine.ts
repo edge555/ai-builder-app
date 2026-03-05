@@ -48,6 +48,10 @@ const logger = createLogger('ModificationEngine');
 
 const DESIGN_SYSTEM_CATEGORIES = new Set(['ui', 'style', 'mixed']);
 
+export type ModificationPhase = 'planning' | 'generating' | 'applying' | 'validating' | 'build-fixing';
+
+export type OnProgressCallback = (phase: ModificationPhase, label: string) => void;
+
 const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
@@ -78,7 +82,7 @@ export class ModificationEngine {
   async modifyProject(
     projectState: ProjectState,
     prompt: string,
-    options?: { shouldSkipPlanning?: boolean; requestId?: string }
+    options?: { shouldSkipPlanning?: boolean; requestId?: string; onProgress?: OnProgressCallback }
   ): Promise<ModificationResult> {
     if (!prompt || prompt.trim() === '') {
       return {
@@ -96,9 +100,11 @@ export class ModificationEngine {
 
     const contextLogger = options?.requestId ? logger.withRequestId(options.requestId) : logger;
     const requestId = options?.requestId;
+    const onProgress = options?.onProgress;
 
     try {
       // Step 1: Select code slices and determine category
+      onProgress?.('planning', 'Analyzing project and planning changes...');
       const { slices, category } = await this.selectCodeSlices(projectState, prompt, options?.shouldSkipPlanning);
 
       // Step 2: Determine if design system should be included based on category
@@ -106,6 +112,7 @@ export class ModificationEngine {
       contextLogger.debug('System instruction determined', { category, shouldIncludeDesignSystem });
 
       // Step 3: Generate modifications with retry logic
+      onProgress?.('generating', 'Generating code modifications...');
       const modificationResult = await this.generateModifications(
         prompt,
         slices,
@@ -122,6 +129,9 @@ export class ModificationEngine {
       }
 
       const { updatedFiles, deletedFiles } = modificationResult;
+
+      // Step 4: Validate AI output
+      onProgress?.('validating', 'Validating generated code...');
       const validationResult = await this.validateModifiedFiles(updatedFiles);
       if (!validationResult.valid) {
         return {
@@ -132,18 +142,21 @@ export class ModificationEngine {
       }
 
       // Step 5: Build validation with auto-retry
+      onProgress?.('validating', 'Running build validation...');
       const buildValidationResult = await this.validateAndFixBuild(
         projectState,
         updatedFiles,
         prompt,
         shouldIncludeDesignSystem,
-        requestId
+        requestId,
+        onProgress
       );
 
       // Use the potentially updated files from build validation
       const finalUpdatedFiles = buildValidationResult.updatedFiles;
 
       // Step 6: Create final result with updated project state and metadata
+      onProgress?.('applying', 'Finalizing changes...');
       return await this.createResult(projectState, finalUpdatedFiles, deletedFiles, prompt);
     } catch (error) {
       return {
@@ -223,7 +236,7 @@ export class ModificationEngine {
       const response = await this.callModificationAI(userRequest, contextPrompt, shouldIncludeDesignSystem, attempt, lastEditError, requestId);
 
       if (!response.success || !response.content) {
-        logger.error('Gemini error', { error: response.error });
+        logger.error('AI provider error', { error: response.error });
         lastEditError = response.error ?? 'Failed to get modification from AI';
         editErrors.push(lastEditError);
         continue;
@@ -287,7 +300,7 @@ export class ModificationEngine {
   ): Promise<AIResponse> {
     const systemInstruction = getModificationPrompt(userRequest, shouldIncludeDesignSystem);
 
-    logger.info('Sending modification request to Gemini', {
+    logger.info('Sending modification request to AI provider', {
       attempt,
       promptLength: contextPrompt.length,
       systemInstructionLength: systemInstruction.length,
@@ -295,7 +308,7 @@ export class ModificationEngine {
       isRetry: !!lastEditError,
       shouldIncludeDesignSystem,
     });
-    logger.debug('Gemini modification request details', {
+    logger.debug('AI provider modification request details', {
       prompt: contextPrompt,
       systemInstruction,
       responseSchema: MODIFICATION_OUTPUT_SCHEMA,
@@ -310,12 +323,12 @@ export class ModificationEngine {
       requestId,
     });
 
-    logger.info('Received modification response from Gemini', {
+    logger.info('Received modification response from AI provider', {
       success: response.success,
       contentLength: response.content?.length ?? 0,
       hasError: !!response.error,
     });
-    logger.debug('Gemini modification response content', {
+    logger.debug('AI provider modification response content', {
       content: response.content,
       error: response.error,
     });
@@ -442,6 +455,26 @@ export class ModificationEngine {
           break;
         }
 
+        case 'replace_file': {
+          if (!fileEdit.content) {
+            logger.warn('replace_file operation missing content', { path: fileEdit.path });
+            continue;
+          }
+          if (projectState.files[fileEdit.path] === undefined) {
+            logger.warn('replace_file target does not exist, treating as create', { path: fileEdit.path });
+          }
+          let replaceContent = fileEdit.content;
+          if (replaceContent.includes('\\n')) replaceContent = replaceContent.replace(/\\n/g, '\n');
+          if (replaceContent.includes('\\t')) replaceContent = replaceContent.replace(/\\t/g, '\t');
+          try {
+            replaceContent = await formatCode(replaceContent, fileEdit.path);
+          } catch (e) {
+            logger.warn('Failed to format file', { path: fileEdit.path, error: e instanceof Error ? e.message : 'Unknown error' });
+          }
+          updatedFiles[fileEdit.path] = replaceContent;
+          break;
+        }
+
         default:
           logger.warn('Unknown operation type', { path: (fileEdit as any).path });
       }
@@ -474,7 +507,8 @@ export class ModificationEngine {
     updatedFiles: Record<string, string | null>,
     prompt: string,
     shouldIncludeDesignSystem: boolean,
-    requestId?: string
+    requestId?: string,
+    onProgress?: OnProgressCallback
   ): Promise<{ updatedFiles: Record<string, string | null> }> {
     const tempFiles = this.buildProjectView(projectState, updatedFiles);
     const buildStartTime = Date.now();
@@ -504,6 +538,7 @@ export class ModificationEngine {
 
       buildRetryCount++;
       await delay(buildRetryCount * 1000);
+      onProgress?.('build-fixing', `Fixing build errors (attempt ${buildRetryCount}/${this.maxBuildRetries})...`);
       logger.info('Modification build retry', {
         attempt: buildRetryCount,
         maxRetries: this.maxBuildRetries,
@@ -706,7 +741,7 @@ export class ModificationEngine {
         mutableUpdatedFiles[fileEdit.path] = editResult.content!;
         tempFiles[fileEdit.path] = editResult.content!;
       }
-    } else if (fileEdit.operation === 'create' && fileEdit.content) {
+    } else if ((fileEdit.operation === 'create' || fileEdit.operation === 'replace_file') && fileEdit.content) {
       mutableUpdatedFiles[fileEdit.path] = fileEdit.content;
       tempFiles[fileEdit.path] = fileEdit.content;
     }

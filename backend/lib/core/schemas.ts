@@ -43,6 +43,11 @@ export const FileModificationSchema = z.discriminatedUnion('operation', [
     }),
     z.object({
         path: z.string().min(1).regex(PATH_REGEX, 'Path must start with src/, public/, frontend/, or app/').describe('Path to the file'),
+        operation: z.literal('replace_file'),
+        content: z.string().min(1).describe('Complete replacement content for the entire file'),
+    }),
+    z.object({
+        path: z.string().min(1).regex(PATH_REGEX, 'Path must start with src/, public/, frontend/, or app/').describe('Path to the file'),
         operation: z.literal('delete'),
     }),
 ]);

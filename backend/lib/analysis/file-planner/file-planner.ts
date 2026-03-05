@@ -16,6 +16,7 @@
  * @requires ../../logger - Structured logging
  */
 
+import { createHash } from 'crypto';
 import type { ProjectState } from '@ai-app-builder/shared';
 import type { AIProvider } from '../../ai/ai-provider';
 import { getMaxOutputTokens } from '../../config';
@@ -140,7 +141,7 @@ export class FilePlanner {
     try {
       const planningPrompt = buildPlanningPrompt(prompt, metadata);
 
-      logger.debug('Calling Gemini for planning', {
+      logger.debug('Calling AI provider for planning', {
         promptLength: planningPrompt.length,
       });
 
@@ -622,23 +623,16 @@ export class FilePlanner {
 
   /**
    * Generate a content-aware cache key for project state.
-   * Uses a DJB2 hash over sorted "path:contentLength" pairs to avoid collisions
-   * between different file sets that happen to share the same count and total length.
+   * Uses SHA-256 over sorted "path:contentHash" pairs — same approach as DependencyGraph.
+   * Prevents false cache hits when files change without changing their byte count.
    */
   private getProjectStateCacheKey(projectState: ProjectState): string {
-    const entries = Object.entries(projectState.files)
+    const keyParts = Object.entries(projectState.files)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([path, content]) => `${path}:${content.length}`)
-      .join('|');
+      .map(([path, content]) => `${path}:${createHash('sha256').update(content).digest('hex')}`);
 
-    // DJB2 hash
-    let hash = 5381;
-    for (let i = 0; i < entries.length; i++) {
-      hash = ((hash << 5) + hash) ^ entries.charCodeAt(i);
-      hash = hash >>> 0; // keep unsigned 32-bit
-    }
-
-    return `${projectState.id}_${hash.toString(16)}`;
+    const hash = createHash('sha256').update(keyParts.join('|')).digest('hex');
+    return `${projectState.id}_${hash}`;
   }
 
   /**

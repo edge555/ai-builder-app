@@ -20,6 +20,7 @@ import { generateRequestId } from '../../../lib/request-id';
 import {
   BackpressureController,
   EventPriority,
+  SSEEncoder,
 } from '../../../lib/streaming';
 
 const logger = createLogger('api/generate-stream');
@@ -32,56 +33,6 @@ const STREAM_TIMEOUT_MS = 960000; // 16 minutes (Modal can take 10-15+ min for l
  */
 export async function OPTIONS() {
   return handleOptions();
-}
-
-/**
- * Server-Sent Events (SSE) encoder with backpressure support
- */
-class SSEEncoder {
-  private encoder = new TextEncoder();
-  private backpressure: BackpressureController;
-
-  constructor(backpressure: BackpressureController) {
-    this.backpressure = backpressure;
-  }
-
-  /**
-   * Encodes an SSE event
-   */
-  encode(event: string, data: any): Uint8Array {
-    const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    return this.encoder.encode(message);
-  }
-
-  /**
-   * Encodes a heartbeat comment (keeps connection alive)
-   */
-  heartbeat(): Uint8Array {
-    return this.encoder.encode(': heartbeat\n\n');
-  }
-
-  /**
-   * Enqueue an event with backpressure handling
-   */
-  enqueueEvent(
-    controller: ReadableStreamDefaultController<Uint8Array>,
-    event: string,
-    data: any,
-    priority: EventPriority = EventPriority.NORMAL
-  ): boolean {
-    const encoded = this.encode(event, data);
-    return this.backpressure.enqueue(controller, encoded, priority);
-  }
-
-  /**
-   * Enqueue a heartbeat with low priority (can be dropped)
-   */
-  enqueueHeartbeat(
-    controller: ReadableStreamDefaultController<Uint8Array>
-  ): boolean {
-    const encoded = this.heartbeat();
-    return this.backpressure.enqueue(controller, encoded, EventPriority.LOW);
-  }
 }
 
 export async function POST(request: NextRequest) {

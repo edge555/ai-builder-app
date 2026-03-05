@@ -11,3 +11,5 @@ export {
   EventPriority,
   type BackpressureConfig,
 } from './backpressure-controller';
+
+export { SSEEncoder } from './sse-encoder';

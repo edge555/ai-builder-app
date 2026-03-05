@@ -35,15 +35,17 @@ function buildModificationPrompt(userPrompt: string, shouldIncludeDesignSystem: 
 ${LAYOUT_FUNDAMENTALS}
 ${designSystemSection}
 === OUTPUT FORMAT ===
-For each file, output JSON with "path", "operation" ("modify"|"create"|"delete").
-- "create": include "content" with full file content.
+For each file, output JSON with "path", "operation" ("modify"|"create"|"replace_file"|"delete").
+- "create": include "content" with full file content (new files only).
 - "delete": just path and operation.
 - "modify": include "edits" array with search/replace pairs.
+- "replace_file": include "content" with the complete new file content. Use ONLY when the file needs such extensive changes that search/replace would be unreliable (e.g. >60% of lines changing). Prefer "modify" for smaller changes.
 
 === EDIT RULES ===
 - "search" must exactly match existing code (whitespace, newlines included). Include 3–5 lines of context.
 - Multiple edits to same file: list in file order. No line numbers in search.
 - Small changes (<30 lines): modify. Large features (>50 lines new): create new component files.
+- If a file needs many scattered edits (>5 edits or >60% rewrite), use "replace_file" instead of "modify".
 
 ${SEARCH_REPLACE_GUIDANCE}
 
@@ -88,6 +90,11 @@ ${wrapUserInput(userPrompt)}
           "replace": "import { Header } from './components/layout/Header';\\nimport { NewFeature } from './components/features/NewFeature';"
         }
       ]
+    },
+    {
+      "path": "src/components/layout/Sidebar.tsx",
+      "operation": "replace_file",
+      "content": "import React from 'react';\\n// ... complete rewritten file content ..."
     }
   ]
 }`;

@@ -24,8 +24,8 @@ export interface EditOperation {
 export interface FileEdit {
     /** Path to the file relative to project root */
     path: string;
-    /** Operation type: modify existing, create new, or delete */
-    operation: 'modify' | 'create' | 'delete';
+    /** Operation type: modify existing, create new, replace entire file, or delete */
+    operation: 'modify' | 'create' | 'replace_file' | 'delete';
     /** For 'create': the full file content */
     content?: string;
     /** For 'modify': array of surgical edits to apply in order */

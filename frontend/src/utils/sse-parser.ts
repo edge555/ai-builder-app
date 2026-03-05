@@ -36,11 +36,17 @@ export interface StreamEndData {
     warnings: number;
 }
 
+export interface StreamProgressData {
+    phase?: string;
+    label?: string;
+    length?: number;
+}
+
 export async function parseSSEStream(
     reader: ReadableStreamDefaultReader<Uint8Array>,
     handlers: {
         onStart?: () => void;
-        onProgress?: (length: number) => void;
+        onProgress?: (data: StreamProgressData) => void;
         onFile?: (data: StreamFileData, files: Record<string, string>) => void;
         onWarning?: (warning: StreamWarningData) => void;
         onStreamEnd?: (summary: StreamEndData) => void;
@@ -89,7 +95,11 @@ export async function parseSSEStream(
                             break;
 
                         case 'progress':
-                            handlers.onProgress?.(data.length || 0);
+                            handlers.onProgress?.({
+                                phase: data.phase,
+                                label: data.label,
+                                length: data.length,
+                            });
                             break;
 
                         case 'file':

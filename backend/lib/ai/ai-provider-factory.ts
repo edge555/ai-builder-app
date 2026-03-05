@@ -99,13 +99,3 @@ export async function detectIntent(prompt: string, requestId?: string): Promise<
   return intentDetector!.detect(prompt, requestId);
 }
 
-/**
- * Reloads the agent configuration from disk.
- * Useful after the settings page saves a new config.
- */
-async function reloadAgentConfig(): Promise<void> {
-  if (agentRouter) {
-    await agentRouter.reload();
-    logger.info('Agent config reloaded');
-  }
-}

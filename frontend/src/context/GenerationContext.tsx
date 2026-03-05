@@ -6,7 +6,7 @@ import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/cl
 import { getUserFriendlyErrorMessage } from '@/utils/error-messages';
 import { createLogger } from '@/utils/logger';
 import { buildRepairPrompt } from '@/utils/repair-prompt';
-import { parseSSEStream, type StreamFileData, type StreamCompleteData } from '@/utils/sse-parser';
+import { parseSSEStream, type StreamFileData, type StreamCompleteData, type StreamProgressData } from '@/utils/sse-parser';
 
 import { type LoadingPhase } from '../components/ChatInterface/LoadingIndicator';
 import { config as appConfig } from '../config';
@@ -126,6 +126,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     setIsStreaming(true);
     setStreamingState({
       phase: 'connecting',
+      progressLabel: null,
       files: {},
       currentFile: null,
       filesReceived: 0,
@@ -162,15 +163,21 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           resetInactivityTimeout();
           setStreamingState(prev => prev ? { ...prev, phase: 'generating', lastHeartbeat: Date.now() } : null);
         },
-        onProgress: (length: number) => {
+        onProgress: (progressData: StreamProgressData) => {
           resetInactivityTimeout();
-          setStreamingState(prev => prev ? { ...prev, textLength: length, lastHeartbeat: Date.now() } : null);
+          setStreamingState(prev => prev ? {
+            ...prev,
+            textLength: progressData.length ?? prev.textLength,
+            progressLabel: progressData.label ?? prev.progressLabel,
+            lastHeartbeat: Date.now(),
+          } : null);
         },
         onFile: (data: StreamFileData, files: Record<string, string>) => {
           resetInactivityTimeout();
           setStreamingState(prev => prev ? {
             ...prev,
             phase: 'processing',
+            progressLabel: null,
             files: { ...files },
             currentFile: data.path,
             filesReceived: data.index + 1,
@@ -199,6 +206,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           setStreamingState(prev => prev ? {
             ...prev,
             phase: 'complete',
+            progressLabel: null,
             files: data.projectState?.files || files,
             currentFile: null,
             lastHeartbeat: Date.now(),
@@ -217,6 +225,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           setStreamingState(prev => prev ? {
             ...prev,
             phase: 'error',
+            progressLabel: null,
             error: userMessage,
             lastHeartbeat: Date.now(),
           } : null);
@@ -368,6 +377,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     setIsStreaming(true);
     setStreamingState({
       phase: 'connecting',
+      progressLabel: null,
       files: {},
       currentFile: null,
       filesReceived: 0,
@@ -413,15 +423,21 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           resetInactivityTimeout();
           setStreamingState(prev => prev ? { ...prev, phase: 'generating', lastHeartbeat: Date.now() } : null);
         },
-        onProgress: (length: number) => {
+        onProgress: (progressData: StreamProgressData) => {
           resetInactivityTimeout();
-          setStreamingState(prev => prev ? { ...prev, textLength: length, lastHeartbeat: Date.now() } : null);
+          setStreamingState(prev => prev ? {
+            ...prev,
+            textLength: progressData.length ?? prev.textLength,
+            progressLabel: progressData.label ?? prev.progressLabel,
+            lastHeartbeat: Date.now(),
+          } : null);
         },
         onFile: (data: StreamFileData, files: Record<string, string>) => {
           resetInactivityTimeout();
           setStreamingState(prev => prev ? {
             ...prev,
             phase: 'processing',
+            progressLabel: null,
             files: { ...files },
             currentFile: data.path,
             filesReceived: data.index + 1,
@@ -453,6 +469,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           setStreamingState(prev => prev ? {
             ...prev,
             phase: 'complete',
+            progressLabel: null,
             files: data.projectState?.files || files,
             currentFile: null,
             lastHeartbeat: Date.now(),
@@ -469,6 +486,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           setStreamingState(prev => prev ? {
             ...prev,
             phase: 'error',
+            progressLabel: null,
             error: userMessage,
             lastHeartbeat: Date.now(),
           } : null);

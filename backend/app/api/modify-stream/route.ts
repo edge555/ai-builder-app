@@ -14,7 +14,7 @@ import {
   deserializeProjectState,
   ModifyProjectRequestSchema,
 } from '@ai-app-builder/shared';
-import { createModificationEngine } from '../../../lib/diff';
+import { createModificationEngine, type ModificationPhase } from '../../../lib/diff';
 import { detectIntent } from '../../../lib/ai/ai-provider-factory';
 import { handleOptions, getCorsHeaders } from '../../../lib/api';
 import { createLogger } from '../../../lib/logger';
@@ -22,6 +22,7 @@ import { generateRequestId } from '../../../lib/request-id';
 import {
   BackpressureController,
   EventPriority,
+  SSEEncoder,
 } from '../../../lib/streaming';
 
 const logger = createLogger('api/modify-stream');
@@ -34,44 +35,6 @@ const STREAM_TIMEOUT_MS = 960000; // 16 minutes
  */
 export async function OPTIONS() {
   return handleOptions();
-}
-
-/**
- * Server-Sent Events (SSE) encoder with backpressure support
- */
-class SSEEncoder {
-  private encoder = new TextEncoder();
-  private backpressure: BackpressureController;
-
-  constructor(backpressure: BackpressureController) {
-    this.backpressure = backpressure;
-  }
-
-  encode(event: string, data: any): Uint8Array {
-    const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    return this.encoder.encode(message);
-  }
-
-  heartbeat(): Uint8Array {
-    return this.encoder.encode(': heartbeat\n\n');
-  }
-
-  enqueueEvent(
-    controller: ReadableStreamDefaultController<Uint8Array>,
-    event: string,
-    data: any,
-    priority: EventPriority = EventPriority.NORMAL
-  ): boolean {
-    const encoded = this.encode(event, data);
-    return this.backpressure.enqueue(controller, encoded, priority);
-  }
-
-  enqueueHeartbeat(
-    controller: ReadableStreamDefaultController<Uint8Array>
-  ): boolean {
-    const encoded = this.heartbeat();
-    return this.backpressure.enqueue(controller, encoded, EventPriority.LOW);
-  }
 }
 
 export async function POST(request: NextRequest) {
@@ -198,6 +161,15 @@ export async function POST(request: NextRequest) {
           const result = await engine.modifyProject(projectState, body.prompt, {
             shouldSkipPlanning,
             requestId,
+            onProgress: (phase: ModificationPhase, label: string) => {
+              if (isComplete) return;
+              encoder.enqueueEvent(
+                controller,
+                'progress',
+                { phase, label },
+                EventPriority.NORMAL
+              );
+            },
           });
 
           if (isComplete) return; // Client disconnected during modification

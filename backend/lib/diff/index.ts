@@ -13,5 +13,7 @@ export {
 export {
   ModificationEngine,
   createModificationEngine,
+  type ModificationPhase,
+  type OnProgressCallback,
 } from './modification-engine';
 

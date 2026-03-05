@@ -66,15 +66,15 @@ backend/
 │   │   └── ai-error-utils.ts       # Error categorization and retry logic
 │   ├── core/          # Generation, validation, formatting
 │   │   ├── streaming-generator.ts  # SSE streaming orchestrator
-│   │   ├── build-validator.ts      # Missing deps, broken imports, syntax errors
-│   │   ├── file-processor.ts       # File validation + Prettier formatting
+│   │   ├── build-validator.ts      # Missing deps, broken imports, syntax errors, import/export mismatch
+│   │   ├── file-processor.ts       # File validation + Prettier formatting + version pinning
 │   │   ├── validation-pipeline.ts  # Multi-stage validation workflow
 │   │   ├── validators/             # Composable validators (path, syntax, JSON, pattern, architecture)
 │   │   ├── prompts/                # Provider-specific prompt assembly
 │   │   └── version-manager.ts      # FIFO/LRU version eviction
 │   ├── analysis/      # Dependency graph, file indexing, AI-powered file planner
-│   ├── diff/          # Modification engine, multi-tier matcher, prompt builder
-│   ├── streaming/     # SSE backpressure controller (CRITICAL/NORMAL/LOW priority)
+│   ├── diff/          # Modification engine (with progress callbacks), multi-tier matcher, prompt builder
+│   ├── streaming/     # SSE backpressure controller + SSEEncoder utility
 │   ├── utils/         # Incremental JSON parser (O(n)), path security
 │   ├── api/           # CORS, gzip, request ID, error helpers
 │   ├── logger.ts      # Structured logging with redaction and category filtering
@@ -127,10 +127,11 @@ npm run lint                   # All workspaces
 1. User prompt → frontend ChatInterface → backend `/api/generate-stream` or `/api/modify-stream`
 2. Backend resolves AI provider (env var or runtime override from `provider-config.json`)
 3. In OpenRouter mode: `IntentDetector` classifies prompt → `AgentRouter` selects models per task type
-4. AI provider streams response via SSE with backpressure control
+4. AI provider streams response via SSE with backpressure control (SSEEncoder utility)
 5. Incremental JSON parser extracts files as they arrive
-6. Files validated, formatted, streamed back to frontend
-7. Frontend updates ProjectContext → PreviewPanel (Sandpack) re-renders
+6. Files validated, formatted (Prettier), version-pinned (package.json deps), streamed back to frontend
+7. Progress events emitted during modification phases (planning → generating → validating → applying)
+8. Frontend updates ProjectContext → PreviewPanel (Sandpack) re-renders
 8. Auto-save to IndexedDB; auto-repair triggers if preview errors detected (max 3 attempts)
 
 ### AI Provider System

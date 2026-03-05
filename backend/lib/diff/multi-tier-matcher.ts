@@ -144,44 +144,43 @@ function findAllExact(content: string, search: string): number[] {
 }
 
 /**
- * Find occurrences using whitespace-normalized matching.
- * Returns the index in the original content where the match starts.
+ * Map a position in the normalized string back to a position in the original content.
+ * Scans the original content, advancing the normalized counter the same way
+ * normalizeWhitespace() does, until the target normalized position is reached.
  */
-function findWithNormalizedWhitespace(content: string, search: string): number[] {
+function mapNormPosToOrigPos(content: string, normalizedContent: string, normTarget: number): number {
+  let normalizedPos = 0;
+  for (let i = 0; i < content.length; i++) {
+    if (normalizedPos >= normTarget) return i;
+    const char = content[i];
+    if (char === '\n' || char === '\r' || char === '\t' || char === ' ') {
+      if (normalizedContent[normalizedPos] === ' ') normalizedPos++;
+    } else {
+      if (normalizedContent[normalizedPos] === char) normalizedPos++;
+    }
+  }
+  return content.length;
+}
+
+/**
+ * Find occurrences using whitespace-normalized matching.
+ * Returns the start index and exact length of each match in the original content.
+ */
+function findWithNormalizedWhitespace(content: string, search: string): Array<{ index: number; length: number }> {
   const normalizedContent = normalizeWhitespace(content);
   const normalizedSearch = normalizeWhitespace(search);
 
-  const indices: number[] = [];
+  const results: Array<{ index: number; length: number }> = [];
   let normIndex = 0;
 
   while ((normIndex = normalizedContent.indexOf(normalizedSearch, normIndex)) !== -1) {
-    // Map back to original content index (approximate)
-    // This is a heuristic - we find the position in the original that corresponds
-    // to this normalized position
-    let originalIndex = 0;
-    let normalizedPos = 0;
-
-    for (let i = 0; i < content.length && normalizedPos < normIndex; i++) {
-      const char = content[i];
-      if (char === '\n' || char === '\r' || char === '\t' || char === ' ') {
-        // Whitespace in original maps to potential space in normalized
-        if (normalizedContent[normalizedPos] === ' ') {
-          normalizedPos++;
-        }
-      } else {
-        // Non-whitespace character
-        if (normalizedContent[normalizedPos] === char) {
-          normalizedPos++;
-        }
-      }
-      originalIndex = i + 1;
-    }
-
-    indices.push(originalIndex);
+    const origStart = mapNormPosToOrigPos(content, normalizedContent, normIndex);
+    const origEnd = mapNormPosToOrigPos(content, normalizedContent, normIndex + normalizedSearch.length);
+    results.push({ index: origStart, length: origEnd - origStart });
     normIndex += normalizedSearch.length;
   }
 
-  return indices;
+  return results;
 }
 
 /**
@@ -377,13 +376,13 @@ export function multiTierMatch(content: string, search: string, occurrence: numb
   // Tier 2: Whitespace-normalized match
   const normalizedMatches = findWithNormalizedWhitespace(content, search);
   if (normalizedMatches.length >= occurrence) {
-    const index = normalizedMatches[occurrence - 1];
-    logger.info('Tier 2 (whitespace-normalized) match found', { occurrence, index });
+    const match = normalizedMatches[occurrence - 1];
+    logger.info('Tier 2 (whitespace-normalized) match found', { occurrence, index: match.index });
     return {
       found: true,
-      index,
+      index: match.index,
       tier: 2,
-      matchedText: content.substring(index, index + search.length), // Approx, for replacement we use search.length anyway for Tier 2 usually if we want to be safe, but wait...
+      matchedText: content.substring(match.index, match.index + match.length),
       warning: 'Match found using whitespace normalization - original had different whitespace',
     };
   }
@@ -403,17 +402,32 @@ export function multiTierMatch(content: string, search: string, occurrence: numb
   }
 
   // Tier 4: Fuzzy line match
-  const fuzzyMatches = findWithFuzzyLines(content, search);
-  if (fuzzyMatches.length >= occurrence) {
-    const match = fuzzyMatches[occurrence - 1];
-    logger.warn('Tier 4 (fuzzy) match found', { occurrence, index: match.index, similarity: match.similarity });
-    return {
-      found: true,
-      index: match.index,
-      tier: 4,
-      matchedText: content.substring(match.index, match.index + match.length),
-      warning: `Fuzzy match found with ${Math.round(match.similarity * 100)}% similarity - content may differ significantly`,
-    };
+  // Guard: require minimum 3 non-empty lines to reduce false positives on short searches
+  const searchNonEmptyLineCount = search.split('\n').map(l => l.trim()).filter(l => l.length > 0).length;
+  if (searchNonEmptyLineCount >= 3) {
+    const fuzzyMatches = findWithFuzzyLines(content, search);
+
+    // Guard: reject if ambiguous — multiple regions score above 80%
+    if (fuzzyMatches.length > 1) {
+      logger.warn('Tier 4 (fuzzy) rejected: ambiguous match', {
+        matchCount: fuzzyMatches.length,
+        topSimilarities: fuzzyMatches.slice(0, 3).map(m => Math.round(m.similarity * 100)),
+      });
+    } else if (fuzzyMatches.length === 1 && occurrence === 1) {
+      const match = fuzzyMatches[0];
+      logger.warn('Tier 4 (fuzzy) match found', { occurrence, index: match.index, similarity: match.similarity });
+      return {
+        found: true,
+        index: match.index,
+        tier: 4,
+        matchedText: content.substring(match.index, match.index + match.length),
+        warning: `Fuzzy match found with ${Math.round(match.similarity * 100)}% similarity - content may differ significantly`,
+      };
+    }
+  } else {
+    logger.debug('Tier 4 (fuzzy) skipped: search has fewer than 3 non-empty lines', {
+      nonEmptyLineCount: searchNonEmptyLineCount,
+    });
   }
 
   // No match found at any tier
