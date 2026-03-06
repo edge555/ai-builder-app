@@ -11,6 +11,7 @@ import {
   AutoRepairProvider,
   PreviewErrorProvider,
   ErrorAggregatorProvider,
+  ToastProvider,
   useProjectState,
 } from '@/context';
 import {
@@ -141,23 +142,25 @@ export function BuilderPage() {
       onError={handleGlobalError}
       errorMessage="The application encountered an unexpected error. Please refresh the page to continue."
     >
-      <ErrorAggregatorProvider key={projectKey}>
-        <ProjectProvider initialState={initialState}>
-          <ProjectUrlSync />
-          <ChatMessagesProvider initialMessages={initialMessages}>
-            <GenerationProvider>
-              <PreviewErrorProvider>
-                <AutoRepairProvider>
-                  <AppLayout
-                    initialPrompt={initialPrompt}
-                    onBackToDashboard={handleBackToDashboard}
-                  />
-                </AutoRepairProvider>
-              </PreviewErrorProvider>
-            </GenerationProvider>
-          </ChatMessagesProvider>
-        </ProjectProvider>
-      </ErrorAggregatorProvider>
+      <ToastProvider>
+        <ErrorAggregatorProvider key={projectKey}>
+          <ProjectProvider initialState={initialState}>
+            <ProjectUrlSync />
+            <ChatMessagesProvider initialMessages={initialMessages}>
+              <GenerationProvider>
+                <PreviewErrorProvider>
+                  <AutoRepairProvider>
+                    <AppLayout
+                      initialPrompt={initialPrompt}
+                      onBackToDashboard={handleBackToDashboard}
+                    />
+                  </AutoRepairProvider>
+                </PreviewErrorProvider>
+              </GenerationProvider>
+            </ChatMessagesProvider>
+          </ProjectProvider>
+        </ErrorAggregatorProvider>
+      </ToastProvider>
     </ErrorBoundary>
   );
 }

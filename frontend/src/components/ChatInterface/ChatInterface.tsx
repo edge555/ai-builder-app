@@ -72,6 +72,8 @@ export interface ChatInterfaceProps {
   onAbort?: () => void;
   /** Callback when a file change indicator is clicked */
   onFileClick?: (filePath: string) => void;
+  /** Placeholder text for the chat input */
+  inputPlaceholder?: string;
 }
 
 /**
@@ -93,6 +95,7 @@ const ChatInterfaceComponent = function ChatInterface({
   isStreaming = false,
   onAbort,
   onFileClick,
+  inputPlaceholder,
 }: ChatInterfaceProps) {
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -280,6 +283,7 @@ const ChatInterfaceComponent = function ChatInterface({
         disabled={isLoading}
         showAbort={isLoading && Boolean(onAbort)}
         onAbort={onAbort}
+        placeholder={inputPlaceholder}
       />
     </div>
   );

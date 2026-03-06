@@ -1,5 +1,13 @@
-import { useState, useEffect, forwardRef } from 'react';
+import { useState, useEffect, useRef, forwardRef } from 'react';
 import './ChatInterface.css';
+
+const LOADING_TIPS = [
+  'Ctrl+B toggles the sidebar',
+  'You can scroll through previous messages while waiting',
+  'Generation typically takes 10\u201330 seconds',
+  'Ctrl+Z undoes the last change after generation',
+  'Cancel and try a simpler prompt if this takes too long',
+];
 
 /**
  * Loading phase for progress indication.
@@ -57,10 +65,20 @@ export interface LoadingIndicatorProps {
 export const LoadingIndicator = forwardRef<HTMLDivElement, LoadingIndicatorProps>(
   function LoadingIndicator({ phase = 'processing' }, ref) {
     const [messageIndex, setMessageIndex] = useState(0);
+    const [tipIndex, setTipIndex] = useState(0);
+    const [showTip, setShowTip] = useState(false);
+    const tipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Reset index when phase changes
+    // Reset index and tip visibility when phase changes
     useEffect(() => {
       setMessageIndex(0);
+      setShowTip(false);
+
+      // Show tip after 5 seconds of loading
+      tipTimerRef.current = setTimeout(() => setShowTip(true), 5000);
+      return () => {
+        if (tipTimerRef.current) clearTimeout(tipTimerRef.current);
+      };
     }, [phase]);
 
     // Cycle through messages
@@ -70,10 +88,21 @@ export const LoadingIndicator = forwardRef<HTMLDivElement, LoadingIndicatorProps
 
       const interval = setInterval(() => {
         setMessageIndex((prev) => (prev + 1) % steps.length);
-      }, 2000); // Change message every 2 seconds
+      }, 2000);
 
       return () => clearInterval(interval);
     }, [phase]);
+
+    // Cycle through tips every 4 seconds once visible
+    useEffect(() => {
+      if (!showTip) return;
+
+      const interval = setInterval(() => {
+        setTipIndex((prev) => (prev + 1) % LOADING_TIPS.length);
+      }, 4000);
+
+      return () => clearInterval(interval);
+    }, [showTip]);
 
     const steps = LOADING_STEPS[phase] || ['Processing...'];
     const currentMessage = steps[messageIndex % steps.length];
@@ -86,6 +115,9 @@ export const LoadingIndicator = forwardRef<HTMLDivElement, LoadingIndicatorProps
           </div>
           <div className="chat-loading-info">
             <span className="chat-loading-text">{currentMessage}</span>
+            {showTip && (
+              <span className="chat-loading-tip">Tip: {LOADING_TIPS[tipIndex]}</span>
+            )}
           </div>
         </div>
         <div className="chat-loading-progress">

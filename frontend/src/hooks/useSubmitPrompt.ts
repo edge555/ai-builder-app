@@ -1,10 +1,12 @@
 import type { RepairAttempt } from '@/shared';
 import { useCallback, useRef } from 'react';
 
-import { useProjectState, useProjectActions, useChatMessages, useGenerationActions } from '../context';
+import { useProjectState, useProjectActions, useChatMessages, useGenerationActions, useToastActions } from '../context';
 import { storageService, toStoredProject } from '../services/storage';
-import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError } from '../utils/error-messages';
+import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError, extractRetryAfterSeconds } from '../utils/error-messages';
 import { createLogger } from '../utils/logger';
+
+const DEFAULT_RATE_LIMIT_WAIT_MS = 30_000;
 
 const submitLogger = createLogger('SubmitPrompt');
 
@@ -20,10 +22,28 @@ export function useSubmitPrompt() {
     const { setProjectState, undo: projectUndo, redo: projectRedo } = useProjectActions();
     const chatMessages = useChatMessages();
     const generation = useGenerationActions();
+    const { addToast } = useToastActions();
 
     const isSubmittingRef = useRef(false);
     const apiRetryHistoryRef = useRef<RepairAttempt[]>([]);
     const submitAbortRef = useRef<AbortController | null>(null);
+
+    /**
+     * Shows a countdown toast for rate limit errors and waits the required time.
+     */
+    const waitForRateLimit = useCallback(async (errorMsg: string, signal: AbortSignal): Promise<void> => {
+        const waitMs = (extractRetryAfterSeconds(errorMsg) ?? DEFAULT_RATE_LIMIT_WAIT_MS / 1000) * 1000;
+        addToast({
+            type: 'warning',
+            message: 'Rate limited — waiting to retry',
+            countdown: { endsAt: Date.now() + waitMs },
+            autoDismissMs: waitMs + 500,
+        });
+        await new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, waitMs);
+            signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); });
+        });
+    }, [addToast]);
 
     /**
      * Returns a random success message for project generation.
@@ -152,6 +172,8 @@ export function useSubmitPrompt() {
                             if (!isRetryableError(errorType)) {
                                 break; // Stop retrying non-retryable errors
                             }
+                        } else if (errorType === 'rate_limit') {
+                            await waitForRateLimit(errorMsg, abortController.signal);
                         }
                         // Otherwise continue to next retry
                     }
@@ -216,6 +238,8 @@ export function useSubmitPrompt() {
                             if (!isRetryableError(errorType)) {
                                 break; // Stop retrying non-retryable errors
                             }
+                        } else if (errorType === 'rate_limit') {
+                            await waitForRateLimit(errorMsg, abortController.signal);
                         }
                         // Otherwise continue to next retry
                     }
@@ -253,6 +277,7 @@ export function useSubmitPrompt() {
         generation,
         getGenerationSuccessMessage,
         getModificationSuccessMessage,
+        waitForRateLimit,
     ]);
 
     /**

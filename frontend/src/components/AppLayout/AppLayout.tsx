@@ -19,6 +19,7 @@ import { UndoRedoButtons } from '../UndoRedoButtons';
 import { ChatPanel } from './ChatPanel';
 import { PreviewSection } from './PreviewSection';
 import { ResizablePanel } from './ResizablePanel';
+import { ToastContainer } from '../ToastContainer/ToastContainer';
 
 
 
@@ -298,6 +299,8 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                     setIsVersionDrawerOpen(false);
                 }}
             />
+
+            <ToastContainer />
         </div>
     );
 }

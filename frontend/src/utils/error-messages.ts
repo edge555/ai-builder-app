@@ -20,6 +20,29 @@ export interface ErrorContext {
 }
 
 /**
+ * Extracts retry-after seconds from an error message.
+ * Parses patterns like "retry after 30", "wait 30 seconds", "retry-after: 30".
+ * Returns null if no specific time found (caller should use a default).
+ */
+export function extractRetryAfterSeconds(errorMessage: string): number | null {
+  const msg = errorMessage.toLowerCase();
+  const patterns = [
+    /retry.?after[:\s]+(\d+)/,
+    /wait\s+(\d+)\s*s/,
+    /try again in\s+(\d+)/,
+    /(\d+)\s*seconds?/,
+  ];
+  for (const pattern of patterns) {
+    const match = msg.match(pattern);
+    if (match) {
+      const seconds = parseInt(match[1], 10);
+      if (seconds > 0 && seconds < 3600) return seconds;
+    }
+  }
+  return null;
+}
+
+/**
  * Generates a user-friendly error message based on error type and context
  */
 export function getUserFriendlyErrorMessage(context: ErrorContext): string {
@@ -28,22 +51,21 @@ export function getUserFriendlyErrorMessage(context: ErrorContext): string {
   switch (errorType) {
     case 'timeout':
       return partialContent
-        ? `⏱️ The request timed out, but some content was generated. Please try again with a simpler request.`
-        : `⏱️ The request timed out. Please try again with a simpler request or check your connection.`;
+        ? `⏱️ The request timed out, but some content was generated. Try a shorter, more specific prompt.`
+        : `⏱️ The request timed out. Try a shorter, more specific prompt or check your connection.`;
 
     case 'rate_limit':
-      return `🚦 Rate limit exceeded. Please wait a moment before trying again.`;
+      return `🚦 Rate limit exceeded. The system will retry automatically.`;
 
     case 'cancelled':
       return `🚫 Request was cancelled`;
 
     case 'api_error':
-      // Check if it's a specific API error we know about
       if (originalMessage.includes('401') || originalMessage.includes('Unauthorized')) {
-        return `🔐 Authentication error. Please check your API credentials.`;
+        return `🔐 Authentication error. Check your API key in Agent Settings.`;
       }
       if (originalMessage.includes('403') || originalMessage.includes('Forbidden')) {
-        return `🔐 Access denied. Please check your API permissions.`;
+        return `🔐 Access denied. Check your API key permissions in Agent Settings.`;
       }
       if (originalMessage.includes('404')) {
         return `❓ Resource not found. The requested endpoint may not be available.`;

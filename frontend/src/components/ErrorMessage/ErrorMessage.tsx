@@ -1,4 +1,5 @@
-import { forwardRef } from 'react';
+import { forwardRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { type ErrorType } from '../../utils/error-messages';
 
 import './ErrorMessage.css';
@@ -19,6 +20,8 @@ export interface ErrorMessageProps {
   onDismiss?: () => void;
   /** Additional CSS class name */
   className?: string;
+  /** Optional action button rendered alongside retry */
+  actionButton?: { label: string; onClick: () => void };
 }
 
 /**
@@ -39,15 +42,25 @@ const ERROR_TITLES: Record<ErrorType, string> = {
  * Maps error types to helpful suggestions.
  */
 const ERROR_SUGGESTIONS: Record<ErrorType, string> = {
-  network: 'Please check your internet connection and try again.',
+  network: 'Check your internet connection and try again.',
   validation: 'The request could not be processed. Please try a different approach.',
   ai_output: 'The AI generated invalid output. Please try rephrasing your request.',
-  timeout: 'The request took too long. Please try again.',
-  rate_limit: 'Please wait a moment before trying again.',
+  timeout: 'Try a shorter, more specific prompt or check your connection.',
+  rate_limit: 'The system will retry automatically when the rate limit clears.',
   api_error: 'The server returned an error. Please try again later.',
   cancelled: 'The request was cancelled.',
   unknown: 'An unexpected error occurred. Please try again.',
 };
+
+/**
+ * Returns true if this error type should show a "Go to Settings" action button.
+ */
+function isAuthError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes('401') || lower.includes('403') ||
+    lower.includes('unauthorized') || lower.includes('forbidden') ||
+    lower.includes('api key') || lower.includes('credentials');
+}
 
 /**
  * Classifies an error message into an error type.
@@ -95,12 +108,22 @@ export const ErrorMessage = forwardRef<HTMLDivElement, ErrorMessageProps>(functi
     onRetry,
     onDismiss,
     className = '',
+    actionButton,
   },
   ref
 ) {
+  const navigate = useNavigate();
   const errorType = type || classifyError(message);
   const title = ERROR_TITLES[errorType];
   const suggestion = ERROR_SUGGESTIONS[errorType];
+
+  const resolvedActionButton = useMemo(() => {
+    if (actionButton) return actionButton;
+    if (errorType === 'api_error' && isAuthError(message)) {
+      return { label: 'Go to Settings', onClick: () => navigate('/settings/agents') };
+    }
+    return null;
+  }, [actionButton, errorType, message, navigate]);
 
   return (
     <div
@@ -124,11 +147,18 @@ export const ErrorMessage = forwardRef<HTMLDivElement, ErrorMessageProps>(functi
       </div>
       <p className="error-message-text">{message}</p>
       <p className="error-message-suggestion">{suggestion}</p>
-      {recoverable && onRetry && (
-        <button className="error-message-retry-btn" onClick={onRetry} aria-label="Retry">
-          Try Again
-        </button>
-      )}
+      <div className="error-message-actions">
+        {recoverable && onRetry && (
+          <button className="error-message-retry-btn" onClick={onRetry} aria-label="Retry">
+            Try Again
+          </button>
+        )}
+        {resolvedActionButton && (
+          <button className="error-message-action-btn" onClick={resolvedActionButton.onClick}>
+            {resolvedActionButton.label}
+          </button>
+        )}
+      </div>
     </div>
   );
 });

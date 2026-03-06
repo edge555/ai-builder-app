@@ -1,0 +1,174 @@
+/* Toast container - stacks from bottom-right */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+/* Individual toast */
+.toast {
+  pointer-events: auto;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 12px hsl(var(--foreground) / 0.1);
+  min-width: 250px;
+  max-width: 400px;
+  animation: toastSlideIn 0.3s ease-out;
+}
+
+.toast--exiting {
+  animation: toastSlideOut 0.3s ease-in forwards;
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateX(0);
+  }
+}
+
+@keyframes toastSlideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) translateX(20px);
+  }
+}
+
+/* Type-specific left border */
+.toast--success {
+  border-left: 3px solid hsl(142 76% 36%);
+}
+
+.toast--info {
+  border-left: 3px solid hsl(var(--primary));
+}
+
+.toast--warning {
+  border-left: 3px solid hsl(38 92% 50%);
+}
+
+.toast--error {
+  border-left: 3px solid hsl(var(--destructive));
+}
+
+/* Toast content layout */
+.toast__content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toast__icon {
+  flex-shrink: 0;
+  color: hsl(var(--muted-foreground));
+}
+
+.toast__icon--success {
+  color: hsl(142 76% 36%);
+}
+
+.toast__icon--info {
+  color: hsl(var(--primary));
+}
+
+.toast__icon--warning {
+  color: hsl(38 92% 50%);
+}
+
+.toast__icon--error {
+  color: hsl(var(--destructive));
+}
+
+.toast__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toast__message {
+  font-size: 13px;
+  color: hsl(var(--foreground));
+  line-height: 1.4;
+}
+
+.toast__action {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--primary));
+  background: transparent;
+  border: 1px solid hsl(var(--primary));
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.toast__action:hover {
+  background: hsl(var(--primary) / 0.1);
+}
+
+.toast__dismiss {
+  flex-shrink: 0;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.toast__dismiss:hover {
+  color: hsl(var(--foreground));
+}
+
+/* Countdown bar */
+.toast-countdown {
+  margin-top: 8px;
+  height: 3px;
+  background: hsl(var(--muted));
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.toast-countdown-bar {
+  height: 100%;
+  background: hsl(38 92% 50%);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+.toast-countdown-text {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .toast-container {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .toast {
+    max-width: none;
+  }
+}

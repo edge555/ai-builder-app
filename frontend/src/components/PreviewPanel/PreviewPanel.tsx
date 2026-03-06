@@ -11,6 +11,7 @@ import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import type { LoadingPhase } from '../ChatInterface/LoadingIndicator';
 import { CodeEditorView } from '../CodeEditor';
 
+import { EmptyProjectState } from '../EmptyProjectState/EmptyProjectState';
 import { PreviewHeader } from './PreviewHeader';
 import { PreviewSkeleton } from './PreviewSkeleton';
 import { type DeviceMode } from './PreviewToolbar';
@@ -141,6 +142,8 @@ const PreviewPanelComponent = function PreviewPanel({
       {/* Show skeleton during loading */}
       {isLoading && loadingPhase !== 'idle' ? (
         <PreviewSkeleton phase={loadingPhase} />
+      ) : !projectState && !isLoading ? (
+        <EmptyProjectState />
       ) : effectiveShowCode ? (
         <div className="preview-content" role="tabpanel" id="tabpanel-code">
           <CodeEditorView files={projectState?.files || {}} />
@@ -202,11 +205,6 @@ const PreviewPanelComponent = function PreviewPanel({
         </div>
       )}
 
-      {!projectState && !isLoading && (
-        <div className="preview-placeholder">
-          <p>Start by describing your application in the chat.</p>
-        </div>
-      )}
     </div>
   );
 };

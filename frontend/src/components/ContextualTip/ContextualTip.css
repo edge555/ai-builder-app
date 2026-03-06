@@ -1,0 +1,40 @@
+.contextual-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: hsl(var(--primary) / 0.06);
+  border: 1px solid hsl(var(--primary) / 0.2);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.4;
+}
+
+.contextual-tip__icon {
+  flex-shrink: 0;
+  color: hsl(var(--primary));
+  display: flex;
+  align-items: center;
+}
+
+.contextual-tip__message {
+  flex: 1;
+}
+
+.contextual-tip__dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  display: flex;
+  align-items: center;
+  border-radius: 3px;
+  transition: color 0.15s;
+}
+
+.contextual-tip__dismiss:hover {
+  color: hsl(var(--foreground));
+}
