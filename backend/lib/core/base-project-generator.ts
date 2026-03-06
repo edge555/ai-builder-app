@@ -148,7 +148,7 @@ export abstract class BaseProjectGenerator {
                 prompt: 'Generate the fixed project based on the error context in the system instruction.',
                 systemInstruction: fixSystemInstruction,
                 temperature: 0.5,
-                maxOutputTokens: getMaxOutputTokens('modification'),
+                maxOutputTokens: getMaxOutputTokens(mode),
                 responseSchema: PROJECT_OUTPUT_SCHEMA,
             });
 

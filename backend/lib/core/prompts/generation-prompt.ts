@@ -11,6 +11,7 @@ import {
   DEPENDENCY_GUIDANCE,
   getOutputBudgetGuidance,
   SYNTAX_INTEGRITY_RULES,
+  COMMON_REACT_PATTERNS,
   DETAILED_REACT_GUIDANCE,
   DETAILED_CSS_GUIDANCE,
   DETAILED_JSON_OUTPUT_GUIDANCE,
@@ -27,7 +28,20 @@ function shouldIncludeDesignSystem(userPrompt: string): boolean {
 
   const prompt = userPrompt.toLowerCase();
 
-  // Multi-word phrases — substring match (low false-positive risk)
+  // Negation words that suppress a match when appearing within 3 words before the keyword
+  const NEGATION_RE = /\b(?:no|not|don't|dont|without|avoid|skip)\b/;
+
+  function isNegated(kw: string): boolean {
+    const idx = prompt.indexOf(kw);
+    if (idx === -1) return false;
+    // Grab up to 30 chars before the keyword and check for negation
+    const before = prompt.slice(Math.max(0, idx - 30), idx);
+    // Only consider the last 3 words before the keyword
+    const words = before.trimEnd().split(/\s+/).slice(-3).join(' ');
+    return NEGATION_RE.test(words);
+  }
+
+  // Multi-word phrases — word-boundary regex match
   const phraseKeywords = [
     // Explicit design requests
     'beautiful ui', 'beautiful design', 'premium design', 'modern ui', 'modern design',
@@ -48,19 +62,23 @@ function shouldIncludeDesignSystem(userPrompt: string): boolean {
     'dribbble', 'behance', 'figma',
   ];
 
-  if (phraseKeywords.some((kw) => prompt.includes(kw))) return true;
+  for (const kw of phraseKeywords) {
+    const escaped = kw.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const re = new RegExp(`\\b${escaped}\\b`, 'i');
+    if (re.test(prompt) && !isNegated(kw)) return true;
+  }
 
   // Single-word signals — matched with word boundaries to reduce false positives
+  // Removed 'theme'/'dashboard' — these are feature signals, not design signals
   const wordKeywords = [
     'sleek', 'polished', 'elegant', 'stylish', 'aesthetic', 'aesthetics',
     'minimalist', 'minimalistic', 'sophisticated', 'refined',
     'animated', 'animation', 'animations', 'glassmorphism', 'gradient', 'gradients',
-    'theme', 'theming', 'dashboard',
   ];
 
   return wordKeywords.some((word) => {
-    const re = new RegExp(`\\b${word}\\b`);
-    return re.test(prompt);
+    const re = new RegExp(`\\b${word}\\b`, 'i');
+    return re.test(prompt) && !isNegated(word);
   });
 }
 
@@ -81,7 +99,7 @@ function detectComplexity(userPrompt: string): ComplexityLevel {
     /\bcrud\b/, /\bcreate.*(?:read|edit|delete)\b/,
     /\bsettings?\s*page\b/, /\bprofile\s*page\b/, /\bpreferences\b/,
     /\brouting\b/, /\bmulti[\s-]?page\b/, /\bpages?\b.*\bpages?\b/,
-    /\bsearch\b.*\bfilter\b/, /\bsort(?:ing|able)?\b.*\bfilter\b/,
+    /\bsearch(?:ing|able)?\b/, /\bfilter(?:ing|s|able)?\b/, /\bsort(?:ing|able)\b/,
     /\bnotification(?:s)?\b/, /\breal[\s-]?time\b/, /\bwebsocket\b/,
     /\be[\s-]?commerce\b/, /\bshopping\s*cart\b/, /\bcheckout\b/, /\bpayment\b/,
     /\bdrag[\s-]?(?:and[\s-]?)?drop\b/, /\bkanban\b/,
@@ -98,12 +116,7 @@ function detectComplexity(userPrompt: string): ComplexityLevel {
     if (signal.test(prompt)) score++;
   }
 
-  // Prompt length as a secondary signal (long prompts tend to describe more features)
-  const wordCount = prompt.split(/\s+/).length;
-  if (wordCount > 80) score += 2;
-  else if (wordCount > 40) score += 1;
-
-  if (score >= 4) return 'complex';
+  if (score >= 5) return 'complex';
   if (score >= 2) return 'medium';
   return 'simple';
 }
@@ -158,12 +171,25 @@ ${shouldIncludeDesignSystem(userPrompt) ? `${DESIGN_SYSTEM_CONSTANTS}
 ${ACCESSIBILITY_GUIDANCE}
 
 === CSS BEST PRACTICES ===
-- Define tokens (colors, spacing, shadows, radius) as CSS variables in index.css.
 - BEM-like naming per component. No inline styles. Use modern CSS (aspect-ratio, clamp()).
+- Components MUST reference these variables instead of hardcoded values.
+- Define all tokens in :root in index.css using this starter set:
+  --color-primary: #3b82f6;    --color-primary-hover: #2563eb;
+  --color-bg: #ffffff;         --color-surface: #f8fafc;
+  --color-text: #1e293b;       --color-text-secondary: #64748b;
+  --color-border: #e2e8f0;     --color-error: #ef4444;
+  --color-success: #22c55e;
+  --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 32px;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --text-sm: 0.875rem; --text-base: 1rem; --text-lg: 1.125rem; --text-xl: 1.25rem;
+  --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
 
 ${DEPENDENCY_GUIDANCE}
 
 ${SYNTAX_INTEGRITY_RULES}
+
+${COMMON_REACT_PATTERNS}
 
 ${config.includeDetailedGuidance ? `${DETAILED_REACT_GUIDANCE}
 
