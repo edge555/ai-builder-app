@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ModificationEngine, createModificationEngine } from '../../diff';
-import { GeminiClient } from '../../ai';
+import type { AIProvider } from '../../ai';
 import type { ProjectState } from '@ai-app-builder/shared';
 
 vi.mock('../../analysis', async (importOriginal) => {
@@ -23,7 +23,7 @@ vi.mock('../../analysis', async (importOriginal) => {
 });
 
 describe('ModificationEngine', () => {
-  let mockGeminiClient: GeminiClient;
+  let mockAIProvider: AIProvider;
   let modificationEngine: ModificationEngine;
 
   const createProjectState = (files: Record<string, string>): ProjectState => ({
@@ -37,10 +37,11 @@ describe('ModificationEngine', () => {
   });
 
   beforeEach(() => {
-    mockGeminiClient = {
+    mockAIProvider = {
       generate: vi.fn(),
-    } as unknown as GeminiClient;
-    modificationEngine = new ModificationEngine(mockGeminiClient);
+      generateStreaming: vi.fn(),
+    } as AIProvider;
+    modificationEngine = new ModificationEngine(mockAIProvider);
   });
 
   describe('modifyProject', () => {
@@ -73,7 +74,7 @@ describe('ModificationEngine', () => {
       });
 
       // Mock FilePlanner planning response (selects files)
-      vi.mocked(mockGeminiClient.generate)
+      vi.mocked(mockAIProvider.generate)
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -121,7 +122,7 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
-      vi.mocked(mockGeminiClient.generate)
+      vi.mocked(mockAIProvider.generate)
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -160,7 +161,7 @@ describe('ModificationEngine', () => {
         'src/OldComponent.tsx': 'export default function OldComponent() { return <div />; }',
       });
 
-      vi.mocked(mockGeminiClient.generate)
+      vi.mocked(mockAIProvider.generate)
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -197,7 +198,7 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
-      vi.mocked(mockGeminiClient.generate)
+      vi.mocked(mockAIProvider.generate)
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -225,7 +226,7 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
-      vi.mocked(mockGeminiClient.generate)
+      vi.mocked(mockAIProvider.generate)
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -253,7 +254,7 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
-      vi.mocked(mockGeminiClient.generate)
+      vi.mocked(mockAIProvider.generate)
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -291,7 +292,7 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'line1\nline2\nline3',
       });
 
-      vi.mocked(mockGeminiClient.generate)
+      vi.mocked(mockAIProvider.generate)
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -336,7 +337,7 @@ describe('ModificationEngine', () => {
         'src/utils.ts': 'export const helper = () => 42;',
       });
 
-      vi.mocked(mockGeminiClient.generate)
+      vi.mocked(mockAIProvider.generate)
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -373,7 +374,7 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
-      vi.mocked(mockGeminiClient.generate)
+      vi.mocked(mockAIProvider.generate)
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -412,7 +413,7 @@ describe('ModificationEngine', () => {
         'src/old.ts': 'old content',
       });
 
-      vi.mocked(mockGeminiClient.generate)
+      vi.mocked(mockAIProvider.generate)
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({

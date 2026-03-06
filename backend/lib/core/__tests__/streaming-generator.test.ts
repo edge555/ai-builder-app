@@ -8,12 +8,12 @@ vi.mock('../build-validator');
 
 describe('StreamingProjectGenerator', () => {
     let generator: StreamingProjectGenerator;
-    let mockGeminiClient: any;
+    let mockAIProvider: any;
     let mockValidationPipeline: any;
     let mockBuildValidator: any;
 
     beforeEach(() => {
-        mockGeminiClient = {
+        mockAIProvider = {
             generateStreaming: vi.fn(),
             generate: vi.fn(),
         };
@@ -31,7 +31,7 @@ describe('StreamingProjectGenerator', () => {
         (buildValidatorModule.BuildValidator as any).mockImplementation(function () { return mockBuildValidator; });
         (buildValidatorModule.createBuildValidator as any).mockReturnValue(mockBuildValidator);
 
-        generator = new StreamingProjectGenerator(mockGeminiClient);
+        generator = new StreamingProjectGenerator(mockAIProvider);
     });
 
     it('should generate a project with streaming emission', async () => {
@@ -42,7 +42,7 @@ describe('StreamingProjectGenerator', () => {
             ],
         });
 
-        mockGeminiClient.generateStreaming.mockImplementation(async ({ onChunk }: any) => {
+        mockAIProvider.generateStreaming.mockImplementation(async ({ onChunk }: any) => {
             onChunk(mockContent, mockContent.length);
             return { success: true, content: mockContent };
         });
@@ -74,7 +74,7 @@ describe('StreamingProjectGenerator', () => {
     });
 
     it('should handle AI errors during streaming', async () => {
-        mockGeminiClient.generateStreaming.mockResolvedValue({
+        mockAIProvider.generateStreaming.mockResolvedValue({
             success: false,
             error: 'AI Error',
         });
@@ -94,7 +94,7 @@ describe('StreamingProjectGenerator', () => {
             files: [{ path: 'broken.ts', content: 'syntax error' }],
         });
 
-        mockGeminiClient.generateStreaming.mockImplementation(async ({ onChunk }: any) => {
+        mockAIProvider.generateStreaming.mockImplementation(async ({ onChunk }: any) => {
             onChunk(mockContent, mockContent.length);
             return { success: true, content: mockContent };
         });
@@ -122,7 +122,7 @@ describe('StreamingProjectGenerator', () => {
             onError: vi.fn(),
         };
 
-        mockGeminiClient.generateStreaming.mockImplementation(async ({ signal }: any) => {
+        mockAIProvider.generateStreaming.mockImplementation(async ({ signal }: any) => {
             if (signal.aborted) {
                 return { success: false, error: 'Request was cancelled' };
             }
@@ -135,7 +135,7 @@ describe('StreamingProjectGenerator', () => {
 
         expect(result.success).toBe(false);
         expect(result.error).toContain('cancelled');
-        expect(mockGeminiClient.generateStreaming).toHaveBeenCalledWith(expect.objectContaining({
+        expect(mockAIProvider.generateStreaming).toHaveBeenCalledWith(expect.objectContaining({
             signal: controller.signal
         }));
     });

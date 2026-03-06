@@ -1,17 +1,18 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { ProjectGenerator } from '../../core/project-generator';
-import { GeminiClient } from '../../ai';
+import type { AIProvider } from '../../ai';
 
-// Mock GeminiClient
+// Mock AIProvider
 const mockGenerate = vi.fn();
-const mockGeminiClient = {
+const mockAIProvider: AIProvider = {
     generate: mockGenerate,
-} as unknown as GeminiClient;
+    generateStreaming: vi.fn(),
+};
 
 describe('ProjectGenerator Newline Normalization', () => {
     it('should unescape literal \\n even if real newlines exist', async () => {
-        const generator = new ProjectGenerator(mockGeminiClient);
+        const generator = new ProjectGenerator(mockAIProvider);
 
         // Mock response with mixed newlines:
         // "import React from 'react';\n" (literal \n)
@@ -49,7 +50,7 @@ describe('ProjectGenerator Newline Normalization', () => {
     });
 
     it('should handle content with only literal \\n', async () => {
-        const generator = new ProjectGenerator(mockGeminiClient);
+        const generator = new ProjectGenerator(mockAIProvider);
 
         const jsonContent = JSON.stringify({
             files: [

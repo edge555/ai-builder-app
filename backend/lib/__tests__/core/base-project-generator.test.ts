@@ -20,15 +20,16 @@ class TestProjectGenerator extends BaseProjectGenerator {
 
 describe('BaseProjectGenerator', () => {
     let generator: TestProjectGenerator;
-    let mockGeminiClient: any;
+    let mockAIProvider: any;
     let mockBuildValidator: any;
     let mockValidationPipeline: any;
 
     beforeEach(() => {
         vi.clearAllMocks();
 
-        mockGeminiClient = {
+        mockAIProvider = {
             generate: vi.fn(),
+            generateStreaming: vi.fn(),
         };
 
         mockBuildValidator = {
@@ -46,7 +47,7 @@ describe('BaseProjectGenerator', () => {
         // Actually, let's just use the real mock instance.
         vi.mocked(ValidationPipeline).mockImplementation(function() { return mockValidationPipeline; });
 
-        generator = new TestProjectGenerator(mockGeminiClient);
+        generator = new TestProjectGenerator(mockAIProvider);
     });
 
     describe('runBuildFixLoop', () => {
@@ -60,7 +61,7 @@ describe('BaseProjectGenerator', () => {
 
             expect(result).toEqual(initialFiles);
             expect(mockBuildValidator.validate).toHaveBeenCalledTimes(1);
-            expect(mockGeminiClient.generate).not.toHaveBeenCalled();
+            expect(mockAIProvider.generate).not.toHaveBeenCalled();
         });
 
         it('should retry and succeed when AI fixes the errors', async () => {
@@ -72,7 +73,7 @@ describe('BaseProjectGenerator', () => {
             mockBuildValidator.formatErrorsForAI.mockReturnValue('Formatted errors');
 
             // AI returns fixed project
-            mockGeminiClient.generate.mockResolvedValue({
+            mockAIProvider.generate.mockResolvedValue({
                 success: true,
                 content: JSON.stringify({
                     projectName: 'fixed',
@@ -90,7 +91,7 @@ describe('BaseProjectGenerator', () => {
             const result = await generator.testRunBuildFixLoop(initialFiles, 'generation', prompt);
 
             expect(result).toEqual({ 'App.tsx': 'fixed content' });
-            expect(mockGeminiClient.generate).toHaveBeenCalledTimes(1);
+            expect(mockAIProvider.generate).toHaveBeenCalledTimes(1);
             expect(mockBuildValidator.validate).toHaveBeenCalledTimes(2);
         });
 
@@ -101,7 +102,7 @@ describe('BaseProjectGenerator', () => {
                 errors: [{ message: 'Build error', file: 'index.ts' }]
             });
 
-            mockGeminiClient.generate.mockResolvedValue({
+            mockAIProvider.generate.mockResolvedValue({
                 success: true,
                 content: JSON.stringify({
                     projectName: 'retry',
@@ -119,7 +120,7 @@ describe('BaseProjectGenerator', () => {
 
             // Should return the last modified files after 3 retries
             expect(result).toEqual({ 'index.ts': 'attempt' });
-            expect(mockGeminiClient.generate).toHaveBeenCalledTimes(3);
+            expect(mockAIProvider.generate).toHaveBeenCalledTimes(3);
 
             // Verify that failure history is passed to next AI call
             // We can't directly check the internal failureHistory array, 
@@ -133,7 +134,7 @@ describe('BaseProjectGenerator', () => {
                 errors: [{ message: 'Error', file: 'f.ts' }]
             });
 
-            mockGeminiClient.generate.mockResolvedValue({
+            mockAIProvider.generate.mockResolvedValue({
                 success: true,
                 content: 'invalid json'
             });
@@ -141,7 +142,7 @@ describe('BaseProjectGenerator', () => {
             const result = await generator.testRunBuildFixLoop(initialFiles, 'generation', prompt);
 
             expect(result).toEqual(initialFiles);
-            expect(mockGeminiClient.generate).toHaveBeenCalledTimes(1);
+            expect(mockAIProvider.generate).toHaveBeenCalledTimes(1);
         });
     });
 });
