@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-
+import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import { deserializeProjectState, ExportProjectRequestSchema } from '@ai-app-builder/shared';
 import { exportAsZipBuffer } from '../../../lib/core';
 import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError } from '../../../lib/api';
@@ -26,6 +26,9 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const blocked = applyRateLimit(request, RateLimitTier.LOW_COST);
+  if (blocked) return blocked as NextResponse;
+
   const corsHeaders = getCorsHeaders(request);
 
   try {

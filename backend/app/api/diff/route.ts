@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import type { ComputeDiffResponse, ErrorResponse, ComputeDiffRequest } from '@ai-app-builder/shared/types';
 import { ComputeDiffRequestSchema } from '@ai-app-builder/shared/schemas';
 import { getVersionManager } from '../../../lib/core';
@@ -27,6 +28,9 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse<ComputeDiffResponse | ErrorResponse>> {
+  const blocked = applyRateLimit(request, RateLimitTier.LOW_COST);
+  if (blocked) return blocked as NextResponse<ComputeDiffResponse | ErrorResponse>;
+
   try {
     // Parse request body
     const body = await request.json();

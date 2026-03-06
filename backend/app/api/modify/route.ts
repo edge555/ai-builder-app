@@ -7,6 +7,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import type {
   ModifyProjectResponse,
   ErrorResponse,
@@ -38,6 +39,9 @@ export async function OPTIONS() {
 export async function POST(
   request: NextRequest
 ): Promise<Response> {
+  const blocked = applyRateLimit(request, RateLimitTier.MEDIUM_COST);
+  if (blocked) return blocked;
+
   // Generate request ID for correlation
   const requestId = generateRequestId();
   const contextLogger = logger.withRequestId(requestId);

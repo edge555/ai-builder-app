@@ -6,12 +6,16 @@ import {
   saveProvider,
 } from '../../../lib/ai/provider-config-store';
 import { resetProviderSingletons } from '../../../lib/ai/ai-provider-factory';
+import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 
 export async function OPTIONS() {
   return handleOptions();
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const blocked = applyRateLimit(request, RateLimitTier.CONFIG);
+  if (blocked) return blocked as NextResponse;
+
   try {
     const result = await getProviderConfigWithSource();
     return NextResponse.json(result, { status: 200, headers: getCorsHeaders(request) });
@@ -25,6 +29,9 @@ const ProviderConfigSchema = z.object({
 });
 
 export async function PUT(request: NextRequest): Promise<NextResponse> {
+  const blocked = applyRateLimit(request, RateLimitTier.CONFIG);
+  if (blocked) return blocked as NextResponse;
+
   try {
     const body = await request.json();
     const { aiProvider } = ProviderConfigSchema.parse(body);

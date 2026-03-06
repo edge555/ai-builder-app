@@ -29,6 +29,11 @@ import {
   MODAL_MAX_OUTPUT_TOKENS_GENERATION,
   MODAL_MAX_OUTPUT_TOKENS_MODIFICATION,
   MODAL_MAX_OUTPUT_TOKENS_PLANNING,
+  RATE_LIMIT_HIGH_COST_MAX,
+  RATE_LIMIT_MEDIUM_COST_MAX,
+  RATE_LIMIT_LOW_COST_MAX,
+  RATE_LIMIT_CONFIG_MAX,
+  RATE_LIMIT_WINDOW_MS,
 } from './constants';
 
 const logger = createLogger('config');
@@ -46,6 +51,10 @@ const envSchema = z.object({
   ALLOWED_ORIGINS: z.string().default('http://localhost:8080'),
   PORT: z.coerce.number().default(4000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  RATE_LIMIT_ENABLED: z
+    .string()
+    .transform((v) => v !== 'false' && v !== '0')
+    .default('true'),
 });
 
 /**
@@ -103,6 +112,14 @@ export interface BackendConfig {
     maxAppLines: number;
     contextLines: number;
   };
+  rateLimit: {
+    enabled: boolean;
+    windowMs: number;
+    highCostMax: number;
+    mediumCostMax: number;
+    lowCostMax: number;
+    configMax: number;
+  };
 }
 
 export const config: BackendConfig = {
@@ -140,6 +157,14 @@ export const config: BackendConfig = {
     maxComponentLines: MAX_COMPONENT_LINES,
     maxAppLines: MAX_APP_LINES,
     contextLines: DIFF_CONTEXT_LINES,
+  },
+  rateLimit: {
+    enabled: env.RATE_LIMIT_ENABLED,
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    highCostMax: RATE_LIMIT_HIGH_COST_MAX,
+    mediumCostMax: RATE_LIMIT_MEDIUM_COST_MAX,
+    lowCostMax: RATE_LIMIT_LOW_COST_MAX,
+    configMax: RATE_LIMIT_CONFIG_MAX,
   },
 };
 

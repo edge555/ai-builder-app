@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCorsHeaders, handleOptions, handleError } from '../../../lib/api';
 import { load, save } from '../../../lib/ai/agent-config-store';
+import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 
 export async function OPTIONS() {
   return handleOptions();
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const blocked = applyRateLimit(request, RateLimitTier.CONFIG);
+  if (blocked) return blocked as NextResponse;
+
   try {
     const config = await load();
     return NextResponse.json(config, { status: 200, headers: getCorsHeaders(request) });
@@ -44,6 +48,9 @@ const AgentConfigSchema = z.object({
 });
 
 export async function PUT(request: NextRequest): Promise<NextResponse> {
+  const blocked = applyRateLimit(request, RateLimitTier.CONFIG);
+  if (blocked) return blocked as NextResponse;
+
   try {
     const body = await request.json();
     const config = AgentConfigSchema.parse(body);

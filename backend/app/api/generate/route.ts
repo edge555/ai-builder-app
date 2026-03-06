@@ -8,6 +8,7 @@
 
 import { NextRequest } from 'next/server';
 import type { GenerateProjectResponse } from '@ai-app-builder/shared';
+import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import { serializeProjectState, serializeVersion, GenerateProjectRequestSchema } from '@ai-app-builder/shared';
 import { createProjectGenerator } from '../../../lib/core';
 import { getCorsHeaders, handleOptions, handleError, AppError, gzipJson } from '../../../lib/api';
@@ -24,6 +25,9 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
+  const blocked = applyRateLimit(request, RateLimitTier.MEDIUM_COST);
+  if (blocked) return blocked;
+
   // Generate request ID for correlation
   const requestId = generateRequestId();
   const contextLogger = logger.withRequestId(requestId);

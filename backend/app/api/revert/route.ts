@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import type {
   RevertVersionResponse,
   ErrorResponse,
@@ -35,6 +36,9 @@ export async function OPTIONS() {
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<RevertVersionResponse | ErrorResponse>> {
+  const blocked = applyRateLimit(request, RateLimitTier.LOW_COST);
+  if (blocked) return blocked as NextResponse<RevertVersionResponse | ErrorResponse>;
+
   try {
     // Parse request body
     const body = await request.json();

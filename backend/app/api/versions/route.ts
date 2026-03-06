@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import type { GetVersionsResponse, ErrorResponse } from '@ai-app-builder/shared';
 import { serializeVersion, GetVersionsRequestSchema } from '@ai-app-builder/shared';
 import { getVersionManager } from '../../../lib/core';
@@ -20,6 +21,9 @@ export async function OPTIONS() {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse<GetVersionsResponse | ErrorResponse>> {
+  const blocked = applyRateLimit(request, RateLimitTier.LOW_COST);
+  if (blocked) return blocked as NextResponse<GetVersionsResponse | ErrorResponse>;
+
   try {
     // Get projectId from query parameters
     const { searchParams } = new URL(request.url);

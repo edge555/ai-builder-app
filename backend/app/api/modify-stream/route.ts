@@ -8,6 +8,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import {
   serializeProjectState,
   serializeVersion,
@@ -38,6 +39,9 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest) {
+  const blocked = applyRateLimit(request, RateLimitTier.HIGH_COST);
+  if (blocked) return blocked;
+
   const requestId = generateRequestId();
   const contextLogger = logger.withRequestId(requestId);
 

@@ -52,3 +52,19 @@ export const MAX_OUTPUT_TOKENS_PLANNING = 1024;
 export const MODAL_MAX_OUTPUT_TOKENS_GENERATION = 32768;
 export const MODAL_MAX_OUTPUT_TOKENS_MODIFICATION = 16384;
 export const MODAL_MAX_OUTPUT_TOKENS_PLANNING = 2048;
+
+// Rate limiting
+export const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute sliding window
+export const RATE_LIMIT_CLEANUP_INTERVAL_MS = 60_000; // evict stale entries every 60s
+
+// Per-tier max requests per IP per window
+export const RATE_LIMIT_HIGH_COST_MAX = 5;    // generate-stream, modify-stream
+export const RATE_LIMIT_MEDIUM_COST_MAX = 10; // generate, modify, plan
+export const RATE_LIMIT_LOW_COST_MAX = 60;    // diff, revert, export, versions, health
+export const RATE_LIMIT_CONFIG_MAX = 20;      // agent-config, provider-config
+
+// Per-tier request body size limits
+export const MAX_BODY_HIGH_COST_BYTES = 2 * 1024 * 1024;   // 2 MB
+export const MAX_BODY_MEDIUM_COST_BYTES = 2 * 1024 * 1024; // 2 MB
+export const MAX_BODY_LOW_COST_BYTES = 5 * 1024 * 1024;    // 5 MB
+export const MAX_BODY_CONFIG_BYTES = 64 * 1024;             // 64 KB
