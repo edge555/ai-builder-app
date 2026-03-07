@@ -17,13 +17,14 @@ import {
 } from '@ai-app-builder/shared';
 import { createModificationEngine, type ModificationPhase } from '../../../lib/diff';
 import { detectIntent } from '../../../lib/ai/ai-provider-factory';
-import { handleOptions, getCorsHeaders } from '../../../lib/api';
+import { handleOptions, getCorsHeaders, parseJsonRequest } from '../../../lib/api';
 import { createLogger } from '../../../lib/logger';
 import { generateRequestId } from '../../../lib/request-id';
 import {
   BackpressureController,
   EventPriority,
   SSEEncoder,
+  createStreamLifecycle,
 } from '../../../lib/streaming';
 
 const logger = createLogger('api/modify-stream');
@@ -46,24 +47,10 @@ export async function POST(request: NextRequest) {
   const contextLogger = logger.withRequestId(requestId);
 
   try {
-    // Parse request body
-    let rawBody;
-    try {
-      rawBody = await request.json();
-    } catch {
-      return new Response('Invalid JSON in request body', { status: 400 });
-    }
-
-    // Validate request
-    let body;
-    try {
-      body = ModifyProjectRequestSchema.parse(rawBody);
-    } catch (error: any) {
-      const message = error.errors
-        ? error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
-        : 'Validation failed';
-      return new Response(`Invalid request: ${message}`, { status: 400 });
-    }
+    // Parse and validate request body
+    const parsed = await parseJsonRequest(request, ModifyProjectRequestSchema);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
     contextLogger.info('Starting streaming modification', {
       promptLength: body.prompt.length,
@@ -71,7 +58,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Deserialize project state
-    const projectState = deserializeProjectState(body.projectState as any);
+    const projectState = deserializeProjectState(body.projectState);
     const { shouldSkipPlanning } = body;
 
     // Detect intent for task-specific model routing
@@ -88,69 +75,15 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new SSEEncoder(backpressure);
-        let heartbeatInterval: NodeJS.Timeout | null = null;
-        let streamTimeout: NodeJS.Timeout | null = null;
-        let isComplete = false;
+        const lifecycle = createStreamLifecycle(
+          controller, encoder, backpressure, request.signal, contextLogger,
+          { heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS, streamTimeoutMs: STREAM_TIMEOUT_MS }
+        );
+        const { isComplete, cleanup, safeClose } = lifecycle;
 
-        const cleanup = () => {
-          if (heartbeatInterval) clearInterval(heartbeatInterval);
-          if (streamTimeout) clearTimeout(streamTimeout);
-          heartbeatInterval = null;
-          streamTimeout = null;
-          isComplete = true;
-          backpressure.logStats();
-        };
-
-        const safeClose = () => {
-          if (isComplete) return;
-          cleanup();
-          try {
-            controller.close();
-          } catch {
-            // Controller already closed
-          }
-        };
-
-        const onAbort = () => {
-          if (isComplete) return;
-          contextLogger.info('Client disconnected, aborting SSE stream');
-          cleanup();
-          try {
-            controller.close();
-          } catch {
-            // Controller already closed
-          }
-        };
-
-        if (request.signal) {
-          if (request.signal.aborted) {
-            onAbort();
-            return;
-          }
-          request.signal.addEventListener('abort', onAbort, { once: true });
-        }
+        if (isComplete()) return; // Already aborted
 
         try {
-          // Heartbeat to prevent proxy timeouts
-          heartbeatInterval = setInterval(() => {
-            if (!isComplete) {
-              encoder.enqueueHeartbeat(controller);
-            }
-          }, HEARTBEAT_INTERVAL_MS);
-
-          // Stream timeout
-          streamTimeout = setTimeout(() => {
-            if (!isComplete) {
-              cleanup();
-              encoder.enqueueEvent(
-                controller,
-                'error',
-                { error: `Stream timeout after ${STREAM_TIMEOUT_MS / 1000} seconds` },
-                EventPriority.CRITICAL
-              );
-              controller.close();
-            }
-          }, STREAM_TIMEOUT_MS);
 
           // Emit start event
           encoder.enqueueEvent(
@@ -166,7 +99,7 @@ export async function POST(request: NextRequest) {
             shouldSkipPlanning,
             requestId,
             onProgress: (phase: ModificationPhase, label: string) => {
-              if (isComplete) return;
+              if (isComplete()) return;
               encoder.enqueueEvent(
                 controller,
                 'progress',
@@ -176,7 +109,7 @@ export async function POST(request: NextRequest) {
             },
           });
 
-          if (isComplete) return; // Client disconnected during modification
+          if (isComplete()) return; // Client disconnected during modification
 
           if (!result.success) {
             encoder.enqueueEvent(
@@ -198,7 +131,7 @@ export async function POST(request: NextRequest) {
           const totalFiles = filePaths.length;
 
           for (let i = 0; i < filePaths.length; i++) {
-            if (isComplete) return;
+            if (isComplete()) return;
             const path = filePaths[i];
             encoder.enqueueEvent(
               controller,
@@ -251,7 +184,7 @@ export async function POST(request: NextRequest) {
             totalFiles,
           });
         } catch (error) {
-          if (isComplete) {
+          if (isComplete()) {
             contextLogger.info('Stream already closed (client disconnected)');
             return;
           }

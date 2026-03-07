@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // transpilePackages: ['@ai-app-builder/shared'],
+  transpilePackages: ['@ai-app-builder/shared'],
 
   // Production optimizations
   productionBrowserSourceMaps: false, // Disable sourcemaps in production builds

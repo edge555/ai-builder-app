@@ -48,6 +48,8 @@ export function FileTreeSidebar({
   onFileSelect,
 }: FileTreeSidebarProps) {
   const tree = useMemo(() => buildFileTree(files), [files]);
+  const topLevelDirPaths = useMemo(() => getTopLevelDirPaths(tree), [tree]);
+  const allDirPaths = useMemo(() => getAllDirPaths(tree), [tree]);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -63,8 +65,7 @@ export function FileTreeSidebar({
   // - Remove paths that no longer exist
   // - Deeper new directories are intentionally left collapsed
   useEffect(() => {
-    const allDirPaths = getAllDirPaths(tree);
-    const topLevelPaths = new Set(getTopLevelDirPaths(tree));
+    const topLevelPaths = new Set(topLevelDirPaths);
     const validPaths = new Set(allDirPaths);
 
     setExpandedDirs((prev) => {
@@ -80,7 +81,7 @@ export function FileTreeSidebar({
 
       return next;
     });
-  }, [tree]);
+  }, [topLevelDirPaths, allDirPaths]);
 
   const handleToggleDir = useCallback((path: string) => {
     setExpandedDirs((prev) => {
@@ -95,8 +96,8 @@ export function FileTreeSidebar({
   }, []);
 
   const handleExpandAll = useCallback(() => {
-    setExpandedDirs(new Set(getAllDirPaths(tree)));
-  }, [tree]);
+    setExpandedDirs(new Set(allDirPaths));
+  }, [allDirPaths]);
 
   const handleCollapseAll = useCallback(() => {
     setExpandedDirs(new Set());
@@ -209,11 +210,10 @@ export function FileTreeSidebar({
   };
 
   const allExpanded = useMemo(() => {
-    const allPaths = getAllDirPaths(tree);
-    return allPaths.length > 0 && allPaths.every((p) => expandedDirs.has(p));
-  }, [tree, expandedDirs]);
+    return allDirPaths.length > 0 && allDirPaths.every((p) => expandedDirs.has(p));
+  }, [allDirPaths, expandedDirs]);
 
-  const hasAnyDir = useMemo(() => getAllDirPaths(tree).length > 0, [tree]);
+  const hasAnyDir = useMemo(() => allDirPaths.length > 0, [allDirPaths]);
 
   return (
     <div

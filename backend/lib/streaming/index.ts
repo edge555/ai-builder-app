@@ -13,3 +13,4 @@ export {
 } from './backpressure-controller';
 
 export { SSEEncoder } from './sse-encoder';
+export { createStreamLifecycle, type StreamLifecycle, type StreamLifecycleConfig } from './stream-lifecycle';

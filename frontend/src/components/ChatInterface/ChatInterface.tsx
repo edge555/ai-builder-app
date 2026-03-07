@@ -1,6 +1,6 @@
 import type { ChangeSummary, FileDiff } from '@ai-app-builder/shared/types';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useState, useRef, useEffect, forwardRef, memo } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 
 import type { StreamingState } from '@/context';
 import type { PromptSuggestion } from '@/data/prompt-suggestions';
@@ -14,6 +14,7 @@ import { QuickActions } from '../QuickActions/QuickActions';
 import { StreamingIndicator } from '../StreamingIndicator';
 
 import { ChatInput } from './ChatInput';
+import { MessageItemWithRef } from './MessageItem';
 import { CollapseAllButton } from './CollapseAllButton';
 import { CollapsibleMessage } from './CollapsibleMessage';
 import { LoadingIndicator, type LoadingPhase } from './LoadingIndicator';
@@ -374,50 +375,6 @@ function areChatPropsEqual(
  */
 export const ChatInterface = memo(ChatInterfaceComponent, areChatPropsEqual);
 
-/**
- * Props for the MessageItem component.
- */
-interface MessageItemProps {
-  message: ChatMessage;
-  onFileClick?: (filePath: string) => void;
-}
-
-/**
- * Renders a single chat message with optional change summary.
- * Accepts refs to avoid React dev warnings when something upstream attaches refs.
- */
-const MessageItemWithRef = memo(
-  forwardRef<HTMLDivElement, MessageItemProps>(function MessageItemWithRef({ message, onFileClick }, ref) {
-    const isUser = message.role === 'user';
-
-    return (
-      <div ref={ref} className={`chat-message ${isUser ? 'chat-message-user' : 'chat-message-assistant'}`}>
-        <div className="chat-message-header">
-          <span className="chat-message-role">{isUser ? 'You' : 'Assistant'}</span>
-          <span className="chat-message-time">
-            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        </div>
-        <div className="chat-message-content">
-          {isUser ? (
-            message.content
-          ) : (
-            <MarkdownRenderer content={message.content} />
-          )}
-        </div>
-        {message.changeSummary && (
-          <FileChangeSummary
-            changeSummary={message.changeSummary}
-            diffs={message.diffs}
-            onFileClick={onFileClick}
-          />
-        )}
-      </div>
-    );
-  })
-);
-
-MessageItemWithRef.displayName = 'MessageItem';
 
 
 export default ChatInterface;

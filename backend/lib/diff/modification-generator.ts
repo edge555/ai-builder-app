@@ -8,6 +8,7 @@ import { isSafePath } from '../utils';
 import { buildModificationPrompt } from './prompt-builder';
 import { applyFileEdits } from './file-edit-applicator';
 import { createLogger } from '../logger';
+import { OperationTimer, formatMetrics } from '../metrics';
 
 const logger = createLogger('ModificationGenerator');
 
@@ -35,6 +36,7 @@ export async function generateModifications(
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     if (attempt > 1) await delay(attempt * 500);
+    const attemptTimer = new OperationTimer(`modification-attempt-${attempt}`, requestId);
     logger.info('Modification attempt', { attempt, maxAttempts: MAX_ATTEMPTS });
 
     // Build prompt with error feedback if this is a retry.
@@ -51,6 +53,7 @@ export async function generateModifications(
       logger.error('AI provider error', { error: response.error });
       lastEditError = response.error ?? 'Failed to get modification from AI';
       editErrors.push(lastEditError);
+      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(false, { retryCount: attempt - 1, error: lastEditError })));
       continue;
     }
 
@@ -58,6 +61,7 @@ export async function generateModifications(
     if (!parseResult.success) {
       lastEditError = parseResult.error!;
       editErrors.push(lastEditError);
+      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(false, { retryCount: attempt - 1, error: lastEditError })));
       continue;
     }
 
@@ -67,11 +71,13 @@ export async function generateModifications(
     if (pathError) {
       lastEditError = pathError;
       editErrors.push(lastEditError);
+      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(false, { retryCount: attempt - 1, error: lastEditError })));
       continue;
     }
 
     const editResult = await applyFileEdits(aiFilesArray, projectState);
     if (editResult.success) {
+      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(true, { retryCount: attempt - 1 })));
       logger.info('Modification succeeded', { attempt });
       logger.info('generateModifications summary', {
         totalAttempts: attempt,
@@ -84,6 +90,7 @@ export async function generateModifications(
 
     lastEditError = editResult.error!;
     editErrors.push(lastEditError);
+    logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(false, { retryCount: attempt - 1, error: lastEditError })));
     logger.info('Retrying due to error', { error: lastEditError });
   }
 

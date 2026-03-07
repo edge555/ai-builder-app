@@ -87,8 +87,10 @@ export abstract class BaseProjectGenerator {
     protected async runBuildFixLoop(
         files: Record<string, string>,
         mode: BuildFixMode,
-        originalPrompt: string
+        originalPrompt: string,
+        requestId?: string
     ): Promise<Record<string, string>> {
+        const contextLogger = requestId ? logger.withRequestId(requestId) : logger;
         let currentFiles = files;
         let buildResult = this.buildValidator.validate(currentFiles);
         let buildRetryCount = 0;
@@ -100,20 +102,20 @@ export abstract class BaseProjectGenerator {
             const unfixableErrors = buildResult.errors.filter(e => e.severity === 'unfixable');
 
             if (unfixableErrors.length > 0 && fixableErrors.length === 0) {
-                logger.warn('All build errors are unfixable, skipping retry loop', {
+                contextLogger.warn('All build errors are unfixable, skipping retry loop', {
                     unfixableErrors: unfixableErrors.map(e => ({ message: e.message, file: e.file })),
                 });
                 break;
             }
 
             if (unfixableErrors.length > 0) {
-                logger.warn('Some build errors are unfixable and will persist after retries', {
+                contextLogger.warn('Some build errors are unfixable and will persist after retries', {
                     unfixableErrors: unfixableErrors.map(e => ({ message: e.message, file: e.file })),
                 });
             }
 
             buildRetryCount++;
-            logger.info('Build validation retry', {
+            contextLogger.info('Build validation retry', {
                 attempt: buildRetryCount,
                 maxRetries: this.maxBuildRetries,
                 errors: buildResult.errors.map(e => e.message),
@@ -133,13 +135,13 @@ export abstract class BaseProjectGenerator {
             const fixSystemInstruction = getGenerationPrompt(fixPromptContent) +
                 '\n\nIMPORTANT: You must fix ALL the build errors listed above. Make sure to either add missing dependencies to package.json OR use native alternatives.';
 
-            logger.info('Sending build fix request to AI provider', {
+            contextLogger.info('Sending build fix request to AI provider', {
                 attempt: buildRetryCount,
                 systemInstructionLength: fixSystemInstruction.length,
                 errorCount: buildResult.errors.length,
                 hasFailureHistory: failureHistory.length > 0,
             });
-            logger.debug('AI provider fix request details', {
+            contextLogger.debug('AI provider fix request details', {
                 systemInstruction: fixSystemInstruction,
             });
 
@@ -150,20 +152,21 @@ export abstract class BaseProjectGenerator {
                 temperature: 0.5,
                 maxOutputTokens: getMaxOutputTokens(mode),
                 responseSchema: PROJECT_OUTPUT_SCHEMA,
+                requestId,
             });
 
-            logger.info('Received fix response from AI provider', {
+            contextLogger.info('Received fix response from AI provider', {
                 success: fixResponse.success,
                 contentLength: fixResponse.content?.length ?? 0,
                 hasError: !!fixResponse.error,
             });
-            logger.debug('AI provider fix response content', {
+            contextLogger.debug('AI provider fix response content', {
                 content: fixResponse.content,
                 error: fixResponse.error,
             });
 
             if (!fixResponse.success || !fixResponse.content) {
-                logger.error('Failed to get fix response from AI');
+                contextLogger.error('Failed to get fix response from AI');
                 // Record this failure
                 failureHistory.push({
                     attempt: buildRetryCount,
@@ -181,7 +184,7 @@ export abstract class BaseProjectGenerator {
                 const zodResult = ProjectOutputSchema.safeParse(parsedData);
 
                 if (!zodResult.success) {
-                    logger.error('Zod validation failed on fix response', {
+                    contextLogger.error('Zod validation failed on fix response', {
                         errors: zodResult.error.issues,
                     });
                     // Record this failure
@@ -202,7 +205,7 @@ export abstract class BaseProjectGenerator {
                 // Re-validate syntax
                 const revalidation = this.validationPipeline.validate(fixedFiles);
                 if (!revalidation.valid) {
-                    logger.error('Fixed code failed syntax validation');
+                    contextLogger.error('Fixed code failed syntax validation');
                     // Record this failure
                     failureHistory.push({
                         attempt: buildRetryCount,
@@ -219,7 +222,7 @@ export abstract class BaseProjectGenerator {
                 buildResult = this.buildValidator.validate(currentFiles);
 
                 if (buildResult.valid) {
-                    logger.info('Build errors fixed successfully');
+                    contextLogger.info('Build errors fixed successfully');
                 } else {
                     // Record this failure for next iteration
                     failureHistory.push({
@@ -230,7 +233,7 @@ export abstract class BaseProjectGenerator {
                     });
                 }
             } catch (e) {
-                logger.error('Failed to parse fix response', { error: e instanceof Error ? e.message : 'Unknown error' });
+                contextLogger.error('Failed to parse fix response', { error: e instanceof Error ? e.message : 'Unknown error' });
                 // Record this failure
                 failureHistory.push({
                     attempt: buildRetryCount,
@@ -244,7 +247,7 @@ export abstract class BaseProjectGenerator {
 
         // Log if there are still build errors after retries
         if (!buildResult.valid) {
-            logger.warn('Build warnings after retries', {
+            contextLogger.warn('Build warnings after retries', {
                 errors: buildResult.errors.map(e => ({ message: e.message, file: e.file })),
                 totalAttempts: buildRetryCount,
             });

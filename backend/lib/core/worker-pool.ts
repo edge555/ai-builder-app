@@ -45,7 +45,9 @@ export class WorkerPool {
         worker.on('error', (error) => {
             logger.error(`Worker ${index} error`, { error: error.message });
             this.abortTaskOnWorker(index, `Worker error: ${error.message}`);
-            worker.terminate().catch(() => { });
+            worker.terminate().catch((err) => {
+                logger.error(`Worker ${index} failed to terminate`, { error: err instanceof Error ? err.message : String(err) });
+            });
             this.replaceWorker(index);
         });
 

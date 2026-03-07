@@ -18,20 +18,26 @@ Additionally: `supabase/` (edge functions + config), `modal-code-ai/` (Python Mo
 ### Frontend Structure
 ```
 frontend/src/
-├── components/         # 27 component directories
+├── components/         # 36 component directories
 │   ├── AppLayout/     # Main layout (ChatPanel, PreviewSection, ResizablePanel, ErrorOverlay)
-│   ├── ChatInterface/ # Chat UI with virtualization
+│   ├── AuthGuard/     # Route protection for authenticated routes
+│   ├── ChatInterface/ # Chat UI with virtualization + MessageItem
 │   ├── CodeEditor/    # Monaco editor + file tree sidebar
 │   ├── PreviewPanel/  # Sandpack preview + error handling
 │   ├── ProjectGallery/# Saved projects with virtualization
 │   ├── SiteHeader/    # Global header with theme toggle
-│   ├── ThemeToggle/   # Light/dark mode toggle
-│   └── ...            # TemplateGrid, ConfirmDialog, ErrorBoundary, etc.
+│   ├── UserMenu/      # Authenticated user menu
+│   └── ...            # TemplateGrid, ConfirmDialog, ErrorBoundary, UndoRedoButtons, etc.
 ├── context/           # React Context providers (split state/actions pattern)
-├── hooks/             # Custom hooks (useSubmitPrompt, useAutoSave, useUndoRedo, etc.)
-├── pages/             # WelcomePage, BuilderPage, AgentSettingsPage (all lazy-loaded)
-├── services/          # StorageService (IndexedDB), ErrorAggregator, agent-config-service
-├── utils/             # Logger, SSE parser, repair prompts, error messages
+│   └── AuthContext    # Authentication state + actions (split pattern)
+├── hooks/             # Custom hooks (useSubmitPrompt, useAutoSave, useUndoRedo,
+│                      #   useCountdown, useSidebarResize, useCollapsibleMessages, etc.)
+├── pages/             # WelcomePage, BuilderPage, LoginPage, AgentSettingsPage (lazy-loaded)
+├── services/          # Storage, cloud, error aggregation, agent config
+│   ├── storage/       # IndexedDB abstraction (StorageService, HybridStorageService,
+│   │                  #   project-store, chat-store, metadata-store, template-store)
+│   └── cloud/         # CloudStorageService (Supabase integration)
+├── utils/             # Logger, SSE parser, repair prompts, error messages, capture-screenshot
 ├── data/              # Starter templates, prompt suggestions
 ├── integrations/      # Backend API client config
 └── styles/            # Global CSS
@@ -63,7 +69,8 @@ backend/
 │   │   ├── intent-detector.ts      # Prompt classification for model routing
 │   │   ├── agent-config-store.ts   # Per-task model config persistence
 │   │   ├── provider-config-store.ts# Runtime provider override persistence
-│   │   └── ai-error-utils.ts       # Error categorization and retry logic
+│   │   ├── ai-retry.ts             # Shared retry-with-backoff logic (executeWithRetry)
+│   │   └── sse-stream-processor.ts # Provider-agnostic SSE stream parsing
 │   ├── core/          # Generation, validation, formatting
 │   │   ├── streaming-generator.ts  # SSE streaming orchestrator
 │   │   ├── build-validator.ts      # Missing deps, broken imports, syntax errors, import/export mismatch
@@ -74,9 +81,13 @@ backend/
 │   │   └── version-manager.ts      # FIFO/LRU version eviction
 │   ├── analysis/      # Dependency graph, file indexing, AI-powered file planner
 │   ├── diff/          # Modification engine (with progress callbacks), multi-tier matcher, prompt builder
-│   ├── streaming/     # SSE backpressure controller + SSEEncoder utility
+│   ├── streaming/     # SSE backpressure controller, SSEEncoder, stream-lifecycle
+│   │   └── stream-lifecycle.ts     # Heartbeat, timeout, abort, cleanup management
 │   ├── utils/         # Incremental JSON parser (O(n)), path security
 │   ├── api/           # CORS, gzip, request ID, error helpers
+│   │   ├── request-parser.ts       # JSON parsing + Zod validation
+│   │   ├── route-context.ts        # Request ID + context logger middleware
+│   │   └── zod-error.ts            # Zod error formatting
 │   ├── logger.ts      # Structured logging with redaction and category filtering
 │   ├── metrics.ts     # AI operation timing and token tracking
 │   ├── config.ts      # Zod-validated env vars with provider-aware defaults
@@ -87,7 +98,7 @@ backend/
 ### Shared Package
 ```
 shared/src/
-├── types/     # API contracts, project state, versions, diffs, errors, plans
+├── types/     # API contracts, project state, versions, diffs, errors, plans, auth
 ├── schemas/   # Zod validation for all API endpoints
 └── utils/     # sanitizeError(), error messages, text diff
 ```
@@ -118,6 +129,7 @@ npm run lint                   # All workspaces
 ### Routing
 
 - `/`: WelcomePage — templates grid, saved projects gallery
+- `/login`: LoginPage — authentication via Supabase
 - `/project/new`: BuilderPage — new project (optional `?prompt=` query param)
 - `/project/:id`: BuilderPage — existing project from IndexedDB
 - `/settings/agents`: AgentSettingsPage — AI model/provider configuration
@@ -160,11 +172,22 @@ Multi-provider architecture with runtime switching:
 - Components subscribe selectively: `useXxxState()` or `useXxxActions()`
 - Applied to: GenerationContext, PreviewErrorContext, ChatMessagesContext, VersionContext
 
-**Context Providers**: ProjectContext, ChatMessagesContext, GenerationContext, VersionContext, AutoRepairProvider, PreviewErrorProvider, ErrorAggregatorProvider
+**Context Providers**: ProjectContext, ChatMessagesContext, GenerationContext, VersionContext, AutoRepairProvider, PreviewErrorProvider, ErrorAggregatorProvider, AuthContext
+
+### Authentication
+
+- **Supabase Auth** integration with JWT verification
+- `AuthContext` (split pattern) manages auth state and actions
+- `AuthGuard` component protects authenticated routes
+- `LoginPage` handles sign-in flow
+- Backend validates JWTs via `SUPABASE_JWT_SECRET`
 
 ### Storage
 
 - **IndexedDB** via `StorageService`: Local-first project persistence (files, chat, versions, metadata)
+- **Cloud storage** via `CloudStorageService`: Supabase-backed sync for authenticated users
+- **HybridStorageService**: Fallback layer (local → cloud) for seamless offline/online experience
+- **Modular stores**: project-store, chat-store, metadata-store, template-store
 - **Auto-save** with debouncing; **write coalescing** prevents race conditions (latest wins)
 - CRUD: create, read, update, delete, rename, duplicate projects
 
@@ -186,6 +209,8 @@ Multi-provider architecture with runtime switching:
 - `LOG_LEVEL`: debug/info/warn/error (default: info)
 - `LOG_FORMAT`: text/json (default: text)
 - `LOG_CATEGORIES`: ai,api,core,diff,analysis,streaming
+- `SUPABASE_JWT_SECRET`: JWT verification for Supabase Auth (optional)
+- `RATE_LIMIT_ENABLED`: Enable rate limiting (default: true)
 
 **Frontend** (`.env`):
 - `VITE_API_BASE_URL`: Backend URL (default: http://localhost:4000)
@@ -194,7 +219,7 @@ Multi-provider architecture with runtime switching:
 
 ## Key Dependencies
 
-**Frontend**: react 18, react-router-dom 7, @codesandbox/sandpack-react, @monaco-editor/react, @tanstack/react-virtual, lucide-react, react-markdown + remark-gfm, react-syntax-highlighter, zod
+**Frontend**: react 18, react-router-dom 7, @codesandbox/sandpack-react, @monaco-editor/react, @tanstack/react-virtual, lucide-react, react-markdown + remark-gfm, react-syntax-highlighter, zod, @supabase/supabase-js, @stackblitz/sdk, html2canvas
 
 **Backend**: next 14, zod, prettier, jszip, uuid
 
@@ -222,6 +247,8 @@ Multi-provider architecture with runtime switching:
 6. **Local-First**: IndexedDB persistence, no server required for storage
 7. **Request ID Tracing**: Unique ID per request, propagated through all layers
 8. **Auto-Repair**: Automatic error detection and fix with bounded retries
+9. **Authentication**: Optional Supabase Auth with JWT verification
+10. **Hybrid Storage**: Local-first with optional cloud sync via Supabase
 
 ### Frontend Performance
 - **Split Context Pattern**: Subscribe only to state OR actions, not both

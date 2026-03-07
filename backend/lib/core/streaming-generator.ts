@@ -193,6 +193,18 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     contextLogger.debug('Validating files', { files: Object.keys(prefixedFiles) });
     const validationResult = this.validationPipeline.validate(prefixedFiles);
 
+    // Surface quality warnings via SSE instead of just logging
+    if (validationResult.warnings && validationResult.warnings.length > 0) {
+      for (const warning of validationResult.warnings) {
+        callbacks.onWarning?.({
+          path: warning.filePath ?? '',
+          message: warning.message,
+          type: 'validation',
+        });
+        warningCount++;
+      }
+    }
+
     if (!validationResult.valid) {
       contextLogger.error('Validation errors', { errors: validationResult.errors });
       const error = 'AI output failed validation';
@@ -218,7 +230,8 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     const finalFiles = await this.runBuildFixLoop(
       validationResult.sanitizedOutput!,
       'generation',
-      description
+      description,
+      options?.requestId
     );
 
     // If aborted after build-fix, skip file emission

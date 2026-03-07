@@ -4,6 +4,12 @@ import { useNavigate } from 'react-router-dom';
 
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import {
+    useSidebarResize,
+    RESIZE_MIN_WIDTH,
+    DESKTOP_BREAKPOINT,
+    SIDEBAR_COLLAPSED_WIDTH,
+} from '@/hooks/useSidebarResize';
 
 import { useProjectState, useProjectActions, useChatMessages, useGenerationState } from '../../context';
 import { VersionHistoryDrawer } from '../VersionHistory';
@@ -23,13 +29,6 @@ import { ResizablePanel } from './ResizablePanel';
 
 
 
-const RESIZE_MIN_WIDTH = 300;
-const RESIZE_MAX_FRACTION = 0.6;
-const DESKTOP_BREAKPOINT = 1023;
-const SIDE_PANEL_WIDTH_STORAGE_KEY = 'ai_app_builder:sidePanelWidth';
-const SIDEBAR_COLLAPSED_STORAGE_KEY = 'ai_app_builder:sidebarCollapsed';
-const SIDEBAR_COLLAPSED_WIDTH = 48;
-const SIDEBAR_DEFAULT_WIDTH = 340;
 
 /**
  * Formats a timestamp for the save indicator.
@@ -98,53 +97,15 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialPrompt]);
     const [activePanel, setActivePanel] = useState<ActivePanel>('chat');
-    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-        const raw = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
-        // Default to collapsed on tablet/mobile, expanded on desktop
-        if (raw === null) {
-            return window.innerWidth <= DESKTOP_BREAKPOINT;
-        }
-        return raw === 'true';
-    });
-    const [sidePanelWidth, setSidePanelWidth] = useState(() => {
-        const raw = localStorage.getItem(SIDE_PANEL_WIDTH_STORAGE_KEY);
-        const parsed = raw ? Number(raw) : NaN;
-        return Number.isFinite(parsed) ? parsed : SIDEBAR_DEFAULT_WIDTH;
-    });
-    const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
-
-    const maxSidePanelWidth = Math.max(
-        RESIZE_MIN_WIDTH,
-        Math.floor(windowWidth * RESIZE_MAX_FRACTION)
-    );
-
-    useEffect(() => {
-        const onResize = () => {
-            setWindowWidth(window.innerWidth);
-        };
-        window.addEventListener('resize', onResize);
-        return () => window.removeEventListener('resize', onResize);
-    }, []);
-
-    // Persist split width locally (no cloud)
-    useEffect(() => {
-        localStorage.setItem(SIDE_PANEL_WIDTH_STORAGE_KEY, String(sidePanelWidth));
-    }, [sidePanelWidth]);
-
-    // Persist sidebar collapsed state
-    useEffect(() => {
-        localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(isSidebarCollapsed));
-    }, [isSidebarCollapsed]);
-
-    // If the viewport shrinks, clamp the stored width to avoid layout issues.
-    useEffect(() => {
-        setSidePanelWidth((w) => Math.max(RESIZE_MIN_WIDTH, Math.min(w, maxSidePanelWidth)));
-    }, [maxSidePanelWidth]);
-
-    // Toggle sidebar collapse
-    const handleToggleSidebar = useCallback(() => {
-        setIsSidebarCollapsed((prev) => !prev);
-    }, []);
+    const {
+        isSidebarCollapsed,
+        setIsSidebarCollapsed,
+        sidePanelWidth,
+        setSidePanelWidth,
+        windowWidth,
+        maxSidePanelWidth,
+        handleToggleSidebar,
+    } = useSidebarResize();
 
     // Close sidebar when clicking backdrop on tablet
     const handleBackdropClick = useCallback(() => {

@@ -80,18 +80,18 @@ export function ConfirmDialog({
   }, [onCancel]);
 
   return (
-    <dialog ref={dialogRef} className="confirm-dialog">
+    <dialog ref={dialogRef} className="confirm-dialog" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message">
       <div className="confirm-dialog-content">
         <div className="confirm-dialog-header">
           {confirmVariant === 'destructive' && (
-            <div className="confirm-dialog-icon confirm-dialog-icon--warning">
+            <div className="confirm-dialog-icon confirm-dialog-icon--warning" aria-hidden="true">
               <AlertTriangle size={20} />
             </div>
           )}
-          <h2 className="confirm-dialog-title">{title}</h2>
+          <h2 id="confirm-dialog-title" className="confirm-dialog-title">{title}</h2>
         </div>
 
-        <p className="confirm-dialog-message">{message}</p>
+        <p id="confirm-dialog-message" className="confirm-dialog-message">{message}</p>
 
         <div className="confirm-dialog-actions">
           <button

@@ -15,13 +15,14 @@ import {
   GenerateProjectRequestSchema
 } from '@ai-app-builder/shared';
 import { createStreamingProjectGenerator } from '../../../lib/core/streaming-generator';
-import { handleOptions, getCorsHeaders } from '../../../lib/api';
+import { handleOptions, getCorsHeaders, parseJsonRequest } from '../../../lib/api';
 import { createLogger } from '../../../lib/logger';
 import { generateRequestId } from '../../../lib/request-id';
 import {
   BackpressureController,
   EventPriority,
   SSEEncoder,
+  createStreamLifecycle,
 } from '../../../lib/streaming';
 
 const logger = createLogger('api/generate-stream');
@@ -45,24 +46,10 @@ export async function POST(request: NextRequest) {
   const contextLogger = logger.withRequestId(requestId);
 
   try {
-    // Parse request body
-    // Parse request body
-    let rawBody;
-    try {
-      rawBody = await request.json();
-    } catch {
-      return new Response('Invalid JSON in request body', { status: 400 });
-    }
-
-    // Validate request using strict schema
-    let body: GenerateProjectRequest;
-    try {
-      body = GenerateProjectRequestSchema.parse(rawBody);
-    } catch (error: any) {
-      // Simple error formatting for Zod errors
-      const message = error.errors ? error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ') : 'Validation failed';
-      return new Response(`Invalid request: ${message}`, { status: 400 });
-    }
+    // Parse and validate request body
+    const parsed = await parseJsonRequest(request, GenerateProjectRequestSchema);
+    if (!parsed.ok) return parsed.response;
+    const body: GenerateProjectRequest = parsed.data;
 
     contextLogger.info('Starting streaming generation', {
       descriptionLength: body.description.length,
@@ -79,88 +66,15 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new SSEEncoder(backpressure);
-        let heartbeatInterval: NodeJS.Timeout | null = null;
-        let streamTimeout: NodeJS.Timeout | null = null;
-        let isComplete = false;
+        const lifecycle = createStreamLifecycle(
+          controller, encoder, backpressure, request.signal, contextLogger,
+          { heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS, streamTimeoutMs: STREAM_TIMEOUT_MS }
+        );
+        const { isComplete, cleanup, safeClose, safeEnqueue } = lifecycle;
 
-        // Cleanup function
-        const cleanup = () => {
-          if (heartbeatInterval) clearInterval(heartbeatInterval);
-          if (streamTimeout) clearTimeout(streamTimeout);
-          heartbeatInterval = null;
-          streamTimeout = null;
-          isComplete = true;
-
-          // Log backpressure statistics
-          backpressure.logStats();
-        };
-
-        // Safe enqueue — guards against writing to a closed/errored controller
-        const safeEnqueue = (data: Uint8Array) => {
-          if (isComplete) return;
-          try {
-            controller.enqueue(data);
-          } catch {
-            // Controller already closed (client disconnected)
-          }
-        };
-
-        // Safe close — guards against double-close
-        const safeClose = () => {
-          if (isComplete) return;
-          cleanup();
-          try {
-            controller.close();
-          } catch {
-            // Controller already closed
-          }
-        };
-
-        // Listen for client disconnect via request.signal
-        const onAbort = () => {
-          if (isComplete) return;
-          contextLogger.info('Client disconnected, aborting SSE stream');
-          cleanup();
-          try {
-            controller.close();
-          } catch {
-            // Controller already closed
-          }
-        };
-
-        if (request.signal) {
-          if (request.signal.aborted) {
-            // Already aborted before we started
-            onAbort();
-            return;
-          }
-          request.signal.addEventListener('abort', onAbort, { once: true });
-        }
+        if (isComplete()) return; // Already aborted
 
         try {
-          // Set up heartbeat to prevent proxy timeouts
-          heartbeatInterval = setInterval(() => {
-            if (!isComplete) {
-              // Heartbeat has low priority and can be dropped under backpressure
-              encoder.enqueueHeartbeat(controller);
-            }
-          }, HEARTBEAT_INTERVAL_MS);
-
-          // Set up stream timeout
-          streamTimeout = setTimeout(() => {
-            if (!isComplete) {
-              cleanup();
-              // Error events are critical
-              encoder.enqueueEvent(
-                controller,
-                'error',
-                // Convert ms to seconds: 960000ms / 1000 = 960 seconds (16 minutes)
-              { error: `Stream timeout after ${STREAM_TIMEOUT_MS / 1000} seconds` },
-                EventPriority.CRITICAL
-              );
-              controller.close();
-            }
-          }, STREAM_TIMEOUT_MS);
 
           // Generate project with streaming callbacks
           const generator = await createStreamingProjectGenerator();
@@ -256,7 +170,7 @@ export async function POST(request: NextRequest) {
           }, { requestId });
 
           // If already aborted, skip final messages
-          if (isComplete) return;
+          if (isComplete()) return;
 
           // If generation failed without calling onError
           if (!result.success && result.error) {
@@ -279,7 +193,7 @@ export async function POST(request: NextRequest) {
 
         } catch (error) {
           // If already cleaned up (client disconnect), just log and return
-          if (isComplete) {
+          if (isComplete()) {
             contextLogger.info('Stream already closed (client disconnected)');
             return;
           }

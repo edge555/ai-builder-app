@@ -18,11 +18,11 @@
 import { createLogger } from '../logger';
 import { config } from '../config';
 import { ERROR_TEXT_MAX_LENGTH } from '../constants';
-import { OperationTimer, formatMetrics } from '../metrics';
 import { extractJsonFromResponse } from './modal-response-parser';
 import type { AIProvider, AIRequest, AIStreamingRequest, AIResponse } from './ai-provider';
-import { categorizeError, isRetryableError } from './ai-error-utils';
-import { serviceError, stateError, envVarError } from '@ai-app-builder/shared/utils';
+import { executeWithRetry } from './ai-retry';
+import { processSSEStream } from './sse-stream-processor';
+import { serviceError, envVarError } from '@ai-app-builder/shared/utils';
 
 const logger = createLogger('modal-client');
 
@@ -75,71 +75,26 @@ export class ModalClient implements AIProvider {
    * Sends a request to the Modal endpoint with retry logic.
    */
   async generate(request: AIRequest): Promise<AIResponse> {
-    return this.executeWithRetry('modal-generate', request, () => this.makeRequest(request));
+    return executeWithRetry(
+      'modal-generate',
+      request,
+      { maxRetries: this.maxRetries, retryBaseDelay: this.retryBaseDelay, apiErrorPrefix: 'modal request failed' },
+      logger,
+      async () => ({ content: await this.makeRequest(request) })
+    );
   }
 
   /**
    * Streaming implementation: calls makeStreamingRequest() with retry logic.
    */
   async generateStreaming(request: AIStreamingRequest): Promise<AIResponse> {
-    return this.executeWithRetry('modal-generate-streaming', request, () => this.makeStreamingRequest(request));
-  }
-
-  /**
-   * Common retry logic for generate and generateStreaming.
-   */
-  private async executeWithRetry(
-    operationName: string,
-    request: AIRequest,
-    operation: () => Promise<string>
-  ): Promise<AIResponse> {
-    const timer = new OperationTimer(operationName, request.requestId);
-    const contextLogger = request.requestId ? logger.withRequestId(request.requestId) : logger;
-
-    let lastError: Error | null = null;
-    let retryCount = 0;
-
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      try {
-        const content = await operation();
-
-        const metrics = timer.complete(true, { retryCount: attempt });
-        contextLogger.info(`${operationName} completed`, formatMetrics(metrics));
-
-        return { success: true, content, retryCount: attempt };
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        retryCount = attempt;
-
-        if (!isRetryableError(lastError, 'modal request failed')) {
-          break;
-        }
-
-        contextLogger.warn(`${operationName} attempt ${attempt} failed, retrying...`, {
-          error: lastError.message,
-        });
-
-        if (attempt < this.maxRetries) {
-          await this.delay(this.calculateBackoff(attempt));
-        }
-      }
-    }
-
-    const metrics = timer.complete(false, {
-      retryCount,
-      error: lastError?.message ?? 'Unknown error occurred',
-    });
-    contextLogger.error(`${operationName} failed`, formatMetrics(metrics));
-
-    const { errorType, errorCode } = categorizeError(lastError!, 'modal request failed');
-
-    return {
-      success: false,
-      error: lastError?.message ?? 'Unknown error occurred',
-      errorType,
-      errorCode,
-      retryCount,
-    };
+    return executeWithRetry(
+      'modal-generate-streaming',
+      request,
+      { maxRetries: this.maxRetries, retryBaseDelay: this.retryBaseDelay, apiErrorPrefix: 'modal request failed' },
+      logger,
+      async () => ({ content: await this.makeStreamingRequest(request) })
+    );
   }
 
   /**
@@ -211,9 +166,9 @@ export class ModalClient implements AIProvider {
         throw new Error(serviceError('Modal', `${response.status} - ${errorText}`));
       }
 
-      const accumulated = await this.processSSEStream(response, (token, totalLength) => {
+      const accumulated = await processSSEStream(response, this.parseSSEToken.bind(this), (token, totalLength) => {
         request.onChunk?.(token, totalLength);
-      });
+      }, 'Modal');
 
       clearTimeout(timeoutId);
       return accumulated;
@@ -275,43 +230,6 @@ export class ModalClient implements AIProvider {
       clearTimeout(timeoutId);
       throw this.handleFetchError(error, requestSignal);
     }
-  }
-
-  /**
-   * Process an SSE stream, calling onToken for each received token.
-   * Returns the full accumulated content.
-   */
-  private async processSSEStream(
-    response: Response,
-    onToken: (token: string, totalLength: number) => void
-  ): Promise<string> {
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error(stateError('Modal', 'response body is null'));
-    }
-
-    const decoder = new TextDecoder();
-    let accumulated = '';
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const token = this.parseSSEToken(line);
-        if (token !== null) {
-          accumulated += token;
-          onToken(token, accumulated.length);
-        }
-      }
-    }
-
-    return accumulated;
   }
 
   /**
@@ -387,20 +305,6 @@ export class ModalClient implements AIProvider {
     return request.systemInstruction;
   }
 
-  /**
-   * Calculates exponential backoff delay with jitter.
-   */
-  private calculateBackoff(attempt: number): number {
-    // Exponential backoff: doubles the delay with each retry attempt (2^attempt)
-    const exponentialDelay = this.retryBaseDelay * Math.pow(2, attempt);
-    // Add up to 30% random jitter (0.3) to prevent thundering herd problem
-    const jitter = Math.random() * 0.3 * exponentialDelay;
-    return exponentialDelay + jitter;
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }
 
 /**

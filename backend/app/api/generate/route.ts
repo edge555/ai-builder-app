@@ -11,7 +11,7 @@ import type { GenerateProjectResponse } from '@ai-app-builder/shared';
 import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import { serializeProjectState, serializeVersion, GenerateProjectRequestSchema } from '@ai-app-builder/shared';
 import { createProjectGenerator } from '../../../lib/core';
-import { getCorsHeaders, handleOptions, handleError, AppError, gzipJson } from '../../../lib/api';
+import { getCorsHeaders, handleOptions, handleError, AppError, gzipJson, parseJsonRequest } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
 
@@ -33,11 +33,10 @@ export async function POST(request: NextRequest): Promise<Response> {
   const contextLogger = logger.withRequestId(requestId);
 
   try {
-    // Parse request body
-    const body = await request.json();
-
-    // Validate request
-    const validatedRequest = GenerateProjectRequestSchema.parse(body);
+    // Parse and validate request body
+    const parsed = await parseJsonRequest(request, GenerateProjectRequestSchema);
+    if (!parsed.ok) return parsed.response;
+    const validatedRequest = parsed.data;
 
     contextLogger.info('Generating project', {
       descriptionLength: validatedRequest.description.length,

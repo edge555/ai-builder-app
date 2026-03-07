@@ -39,7 +39,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const validatedRequest = ExportProjectRequestSchema.parse(body);
 
     // Deserialize project state
-    const projectState = deserializeProjectState(validatedRequest.projectState as any);
+    const projectState = deserializeProjectState(validatedRequest.projectState);
 
     // Generate ZIP file with timeout
     const zipBuffer = await withTimeout(

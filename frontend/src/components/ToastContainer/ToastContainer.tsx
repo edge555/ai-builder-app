@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { CheckCircle, Info, AlertTriangle, AlertCircle, X } from 'lucide-react';
 import { useToastState, useToastActions, type ToastItem, type ToastType } from '@/context/ToastContext';
+import { useCountdown } from '@/hooks/useCountdown';
 import './ToastContainer.css';
 
 const ICONS: Record<ToastType, typeof CheckCircle> = {
@@ -11,25 +12,7 @@ const ICONS: Record<ToastType, typeof CheckCircle> = {
 };
 
 function CountdownBar({ endsAt }: { endsAt: number }) {
-  const [progress, setProgress] = useState(100);
-
-  useEffect(() => {
-    const total = endsAt - Date.now();
-    if (total <= 0) return;
-
-    const interval = setInterval(() => {
-      const remaining = endsAt - Date.now();
-      if (remaining <= 0) {
-        setProgress(0);
-        clearInterval(interval);
-      } else {
-        setProgress((remaining / total) * 100);
-      }
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [endsAt]);
-
+  const { progress } = useCountdown(endsAt);
   return (
     <div className="toast-countdown">
       <div
@@ -41,18 +24,7 @@ function CountdownBar({ endsAt }: { endsAt: number }) {
 }
 
 function CountdownText({ endsAt }: { endsAt: number }) {
-  const [seconds, setSeconds] = useState(() => Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)));
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const remaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
-      setSeconds(remaining);
-      if (remaining <= 0) clearInterval(interval);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [endsAt]);
-
+  const { seconds } = useCountdown(endsAt);
   if (seconds <= 0) return null;
   return <span className="toast-countdown-text">Try again in {seconds}s</span>;
 }

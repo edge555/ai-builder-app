@@ -78,6 +78,7 @@ export function FileTreeNode({
               width="12"
               height="12"
               viewBox="0 0 12 12"
+              aria-hidden="true"
               style={{
                 marginRight: '6px',
                 transition: 'transform 0.15s ease',
@@ -97,6 +98,7 @@ export function FileTreeNode({
               width="14"
               height="14"
               viewBox="0 0 16 16"
+              aria-hidden="true"
               style={{ marginRight: '6px' }}
             >
               <path
@@ -113,6 +115,7 @@ export function FileTreeNode({
               width="14"
               height="14"
               viewBox="0 0 16 16"
+              aria-hidden="true"
               style={{ marginRight: '6px', marginLeft: '18px' }}
             >
               <path
@@ -129,7 +132,7 @@ export function FileTreeNode({
       </div>
 
       {isDirectory && isExpanded && node.children && (
-        <div>
+        <div role="group">
           {node.children.map((child) => (
             <FileTreeNode
               key={child.path}

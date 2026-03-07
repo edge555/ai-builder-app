@@ -122,7 +122,7 @@ const PreviewPanelComponent = function PreviewPanel({
   const entryFile = useMemo(() => getEntryFile(sandpackFiles), [sandpackFiles]);
 
   return (
-    <div className="preview-panel">
+    <div className="preview-panel" role="region" aria-label="Application preview">
       <PreviewHeader
         showCode={effectiveShowCode}
         onViewChange={setShowCode}
@@ -145,11 +145,11 @@ const PreviewPanelComponent = function PreviewPanel({
       ) : !projectState && !isLoading ? (
         <EmptyProjectState />
       ) : effectiveShowCode ? (
-        <div className="preview-content" role="tabpanel" id="tabpanel-code">
+        <div className="preview-content" role="tabpanel" id="tabpanel-code" aria-label="Code editor">
           <CodeEditorView files={projectState?.files || {}} />
         </div>
       ) : (
-        <div className="preview-content" role="tabpanel" id="tabpanel-preview">
+        <div className="preview-content" role="tabpanel" id="tabpanel-preview" aria-label="Live preview">
           <SandpackProvider
             files={Object.fromEntries(
               Object.entries(sandpackFiles).map(([path, code]) => [path, { code }])

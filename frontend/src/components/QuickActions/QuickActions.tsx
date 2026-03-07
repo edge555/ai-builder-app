@@ -92,6 +92,7 @@ export function QuickActions({
                         disabled={disabled}
                         type="button"
                         title={action.prompt}
+                        aria-label={action.prompt}
                     >
                         <span className="quick-action-icon" aria-hidden="true">
                             {action.icon || <Sparkles size={14} />}

@@ -15,10 +15,10 @@
 
 import { createLogger } from '../logger';
 import { ERROR_TEXT_MAX_LENGTH } from '../constants';
-import { OperationTimer, formatMetrics } from '../metrics';
 import type { AIProvider, AIRequest, AIStreamingRequest, AIResponse } from './ai-provider';
-import { categorizeError, isRetryableError } from './ai-error-utils';
-import { serviceError, stateError, envVarError } from '@ai-app-builder/shared/utils';
+import { executeWithRetry } from './ai-retry';
+import { processSSEStream } from './sse-stream-processor';
+import { serviceError, envVarError } from '@ai-app-builder/shared/utils';
 import type {
   OpenRouterClientConfig,
   OpenRouterRequest,
@@ -53,98 +53,39 @@ export class OpenRouterClient implements AIProvider {
   }
 
   async generate(request: AIRequest): Promise<AIResponse> {
-    return this.executeWithRetry('openrouter-generate', request, async () => {
-      const { content, usage } = await this.makeRequest(request, false);
-      return {
-        content,
-        extraResponse: usage ? {
-          usage: {
-            inputTokens: usage.prompt_tokens,
-            outputTokens: usage.completion_tokens,
-            totalTokens: usage.total_tokens,
-          },
-        } : undefined,
-        extraLog: usage ? { inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens } : undefined,
-      };
-    });
+    return executeWithRetry(
+      'openrouter-generate',
+      request,
+      { maxRetries: this.maxRetries, retryBaseDelay: this.retryBaseDelay, apiErrorPrefix: 'openrouter request failed', modelId: this.model },
+      logger,
+      async () => {
+        const { content, usage } = await this.makeRequest(request, false);
+        return {
+          content,
+          extraResponse: usage ? {
+            usage: {
+              inputTokens: usage.prompt_tokens,
+              outputTokens: usage.completion_tokens,
+              totalTokens: usage.total_tokens,
+            },
+          } : undefined,
+          extraLog: usage ? { inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens } : undefined,
+        };
+      }
+    );
   }
 
   async generateStreaming(request: AIStreamingRequest): Promise<AIResponse> {
-    return this.executeWithRetry('openrouter-generate-streaming', request, async () => {
-      const content = await this.makeStreamingRequest(request);
-      return { content };
-    });
-  }
-
-  /**
-   * Common retry logic for generate and generateStreaming.
-   */
-  private async executeWithRetry(
-    operationName: string,
-    request: AIRequest,
-    operation: () => Promise<{ content: string; extraResponse?: Record<string, unknown>; extraLog?: Record<string, unknown> }>
-  ): Promise<AIResponse> {
-    const timer = new OperationTimer(operationName, request.requestId);
-    const contextLogger = request.requestId ? logger.withRequestId(request.requestId) : logger;
-
-    let lastError: Error | null = null;
-    let retryCount = 0;
-
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      try {
-        const result = await operation();
-
-        const metrics = timer.complete(true, { retryCount: attempt });
-        contextLogger.info(`[openrouter-client] ${operationName} to ${this.model} | Latency: ${metrics.durationMs}ms`, {
-          ...formatMetrics(metrics),
-          model: this.model,
-          ...result.extraLog,
-        });
-
-        return {
-          success: true,
-          content: result.content,
-          modelId: this.model,
-          retryCount: attempt,
-          ...result.extraResponse,
-        };
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        retryCount = attempt;
-
-        if (!isRetryableError(lastError, 'openrouter request failed')) {
-          break;
-        }
-
-        if (attempt < this.maxRetries) {
-          contextLogger.warn(`OpenRouter ${operationName} attempt ${attempt} failed, retrying...`, {
-            error: lastError.message,
-            model: this.model,
-          });
-          await this.delay(this.calculateBackoff(attempt));
-        }
+    return executeWithRetry(
+      'openrouter-generate-streaming',
+      request,
+      { maxRetries: this.maxRetries, retryBaseDelay: this.retryBaseDelay, apiErrorPrefix: 'openrouter request failed', modelId: this.model },
+      logger,
+      async () => {
+        const content = await this.makeStreamingRequest(request);
+        return { content };
       }
-    }
-
-    const metrics = timer.complete(false, {
-      retryCount,
-      error: lastError?.message ?? 'Unknown error occurred',
-    });
-    contextLogger.error(`OpenRouter ${operationName} failed`, {
-      ...formatMetrics(metrics),
-      model: this.model,
-    });
-
-    const { errorType, errorCode } = categorizeError(lastError!, 'openrouter request failed');
-
-    return {
-      success: false,
-      modelId: this.model,
-      error: lastError?.message ?? 'Unknown error occurred',
-      errorType,
-      errorCode,
-      retryCount,
-    };
+    );
   }
 
   // ---- Private helpers ----
@@ -261,9 +202,9 @@ export class OpenRouterClient implements AIProvider {
         throw new Error(serviceError('OpenRouter', `${response.status} - ${errorText}`));
       }
 
-      const accumulated = await this.processSSEStream(response, (delta, totalLength) => {
+      const accumulated = await processSSEStream(response, this.parseSSEDelta.bind(this), (delta, totalLength) => {
         request.onChunk?.(delta, totalLength);
-      });
+      }, 'OpenRouter');
 
       clearTimeout(timeoutId);
       return accumulated;
@@ -271,42 +212,6 @@ export class OpenRouterClient implements AIProvider {
       clearTimeout(timeoutId);
       throw error;
     }
-  }
-
-  /**
-   * Process an SSE stream, calling onToken for each received delta.
-   */
-  private async processSSEStream(
-    response: Response,
-    onToken: (delta: string, totalLength: number) => void
-  ): Promise<string> {
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error(stateError('OpenRouter', 'response body is null'));
-    }
-
-    const decoder = new TextDecoder();
-    let accumulated = '';
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const delta = this.parseSSEDelta(line);
-        if (delta !== null) {
-          accumulated += delta;
-          onToken(delta, accumulated.length);
-        }
-      }
-    }
-
-    return accumulated;
   }
 
   /**
@@ -390,13 +295,4 @@ export class OpenRouterClient implements AIProvider {
     return error instanceof Error ? error : new Error(String(error));
   }
 
-  private calculateBackoff(attempt: number): number {
-    const exponentialDelay = this.retryBaseDelay * Math.pow(2, attempt);
-    const jitter = Math.random() * 0.3 * exponentialDelay;
-    return exponentialDelay + jitter;
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 }

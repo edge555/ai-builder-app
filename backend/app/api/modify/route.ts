@@ -20,7 +20,7 @@ import {
 } from '@ai-app-builder/shared';
 import { createModificationEngine } from '../../../lib/diff';
 import { detectIntent } from '../../../lib/ai/ai-provider-factory';
-import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError, gzipJson } from '../../../lib/api';
+import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError, gzipJson, parseJsonRequest } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
 
@@ -47,11 +47,10 @@ export async function POST(
   const contextLogger = logger.withRequestId(requestId);
 
   try {
-    // Parse request body
-    const body = await request.json();
-
-    // Validate request
-    const validatedRequest = ModifyProjectRequestSchema.parse(body);
+    // Parse and validate request body
+    const parsed = await parseJsonRequest(request, ModifyProjectRequestSchema);
+    if (!parsed.ok) return parsed.response;
+    const validatedRequest = parsed.data;
 
     contextLogger.info('Modifying project', {
       promptLength: validatedRequest.prompt.length,
@@ -59,7 +58,7 @@ export async function POST(
     });
 
     // Deserialize project state
-    const projectState = deserializeProjectState(validatedRequest.projectState as any);
+    const projectState = deserializeProjectState(validatedRequest.projectState);
 
     // Extract shouldSkipPlanning option from request
     const { shouldSkipPlanning } = validatedRequest;
