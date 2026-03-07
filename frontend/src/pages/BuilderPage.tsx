@@ -11,14 +11,13 @@ import {
   AutoRepairProvider,
   PreviewErrorProvider,
   ErrorAggregatorProvider,
-  ToastProvider,
   useProjectState,
 } from '@/context';
 import {
-  storageService,
   toSerializedProjectState,
   deserializeChatMessages,
 } from '@/services/storage';
+import { hybridStorageService } from '@/services/storage/HybridStorageService';
 import { createLogger } from '@/utils/logger';
 
 /**
@@ -86,7 +85,7 @@ export function BuilderPage() {
       } else if (projectId) {
         // Load existing project from storage
         try {
-          const storedProject = await storageService.getProject(projectId);
+          const storedProject = await hybridStorageService.getProject(projectId);
           if (!storedProject) {
             builderLogger.error('Project not found', { projectId });
             navigate('/', { replace: true });
@@ -142,25 +141,23 @@ export function BuilderPage() {
       onError={handleGlobalError}
       errorMessage="The application encountered an unexpected error. Please refresh the page to continue."
     >
-      <ToastProvider>
-        <ErrorAggregatorProvider key={projectKey}>
-          <ProjectProvider initialState={initialState}>
-            <ProjectUrlSync />
-            <ChatMessagesProvider initialMessages={initialMessages}>
-              <GenerationProvider>
-                <PreviewErrorProvider>
-                  <AutoRepairProvider>
-                    <AppLayout
-                      initialPrompt={initialPrompt}
-                      onBackToDashboard={handleBackToDashboard}
-                    />
-                  </AutoRepairProvider>
-                </PreviewErrorProvider>
-              </GenerationProvider>
-            </ChatMessagesProvider>
-          </ProjectProvider>
-        </ErrorAggregatorProvider>
-      </ToastProvider>
+      <ErrorAggregatorProvider key={projectKey}>
+        <ProjectProvider initialState={initialState}>
+          <ProjectUrlSync />
+          <ChatMessagesProvider initialMessages={initialMessages}>
+            <GenerationProvider>
+              <PreviewErrorProvider>
+                <AutoRepairProvider>
+                  <AppLayout
+                    initialPrompt={initialPrompt}
+                    onBackToDashboard={handleBackToDashboard}
+                  />
+                </AutoRepairProvider>
+              </PreviewErrorProvider>
+            </GenerationProvider>
+          </ChatMessagesProvider>
+        </ProjectProvider>
+      </ErrorAggregatorProvider>
     </ErrorBoundary>
   );
 }

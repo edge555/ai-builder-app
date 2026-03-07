@@ -4,7 +4,7 @@
  * Calls Gemini API directly - no proxy layer.
  */
 import { corsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts';
-import { createServiceClient } from '../_shared/supabase-client.ts';
+import { createAuthClient } from '../_shared/supabase-client.ts';
 import { sanitizeError } from '../_shared/error-utils.ts';
 import { createGeminiClient, getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from '../_shared/ai/index.ts';
 
@@ -93,6 +93,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Extract auth header (required — verify_jwt = true ensures it's valid)
+    const authHeader = req.headers.get('Authorization') ?? '';
+
     // Parse and validate request body
     const body = (await req.json().catch(() => ({}))) as GenerateBody;
     const description = (body.description ?? '').trim();
@@ -243,32 +246,44 @@ Deno.serve(async (req) => {
             version,
           }));
 
-          // Save to database
+          // Save to database using user-scoped client so RLS applies
           try {
-            const supabase = createServiceClient();
+            const supabase = createAuthClient(authHeader);
 
-            const { data: project, error: projectErr } = await supabase
-              .from('projects')
-              .insert({
-                name: projectState.name,
-                description: projectState.description
-              })
-              .select('id')
-              .single();
+            // Resolve user_id from the JWT
+            const { data: { user } } = await supabase.auth.getUser();
+            const userId = user?.id;
 
-            if (!projectErr && project) {
-              const dbProjectId = project.id as string;
+            if (userId) {
+              const { data: project, error: projectErr } = await supabase
+                .from('projects')
+                .insert({
+                  name: projectState.name,
+                  description: projectState.description,
+                  user_id: userId,
+                })
+                .select('id')
+                .single();
 
-              await supabase.from('versions').insert({
-                id: versionId,
-                project_id: dbProjectId,
-                message: description,
-                project_state: projectState,
-                diffs: [],
-                change_summary: null,
-              });
+              if (!projectErr && project) {
+                const dbProjectId = project.id as string;
 
-              console.log('[generate-stream] Saved project to database:', dbProjectId);
+                await supabase.from('versions').insert({
+                  id: versionId,
+                  project_id: dbProjectId,
+                  message: description,
+                  project_state: projectState,
+                  diffs: [],
+                  change_summary: null,
+                  user_id: userId,
+                });
+
+                console.log('[generate-stream] Saved project to database:', dbProjectId);
+              } else if (projectErr) {
+                console.error('[generate-stream] Project insert error:', projectErr);
+              }
+            } else {
+              console.warn('[generate-stream] No user_id in JWT, skipping DB save');
             }
           } catch (dbError) {
             console.error('[generate-stream] Database save error:', dbError);

@@ -52,3 +52,18 @@
   align-items: center;
   gap: 10px;
 }
+
+.site-header-sign-in {
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  text-decoration: none;
+  border: 1px solid hsl(var(--border));
+  transition: background 150ms;
+}
+
+.site-header-sign-in:hover {
+  background: hsl(var(--muted));
+}
