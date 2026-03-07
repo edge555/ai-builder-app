@@ -4,7 +4,7 @@
  * No proxy layer - all logic runs in the edge function.
  */
 import { corsHeaders, handleCorsPreflightRequest } from '../_shared/cors.ts';
-import { createServiceClient } from '../_shared/supabase-client.ts';
+import { createAuthClient } from '../_shared/supabase-client.ts';
 import { sanitizeError } from '../_shared/error-utils.ts';
 import { createGeminiClient, getModificationPrompt, MODIFICATION_OUTPUT_SCHEMA } from '../_shared/ai/index.ts';
 import { applySearchReplace } from '../_shared/search-replace.ts';
@@ -310,6 +310,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Extract auth header (required — verify_jwt = true ensures it's valid)
+    const authHeader = req.headers.get('Authorization') ?? '';
+
     // Parse and validate request body
     const body = (await req.json().catch(() => ({}))) as ModifyBody;
     const promptText = (body.prompt ?? '').trim();
@@ -422,35 +425,44 @@ Deno.serve(async (req) => {
       parentVersionId: current.currentVersionId,
     };
 
-    // Step 7: Save to Supabase database
+    // Step 7: Save to Supabase database using user-scoped client so RLS applies
     try {
-      const supabase = createServiceClient();
+      const supabase = createAuthClient(authHeader);
 
-      // Update project metadata
-      await supabase
-        .from('projects')
-        .update({
-          name: updatedProjectState.name,
-          description: updatedProjectState.description
-        })
-        .eq('id', current.id);
+      // Resolve user_id from the JWT
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
 
-      // Save new version
-      const { error: verErr } = await supabase.from('versions').insert({
-        id: versionId,
-        project_id: current.id,
-        message: promptText,
-        project_state: updatedProjectState,
-        diffs: applyResult.diffs,
-        change_summary: null,
-      });
+      if (userId) {
+        // Update project metadata
+        await supabase
+          .from('projects')
+          .update({
+            name: updatedProjectState.name,
+            description: updatedProjectState.description,
+          })
+          .eq('id', current.id);
 
-      if (verErr) {
-        console.error('[modify] Database error:', verErr);
-        throw verErr;
+        // Save new version
+        const { error: verErr } = await supabase.from('versions').insert({
+          id: versionId,
+          project_id: current.id,
+          message: promptText,
+          project_state: updatedProjectState,
+          diffs: applyResult.diffs,
+          change_summary: null,
+          user_id: userId,
+        });
+
+        if (verErr) {
+          console.error('[modify] Database error:', verErr);
+          throw verErr;
+        }
+
+        console.log('[modify] Saved version to database:', versionId);
+      } else {
+        console.warn('[modify] No user_id in JWT, skipping DB save');
       }
-
-      console.log('[modify] Saved version to database:', versionId);
     } catch (dbError) {
       console.error('[modify] Failed to save to database:', dbError);
       // Don't fail the modification if DB save fails

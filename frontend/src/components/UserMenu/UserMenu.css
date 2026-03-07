@@ -1,0 +1,60 @@
+.user-menu {
+    position: relative;
+}
+
+.user-menu-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    background: transparent;
+    color: hsl(var(--foreground));
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: background 150ms;
+}
+
+.user-menu-trigger:hover {
+    background: hsl(var(--muted));
+}
+
+.user-menu-email {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-menu-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 160px;
+    background: hsl(var(--popover));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px hsl(var(--foreground) / 0.08);
+    z-index: 200;
+    padding: 4px;
+}
+
+.user-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: calc(var(--radius) - 2px);
+    background: transparent;
+    color: hsl(var(--foreground));
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: background 150ms;
+}
+
+.user-menu-item:hover {
+    background: hsl(var(--muted));
+}

@@ -1,6 +1,8 @@
 import { Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ThemeToggle/ThemeToggle';
+import { UserMenu } from '@/components/UserMenu/UserMenu';
+import { useAuthState } from '@/context/AuthContext.context';
 import './SiteHeader.css';
 
 interface SiteHeaderProps {
@@ -11,6 +13,8 @@ interface SiteHeaderProps {
 }
 
 export function SiteHeader({ actions, scrolled }: SiteHeaderProps) {
+  const { isAuthenticated } = useAuthState();
+
   return (
     <header className={`site-header ${scrolled ? 'site-header-scrolled' : ''}`}>
       <div className="site-header-content">
@@ -23,6 +27,11 @@ export function SiteHeader({ actions, scrolled }: SiteHeaderProps) {
         <div className="site-header-actions">
           {actions}
           <ThemeToggle />
+          {isAuthenticated ? (
+            <UserMenu />
+          ) : (
+            <Link to="/login" className="site-header-sign-in">Sign In</Link>
+          )}
         </div>
       </div>
     </header>

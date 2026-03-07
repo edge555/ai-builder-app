@@ -1,7 +1,19 @@
 project_id = "hzppirupmuvctfnqubvq"
 
 [functions.generate-stream]
-verify_jwt = false
+verify_jwt = true
+
+[functions.generate]
+verify_jwt = true
 
 [functions.modify]
-verify_jwt = false
+verify_jwt = true
+
+[functions.export]
+verify_jwt = true
+
+[functions.revert]
+verify_jwt = true
+
+[functions.versions]
+verify_jwt = true
