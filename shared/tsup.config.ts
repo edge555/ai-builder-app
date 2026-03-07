@@ -9,6 +9,7 @@ export default defineConfig({
     },
     format: ['cjs', 'esm'],
     dts: true,
+    tsconfig: './tsconfig.json',
     splitting: true,
     sourcemap: process.env.NODE_ENV !== 'production',
     clean: true,

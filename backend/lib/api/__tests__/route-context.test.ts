@@ -1,0 +1,197 @@
+/**
+ * Tests for route-context module
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createRouteContext, withRouteContext } from '../route-context';
+import type { NextRequest } from 'next/server';
+
+// Mock the logger
+vi.mock('../../logger', () => ({
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    withRequestId: vi.fn(function(this: any, requestId: string) {
+      return { ...this, requestId };
+    }),
+  })),
+}));
+
+// Mock the request-id module
+vi.mock('../../request-id', () => ({
+  generateRequestId: vi.fn(() => 'req_1234567890_abcdefgh'),
+}));
+
+describe('route-context', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('createRouteContext', () => {
+    it('should create a route context with request ID', () => {
+      const context = createRouteContext('api/test');
+
+      expect(context.requestId).toBe('req_1234567890_abcdefgh');
+      expect(context.contextLogger).toBeDefined();
+    });
+
+    it('should create context logger with request ID correlation', () => {
+      const context = createRouteContext('api/my-route');
+
+      expect(context.contextLogger).toHaveProperty('requestId', 'req_1234567890_abcdefgh');
+    });
+
+    it('should generate unique request IDs for each call', async () => {
+      let callCount = 0;
+      const requestModule = await import('../../request-id');
+      vi.mocked(requestModule).generateRequestId = vi.fn(() => {
+        callCount++;
+        return `req_${callCount}_abcdefgh`;
+      });
+
+      const context1 = createRouteContext('api/test1');
+      const context2 = createRouteContext('api/test2');
+
+      expect(context1.requestId).not.toBe(context2.requestId);
+    });
+
+    it('should accept different module names', () => {
+      const modules = ['api/health', 'api/generate', 'api/diff', 'api/versions'];
+
+      modules.forEach(module => {
+        const context = createRouteContext(module);
+        expect(context.requestId).toBeDefined();
+      });
+    });
+  });
+
+  describe('withRouteContext', () => {
+    it('should wrap handler and provide route context', async () => {
+      const mockRequest = {} as NextRequest;
+      const handler = vi.fn(async (ctx, request) => {
+        return new Response('ok', { status: 200 });
+      });
+
+      const wrappedHandler = withRouteContext('api/test', handler);
+      const response = await wrappedHandler(mockRequest);
+
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestId: 'req_1234567890_abcdefgh',
+          contextLogger: expect.any(Object),
+        }),
+        mockRequest
+      );
+      expect(response.status).toBe(200);
+    });
+
+    it('should add X-Request-Id header to response', async () => {
+      const mockRequest = {} as NextRequest;
+      const handler = vi.fn(async (ctx, request) => {
+        return new Response('ok', { status: 200 });
+      });
+
+      const wrappedHandler = withRouteContext('api/test', handler);
+      const response = await wrappedHandler(mockRequest);
+
+      expect(response.headers.get('X-Request-Id')).toBe('req_1234567890_abcdefgh');
+    });
+
+    it('should not override existing X-Request-Id header', async () => {
+      const mockRequest = {} as NextRequest;
+      const handler = vi.fn(async (ctx, request) => {
+        return new Response('ok', {
+          status: 200,
+          headers: { 'X-Request-Id': 'custom-id' },
+        });
+      });
+
+      const wrappedHandler = withRouteContext('api/test', handler);
+      const response = await wrappedHandler(mockRequest);
+
+      expect(response.headers.get('X-Request-Id')).toBe('custom-id');
+    });
+
+    it('should preserve response status and body', async () => {
+      const mockRequest = {} as NextRequest;
+      const handler = vi.fn(async (ctx, request) => {
+        return new Response(JSON.stringify({ data: 'test' }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+
+      const wrappedHandler = withRouteContext('api/test', handler);
+      const response = await wrappedHandler(mockRequest);
+
+      expect(response.status).toBe(201);
+      expect(response.headers.get('Content-Type')).toBe('application/json');
+    });
+
+    it('should handle handler errors', async () => {
+      const mockRequest = {} as NextRequest;
+      const handler = vi.fn(async (ctx, request) => {
+        throw new Error('Handler error');
+      });
+
+      const wrappedHandler = withRouteContext('api/test', handler);
+
+      await expect(wrappedHandler(mockRequest)).rejects.toThrow('Handler error');
+    });
+
+    it('should pass through request object unchanged', async () => {
+      const mockRequest = {
+        method: 'POST',
+        headers: new Headers({ 'Content-Type': 'application/json' }),
+      } as NextRequest;
+
+      const handler = vi.fn(async (ctx, request) => {
+        return new Response('ok');
+      });
+
+      const wrappedHandler = withRouteContext('api/test', handler);
+      await wrappedHandler(mockRequest);
+
+      expect(handler).toHaveBeenCalledWith(
+        expect.any(Object),
+        mockRequest
+      );
+    });
+
+    it('should preserve other response headers', async () => {
+      const mockRequest = {} as NextRequest;
+      const handler = vi.fn(async (ctx, request) => {
+        return new Response('ok', {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/plain',
+            'X-Custom-Header': 'custom-value',
+          },
+        });
+      });
+
+      const wrappedHandler = withRouteContext('api/test', handler);
+      const response = await wrappedHandler(mockRequest);
+
+      expect(response.headers.get('X-Custom-Header')).toBe('custom-value');
+      expect(response.headers.get('Content-Type')).toBe('text/plain');
+      expect(response.headers.get('X-Request-Id')).toBe('req_1234567890_abcdefgh');
+    });
+
+    it('should work with async handlers that return JSON', async () => {
+      const mockRequest = {} as NextRequest;
+      const handler = vi.fn(async (ctx, request) => {
+        return Response.json({ success: true, data: { id: 1 } });
+      });
+
+      const wrappedHandler = withRouteContext('api/test', handler);
+      const response = await wrappedHandler(mockRequest);
+
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).toEqual({ success: true, data: { id: 1 } });
+    });
+  });
+});
