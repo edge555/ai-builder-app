@@ -355,7 +355,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     currentState: SerializedProjectState,
     prompt: string,
     runtimeError?: RuntimeError,
-    options?: { shouldSkipPlanning?: boolean }
+    options?: { shouldSkipPlanning?: boolean; errorContext?: { affectedFiles: string[]; errorType: string } }
   ): Promise<ModifyProjectResponse> => {
     streamAbortRef.current?.abort();
     const controller = new AbortController();
@@ -406,6 +406,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           prompt,
           runtimeError,
           shouldSkipPlanning: options?.shouldSkipPlanning,
+          errorContext: options?.errorContext,
         }),
         signal: controller.signal,
       });
@@ -565,8 +566,24 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       repairHistoryRef.current.length > 0 ? repairHistoryRef.current : undefined
     );
 
+    // Collect all affected file paths from the error and aggregated errors
+    const affectedFiles = new Set<string>();
+    if (runtimeError.filePath) affectedFiles.add(runtimeError.filePath);
+    if (aggregatedErrors) {
+      for (const err of aggregatedErrors.errors) {
+        if (err.filePath) affectedFiles.add(err.filePath);
+      }
+    }
+    const errorContext = {
+      affectedFiles: Array.from(affectedFiles),
+      errorType: runtimeError.type,
+    };
+
     try {
-      const result = await modifyProjectStreaming(projectState, repairPrompt, runtimeError, { shouldSkipPlanning: true });
+      const result = await modifyProjectStreaming(projectState, repairPrompt, runtimeError, {
+        shouldSkipPlanning: true,
+        errorContext,
+      });
 
       setIsAutoRepairing(false);
       setLoadingPhase('idle');

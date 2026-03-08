@@ -60,8 +60,8 @@ export async function POST(
     // Deserialize project state
     const projectState = deserializeProjectState(validatedRequest.projectState);
 
-    // Extract shouldSkipPlanning option from request
-    const { shouldSkipPlanning } = validatedRequest;
+    // Extract shouldSkipPlanning and errorContext options from request
+    const { shouldSkipPlanning, errorContext } = validatedRequest;
 
     // Detect intent to route to the appropriate task-specific models
     const detectedTaskType = await detectIntent(validatedRequest.prompt, requestId);
@@ -70,7 +70,7 @@ export async function POST(
     // Modify project with timeout
     const engine = await createModificationEngine(detectedTaskType);
     const result = await withTimeout(
-      engine.modifyProject(projectState, validatedRequest.prompt, { shouldSkipPlanning, requestId }),
+      engine.modifyProject(projectState, validatedRequest.prompt, { shouldSkipPlanning, errorContext, requestId }),
       {
         timeoutMs: MODIFY_TIMEOUT_MS,
         operationName: 'project modification',

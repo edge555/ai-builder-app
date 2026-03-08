@@ -31,6 +31,7 @@ import {
   createFilePlanner,
 } from '../analysis';
 import { buildSlicesFromFiles } from './prompt-builder';
+import { selectRepairFiles, type ErrorContext } from './repair-file-selector';
 import { createModificationResult } from './result-builder';
 import { generateModifications } from './modification-generator';
 import { validateAndFixBuild } from './build-fixer';
@@ -70,7 +71,7 @@ export class ModificationEngine {
   async modifyProject(
     projectState: ProjectState,
     prompt: string,
-    options?: { shouldSkipPlanning?: boolean; requestId?: string; onProgress?: OnProgressCallback }
+    options?: { shouldSkipPlanning?: boolean; errorContext?: ErrorContext; requestId?: string; onProgress?: OnProgressCallback }
   ): Promise<ModificationResult> {
     if (!prompt || prompt.trim() === '') {
       return {
@@ -93,7 +94,7 @@ export class ModificationEngine {
     try {
       // Step 1: Select code slices and determine category
       onProgress?.('planning', 'Analyzing project and planning changes...');
-      const { slices, category } = await this.selectCodeSlices(projectState, prompt, options?.shouldSkipPlanning);
+      const { slices, category } = await this.selectCodeSlices(projectState, prompt, options?.shouldSkipPlanning, options?.errorContext);
 
       // Step 2: Determine if design system should be included based on category
       const shouldIncludeDesignSystem = DESIGN_SYSTEM_CATEGORIES.has(category);
@@ -164,12 +165,20 @@ export class ModificationEngine {
   private async selectCodeSlices(
     projectState: ProjectState,
     prompt: string,
-    shouldSkipPlanning?: boolean
+    shouldSkipPlanning?: boolean,
+    errorContext?: ErrorContext
   ): Promise<{ slices: CodeSlice[]; category: 'ui' | 'logic' | 'style' | 'mixed' }> {
     let slices: CodeSlice[];
     let category: 'ui' | 'logic' | 'style' | 'mixed' = 'mixed';
 
-    if (shouldSkipPlanning) {
+    if (shouldSkipPlanning && errorContext) {
+      // Repair mode: select only affected files + their dependents/dependencies
+      slices = selectRepairFiles(projectState, errorContext);
+      logger.info('Repair mode: selected targeted files', {
+        fileCount: slices.length,
+        errorType: errorContext.errorType,
+      });
+    } else if (shouldSkipPlanning) {
       // When shouldSkipPlanning is true, treat all provided files as primary files
       // Build slices directly without calling FilePlanner
       slices = buildSlicesFromFiles(projectState);

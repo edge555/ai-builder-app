@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     // Deserialize project state
     const projectState = deserializeProjectState(body.projectState);
-    const { shouldSkipPlanning } = body;
+    const { shouldSkipPlanning, errorContext } = body;
 
     // Detect intent for task-specific model routing
     const detectedTaskType = await detectIntent(body.prompt, requestId);
@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
           const engine = await createModificationEngine(detectedTaskType);
           const result = await engine.modifyProject(projectState, body.prompt, {
             shouldSkipPlanning,
+            errorContext,
             requestId,
             onProgress: (phase: ModificationPhase, label: string) => {
               if (isComplete()) return;
