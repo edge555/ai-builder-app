@@ -12,6 +12,8 @@ import {
 } from '@/hooks/useSidebarResize';
 
 import { useProjectState, useProjectActions, useChatMessages, useGenerationState } from '../../context';
+import { TooltipGuide, shouldShowTooltipGuide } from '../TooltipGuide/TooltipGuide';
+import type { TooltipItem } from '../TooltipGuide/TooltipGuide';
 import { VersionHistoryDrawer } from '../VersionHistory';
 import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
 import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
@@ -25,6 +27,12 @@ import { UndoRedoButtons } from '../UndoRedoButtons';
 import { ChatPanel } from './ChatPanel';
 import { PreviewSection } from './PreviewSection';
 import { ResizablePanel } from './ResizablePanel';
+
+const builderTooltips: TooltipItem[] = [
+    { targetSelector: '.chat-panel', message: 'Describe what you want to build or change. The AI will generate or update your app.', placement: 'right' },
+    { targetSelector: '.preview-section', message: 'Your app preview updates live as the AI generates code.', placement: 'left' },
+    { targetSelector: '.app-header-action-group', message: 'Undo or redo changes with these buttons, or use Ctrl+Z / Ctrl+Y.', placement: 'bottom' },
+];
 
 
 
@@ -120,6 +128,8 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
         onRedo: redo,
         onToggleSidebar: handleToggleSidebar,
     });
+
+    const [showTooltips] = useState(() => shouldShowTooltipGuide());
 
     // Format save indicator text
     const saveIndicatorText = isSaving
@@ -249,6 +259,8 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
                     <PreviewSection activePanel={activePanel} />
                 </section>
             </main>
+
+            {showTooltips && <TooltipGuide tooltips={builderTooltips} />}
 
             <VersionHistoryDrawer
                 isOpen={isVersionDrawerOpen}

@@ -186,6 +186,7 @@ const ChatInterfaceComponent = function ChatInterface({
                   />
                 </div>
               )}
+              <p className="chat-empty-tip">You can refine your app by describing changes after the first build.</p>
             </div>
           </div>
         )}

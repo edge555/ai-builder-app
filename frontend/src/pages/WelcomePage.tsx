@@ -2,10 +2,12 @@ import { ArrowRight, Sparkles, Plus, Eye, Zap, Download, Code } from 'lucide-rea
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog/ConfirmDialog';
+import { OnboardingOverlay, shouldShowOnboarding } from '@/components/OnboardingOverlay/OnboardingOverlay';
 import { ProjectGallery } from '@/components/ProjectGallery/ProjectGallery';
 import { SiteFooter } from '@/components/SiteFooter/SiteFooter';
 import { SiteHeader } from '@/components/SiteHeader/SiteHeader';
 import { TemplateGrid } from '@/components/TemplateGrid/TemplateGrid';
+import { initialSuggestions } from '@/data/prompt-suggestions';
 import { starterTemplates } from '@/data/templates';
 import { storageService, type ProjectMetadata, type UserTemplate } from '@/services/storage';
 import './WelcomePage.css';
@@ -52,11 +54,11 @@ const features = [
   },
 ];
 
-const suggestionChips = [
-  'A todo app with categories',
-  'Landing page for a SaaS product',
-  'Analytics dashboard with charts',
-];
+const suggestionChips = initialSuggestions.map(s => ({
+  label: s.label,
+  prompt: s.prompt,
+  icon: s.icon,
+}));
 
 export function WelcomePage({
   onEnterApp,
@@ -79,6 +81,7 @@ export function WelcomePage({
     projectId: null,
     projectName: null,
   });
+  const [showOnboarding, setShowOnboarding] = useState(() => shouldShowOnboarding());
   const [isScrolled, setIsScrolled] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
 
@@ -243,15 +246,16 @@ export function WelcomePage({
 
         {/* Suggestion Chips */}
         <div className="welcome-hero-suggestions">
-          {suggestionChips.map((suggestion) => (
+          {suggestionChips.map((chip) => (
             <button
-              key={suggestion}
+              key={chip.label}
               className="welcome-hero-suggestion-chip"
-              onClick={() => handleSuggestionClick(suggestion)}
+              onClick={() => handleSuggestionClick(chip.prompt)}
               onMouseEnter={preloadBuilderPage}
               type="button"
             >
-              {suggestion}
+              <span className="welcome-hero-suggestion-icon">{chip.icon}</span>
+              {chip.label}
             </button>
           ))}
         </div>
@@ -303,6 +307,11 @@ export function WelcomePage({
 
       {/* Footer */}
       <SiteFooter />
+
+      {/* Onboarding Overlay */}
+      {showOnboarding && (
+        <OnboardingOverlay onDismiss={() => setShowOnboarding(false)} />
+      )}
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

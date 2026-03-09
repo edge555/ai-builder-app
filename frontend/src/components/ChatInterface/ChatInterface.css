@@ -107,6 +107,13 @@
   font-weight: 600;
 }
 
+.chat-empty-tip {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  margin-top: 1rem;
+  font-style: italic;
+}
+
 /* Contextual suggestions above input */
 .chat-contextual-suggestions {
   padding: 0.5rem 1.25rem;
