@@ -232,23 +232,72 @@ export class ModalClient implements AIProvider {
     }
   }
 
+  /** Tracks inter-token timing for streaming diagnostics */
+  private _lastTokenTime: number | null = null;
+  private _tokenDelays: number[] = [];
+
   /**
    * Parse a single SSE line and extract the token string, or null if not applicable.
+   * Logs inter-token timing diagnostics using the optional `timestamp` field.
    */
   private parseSSEToken(line: string): string | null {
     const trimmedLine = line.trim();
     if (!trimmedLine || !trimmedLine.startsWith('data: ')) return null;
 
     const dataStr = trimmedLine.slice(6);
-    if (dataStr === '[DONE]') return null;
+    if (dataStr === '[DONE]') {
+      this.logStreamingDiagnostics();
+      return null;
+    }
 
     try {
       const data = JSON.parse(dataStr);
       const token = data.token;
-      return typeof token === 'string' ? token : null;
+      if (typeof token !== 'string') return null;
+
+      // Track inter-token timing using server-side timestamp
+      const serverTimestamp: number | undefined = typeof data.timestamp === 'number' ? data.timestamp : undefined;
+      const now = serverTimestamp ?? Date.now() / 1000;
+      if (this._lastTokenTime !== null) {
+        const delayMs = (now - this._lastTokenTime) * 1000;
+        this._tokenDelays.push(delayMs);
+      }
+      this._lastTokenTime = now;
+
+      return token;
     } catch (error) {
       logger.warn('Failed to parse SSE data', { line: trimmedLine, error });
       return null;
+    }
+  }
+
+  /**
+   * Logs inter-token delay diagnostics to detect buffering.
+   * Batch pattern: many tokens arriving within 1ms = likely buffered.
+   */
+  private logStreamingDiagnostics(): void {
+    const delays = this._tokenDelays;
+    this._tokenDelays = [];
+    this._lastTokenTime = null;
+
+    if (delays.length === 0) return;
+
+    const avg = delays.reduce((a, b) => a + b, 0) / delays.length;
+    const max = Math.max(...delays);
+    const batchCount = delays.filter(d => d < 1).length;
+    const batchRatio = batchCount / delays.length;
+
+    logger.info('Modal streaming diagnostics', {
+      tokenCount: delays.length,
+      avgInterTokenDelayMs: Math.round(avg * 100) / 100,
+      maxInterTokenDelayMs: Math.round(max * 100) / 100,
+      batchedTokens: batchCount,
+      batchRatio: Math.round(batchRatio * 100) + '%',
+      likelyBuffered: batchRatio > 0.5,
+    });
+
+    if (batchRatio > 0.5) {
+      logger.warn('Modal streaming appears buffered — >50% of tokens arrived within 1ms of previous token');
     }
   }
 

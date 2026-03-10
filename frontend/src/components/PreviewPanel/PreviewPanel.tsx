@@ -4,7 +4,7 @@ import {
   SandpackLayout,
   SandpackPreview,
 } from '@codesandbox/sandpack-react';
-import { useState, useCallback, useMemo, memo, useRef } from 'react';
+import { type ReactNode, useState, useCallback, useMemo, memo, useRef } from 'react';
 
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 
@@ -14,7 +14,7 @@ import { CodeEditorView } from '../CodeEditor';
 import { EmptyProjectState } from '../EmptyProjectState/EmptyProjectState';
 import { PreviewHeader } from './PreviewHeader';
 import { PreviewSkeleton } from './PreviewSkeleton';
-import { type DeviceMode } from './PreviewToolbar';
+import { DEVICE_PRESETS } from './PreviewToolbar';
 import {
   transformFilesForSandpack,
   hasRequiredFiles,
@@ -24,6 +24,55 @@ import {
 import { SandpackErrorListener } from './SandpackErrorListener';
 import { SandpackRefresher } from './SandpackRefresher';
 import './PreviewPanel.css';
+
+/** Shared Sandpack dependency map. */
+const SANDPACK_DEPS = {
+  'react': '^18.2.0',
+  'react-dom': '^18.2.0',
+  'lucide-react': '^0.294.0',
+  'clsx': '^2.0.0',
+  'tailwind-merge': '^2.0.0',
+};
+
+/** Fixed frames shown in compare mode. */
+const COMPARE_FRAMES = [
+  { label: 'Mobile (375×667)',   width: 375,  height: 667  },
+  { label: 'Tablet (768×1024)', width: 768,  height: 1024 },
+  { label: 'Desktop',           width: 1280, height: 800  },
+];
+
+interface DeviceFrameProps {
+  presetId: string;
+  customWidth: number;
+  customHeight: number;
+  isRotated: boolean;
+  zoom: number;
+  children: ReactNode;
+}
+
+/** Renders a device-sized frame with zoom applied via CSS transform. */
+function DeviceFrame({ presetId, customWidth, customHeight, isRotated, zoom, children }: DeviceFrameProps) {
+  const preset = DEVICE_PRESETS.find(p => p.id === presetId);
+  const baseW = presetId === 'custom' ? customWidth  : (preset?.width  ?? customWidth);
+  const baseH = presetId === 'custom' ? customHeight : (preset?.height ?? customHeight);
+  const w = isRotated ? baseH : baseW;
+  const h = isRotated ? baseW : baseH;
+  const scale = zoom / 100;
+
+  return (
+    <div
+      className="device-frame"
+      style={{
+        width: w,
+        height: h,
+        transform: scale !== 1 ? `scale(${scale})` : undefined,
+        transformOrigin: 'top center',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 /**
  * Props for the PreviewPanel component.
@@ -61,8 +110,12 @@ const PreviewPanelComponent = function PreviewPanel({
   forceCodeView = false,
 }: PreviewPanelProps) {
   const [showCode, setShowCode] = useState(false);
-  const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
+  const [presetId, setPresetId] = useState('desktop');
+  const [customWidth, setCustomWidth] = useState(375);
+  const [customHeight, setCustomHeight] = useState(667);
   const [isRotated, setIsRotated] = useState(false);
+  const [zoom, setZoom] = useState(100);
+  const [compareMode, setCompareMode] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Use forceCodeView when provided (for mobile three-tab layout)
@@ -126,13 +179,19 @@ const PreviewPanelComponent = function PreviewPanel({
       <PreviewHeader
         showCode={effectiveShowCode}
         onViewChange={setShowCode}
-        deviceMode={deviceMode}
-        isRotated={isRotated}
-        onModeChange={(mode) => {
-          setDeviceMode(mode);
-          setIsRotated(false); // Reset rotation on mode change
+        toolbarProps={{
+          presetId,
+          customWidth,
+          customHeight,
+          isRotated,
+          zoom,
+          compareMode,
+          onPresetChange: (id) => { setPresetId(id); setIsRotated(false); },
+          onCustomDimensionChange: (w, h) => { setCustomWidth(w); setCustomHeight(h); },
+          onRotate: () => setIsRotated(prev => !prev),
+          onZoomChange: setZoom,
+          onCompareModeChange: setCompareMode,
         }}
-        onRotate={() => setIsRotated(!isRotated)}
         isLoading={isLoading}
         projectState={projectState}
         isRefreshing={isRefreshing}
@@ -150,58 +209,81 @@ const PreviewPanelComponent = function PreviewPanel({
         </div>
       ) : (
         <div className="preview-content" role="tabpanel" id="tabpanel-preview" aria-label="Live preview">
-          <SandpackProvider
-            files={Object.fromEntries(
-              Object.entries(sandpackFiles).map(([path, code]) => [path, { code }])
-            )}
-            theme="dark"
-            options={{
-              activeFile: entryFile,
-              recompileMode: 'delayed',
-              recompileDelay: 500,
-              visibleFiles: Object.keys(sandpackFiles),
-            }}
-            customSetup={{
-              entry: entryFile,
-              dependencies: {
-                'react': '^18.2.0',
-                'react-dom': '^18.2.0',
-                'lucide-react': '^0.294.0',
-                'clsx': '^2.0.0',
-                'tailwind-merge': '^2.0.0',
-              },
-            }}
-          >
-            {/* Error listener for auto-repair */}
-            {errorMonitoringEnabled && (
-              <SandpackErrorListener
-                onErrorsReady={onErrorsReady}
-                enabled={!isLoading}
-                onBundlerIdle={onBundlerIdle}
-              />
-            )}
-            <SandpackLayout>
-              {/* Dispatch-based refresh — no iframe remount */}
-              <SandpackRefresher onRefreshReady={(fn) => { refreshFnRef.current = fn; }} />
-              {deviceMode === 'desktop' ? (
-                <SandpackPreview
-                  showOpenInCodeSandbox={true}
-                  showRefreshButton
-                  style={{ height: '100%' }}
-                />
-              ) : (
-                <div className="device-simulation-container">
-                  <div className={`device-frame ${deviceMode} ${isRotated ? 'rotated' : ''}`}>
-                    <SandpackPreview
-                      showOpenInCodeSandbox={true}
-                      showRefreshButton
-                      style={{ height: '100%' }}
-                    />
-                  </div>
+          {compareMode ? (
+            /* ── Compare mode: three fixed-size frames side by side ── */
+            <div className="device-compare-container">
+              {COMPARE_FRAMES.map(frame => (
+                <div key={frame.label} className="device-compare-frame">
+                  <div className="device-compare-label">{frame.label}</div>
+                  <SandpackProvider
+                    files={Object.fromEntries(
+                      Object.entries(sandpackFiles).map(([path, code]) => [path, { code }])
+                    )}
+                    theme="dark"
+                    options={{ activeFile: entryFile, recompileMode: 'delayed', recompileDelay: 500, visibleFiles: Object.keys(sandpackFiles) }}
+                    customSetup={{ entry: entryFile, dependencies: SANDPACK_DEPS }}
+                  >
+                    <SandpackLayout>
+                      <div className="device-frame" style={{ width: frame.width, height: frame.height }}>
+                        <SandpackPreview showOpenInCodeSandbox={false} showRefreshButton style={{ height: '100%' }} />
+                      </div>
+                    </SandpackLayout>
+                  </SandpackProvider>
                 </div>
+              ))}
+            </div>
+          ) : (
+            /* ── Normal single-device mode ── */
+            <SandpackProvider
+              files={Object.fromEntries(
+                Object.entries(sandpackFiles).map(([path, code]) => [path, { code }])
               )}
-            </SandpackLayout>
-          </SandpackProvider>
+              theme="dark"
+              options={{
+                activeFile: entryFile,
+                recompileMode: 'delayed',
+                recompileDelay: 500,
+                visibleFiles: Object.keys(sandpackFiles),
+              }}
+              customSetup={{ entry: entryFile, dependencies: SANDPACK_DEPS }}
+            >
+              {/* Error listener for auto-repair */}
+              {errorMonitoringEnabled && (
+                <SandpackErrorListener
+                  onErrorsReady={onErrorsReady}
+                  enabled={!isLoading}
+                  onBundlerIdle={onBundlerIdle}
+                />
+              )}
+              <SandpackLayout>
+                {/* Dispatch-based refresh — no iframe remount */}
+                <SandpackRefresher onRefreshReady={(fn) => { refreshFnRef.current = fn; }} />
+                {presetId === 'desktop' ? (
+                  <SandpackPreview
+                    showOpenInCodeSandbox={true}
+                    showRefreshButton
+                    style={{ height: '100%' }}
+                  />
+                ) : (
+                  <div className="device-simulation-container">
+                    <DeviceFrame
+                      presetId={presetId}
+                      customWidth={customWidth}
+                      customHeight={customHeight}
+                      isRotated={isRotated}
+                      zoom={zoom}
+                    >
+                      <SandpackPreview
+                        showOpenInCodeSandbox={true}
+                        showRefreshButton
+                        style={{ height: '100%' }}
+                      />
+                    </DeviceFrame>
+                  </div>
+                )}
+              </SandpackLayout>
+            </SandpackProvider>
+          )}
         </div>
       )}
 

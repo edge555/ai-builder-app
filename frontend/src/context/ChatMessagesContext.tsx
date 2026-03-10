@@ -56,6 +56,22 @@ export function ChatMessagesProvider({ children, initialMessages }: ChatMessages
   }, []);
 
   /**
+   * Adds an error assistant message with an optional retry prompt.
+   */
+  const addErrorMessage = useCallback((content: string, retryPrompt?: string): ChatMessage => {
+    const message: ChatMessage = {
+      id: generateId(),
+      role: 'assistant',
+      content,
+      timestamp: new Date(),
+      isError: true,
+      retryPrompt,
+    };
+    setMessages((prev) => [...prev, message]);
+    return message;
+  }, []);
+
+  /**
    * Clears all messages from the chat history.
    */
   const clearMessages = useCallback(() => {
@@ -66,8 +82,9 @@ export function ChatMessagesProvider({ children, initialMessages }: ChatMessages
     messages,
     addUserMessage,
     addAssistantMessage,
+    addErrorMessage,
     clearMessages,
-  }), [messages, addUserMessage, addAssistantMessage, clearMessages]);
+  }), [messages, addUserMessage, addAssistantMessage, addErrorMessage, clearMessages]);
 
   return (
     <ChatMessagesContext.Provider value={value}>

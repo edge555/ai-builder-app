@@ -26,6 +26,10 @@ export interface RepairStatusProps {
   onDismiss?: () => void;
   /** Callback to view error details */
   onViewDetails?: () => void;
+  /** Callback to retry repair after failure */
+  onRetry?: () => void;
+  /** Callback to revert to last working state */
+  onRevert?: () => void;
   /** Auto-dismiss success after ms */
   autoDismissMs?: number;
 }
@@ -42,6 +46,8 @@ export function RepairStatus({
   errorCount = 1,
   onDismiss,
   onViewDetails,
+  onRetry,
+  onRevert,
   autoDismissMs = 3000,
 }: RepairStatusProps) {
   const [isVisible, setIsVisible] = useState(false);
@@ -144,6 +150,26 @@ export function RepairStatus({
       <div className="repair-status-content">
         {getIcon()}
         <span className="repair-status-message">{getMessage()}</span>
+
+        {phase === 'failed' && onRetry && (
+          <button
+            className="repair-status-action"
+            onClick={onRetry}
+            aria-label="Try repair again"
+          >
+            Try Again
+          </button>
+        )}
+
+        {phase === 'failed' && onRevert && (
+          <button
+            className="repair-status-action"
+            onClick={onRevert}
+            aria-label="Revert to last working state"
+          >
+            Revert
+          </button>
+        )}
 
         {phase === 'failed' && onViewDetails && (
           <button

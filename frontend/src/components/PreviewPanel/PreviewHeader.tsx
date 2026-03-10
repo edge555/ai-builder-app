@@ -3,7 +3,7 @@ import { Code, Monitor } from 'lucide-react';
 
 import { TabBar } from '../TabBar/TabBar';
 
-import { PreviewToolbar, type DeviceMode } from './PreviewToolbar';
+import { PreviewToolbar, type PreviewToolbarProps } from './PreviewToolbar';
 import './PreviewPanel.css';
 
 export interface PreviewHeaderProps {
@@ -11,14 +11,8 @@ export interface PreviewHeaderProps {
   showCode: boolean;
   /** Callback when view changes */
   onViewChange: (showCode: boolean) => void;
-  /** Current device mode */
-  deviceMode: DeviceMode;
-  /** Whether device is rotated */
-  isRotated: boolean;
-  /** Callback when device mode changes */
-  onModeChange: (mode: DeviceMode) => void;
-  /** Callback when rotation toggles */
-  onRotate: () => void;
+  /** Props forwarded verbatim to PreviewToolbar */
+  toolbarProps: PreviewToolbarProps;
   /** Whether content is loading */
   isLoading: boolean;
   /** Current project state */
@@ -35,10 +29,7 @@ export interface PreviewHeaderProps {
 export function PreviewHeader({
   showCode,
   onViewChange,
-  deviceMode,
-  isRotated,
-  onModeChange,
-  onRotate,
+  toolbarProps,
   isLoading,
   projectState,
   isRefreshing,
@@ -108,14 +99,7 @@ export function PreviewHeader({
 
           {/* Device Toolbar */}
           <div className="preview-device-toolbar">
-            <PreviewToolbar
-              currentMode={deviceMode}
-              isRotated={isRotated}
-              onModeChange={(mode) => {
-                onModeChange(mode);
-              }}
-              onRotate={onRotate}
-            />
+            <PreviewToolbar {...toolbarProps} />
           </div>
         </>
       )}

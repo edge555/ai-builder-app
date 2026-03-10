@@ -143,12 +143,14 @@ def generate_api(request: GenerateRequest):
 
 @app.function(image=image)
 @modal.fastapi_endpoint(method="POST")
-def generate_stream_api(request: GenerateRequest):
+async def generate_stream_api(request: GenerateRequest):
+    import time
     from starlette.responses import StreamingResponse
 
-    def event_stream():
+    async def event_stream():
         for token in CodeGenerator().generate_stream.remote_gen(request):
-            yield f"data: {json.dumps({'token': token})}\n\n"
+            timestamp = time.time()
+            yield f"data: {json.dumps({'token': token, 'timestamp': timestamp})}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(
@@ -157,5 +159,8 @@ def generate_stream_api(request: GenerateRequest):
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+            "X-Content-Type-Options": "nosniff",
+            "Transfer-Encoding": "chunked",
         },
     )
