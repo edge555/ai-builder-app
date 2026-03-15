@@ -1,4 +1,4 @@
-import type { RuntimeError } from '@/shared';
+import type { RuntimeError } from '@ai-app-builder/shared/types';
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 
 import type { RepairPhase } from '@/components/RepairStatus';

@@ -552,6 +552,41 @@
   height: 20px;
 }
 
+/* Abort button */
+.chat-abort-button {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 44px;
+  padding: 0 1rem;
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.1);
+  border: 1px solid hsl(var(--destructive) / 0.3);
+  cursor: pointer;
+  transition: all 200ms ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.chat-abort-button:hover {
+  background: hsl(var(--destructive) / 0.18);
+  border-color: hsl(var(--destructive) / 0.5);
+  transform: scale(1.02);
+}
+
+.chat-abort-button:active {
+  transform: scale(0.98);
+}
+
+.chat-abort-button svg {
+  width: 16px;
+  height: 16px;
+}
+
 /* Error container in chat */
 .chat-error-container {
   padding: 0 0.5rem;

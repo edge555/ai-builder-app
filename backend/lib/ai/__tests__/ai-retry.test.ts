@@ -13,6 +13,7 @@ vi.mock('../../metrics', () => ({
     return { complete: vi.fn(() => ({ durationMs: 100, retryCount: 0 })) };
   }),
   formatMetrics: vi.fn(() => ({ durationMs: 100 })),
+  recordOperation: vi.fn(),
 }));
 
 // Mock the ai-error-utils

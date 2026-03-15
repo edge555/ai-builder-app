@@ -127,7 +127,7 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema, serializeProjectState, serializeVersion } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (RevertVersionRequestSchema.parse as any).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
@@ -161,7 +161,7 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (RevertVersionRequestSchema.parse as any).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
@@ -182,7 +182,7 @@ describe('Revert API Endpoint', () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { RevertVersionRequestSchema } = await import('@ai-app-builder/shared');
 
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (RevertVersionRequestSchema.parse as any).mockImplementation(() => {
                 throw new Error('Invalid request');
             });
@@ -203,7 +203,7 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (RevertVersionRequestSchema.parse as any).mockReturnValue({
                 projectId: 'my-project',
                 versionId: 'v2',
@@ -231,7 +231,7 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (RevertVersionRequestSchema.parse as any).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
@@ -265,7 +265,7 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout, AppError, handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (RevertVersionRequestSchema.parse as any).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
@@ -303,7 +303,7 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout, TimeoutError, AppError, handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (RevertVersionRequestSchema.parse as any).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
@@ -349,7 +349,7 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema, serializeProjectState, serializeVersion } = await import('@ai-app-builder/shared');
             const { withTimeout, getCorsHeaders } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (RevertVersionRequestSchema.parse as any).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
@@ -386,7 +386,7 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema, serializeProjectState, serializeVersion } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (RevertVersionRequestSchema.parse as any).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',

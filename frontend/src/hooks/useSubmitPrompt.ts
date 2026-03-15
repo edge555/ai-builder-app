@@ -1,5 +1,5 @@
-import type { RepairAttempt } from '@/shared';
-import { useCallback, useRef } from 'react';
+import type { RepairAttempt } from '@ai-app-builder/shared/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useProjectState, useProjectActions, useChatMessages, useGenerationActions, useToastActions } from '../context';
 import { storageService, toStoredProject } from '../services/storage';
@@ -25,8 +25,19 @@ export function useSubmitPrompt() {
     const { addToast } = useToastActions();
 
     const isSubmittingRef = useRef(false);
+    const [isGenerating, setIsGenerating] = useState(false);
     const apiRetryHistoryRef = useRef<RepairAttempt[]>([]);
     const submitAbortRef = useRef<AbortController | null>(null);
+
+    // Warn user before closing tab during generation
+    useEffect(() => {
+        if (!isGenerating) return;
+        const handler = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [isGenerating]);
 
     /**
      * Shows a countdown toast for rate limit errors and waits the required time.
@@ -87,6 +98,7 @@ export function useSubmitPrompt() {
         const abortController = new AbortController();
         submitAbortRef.current = abortController;
         isSubmittingRef.current = true;
+        setIsGenerating(true);
         generation.clearError();
         generation.setIsLoading(true);
 
@@ -265,6 +277,7 @@ export function useSubmitPrompt() {
                 generation.setIsLoading(false);
                 generation.setLoadingPhase('idle');
                 isSubmittingRef.current = false;
+                setIsGenerating(false);
                 submitAbortRef.current = null;
             }
         }

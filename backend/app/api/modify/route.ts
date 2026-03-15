@@ -39,7 +39,7 @@ export async function OPTIONS() {
 export async function POST(
   request: NextRequest
 ): Promise<Response> {
-  const blocked = applyRateLimit(request, RateLimitTier.MEDIUM_COST);
+  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.MEDIUM_COST);
   if (blocked) return blocked;
 
   // Generate request ID for correlation
@@ -101,7 +101,7 @@ export async function POST(
       changedFiles: result.diffs?.length ?? 0,
     });
 
-    return gzipJson(response, { status: 200, headers: { ...getCorsHeaders(request), 'X-Request-Id': requestId }, request });
+    return gzipJson(response, { status: 200, headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId }, request });
   } catch (error) {
     // Handle timeout errors specifically
     if (error instanceof TimeoutError) {

@@ -1,4 +1,4 @@
-import type { SerializedProjectState } from '@/shared';
+import type { SerializedProjectState } from '@ai-app-builder/shared/types';
 import { useEffect, useState, useRef } from 'react';
 
 import type { ChatMessage } from '@/components';

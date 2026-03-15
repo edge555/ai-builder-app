@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type { AuthUser, AuthSession } from '@ai-app-builder/shared/types';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -29,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [session, setSession] = useState<AuthSession | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const wasAuthenticatedRef = useRef(false);
 
     useEffect(() => {
         if (!supabase) {
@@ -40,13 +41,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const mapped = mapSession(data.session as Parameters<typeof mapSession>[0]);
             setUser(mapped?.user ?? null);
             setSession(mapped?.session ?? null);
+            wasAuthenticatedRef.current = !!mapped?.user;
             setIsLoading(false);
         });
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, raw) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, raw) => {
             const mapped = mapSession(raw as Parameters<typeof mapSession>[0]);
             setUser(mapped?.user ?? null);
             setSession(mapped?.session ?? null);
+
+            // Redirect to login when a previously authenticated user is signed out
+            // (e.g. refresh token expired, manual sign-out)
+            if (event === 'SIGNED_OUT' && wasAuthenticatedRef.current) {
+                wasAuthenticatedRef.current = false;
+                window.location.href = '/login';
+                return;
+            }
+
+            wasAuthenticatedRef.current = !!mapped?.user;
         });
 
         return () => subscription.unsubscribe();

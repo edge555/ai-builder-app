@@ -101,7 +101,7 @@ describe('Agent Config API Endpoint', () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { load } = await import('../../../lib/ai/agent-config-store');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (load as any).mockResolvedValue(mockConfig);
 
             const request = new NextRequest('http://localhost/api/agent-config', {
@@ -119,7 +119,7 @@ describe('Agent Config API Endpoint', () => {
             const { applyRateLimit, RateLimitTier } = await import('../../../lib/security');
             const { load } = await import('../../../lib/ai/agent-config-store');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (load as any).mockResolvedValue(mockConfig);
 
             const request = new NextRequest('http://localhost/api/agent-config', {
@@ -150,7 +150,7 @@ describe('Agent Config API Endpoint', () => {
             const { load } = await import('../../../lib/ai/agent-config-store');
             const { handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (load as any).mockRejectedValue(new Error('Failed to load config'));
 
             const request = new NextRequest('http://localhost/api/agent-config', {
@@ -171,7 +171,7 @@ describe('Agent Config API Endpoint', () => {
             const { load } = await import('../../../lib/ai/agent-config-store');
             const { getCorsHeaders } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (load as any).mockResolvedValue(mockConfig);
             
             const mockCorsHeaders = {
@@ -196,7 +196,7 @@ describe('Agent Config API Endpoint', () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { save } = await import('../../../lib/ai/agent-config-store');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (save as any).mockResolvedValue(undefined);
 
             const request = new NextRequest('http://localhost/api/agent-config', {
@@ -215,7 +215,7 @@ describe('Agent Config API Endpoint', () => {
             const { applyRateLimit, RateLimitTier } = await import('../../../lib/security');
             const { save } = await import('../../../lib/ai/agent-config-store');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (save as any).mockResolvedValue(undefined);
 
             const request = new NextRequest('http://localhost/api/agent-config', {
@@ -231,7 +231,7 @@ describe('Agent Config API Endpoint', () => {
         it('should return 400 when request body fails schema validation', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
 
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
 
             const invalidConfig = {
                 version: 2, // Invalid version (schema expects literal 1)
@@ -251,7 +251,7 @@ describe('Agent Config API Endpoint', () => {
         it('should return 400 when required task types are missing', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
 
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
 
             const incompleteConfig = {
                 version: 1,
@@ -274,7 +274,7 @@ describe('Agent Config API Endpoint', () => {
         it('should return 400 when model entry has empty id', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
 
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
 
             const invalidModelConfig = {
                 version: 1,
@@ -302,7 +302,7 @@ describe('Agent Config API Endpoint', () => {
             const { save } = await import('../../../lib/ai/agent-config-store');
             const { handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (save as any).mockRejectedValue(new Error('Failed to save config'));
 
             const request = new NextRequest('http://localhost/api/agent-config', {

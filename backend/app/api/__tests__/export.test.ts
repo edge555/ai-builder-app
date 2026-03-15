@@ -109,7 +109,7 @@ describe('Export API Endpoint', () => {
             const { exportAsZipBuffer } = await import('../../../lib/core');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (ExportProjectRequestSchema.parse as any).mockReturnValue({
                 projectState: mockProjectState,
             });
@@ -135,7 +135,7 @@ describe('Export API Endpoint', () => {
             const { ExportProjectRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (ExportProjectRequestSchema.parse as any).mockReturnValue({
                 projectState: mockProjectState,
             });
@@ -155,7 +155,7 @@ describe('Export API Endpoint', () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { ExportProjectRequestSchema } = await import('@ai-app-builder/shared');
 
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (ExportProjectRequestSchema.parse as any).mockImplementation(() => {
                 throw new Error('Invalid project state');
             });
@@ -175,7 +175,7 @@ describe('Export API Endpoint', () => {
             const { ExportProjectRequestSchema, deserializeProjectState } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (ExportProjectRequestSchema.parse as any).mockReturnValue({
                 projectState: mockProjectState,
             });
@@ -198,7 +198,7 @@ describe('Export API Endpoint', () => {
             const { exportAsZipBuffer } = await import('../../../lib/core');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (ExportProjectRequestSchema.parse as any).mockReturnValue({
                 projectState: mockProjectState,
             });
@@ -228,7 +228,7 @@ describe('Export API Endpoint', () => {
             const { exportAsZipBuffer } = await import('../../../lib/core');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (ExportProjectRequestSchema.parse as any).mockReturnValue({
                 projectState: mockProjectState,
             });
@@ -258,7 +258,7 @@ describe('Export API Endpoint', () => {
                 name: 'My Test Project!!!',
             };
 
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (ExportProjectRequestSchema.parse as any).mockReturnValue({
                 projectState: specialNameProject,
             });
@@ -297,7 +297,7 @@ describe('Export API Endpoint', () => {
             const { ExportProjectRequestSchema, deserializeProjectState } = await import('@ai-app-builder/shared');
             const { withTimeout, TimeoutError, AppError, handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (ExportProjectRequestSchema.parse as any).mockReturnValue({
                 projectState: mockProjectState,
             });
@@ -328,7 +328,7 @@ describe('Export API Endpoint', () => {
             const { exportAsZipBuffer } = await import('../../../lib/core');
             const { withTimeout, getCorsHeaders } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue(null);
+            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
             (ExportProjectRequestSchema.parse as any).mockReturnValue({
                 projectState: mockProjectState,
             });

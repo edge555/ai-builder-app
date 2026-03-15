@@ -8,8 +8,10 @@ export async function OPTIONS() {
   return handleOptions();
 }
 
-export const GET = withRouteContext('api/agent-config', async ({ contextLogger }, request: NextRequest) => {
-  const blocked = applyRateLimit(request, RateLimitTier.CONFIG);
+export const GET = withRouteContext('api/agent-config', async (ctx, request: NextRequest) => {
+  const { contextLogger } = ctx;
+  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.CONFIG);
+  ctx.setRateLimitHeaders(rlHeaders);
   if (blocked) return blocked as NextResponse;
 
   try {
@@ -48,8 +50,10 @@ const AgentConfigSchema = z.object({
   }),
 });
 
-export const PUT = withRouteContext('api/agent-config', async ({ contextLogger }, request: NextRequest) => {
-  const blocked = applyRateLimit(request, RateLimitTier.CONFIG);
+export const PUT = withRouteContext('api/agent-config', async (ctx, request: NextRequest) => {
+  const { contextLogger } = ctx;
+  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.CONFIG);
+  ctx.setRateLimitHeaders(rlHeaders);
   if (blocked) return blocked as NextResponse;
 
   const parsed = await parseJsonRequest(request, AgentConfigSchema);

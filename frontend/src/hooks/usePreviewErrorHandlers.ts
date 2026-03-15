@@ -3,7 +3,7 @@
  * Uses refs internally to avoid re-renders when error state changes.
  */
 
-import type { RuntimeError } from '@/shared';
+import type { RuntimeError } from '@ai-app-builder/shared/types';
 import { useCallback, useRef, useEffect } from 'react';
 
 import { usePreviewErrorState, usePreviewErrorActions } from '@/context';

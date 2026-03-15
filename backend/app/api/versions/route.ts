@@ -20,8 +20,10 @@ export async function OPTIONS() {
   return handleOptions();
 }
 
-export const GET = withRouteContext('api/versions', async ({ contextLogger }, request: NextRequest) => {
-  const blocked = applyRateLimit(request, RateLimitTier.LOW_COST);
+export const GET = withRouteContext('api/versions', async (ctx, request: NextRequest) => {
+  const { contextLogger } = ctx;
+  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.LOW_COST);
+  ctx.setRateLimitHeaders(rlHeaders);
   if (blocked) return blocked as NextResponse<GetVersionsResponse | ErrorResponse>;
 
   try {

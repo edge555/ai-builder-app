@@ -1,4 +1,4 @@
-import type { SerializedProjectState } from '@/shared';
+import type { SerializedProjectState } from '@ai-app-builder/shared/types';
 import { useState, useEffect, useRef, useCallback, lazy, Suspense, memo } from 'react';
 
 

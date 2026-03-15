@@ -1,5 +1,5 @@
 import type { Logger } from '../logger';
-import { OperationTimer, formatMetrics } from '../metrics';
+import { OperationTimer, formatMetrics, recordOperation } from '../metrics';
 import type { AIRequest, AIResponse } from './ai-provider';
 import { categorizeError, isRetryableError } from './ai-error-utils';
 
@@ -40,6 +40,7 @@ export async function executeWithRetry(
       const result = await operation();
 
       const metrics = timer.complete(true, { retryCount: attempt });
+      recordOperation(metrics);
       contextLogger.info(`${operationName} completed`, {
         ...formatMetrics(metrics),
         ...(config.modelId ? { model: config.modelId } : {}),
@@ -75,6 +76,7 @@ export async function executeWithRetry(
     retryCount,
     error: lastError?.message ?? 'Unknown error occurred',
   });
+  recordOperation(metrics);
   contextLogger.error(`${operationName} failed`, {
     ...formatMetrics(metrics),
     ...(config.modelId ? { model: config.modelId } : {}),

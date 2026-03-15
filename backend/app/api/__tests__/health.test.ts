@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../../../lib/security', () => ({
-  applyRateLimit: vi.fn().mockReturnValue(null),
+  applyRateLimit: vi.fn().mockReturnValue({ blocked: null, headers: {} }),
   RateLimitTier: { LOW_COST: 'LOW_COST' },
 }));
 

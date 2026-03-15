@@ -12,13 +12,19 @@ const LOADING_TIPS = [
 /**
  * Loading phase for progress indication.
  */
-export type LoadingPhase = 'idle' | 'generating' | 'modifying' | 'validating' | 'processing';
+export type LoadingPhase = 'idle' | 'planning' | 'generating' | 'modifying' | 'validating' | 'processing';
 
 /**
  * Detailed loading steps for different phases to simulate complex processing.
  */
 const LOADING_STEPS: Record<LoadingPhase, string[]> = {
   idle: ['Ready'],
+  planning: [
+    'Understanding your request...',
+    'Identifying affected files...',
+    'Planning modifications...',
+    'Prioritizing changes...',
+  ],
   generating: [
     'Analyzing requirements...',
     'Designing application architecture...',
@@ -67,17 +73,23 @@ export const LoadingIndicator = forwardRef<HTMLDivElement, LoadingIndicatorProps
     const [messageIndex, setMessageIndex] = useState(0);
     const [tipIndex, setTipIndex] = useState(0);
     const [showTip, setShowTip] = useState(false);
+    const [showSlowWarning, setShowSlowWarning] = useState(false);
     const tipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const slowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Reset index and tip visibility when phase changes
     useEffect(() => {
       setMessageIndex(0);
       setShowTip(false);
+      setShowSlowWarning(false);
 
       // Show tip after 5 seconds of loading
       tipTimerRef.current = setTimeout(() => setShowTip(true), 5000);
+      // Show slow warning after 30 seconds
+      slowTimerRef.current = setTimeout(() => setShowSlowWarning(true), 30000);
       return () => {
         if (tipTimerRef.current) clearTimeout(tipTimerRef.current);
+        if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
       };
     }, [phase]);
 
@@ -115,9 +127,11 @@ export const LoadingIndicator = forwardRef<HTMLDivElement, LoadingIndicatorProps
           </div>
           <div className="chat-loading-info">
             <span className="chat-loading-text">{currentMessage}</span>
-            {showTip && (
+            {showSlowWarning ? (
+              <span className="chat-loading-tip">Taking longer than expected — the AI service may be under heavy load</span>
+            ) : showTip ? (
               <span className="chat-loading-tip">Tip: {LOADING_TIPS[tipIndex]}</span>
-            )}
+            ) : null}
           </div>
         </div>
         <div className="chat-loading-progress">

@@ -1,4 +1,4 @@
-import type { GenerateProjectResponse } from '@/shared';
+import type { GenerateProjectResponse } from '@ai-app-builder/shared/types';
 
 /**
  * Shared SSE parser utility with heartbeat support.
