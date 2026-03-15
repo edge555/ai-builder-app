@@ -23,6 +23,21 @@ vi.mock('../../../lib/api', () => ({
     handleError: vi.fn((error, context, request) => {
         return new Response(JSON.stringify({ error: error.message }), { status: 500 });
     }),
+    withRouteContext: vi.fn().mockImplementation((_module: string, handler: any) => {
+        return (request: any) => handler(
+            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } },
+            request
+        );
+    }),
+    parseJsonRequest: vi.fn().mockImplementation(async (request: any, schema: any) => {
+        try {
+            const body = await request.json();
+            const data = schema.parse(body);
+            return { ok: true, data };
+        } catch {
+            return { ok: false, response: new Response('Invalid request', { status: 400 }) };
+        }
+    }),
 }));
 
 // Mock the provider-config-store
@@ -199,8 +214,7 @@ describe('Provider Config API Endpoint', () => {
         it('should validate aiProvider enum values', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { saveProvider } = await import('../../../lib/ai/provider-config-store');
-            const { handleError: apiHandleError } = await import('../../../lib/api');
-            
+
             (applyRateLimit as any).mockReturnValue(null);
 
             const invalidRequestBody = { aiProvider: 'invalid-provider' };
@@ -211,7 +225,7 @@ describe('Provider Config API Endpoint', () => {
 
             const response = await PUT(request);
 
-            expect(apiHandleError).toHaveBeenCalled();
+            expect(response.status).toBe(400);
             expect(saveProvider).not.toHaveBeenCalled();
         });
 
@@ -279,8 +293,7 @@ describe('Provider Config API Endpoint', () => {
 
         it('should handle invalid JSON in request body', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
-            const { handleError: apiHandleError } = await import('../../../lib/api');
-            
+
             (applyRateLimit as any).mockReturnValue(null);
 
             const request = new NextRequest('http://localhost/api/provider-config', {
@@ -290,7 +303,7 @@ describe('Provider Config API Endpoint', () => {
 
             const response = await PUT(request);
 
-            expect(apiHandleError).toHaveBeenCalled();
+            expect(response.status).toBe(400);
         });
     });
 });

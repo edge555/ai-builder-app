@@ -53,9 +53,15 @@ export const MODAL_MAX_OUTPUT_TOKENS_GENERATION = 32768;
 export const MODAL_MAX_OUTPUT_TOKENS_MODIFICATION = 16384;
 export const MODAL_MAX_OUTPUT_TOKENS_PLANNING = 2048;
 
+// Route operation timeouts
+export const DIFF_TIMEOUT_MS = 30_000;   // 30 seconds
+export const EXPORT_TIMEOUT_MS = 60_000; // 60 seconds
+export const REVERT_TIMEOUT_MS = 30_000; // 30 seconds
+
 // Rate limiting
 export const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute sliding window
 export const RATE_LIMIT_CLEANUP_INTERVAL_MS = 60_000; // evict stale entries every 60s
+export const RATE_LIMIT_MAX_STORE_SIZE = 100_000; // cap to prevent memory leak under attack
 
 // Per-tier max requests per IP per window
 export const RATE_LIMIT_HIGH_COST_MAX = 5;    // generate-stream, modify-stream

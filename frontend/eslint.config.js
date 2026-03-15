@@ -35,7 +35,7 @@ export default tseslint.config(
           "alphabetize": { "order": "asc", "caseInsensitive": true }
         }
       ],
-      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-explicit-any": "warn",
       "no-case-declarations": "off",
     },
     settings: {

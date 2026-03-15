@@ -1,7 +1,7 @@
 /**
  * Export Project API Endpoint
  * POST /api/export
- * 
+ *
  * Accepts a project state and returns a downloadable ZIP file.
  * Implements Requirement 10.5
  */
@@ -10,13 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import { deserializeProjectState, ExportProjectRequestSchema } from '@ai-app-builder/shared';
 import { exportAsZipBuffer } from '../../../lib/core';
-import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError } from '../../../lib/api';
-import { createLogger } from '../../../lib/logger';
-
-const logger = createLogger('api/export');
-
-// Timeout for export operations (60 seconds)
-const EXPORT_TIMEOUT_MS = 60_000;
+import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError, parseJsonRequest, withRouteContext } from '../../../lib/api';
+import { EXPORT_TIMEOUT_MS } from '../../../lib/constants';
 
 /**
  * Handle OPTIONS preflight request
@@ -25,21 +20,20 @@ export async function OPTIONS() {
   return handleOptions();
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export const POST = withRouteContext('api/export', async ({ contextLogger }, request: NextRequest) => {
   const blocked = applyRateLimit(request, RateLimitTier.LOW_COST);
   if (blocked) return blocked as NextResponse;
 
   const corsHeaders = getCorsHeaders(request);
 
-  try {
-    // Parse request body
-    const body = await request.json();
+  const parsed = await parseJsonRequest(request, ExportProjectRequestSchema);
+  if (!parsed.ok) return parsed.response;
 
-    // Validate request
-    const validatedRequest = ExportProjectRequestSchema.parse(body);
+  try {
+    const start = Date.now();
 
     // Deserialize project state
-    const projectState = deserializeProjectState(validatedRequest.projectState);
+    const projectState = deserializeProjectState(parsed.data.projectState);
 
     // Generate ZIP file with timeout
     const zipBuffer = await withTimeout(
@@ -58,6 +52,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .replace(/^-|-$/g, '') || 'project';
     const filename = `${sanitizedName}.zip`;
 
+    contextLogger.info('Export complete', { durationMs: Date.now() - start, filename });
+
     // Return ZIP file as binary download
     // Convert Buffer to Uint8Array for NextResponse compatibility
     return new NextResponse(new Uint8Array(zipBuffer), {
@@ -71,14 +67,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
 
   } catch (error) {
-    // Handle timeout errors specifically
     if (error instanceof TimeoutError) {
-      logger.error('Export timed out', {
-        timeoutMs: error.timeoutMs,
-      });
+      contextLogger.error('Export timed out', { timeoutMs: error.timeoutMs });
       const timeoutError = AppError.network(
         'OPERATION_TIMEOUT',
-        // Convert milliseconds to seconds (1000ms = 1s) for human-readable message
         `Project export timed out after ${error.timeoutMs / 1000} seconds`,
         { timeoutMs: error.timeoutMs },
         504
@@ -88,4 +80,4 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     return handleError(error, 'api/export', request);
   }
-}
+});

@@ -12,7 +12,7 @@
  *   if (!result.allowed) { // return 429 }
  */
 
-import { RATE_LIMIT_CLEANUP_INTERVAL_MS } from '../constants';
+import { RATE_LIMIT_CLEANUP_INTERVAL_MS, RATE_LIMIT_MAX_STORE_SIZE } from '../constants';
 
 export interface RateLimitResult {
   /** Whether the request is allowed */
@@ -31,8 +31,10 @@ interface WindowEntry {
 export class RateLimiter {
   private readonly store = new Map<string, WindowEntry>();
   private cleanupTimer: NodeJS.Timeout | null = null;
+  private readonly maxStoreSize: number;
 
-  constructor(cleanupIntervalMs = RATE_LIMIT_CLEANUP_INTERVAL_MS) {
+  constructor(cleanupIntervalMs = RATE_LIMIT_CLEANUP_INTERVAL_MS, maxStoreSize = RATE_LIMIT_MAX_STORE_SIZE) {
+    this.maxStoreSize = maxStoreSize;
     this.cleanupTimer = setInterval(() => this.cleanup(), cleanupIntervalMs);
     // Allow the process to exit even if the interval is still running
     this.cleanupTimer.unref?.();
@@ -43,6 +45,11 @@ export class RateLimiter {
    * Returns whether the request is allowed and how many remain.
    */
   check(key: string, limit: number, windowMs: number): RateLimitResult {
+    // Prevent unbounded memory growth under attack (many unique IPs)
+    if (this.store.size >= this.maxStoreSize) {
+      this.cleanup();
+    }
+
     const now = Date.now();
     const entry = this.store.get(key);
 

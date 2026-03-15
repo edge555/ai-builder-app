@@ -90,6 +90,54 @@ describe('applyRateLimit()', () => {
     it.todo('returns null regardless of request count — requires dynamic mock config (vi.doMock)');
   });
 
+  describe('IP validation (X-Forwarded-For)', () => {
+    it('uses valid IPv4 from X-Forwarded-For', () => {
+      const req = makeRequest({ headers: { 'x-forwarded-for': '203.0.113.5' } });
+      // First request should be allowed (within limit)
+      const result = applyRateLimit(req, RateLimitTier.HIGH_COST);
+      expect(result).toBeNull();
+    });
+
+    it('uses valid IPv6 from X-Forwarded-For', () => {
+      const req = makeRequest({ headers: { 'x-forwarded-for': '2001:db8::1' } });
+      const result = applyRateLimit(req, RateLimitTier.HIGH_COST);
+      expect(result).toBeNull();
+    });
+
+    it('falls back to request.ip when X-Forwarded-For is malformed', () => {
+      // Malformed value — should fall back to request.ip 'fallback-ip'
+      const req = {
+        method: 'POST',
+        ip: 'fallback-ip',
+        headers: new Headers({ 'x-forwarded-for': 'evil;DROP TABLE ips;--' }),
+      } as any;
+      // Should not throw; result based on fallback IP
+      const result = applyRateLimit(req, RateLimitTier.HIGH_COST);
+      expect(result).toBeNull();
+    });
+
+    it('falls back when X-Forwarded-For is empty string', () => {
+      const req = {
+        method: 'POST',
+        ip: '1.2.3.4',
+        headers: new Headers({ 'x-forwarded-for': '' }),
+      } as any;
+      const result = applyRateLimit(req, RateLimitTier.HIGH_COST);
+      expect(result).toBeNull();
+    });
+
+    it('uses first IP from comma-separated X-Forwarded-For', () => {
+      const limit = 5;
+      const headers = { 'x-forwarded-for': '10.0.0.1, 10.0.0.2' };
+      for (let i = 0; i < limit; i++) {
+        applyRateLimit(makeRequest({ headers }), RateLimitTier.HIGH_COST);
+      }
+      // Same first IP should be rate limited
+      const result = applyRateLimit(makeRequest({ headers }), RateLimitTier.HIGH_COST);
+      expect(result?.status).toBe(429);
+    });
+  });
+
   describe('allowed requests', () => {
     it('returns null when request is within limit', () => {
       const result = applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);

@@ -23,6 +23,21 @@ vi.mock('../../../lib/api', () => ({
     handleError: vi.fn((error, context, request) => {
         return new Response(JSON.stringify({ error: error.message }), { status: 500 });
     }),
+    withRouteContext: vi.fn().mockImplementation((_module: string, handler: any) => {
+        return (request: any) => handler(
+            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } },
+            request
+        );
+    }),
+    parseJsonRequest: vi.fn().mockImplementation(async (request: any, schema: any) => {
+        try {
+            const body = await request.json();
+            const data = schema.parse(body);
+            return { ok: true, data };
+        } catch {
+            return { ok: false, response: new Response('Invalid request', { status: 400 }) };
+        }
+    }),
 }));
 
 // Mock the agent-config-store
@@ -213,16 +228,13 @@ describe('Agent Config API Endpoint', () => {
             expect(applyRateLimit).toHaveBeenCalledWith(request, RateLimitTier.CONFIG);
         });
 
-        it('should validate request body against schema', async () => {
+        it('should return 400 when request body fails schema validation', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
-            const { save } = await import('../../../lib/ai/agent-config-store');
-            const { handleError: apiHandleError } = await import('../../../lib/api');
-            
+
             (applyRateLimit as any).mockReturnValue(null);
-            (save as any).mockResolvedValue(undefined);
 
             const invalidConfig = {
-                version: 2, // Invalid version
+                version: 2, // Invalid version (schema expects literal 1)
                 tasks: {},
             };
 
@@ -233,26 +245,19 @@ describe('Agent Config API Endpoint', () => {
 
             const response = await PUT(request);
 
-            // Should handle Zod validation error
-            expect(apiHandleError).toHaveBeenCalled();
+            expect(response.status).toBe(400);
         });
 
-        it('should require all task types in config', async () => {
+        it('should return 400 when required task types are missing', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
-            const { save } = await import('../../../lib/ai/agent-config-store');
-            const { handleError: apiHandleError } = await import('../../../lib/api');
-            
+
             (applyRateLimit as any).mockReturnValue(null);
-            (save as any).mockResolvedValue(undefined);
 
             const incompleteConfig = {
                 version: 1,
                 tasks: {
-                    intent: {
-                        taskType: 'intent',
-                        models: [],
-                    },
-                    // Missing other task types
+                    intent: { taskType: 'intent', models: [] },
+                    // Missing planning, coding, debugging, documentation
                 },
             };
 
@@ -263,42 +268,22 @@ describe('Agent Config API Endpoint', () => {
 
             const response = await PUT(request);
 
-            expect(apiHandleError).toHaveBeenCalled();
+            expect(response.status).toBe(400);
         });
 
-        it('should validate model entry structure', async () => {
+        it('should return 400 when model entry has empty id', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
-            const { save } = await import('../../../lib/ai/agent-config-store');
-            const { handleError: apiHandleError } = await import('../../../lib/api');
-            
+
             (applyRateLimit as any).mockReturnValue(null);
-            (save as any).mockResolvedValue(undefined);
 
             const invalidModelConfig = {
                 version: 1,
                 tasks: {
-                    intent: {
-                        taskType: 'intent',
-                        models: [
-                            { id: '', label: 'Test', active: true, priority: 0 }, // Empty id
-                        ],
-                    },
-                    planning: {
-                        taskType: 'planning',
-                        models: [],
-                    },
-                    coding: {
-                        taskType: 'coding',
-                        models: [],
-                    },
-                    debugging: {
-                        taskType: 'debugging',
-                        models: [],
-                    },
-                    documentation: {
-                        taskType: 'documentation',
-                        models: [],
-                    },
+                    intent: { taskType: 'intent', models: [{ id: '', label: 'Test', active: true, priority: 0 }] },
+                    planning: { taskType: 'planning', models: [] },
+                    coding: { taskType: 'coding', models: [] },
+                    debugging: { taskType: 'debugging', models: [] },
+                    documentation: { taskType: 'documentation', models: [] },
                 },
             };
 
@@ -309,7 +294,7 @@ describe('Agent Config API Endpoint', () => {
 
             const response = await PUT(request);
 
-            expect(apiHandleError).toHaveBeenCalled();
+            expect(response.status).toBe(400);
         });
 
         it('should handle save errors', async () => {

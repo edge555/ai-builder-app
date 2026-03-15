@@ -1,24 +1,19 @@
 /**
  * Diff API Endpoint
  * POST /api/diff
- * 
+ *
  * Computes diffs between two versions.
  * Implements Requirement 10.3
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { applyRateLimit, RateLimitTier } from '../../../lib/security';
-import type { ComputeDiffResponse, ErrorResponse, ComputeDiffRequest } from '@ai-app-builder/shared/types';
+import type { ComputeDiffResponse, ErrorResponse } from '@ai-app-builder/shared/types';
 import { ComputeDiffRequestSchema } from '@ai-app-builder/shared/schemas';
 import { getVersionManager } from '../../../lib/core';
 import { getDiffEngine } from '../../../lib/diff';
-import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError } from '../../../lib/api';
-import { createLogger } from '../../../lib/logger';
-
-const logger = createLogger('api/diff');
-
-// Timeout for diff operations (30 seconds)
-const DIFF_TIMEOUT_MS = 30_000;
+import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError, parseJsonRequest, withRouteContext } from '../../../lib/api';
+import { DIFF_TIMEOUT_MS } from '../../../lib/constants';
 
 /**
  * Handle OPTIONS preflight request
@@ -27,29 +22,23 @@ export async function OPTIONS() {
   return handleOptions();
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse<ComputeDiffResponse | ErrorResponse>> {
+export const POST = withRouteContext('api/diff', async ({ contextLogger }, request: NextRequest) => {
   const blocked = applyRateLimit(request, RateLimitTier.LOW_COST);
   if (blocked) return blocked as NextResponse<ComputeDiffResponse | ErrorResponse>;
 
+  const parsed = await parseJsonRequest(request, ComputeDiffRequestSchema);
+  if (!parsed.ok) return parsed.response;
+
+  const { fromVersionId, toVersionId, projectId: projectIdParam } = parsed.data;
+
   try {
-    // Parse request body
-    const body = await request.json();
-
-    // Validate request
-    const validatedRequest = ComputeDiffRequestSchema.parse(body);
-
-    const { fromVersionId, toVersionId } = validatedRequest;
-
-    // Get version manager
+    const start = Date.now();
     const versionManager = getVersionManager();
 
     // We need to find the versions - they could be in any project
     let fromVersion = null;
     let toVersion = null;
     let projectId: string | null = null;
-
-    // Search through all projects to find the versions
-    const projectIdParam = (body as ComputeDiffRequest & { projectId?: string }).projectId;
 
     if (projectIdParam) {
       fromVersion = versionManager.getVersion(projectIdParam, fromVersionId);
@@ -105,23 +94,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<ComputeDi
       }
     );
 
-    // Return successful response
-    const response: ComputeDiffResponse = {
-      success: true,
-      diffs,
-    };
+    contextLogger.info('Diff complete', { durationMs: Date.now() - start });
 
+    const response: ComputeDiffResponse = { success: true, diffs };
     return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
 
   } catch (error) {
-    // Handle timeout errors specifically
     if (error instanceof TimeoutError) {
-      logger.error('Diff computation timed out', {
-        timeoutMs: error.timeoutMs,
-      });
+      contextLogger.error('Diff computation timed out', { timeoutMs: error.timeoutMs });
       const timeoutError = AppError.network(
         'OPERATION_TIMEOUT',
-        // Convert milliseconds to seconds (1000ms = 1s) for human-readable message
         `Diff computation timed out after ${error.timeoutMs / 1000} seconds`,
         { timeoutMs: error.timeoutMs },
         504
@@ -131,4 +113,4 @@ export async function POST(request: NextRequest): Promise<NextResponse<ComputeDi
 
     return handleError(error, 'api/diff', request);
   }
-}
+});

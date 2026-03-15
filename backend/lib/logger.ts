@@ -48,6 +48,8 @@ const LOG_LEVELS: Record<LogLevel, number> = {
 // Sensitive field patterns for redaction
 const SENSITIVE_PATTERNS = [
   /api[_-]?key/i,
+  /api[_-]?url/i,
+  /stream[_-]?url/i,
   /password/i,
   /secret/i,
   /token/i,

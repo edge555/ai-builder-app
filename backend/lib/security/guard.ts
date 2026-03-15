@@ -22,11 +22,19 @@ const logger = createLogger('security/guard');
  * Checks X-Forwarded-For first (proxy / load-balancer), then falls back to
  * Next.js `request.ip`, and finally to 'unknown' for local dev.
  */
+// Matches valid IPv4, IPv6, and IPv4-mapped IPv6 addresses
+const IP_FORMAT = /^[\d.:a-fA-F]+$/;
+
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {
     // X-Forwarded-For may contain a comma-separated list; use the first (client) IP.
-    return forwarded.split(',')[0].trim();
+    const firstIp = forwarded.split(',')[0].trim();
+    // Validate format to prevent crafted header values from being used as rate limit keys
+    if (IP_FORMAT.test(firstIp)) {
+      return firstIp;
+    }
+    // Fall back if the extracted value doesn't look like an IP
   }
   return request.ip ?? 'unknown';
 }

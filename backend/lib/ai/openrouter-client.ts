@@ -163,7 +163,7 @@ export class OpenRouterClient implements AIProvider {
           model: this.model,
           errorText: errorText.slice(0, ERROR_TEXT_MAX_LENGTH),
         });
-        throw new Error(serviceError('OpenRouter', `${response.status} - ${errorText}`));
+        throw new Error(serviceError('OpenRouter', `HTTP ${response.status}`));
       }
 
       const data = (await response.json()) as OpenRouterResponse;
@@ -199,7 +199,11 @@ export class OpenRouterClient implements AIProvider {
     try {
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(serviceError('OpenRouter', `${response.status} - ${errorText}`));
+        logger.error('OpenRouter streaming error', {
+          status: response.status,
+          errorText: errorText.slice(0, ERROR_TEXT_MAX_LENGTH),
+        });
+        throw new Error(serviceError('OpenRouter', `HTTP ${response.status}`));
       }
 
       const accumulated = await processSSEStream(response, this.parseSSEDelta.bind(this), (delta, totalLength) => {

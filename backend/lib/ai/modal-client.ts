@@ -124,7 +124,7 @@ export class ModalClient implements AIProvider {
           status: response.status,
           errorText: errorText.slice(0, ERROR_TEXT_MAX_LENGTH),
         });
-        throw new Error(serviceError('Modal', `${response.status} - ${errorText}`));
+        throw new Error(serviceError('Modal', `HTTP ${response.status}`));
       }
 
       const data = await response.json() as { content?: string;[key: string]: unknown };
@@ -163,7 +163,11 @@ export class ModalClient implements AIProvider {
     try {
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(serviceError('Modal', `${response.status} - ${errorText}`));
+        logger.error('Modal streaming error', {
+          status: response.status,
+          errorText: errorText.slice(0, ERROR_TEXT_MAX_LENGTH),
+        });
+        throw new Error(serviceError('Modal', `HTTP ${response.status}`));
       }
 
       const accumulated = await processSSEStream(response, this.parseSSEToken.bind(this), (token, totalLength) => {

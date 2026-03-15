@@ -23,6 +23,12 @@ vi.mock('../../../lib/api', () => ({
     handleError: vi.fn((error, context, request) => {
         return new Response(JSON.stringify({ error: error.message }), { status: 500 });
     }),
+    withRouteContext: vi.fn().mockImplementation((_module: string, handler: any) => {
+        return (request: any) => handler(
+            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } },
+            request
+        );
+    }),
 }));
 
 // Mock the core module

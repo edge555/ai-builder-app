@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getCorsHeaders, handleOptions, handleError } from '../../../lib/api';
-import {
-  getProviderConfigWithSource,
-  saveProvider,
-} from '../../../lib/ai/provider-config-store';
+import { getCorsHeaders, handleOptions, handleError, parseJsonRequest, withRouteContext } from '../../../lib/api';
+import { getProviderConfigWithSource, saveProvider } from '../../../lib/ai/provider-config-store';
 import { resetProviderSingletons } from '../../../lib/ai/ai-provider-factory';
 import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 
@@ -12,34 +9,37 @@ export async function OPTIONS() {
   return handleOptions();
 }
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export const GET = withRouteContext('api/provider-config', async ({ contextLogger }, request: NextRequest) => {
   const blocked = applyRateLimit(request, RateLimitTier.CONFIG);
   if (blocked) return blocked as NextResponse;
 
   try {
     const result = await getProviderConfigWithSource();
+    contextLogger.info('Provider config fetched');
     return NextResponse.json(result, { status: 200, headers: getCorsHeaders(request) });
   } catch (error) {
     return handleError(error, 'api/provider-config GET', request);
   }
-}
+});
 
 const ProviderConfigSchema = z.object({
   aiProvider: z.enum(['openrouter', 'modal']).nullable(),
 });
 
-export async function PUT(request: NextRequest): Promise<NextResponse> {
+export const PUT = withRouteContext('api/provider-config', async ({ contextLogger }, request: NextRequest) => {
   const blocked = applyRateLimit(request, RateLimitTier.CONFIG);
   if (blocked) return blocked as NextResponse;
 
+  const parsed = await parseJsonRequest(request, ProviderConfigSchema);
+  if (!parsed.ok) return parsed.response;
+
   try {
-    const body = await request.json();
-    const { aiProvider } = ProviderConfigSchema.parse(body);
-    await saveProvider(aiProvider);
+    await saveProvider(parsed.data.aiProvider);
     resetProviderSingletons();
     const result = await getProviderConfigWithSource();
+    contextLogger.info('Provider config updated', { aiProvider: parsed.data.aiProvider });
     return NextResponse.json(result, { status: 200, headers: getCorsHeaders(request) });
   } catch (error) {
     return handleError(error, 'api/provider-config PUT', request);
   }
-}
+});

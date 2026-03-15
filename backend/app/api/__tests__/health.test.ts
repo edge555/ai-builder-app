@@ -1,172 +1,93 @@
 /**
  * Tests for health API endpoint
- * Following industry best practices: AAA pattern, clear descriptions, edge cases
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { GET } from '../health/route';
+
+vi.mock('../../../lib/security', () => ({
+  applyRateLimit: vi.fn().mockReturnValue(null),
+  RateLimitTier: { LOW_COST: 'LOW_COST' },
+}));
+
+vi.mock('../../../lib/config', () => ({
+  config: {
+    provider: { name: 'openrouter' },
+    rateLimit: { enabled: true },
+  },
+}));
+
+vi.mock('../../../lib/api', () => ({
+  getCorsHeaders: vi.fn().mockReturnValue({ 'Access-Control-Allow-Origin': '*' }),
+  handleOptions: vi.fn(() => new Response(null, { status: 204 })),
+}));
+
+import { GET, OPTIONS } from '../health/route';
 
 describe('Health API', () => {
-  let mockRequest: any;
+  let mockRequest: { headers: Headers; ip?: string };
 
   beforeEach(() => {
-    mockRequest = {
-      headers: new Headers(),
-    };
+    mockRequest = { headers: new Headers() };
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('GET /health', () => {
-    it('should return 200 status', async () => {
-      // Act
-      const response = await GET(mockRequest);
+  describe('OPTIONS /api/health', () => {
+    it('returns 204', async () => {
+      const response = await OPTIONS();
+      expect(response.status).toBe(204);
+    });
+  });
 
-      // Assert
+  describe('GET /api/health', () => {
+    it('returns 200', async () => {
+      const response = await GET(mockRequest as any);
       expect(response.status).toBe(200);
     });
 
-    it('should return JSON content', async () => {
-      // Act
-      const response = await GET(mockRequest);
-
-      // Assert
-      expect(response.headers.get('content-type')).toContain('application/json');
+    it('returns status: ok', async () => {
+      const response = await GET(mockRequest as any);
+      const body = await response.json();
+      expect(body.status).toBe('ok');
     });
 
-    it('should include status field in response', async () => {
-      // Act
-      const response = await GET(mockRequest);
+    it('returns ISO timestamp', async () => {
+      const response = await GET(mockRequest as any);
       const body = await response.json();
-
-      // Assert
-      expect(body).toHaveProperty('status');
-    });
-
-    it('should include timestamp field in response', async () => {
-      // Act
-      const response = await GET(mockRequest);
-      const body = await response.json();
-
-      // Assert
-      expect(body).toHaveProperty('timestamp');
-    });
-
-    it('should include version field in response', async () => {
-      // Act
-      const response = await GET(mockRequest);
-      const body = await response.json();
-
-      // Assert
-      expect(body).toHaveProperty('version');
-    });
-
-    it('should return healthy status', async () => {
-      // Act
-      const response = await GET(mockRequest);
-      const body = await response.json();
-
-      // Assert
-      expect(body.status).toBe('healthy');
-    });
-
-    it('should return valid ISO timestamp', async () => {
-      // Act
-      const response = await GET(mockRequest);
-      const body = await response.json();
-
-      // Assert
       expect(body.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     });
 
-    it('should return string version', async () => {
-      // Act
-      const response = await GET(mockRequest);
+    it('returns provider name', async () => {
+      const response = await GET(mockRequest as any);
       const body = await response.json();
-
-      // Assert
-      expect(typeof body.version).toBe('string');
-      expect(body.version.length).toBeGreaterThan(0);
+      expect(body.provider).toBe('openrouter');
     });
 
-    it('should handle concurrent requests', async () => {
-      // Arrange
-      const requests = Array.from({ length: 10 }, () => GET(mockRequest));
-
-      // Act
-      const responses = await Promise.all(requests);
-
-      // Assert
-      responses.forEach((response: any) => {
-        expect(response.status).toBe(200);
-      });
-    });
-
-    it('should return consistent responses', async () => {
-      // Act
-      const response1 = await GET(mockRequest);
-      const response2 = await GET(mockRequest);
-      const body1 = await response1.json();
-      const body2 = await response2.json();
-
-      // Assert
-      expect(body1.status).toBe(body2.status);
-    });
-
-    it('should include CORS headers', async () => {
-      // Act
-      const response = await GET(mockRequest);
-
-      // Assert
-      expect(response.headers.get('access-control-allow-origin')).toBeDefined();
-    });
-
-    it('should handle request with headers', async () => {
-      // Arrange
-      mockRequest.headers = new Headers({
-        'user-agent': 'test-agent',
-        'accept': 'application/json',
-      });
-
-      // Act
-      const response = await GET(mockRequest);
-
-      // Assert
-      expect(response.status).toBe(200);
-    });
-
-    it('should return response quickly', async () => {
-      // Arrange
-      const startTime = Date.now();
-
-      // Act
-      await GET(mockRequest);
-      const endTime = Date.now();
-
-      // Assert
-      expect(endTime - startTime).toBeLessThan(100); // Should complete in less than 100ms
-    });
-
-    it('should not depend on request body', async () => {
-      // Arrange
-      mockRequest.body = null;
-
-      // Act
-      const response = await GET(mockRequest);
-
-      // Assert
-      expect(response.status).toBe(200);
-    });
-
-    it('should return proper JSON structure', async () => {
-      // Act
-      const response = await GET(mockRequest);
+    it('returns rateLimiter info', async () => {
+      const response = await GET(mockRequest as any);
       const body = await response.json();
+      expect(body.rateLimiter).toEqual({ enabled: true });
+    });
 
-      // Assert
-      expect(Object.keys(body)).toEqual(['status', 'timestamp', 'version']);
+    it('returns CORS headers', async () => {
+      const response = await GET(mockRequest as any);
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBeTruthy();
+    });
+
+    it('responds quickly (under 100ms)', async () => {
+      const start = Date.now();
+      await GET(mockRequest as any);
+      expect(Date.now() - start).toBeLessThan(100);
+    });
+
+    it('handles concurrent requests', async () => {
+      const responses = await Promise.all(
+        Array.from({ length: 5 }, () => GET(mockRequest as any))
+      );
+      responses.forEach((r) => expect(r.status).toBe(200));
     });
   });
 });

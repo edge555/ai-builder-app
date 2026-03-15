@@ -113,6 +113,46 @@ describe('RateLimiter', () => {
     });
   });
 
+  describe('store size cap', () => {
+    it('triggers cleanup when store size reaches the cap', () => {
+      // Use a small cap (5) so we can actually fill it
+      const cappedLimiter = new RateLimiter(999_999_999, 5);
+      const cleanupSpy = vi.spyOn(cappedLimiter, 'cleanup');
+
+      // Fill to capacity with unique keys
+      for (let i = 0; i < 5; i++) {
+        cappedLimiter.check(`ip:${i}`, 100, 60_000);
+      }
+      expect(cappedLimiter.size).toBe(5);
+      expect(cleanupSpy).not.toHaveBeenCalled();
+
+      // Next check should trigger cleanup because size >= cap
+      cappedLimiter.check('ip:new', 100, 60_000);
+      expect(cleanupSpy).toHaveBeenCalledTimes(1);
+
+      cappedLimiter.destroy();
+    });
+
+    it('cleanup evicts expired entries to stay below cap', () => {
+      const cappedLimiter = new RateLimiter(999_999_999, 5);
+
+      // Fill to capacity
+      for (let i = 0; i < 5; i++) {
+        cappedLimiter.check(`ip:${i}`, 100, 60_000);
+      }
+      expect(cappedLimiter.size).toBe(5);
+
+      // Advance past cleanup window so entries are expired
+      vi.advanceTimersByTime(121_000);
+
+      // Next check triggers cleanup → expired entries evicted → new entry added
+      cappedLimiter.check('ip:fresh', 100, 60_000);
+      expect(cappedLimiter.size).toBe(1); // only the fresh entry remains
+
+      cappedLimiter.destroy();
+    });
+  });
+
   describe('destroy()', () => {
     it('clears the store', () => {
       limiter.check('ip:1.2.3.4', 5, 60_000);

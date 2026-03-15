@@ -38,6 +38,21 @@ vi.mock('../../../lib/api', () => ({
             this.name = 'TimeoutError';
         }
     },
+    withRouteContext: vi.fn().mockImplementation((_module: string, handler: any) => {
+        return (request: any) => handler(
+            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } },
+            request
+        );
+    }),
+    parseJsonRequest: vi.fn().mockImplementation(async (request: any, schema: any) => {
+        try {
+            const body = await request.json();
+            const data = schema.parse(body);
+            return { ok: true, data };
+        } catch {
+            return { ok: false, response: new Response('Invalid request', { status: 400 }) };
+        }
+    }),
 }));
 
 // Mock the core module
@@ -139,8 +154,7 @@ describe('Export API Endpoint', () => {
         it('should validate request body against schema', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { ExportProjectRequestSchema } = await import('@ai-app-builder/shared');
-            const { handleError: apiHandleError } = await import('../../../lib/api');
-            
+
             (applyRateLimit as any).mockReturnValue(null);
             (ExportProjectRequestSchema.parse as any).mockImplementation(() => {
                 throw new Error('Invalid project state');
@@ -153,11 +167,7 @@ describe('Export API Endpoint', () => {
 
             const response = await POST(request);
 
-            expect(apiHandleError).toHaveBeenCalledWith(
-                expect.any(Error),
-                'api/export',
-                request
-            );
+            expect(response.status).toBe(400);
         });
 
         it('should deserialize project state', async () => {

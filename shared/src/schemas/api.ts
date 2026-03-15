@@ -39,7 +39,13 @@ export const ModifyProjectRequestSchema = z.object({
     projectState: SerializedProjectStateSchema,
     prompt: z.string().min(1, 'Modification prompt is required').max(50000, 'Modification prompt is too long (max 50,000 characters)'),
     shouldSkipPlanning: z.boolean().optional(),
-    runtimeError: z.any().optional(), // RuntimeError type is complex, using any for now or skipping detailed validation
+    runtimeError: z.object({
+        message: z.string(),
+        stack: z.string().optional(),
+        type: z.string().optional(),
+        source: z.string().optional(),
+        priority: z.string().optional(),
+    }).passthrough().optional(), // RuntimeError: validated structurally, passthrough allows extra fields
     errorContext: z.object({
         affectedFiles: z.array(z.string()),
         errorType: z.string(),

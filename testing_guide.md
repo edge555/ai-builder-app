@@ -9,11 +9,14 @@
 - **`vi` module** — mocking (functions, modules, timers)
 - **TypeScript** — all tests are fully typed
 
+> **Globals:** Frontend (`vitest.config.ts` → `globals: true`) — `describe`, `it`, `expect`, `vi` are available without imports. Backend (`globals: false`) — import explicitly from `'vitest'`.
+
 ## File Naming & Location
 
 | Workspace | Pattern | Location |
 |-----------|---------|----------|
 | Backend | `*.test.ts` | `lib/__tests__/<category>/` or `lib/<module>/__tests__/` |
+| Backend (perf) | `*.perf.test.ts` | Same as above — separate file for timing assertions |
 | Frontend | `*.test.ts` / `*.test.tsx` | Colocated: `src/<type>/<Name>/__tests__/` |
 | Shared | `*.test.ts` | `src/__tests__/` |
 
@@ -25,6 +28,26 @@ frontend/src/hooks/__tests__/useAutoSave.test.ts
 frontend/src/components/TemplateGrid/__tests__/TemplateGrid.test.tsx
 frontend/src/context/__tests__/ProjectContext.test.tsx
 ```
+
+## Setup Files & Pre-Mocked APIs
+
+Both workspaces have a `setupFiles` entry that runs before every test. **Do not re-mock anything listed here.**
+
+**Backend** — `backend/lib/__tests__/setup.ts`
+- Sets env vars: `OPENROUTER_API_KEY`, `AI_PROVIDER`, `MAX_OUTPUT_TOKENS`, `PORT`, `CORS_ORIGIN`
+
+**Frontend** — `frontend/src/test/setup.ts`
+- Imports `@testing-library/jest-dom` (adds `toBeInTheDocument`, `toHaveTextContent`, etc.)
+- Calls `cleanup()` after each test automatically
+- Pre-mocked browser APIs (no need to mock these manually):
+  - `localStorage` / `sessionStorage` — full in-memory implementation
+  - `matchMedia()` — returns `{ matches: false }`
+  - `ResizeObserver` / `IntersectionObserver` — no-op stubs
+  - **IndexedDB** — full in-memory implementation (supports versioning, object stores, indexes, cursors)
+  - `URL.createObjectURL` / `revokeObjectURL` — returns stub URL strings
+  - `console.log` / `console.warn` — suppressed (use `vi.spyOn(console, 'error')` to inspect errors)
+
+---
 
 ## Test Structure
 

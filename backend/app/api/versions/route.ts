@@ -1,7 +1,7 @@
 /**
  * Versions API Endpoint
  * GET /api/versions?projectId={projectId}
- * 
+ *
  * Returns a list of all versions for a project with metadata.
  * Implements Requirement 10.4
  */
@@ -11,7 +11,7 @@ import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import type { GetVersionsResponse, ErrorResponse } from '@ai-app-builder/shared';
 import { serializeVersion, GetVersionsRequestSchema } from '@ai-app-builder/shared';
 import { getVersionManager } from '../../../lib/core';
-import { getCorsHeaders, handleOptions, handleError } from '../../../lib/api';
+import { getCorsHeaders, handleOptions, handleError, withRouteContext } from '../../../lib/api';
 
 /**
  * Handle OPTIONS preflight request
@@ -20,11 +20,13 @@ export async function OPTIONS() {
   return handleOptions();
 }
 
-export async function GET(request: NextRequest): Promise<NextResponse<GetVersionsResponse | ErrorResponse>> {
+export const GET = withRouteContext('api/versions', async ({ contextLogger }, request: NextRequest) => {
   const blocked = applyRateLimit(request, RateLimitTier.LOW_COST);
   if (blocked) return blocked as NextResponse<GetVersionsResponse | ErrorResponse>;
 
   try {
+    const start = Date.now();
+
     // Get projectId from query parameters
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId');
@@ -39,14 +41,12 @@ export async function GET(request: NextRequest): Promise<NextResponse<GetVersion
     // Serialize versions for JSON transport
     const serializedVersions = versions.map(serializeVersion);
 
-    // Return successful response
-    const response: GetVersionsResponse = {
-      versions: serializedVersions,
-    };
+    contextLogger.info('Versions fetched', { durationMs: Date.now() - start, count: serializedVersions.length });
 
+    const response: GetVersionsResponse = { versions: serializedVersions };
     return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
 
   } catch (error) {
     return handleError(error, 'api/versions', request);
   }
-}
+});

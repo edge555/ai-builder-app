@@ -44,6 +44,21 @@ vi.mock('../../../lib/api', () => ({
             this.name = 'TimeoutError';
         }
     },
+    withRouteContext: vi.fn().mockImplementation((_module: string, handler: any) => {
+        return (request: any) => handler(
+            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } },
+            request
+        );
+    }),
+    parseJsonRequest: vi.fn().mockImplementation(async (request: any, schema: any) => {
+        try {
+            const body = await request.json();
+            const data = schema.parse(body);
+            return { ok: true, data };
+        } catch {
+            return { ok: false, response: new Response('Invalid request', { status: 400 }) };
+        }
+    }),
 }));
 
 // Mock the core module
@@ -240,11 +255,10 @@ describe('Diff API Endpoint', () => {
             expect(applyRateLimit).toHaveBeenCalledWith(request, RateLimitTier.LOW_COST);
         });
 
-        it('should validate request body against schema', async () => {
+        it('should return 400 when schema validation fails', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { ComputeDiffRequestSchema } = await import('@ai-app-builder/shared/schemas');
-            const { handleError: apiHandleError } = await import('../../../lib/api');
-            
+
             (applyRateLimit as any).mockReturnValue(null);
             (ComputeDiffRequestSchema.parse as any).mockImplementation(() => {
                 throw new Error('Invalid request');
@@ -257,11 +271,7 @@ describe('Diff API Endpoint', () => {
 
             const response = await POST(request);
 
-            expect(apiHandleError).toHaveBeenCalledWith(
-                expect.any(Error),
-                'api/diff',
-                request
-            );
+            expect(response.status).toBe(400);
         });
 
         it('should throw error when fromVersion is not found', async () => {
@@ -428,16 +438,24 @@ describe('Diff API Endpoint', () => {
 
         it('should handle timeout errors', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
+            const { getVersionManager } = await import('../../../lib/core');
             const { ComputeDiffRequestSchema } = await import('@ai-app-builder/shared/schemas');
             const { withTimeout, TimeoutError, AppError, handleError: apiHandleError } = await import('../../../lib/api');
-            
+
             (applyRateLimit as any).mockReturnValue(null);
             (ComputeDiffRequestSchema.parse as any).mockReturnValue({
                 fromVersionId: 'v1',
                 toVersionId: 'v2',
                 projectId: 'test-project',
             });
-            
+
+            const mockVersionManager = {
+                getVersion: vi.fn()
+                    .mockReturnValueOnce(mockFromVersion)
+                    .mockReturnValueOnce(mockToVersion),
+            };
+            (getVersionManager as any).mockReturnValue(mockVersionManager);
+
             const timeoutError = new TimeoutError('Operation timed out', 30000);
             (withTimeout as any).mockRejectedValue(timeoutError);
 
