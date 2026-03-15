@@ -18,9 +18,9 @@ vi.mock('../../logger', () => ({
 
 // Mock the backpressure-controller
 vi.mock('../backpressure-controller', () => ({
-  BackpressureController: vi.fn().mockImplementation(() => ({
-    logStats: vi.fn(),
-  })),
+  BackpressureController: vi.fn().mockImplementation(function() {
+    return { logStats: vi.fn() };
+  }),
   EventPriority: {
     NORMAL: 'normal',
     CRITICAL: 'critical',
@@ -29,10 +29,9 @@ vi.mock('../backpressure-controller', () => ({
 
 // Mock the sse-encoder
 vi.mock('../sse-encoder', () => ({
-  SSEEncoder: vi.fn().mockImplementation(() => ({
-    enqueueHeartbeat: vi.fn(),
-    enqueueEvent: vi.fn(),
-  })),
+  SSEEncoder: vi.fn().mockImplementation(function() {
+    return { enqueueHeartbeat: vi.fn(), enqueueEvent: vi.fn() };
+  }),
 }));
 
 import { SSEEncoder } from '../sse-encoder';

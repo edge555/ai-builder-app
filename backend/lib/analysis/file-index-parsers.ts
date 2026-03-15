@@ -339,6 +339,12 @@ function extractProps(line: string, lines: string[], lineIndex: number): string[
 function parseParams(paramsStr: string): string[] {
   if (!paramsStr.trim()) return [];
 
+  // Handle single destructured param block spanning the whole string: { a, b }
+  const fullDestructuredMatch = paramsStr.trim().match(/^\{([^}]+)\}$/);
+  if (fullDestructuredMatch) {
+    return fullDestructuredMatch[1].split(',').map(s => s.trim().split(/[=:]/)[0].trim()).filter(Boolean);
+  }
+
   return paramsStr
     .split(',')
     .map(p => {

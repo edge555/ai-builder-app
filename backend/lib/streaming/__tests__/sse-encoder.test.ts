@@ -4,13 +4,14 @@ import { BackpressureController, EventPriority } from '../backpressure-controlle
 
 // Mock the BackpressureController
 vi.mock('../backpressure-controller', () => ({
-    BackpressureController: vi.fn().mockImplementation(() => ({
-        enqueue: vi.fn(),
-    })),
+    BackpressureController: vi.fn().mockImplementation(function() {
+        return { enqueue: vi.fn() };
+    }),
     EventPriority: {
-        LOW: 'LOW',
-        NORMAL: 'NORMAL',
-        HIGH: 'HIGH',
+        LOW: 'low',
+        NORMAL: 'normal',
+        HIGH: 'high',
+        CRITICAL: 'critical',
     },
 }));
 
@@ -19,7 +20,9 @@ describe('SSEEncoder', () => {
     let mockBackpressureController: BackpressureController;
 
     beforeEach(() => {
+        vi.clearAllMocks();
         mockBackpressureController = new BackpressureController();
+        (mockBackpressureController.enqueue as ReturnType<typeof vi.fn>).mockReturnValue(true);
         encoder = new SSEEncoder(mockBackpressureController);
     });
 
@@ -186,12 +189,13 @@ describe('SSEEncoder', () => {
         });
 
         it('should return false when backpressure enqueue fails', () => {
+            (mockBackpressureController.enqueue as ReturnType<typeof vi.fn>).mockReturnValue(false);
             const mockController = {
-                enqueue: vi.fn().mockReturnValue(false),
+                enqueue: vi.fn(),
             } as unknown as ReadableStreamDefaultController<Uint8Array>;
-            
+
             const result = encoder.enqueueEvent(mockController, 'message', { text: 'Hello' });
-            
+
             expect(result).toBe(false);
         });
 
@@ -228,12 +232,13 @@ describe('SSEEncoder', () => {
         });
 
         it('should return false when backpressure enqueue fails', () => {
+            (mockBackpressureController.enqueue as ReturnType<typeof vi.fn>).mockReturnValue(false);
             const mockController = {
-                enqueue: vi.fn().mockReturnValue(false),
+                enqueue: vi.fn(),
             } as unknown as ReadableStreamDefaultController<Uint8Array>;
-            
+
             const result = encoder.enqueueHeartbeat(mockController);
-            
+
             expect(result).toBe(false);
         });
 

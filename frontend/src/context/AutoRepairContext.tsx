@@ -1,10 +1,13 @@
 import { useCallback, useMemo, useEffect, useRef, type ReactNode } from 'react';
 
+import { createLogger } from '../utils/logger';
 import { AutoRepairContext, type AutoRepairContextValue } from './AutoRepairContext.context';
 import { useChatMessages } from './ChatMessagesContext.context';
 import { useGenerationState, useGenerationActions } from './GenerationContext.context';
 import { usePreviewErrorState, usePreviewErrorActions } from './PreviewErrorContext.context';
 import { useProjectState } from './ProjectContext.context';
+
+const repairLogger = createLogger('AutoRepair');
 
 /**
  * Provider for unified auto-repair coordination.
@@ -88,7 +91,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
         })
         .catch(error => {
           // Handle unexpected errors during auto-repair
-          console.error('Auto-repair failed with error:', error);
+          repairLogger.error('Auto-repair failed', { error: error instanceof Error ? error.message : String(error) });
           previewErrorActions.completeAutoRepair(false);
           chatMessages.addAssistantMessage(
             `❌ Auto-repair encountered an error: ${error.message || 'Unknown error'}`
@@ -169,7 +172,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
       return success;
     } catch (error) {
       // Handle unexpected errors during manual repair
-      console.error('Manual auto-repair failed with error:', error);
+      repairLogger.error('Manual auto-repair failed', { error: error instanceof Error ? error.message : String(error) });
       previewErrorActions.completeAutoRepair(false);
       chatMessages.addAssistantMessage(
         `❌ Auto-repair encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`

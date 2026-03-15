@@ -6,7 +6,7 @@ import { ZodError } from 'zod';
  */
 export function formatZodError(error: unknown): string {
   if (error instanceof ZodError) {
-    return error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ');
+    return error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ');
   }
   return 'Validation failed';
 }

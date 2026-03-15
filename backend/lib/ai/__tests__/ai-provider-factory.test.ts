@@ -19,17 +19,16 @@ vi.mock('../modal-client', () => ({
 
 // Mock the agent-router
 vi.mock('../agent-router', () => ({
-  AgentRouter: vi.fn().mockImplementation(() => ({
-    init: vi.fn().mockResolvedValue(undefined),
-    createProviderForTask: vi.fn(),
-  })),
+  AgentRouter: vi.fn().mockImplementation(function() {
+    return { init: vi.fn().mockResolvedValue(undefined), createProviderForTask: vi.fn() };
+  }),
 }));
 
 // Mock the intent-detector
 vi.mock('../intent-detector', () => ({
-  IntentDetector: vi.fn().mockImplementation(() => ({
-    detect: vi.fn(),
-  })),
+  IntentDetector: vi.fn().mockImplementation(function() {
+    return { detect: vi.fn() };
+  }),
 }));
 
 // Mock the provider-config-store
@@ -74,10 +73,9 @@ describe('ai-provider-factory', () => {
     it('should allow reinitialization after reset', async () => {
       // Arrange
       vi.mocked(getEffectiveProvider).mockResolvedValue('openrouter');
-      vi.mocked(AgentRouter).mockImplementation(() => ({
-        init: vi.fn().mockResolvedValue(undefined),
-        createProviderForTask: vi.fn(),
-      }));
+      vi.mocked(AgentRouter).mockImplementation(function() {
+        return { init: vi.fn().mockResolvedValue(undefined), createProviderForTask: vi.fn() };
+      });
 
       // Act
       await createAIProvider('coding');
@@ -177,7 +175,7 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn().mockReturnValue(mockProvider),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
       // Act
       await createAIProvider('coding');
@@ -197,7 +195,7 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn().mockReturnValue(mockProvider),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
       // Act
       const result = await createAIProvider('planning');
@@ -217,7 +215,7 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn().mockReturnValue(mockProvider),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
       // Act
       const result = await createAIProvider();
@@ -237,7 +235,7 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn().mockReturnValue(mockProvider),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
       // Act
       await createAIProvider('coding');
@@ -260,7 +258,7 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn().mockReturnValue(mockProvider),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
       const taskTypes: TaskType[] = ['intent', 'planning', 'coding', 'debugging', 'documentation'];
 
@@ -285,7 +283,7 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockRejectedValue(new Error('Initialization failed')),
         createProviderForTask: vi.fn(),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
       // Act & Assert
       await expect(createAIProvider('coding')).rejects.toThrow('Initialization failed');
@@ -315,7 +313,7 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn().mockReturnValue(mockProvider),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
       // Act
       const [result1, result2, result3] = await Promise.all([
@@ -339,7 +337,7 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockRejectedValue(new Error('Init failed')),
         createProviderForTask: vi.fn(),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
       // Act & Assert
       await expect(
@@ -421,11 +419,11 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn(),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
       const mockDetector = {
         detect: vi.fn().mockResolvedValue('coding' as TaskType),
       };
-      vi.mocked(IntentDetector).mockImplementation(() => mockDetector);
+      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
 
       // Act
       await detectIntent('Test prompt');
@@ -440,11 +438,11 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn(),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
       const mockDetector = {
         detect: vi.fn().mockResolvedValue('debugging' as TaskType),
       };
-      vi.mocked(IntentDetector).mockImplementation(() => mockDetector);
+      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
 
       // Act
       const result = await detectIntent('Debug this issue');
@@ -460,11 +458,11 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn(),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
       const mockDetector = {
         detect: vi.fn().mockResolvedValue('coding' as TaskType),
       };
-      vi.mocked(IntentDetector).mockImplementation(() => mockDetector);
+      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
 
       // Act
       await detectIntent('Test prompt', 'test-request-123');
@@ -479,11 +477,11 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn(),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
       const mockDetector = {
         detect: vi.fn().mockResolvedValue('coding' as TaskType),
       };
-      vi.mocked(IntentDetector).mockImplementation(() => mockDetector);
+      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
 
       // Act
       await detectIntent('Prompt 1');
@@ -501,7 +499,7 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn(),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
       const taskTypes: TaskType[] = ['intent', 'planning', 'coding', 'debugging', 'documentation'];
       let callIndex = 0;
       const mockDetector = {
@@ -509,7 +507,7 @@ describe('ai-provider-factory', () => {
           return Promise.resolve(taskTypes[callIndex++ % taskTypes.length]);
         }),
       };
-      vi.mocked(IntentDetector).mockImplementation(() => mockDetector);
+      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
 
       // Act
       const results = await Promise.all([
@@ -536,7 +534,7 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockRejectedValue(new Error('Init failed')),
         createProviderForTask: vi.fn(),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
       // Act & Assert
       await expect(detectIntent('Test prompt')).rejects.toThrow('Init failed');
@@ -549,11 +547,11 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn(),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
       const mockDetector = {
         detect: vi.fn().mockRejectedValue(new Error('Detection failed')),
       };
-      vi.mocked(IntentDetector).mockImplementation(() => mockDetector);
+      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
 
       // Act & Assert
       await expect(detectIntent('Test prompt')).rejects.toThrow('Detection failed');
@@ -568,13 +566,13 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn(),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
       const mockDetector = {
         detect: vi.fn().mockImplementation((prompt: string) => {
           return Promise.resolve(prompt.includes('debug') ? 'debugging' : 'coding');
         }),
       };
-      vi.mocked(IntentDetector).mockImplementation(() => mockDetector);
+      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
 
       // Act
       const [result1, result2, result3] = await Promise.all([
@@ -606,7 +604,7 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn().mockReturnValue(mockProvider),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
       // Act
       await createAIProvider('coding');
@@ -632,7 +630,7 @@ describe('ai-provider-factory', () => {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn().mockReturnValue(mockProvider),
       };
-      vi.mocked(AgentRouter).mockImplementation(() => mockRouter);
+      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
       // Act
       await createAIProvider('coding');

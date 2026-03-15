@@ -1,6 +1,10 @@
 import { RefreshCw, AlertTriangle } from 'lucide-react';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+
+import { createLogger } from '../../utils/logger';
 import './ComponentErrorBoundary.css';
+
+const boundaryLogger = createLogger('ErrorBoundary');
 
 /**
  * Props for the ComponentErrorBoundary component.
@@ -45,10 +49,8 @@ export class ComponentErrorBoundary extends Component<
       errorInfo,
     });
 
-    // Log error to console for debugging
-    console.error(`ComponentErrorBoundary caught error in ${this.props.componentName || 'component'}:`, {
-      error,
-      errorInfo,
+    boundaryLogger.error(`Error caught in ${this.props.componentName || 'component'}`, {
+      error: error.message,
       componentStack: errorInfo.componentStack,
     });
 

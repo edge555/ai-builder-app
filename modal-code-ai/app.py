@@ -1,7 +1,11 @@
 import json
+import logging
 
 import modal
 from pydantic import BaseModel
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger("modal-code-ai")
 
 app = modal.App("ai-code-builder")
 
@@ -10,14 +14,18 @@ volume = modal.Volume.from_name("model-cache", create_if_missing=True)
 image = (
     modal.Image.debian_slim()
     .pip_install(
-        "torch",
-        "transformers",
-        "accelerate",
-        "bitsandbytes",
-        "fastapi[standard]",
-        "pydantic",
+        "torch==2.5.1",
+        "transformers==4.47.1",
+        "accelerate==1.2.1",
+        "bitsandbytes==0.45.0",
+        "fastapi[standard]==0.115.6",
+        "pydantic==2.10.3",
     )
 )
+
+MAX_TOKENS_LIMIT = 16384
+MIN_TOKENS = 1
+MAX_TEMPERATURE = 2.0
 
 
 class GenerateRequest(BaseModel):
@@ -26,6 +34,13 @@ class GenerateRequest(BaseModel):
     temperature: float = 0.7
     max_tokens: int = 1024
     response_format: str = "text"   # "text" | "json_object"
+
+
+def _validate_request(request: GenerateRequest) -> None:
+    if not (MIN_TOKENS <= request.max_tokens <= MAX_TOKENS_LIMIT):
+        raise ValueError(f"max_tokens must be {MIN_TOKENS}-{MAX_TOKENS_LIMIT}, got {request.max_tokens}")
+    if not (0.0 <= request.temperature <= MAX_TEMPERATURE):
+        raise ValueError(f"temperature must be 0.0-{MAX_TEMPERATURE}, got {request.temperature}")
 
 
 @app.cls(
@@ -43,6 +58,10 @@ class CodeGenerator:
         model_name = "Qwen/Qwen2.5-Coder-7B-Instruct"
         bnb_config = BitsAndBytesConfig(load_in_4bit=True)
 
+        # trust_remote_code=True is required by Qwen models: they ship custom
+        # modeling code (e.g. RoPE scaling, attention variants) that is not yet
+        # merged into the transformers library. Without this flag the model
+        # refuses to load. Only enable for trusted, pinned model revisions.
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_name,
             trust_remote_code=True,
@@ -54,9 +73,12 @@ class CodeGenerator:
             trust_remote_code=True,
         )
         self.model_name = model_name
+        logger.info("Model loaded: %s", model_name)
 
     @modal.method()
     def generate(self, request: GenerateRequest) -> dict:
+        _validate_request(request)
+
         system = request.system_instruction
         if request.response_format == "json_object":
             system += "\n\nCRITICAL: Respond with valid JSON only. No markdown, no explanation. Start with '{' and end with '}'."
@@ -75,13 +97,23 @@ class CodeGenerator:
         inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to("cuda")
         input_token_count = inputs["input_ids"].shape[1]
 
-        outputs = self.model.generate(
+        do_sample = request.temperature > 0
+        generation_kwargs = {
             **inputs,
-            max_new_tokens=request.max_tokens,
-            temperature=request.temperature,
-            top_p=0.9,
-            do_sample=True,
-        )
+            "max_new_tokens": request.max_tokens,
+            "do_sample": do_sample,
+        }
+        if do_sample:
+            generation_kwargs["temperature"] = request.temperature
+            generation_kwargs["top_p"] = 0.9
+
+        try:
+            logger.info("generate(): input_tokens=%d max_new_tokens=%d temperature=%f",
+                        input_token_count, request.max_tokens, request.temperature)
+            outputs = self.model.generate(**generation_kwargs)
+        except Exception as exc:
+            logger.exception("Model inference failed in generate()")
+            raise RuntimeError(f"Model inference failed: {exc}") from exc
 
         generated_tokens = outputs[0][input_token_count:]
         content = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
@@ -92,6 +124,8 @@ class CodeGenerator:
     def generate_stream(self, request: GenerateRequest):
         from threading import Thread
         from transformers import TextIteratorStreamer
+
+        _validate_request(request)
 
         system = request.system_instruction
         if request.response_format == "json_object":
@@ -116,23 +150,41 @@ class CodeGenerator:
             skip_special_tokens=True,
         )
 
+        do_sample = request.temperature > 0
         generation_kwargs = {
             **inputs,
             "max_new_tokens": request.max_tokens,
-            "temperature": request.temperature,
-            "top_p": 0.9,
-            "do_sample": True,
+            "do_sample": do_sample,
             "streamer": streamer,
         }
+        if do_sample:
+            generation_kwargs["temperature"] = request.temperature
+            generation_kwargs["top_p"] = 0.9
 
-        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
+        inference_error: list[Exception] = []
+
+        def _run_generation():
+            try:
+                self.model.generate(**generation_kwargs)
+            except Exception as exc:
+                logger.exception("Model inference failed in generate_stream()")
+                inference_error.append(exc)
+                streamer.end()
+
+        logger.info("generate_stream(): max_new_tokens=%d temperature=%f",
+                    request.max_tokens, request.temperature)
+        thread = Thread(target=_run_generation)
         thread.start()
 
-        for token in streamer:
-            if token:
-                yield token
+        try:
+            for token in streamer:
+                if token:
+                    yield token
+        finally:
+            thread.join()
 
-        thread.join()
+        if inference_error:
+            raise RuntimeError(f"Model inference failed: {inference_error[0]}") from inference_error[0]
 
 
 @app.function(image=image)

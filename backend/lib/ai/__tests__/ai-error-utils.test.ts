@@ -157,7 +157,7 @@ describe('categorizeError', () => {
       expect(result.errorCode).toBe('API_ERROR');
     });
 
-    it('should categorize 4xx status codes', () => {
+    it('should categorize 4xx status codes as unknown (not retried)', () => {
       // Arrange
       const error = new Error('HTTP 400 Bad Request');
       const apiErrorPrefix = 'test api error';
@@ -165,9 +165,22 @@ describe('categorizeError', () => {
       // Act
       const result = categorizeError(error, apiErrorPrefix);
 
+      // Assert — 4xx are client errors and should not be retried
+      expect(result.errorType).toBe('unknown');
+      expect(result.errorCode).toBe('INTERNAL_ERROR');
+    });
+
+    it('should categorize 403 Forbidden as unknown (not retried)', () => {
+      // Arrange
+      const error = new Error('HTTP 403 Forbidden');
+      const apiErrorPrefix = 'test api error';
+
+      // Act
+      const result = categorizeError(error, apiErrorPrefix);
+
       // Assert
-      expect(result.errorType).toBe('api_error');
-      expect(result.errorCode).toBe('API_ERROR');
+      expect(result.errorType).toBe('unknown');
+      expect(result.errorCode).toBe('INTERNAL_ERROR');
     });
 
     it('should categorize 5xx status codes', () => {
@@ -183,7 +196,7 @@ describe('categorizeError', () => {
       expect(result.errorCode).toBe('API_ERROR');
     });
 
-    it('should categorize 404 status codes', () => {
+    it('should categorize 404 status codes as unknown (not retried)', () => {
       // Arrange
       const error = new Error('HTTP 404 Not Found');
       const apiErrorPrefix = 'test api error';
@@ -191,9 +204,9 @@ describe('categorizeError', () => {
       // Act
       const result = categorizeError(error, apiErrorPrefix);
 
-      // Assert
-      expect(result.errorType).toBe('api_error');
-      expect(result.errorCode).toBe('API_ERROR');
+      // Assert — 4xx are client errors and should not be retried
+      expect(result.errorType).toBe('unknown');
+      expect(result.errorCode).toBe('INTERNAL_ERROR');
     });
 
     it('should categorize 503 status codes', () => {
@@ -385,9 +398,9 @@ describe('categorizeError', () => {
       expect(result.errorCode).toBe('API_ERROR');
     });
 
-    it('should handle gemini api error prefix', () => {
+    it('should handle gemini api error prefix (non-quota)', () => {
       // Arrange
-      const error = new Error('gemini api error: quota exceeded');
+      const error = new Error('gemini api error: invalid model');
       const apiErrorPrefix = 'gemini api error';
 
       // Act
@@ -396,6 +409,14 @@ describe('categorizeError', () => {
       // Assert
       expect(result.errorType).toBe('api_error');
       expect(result.errorCode).toBe('API_ERROR');
+    });
+
+    it('quota errors from any provider are categorized as rate_limit', () => {
+      // "quota exceeded" triggers rate_limit regardless of prefix (quota IS rate limiting)
+      const error = new Error('gemini api error: quota exceeded');
+      const apiErrorPrefix = 'gemini api error';
+      const result = categorizeError(error, apiErrorPrefix);
+      expect(result.errorType).toBe('rate_limit');
     });
 
     it('should not categorize error with different prefix as API error', () => {
@@ -463,7 +484,7 @@ describe('isRetryableError', () => {
       expect(result).toBe(true);
     });
 
-    it('should return true for 4xx errors', () => {
+    it('should return false for 4xx errors (client errors are not retried)', () => {
       // Arrange
       const error = new Error('HTTP 400 Bad Request');
       const apiErrorPrefix = 'test api error';
@@ -472,7 +493,7 @@ describe('isRetryableError', () => {
       const result = isRetryableError(error, apiErrorPrefix);
 
       // Assert
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
   });
 
@@ -650,7 +671,7 @@ describe('isRetryableError', () => {
         { message: 'quota', expected: true },
         { message: 'test api error: something', expected: true },
         { message: '500', expected: true },
-        { message: '400', expected: true },
+        { message: '400', expected: false },
         { message: 'unknown', expected: false },
       ];
 

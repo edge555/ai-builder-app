@@ -152,6 +152,6 @@ export class WorkerPool {
     }
 
     public async terminate() {
-        await Promise.all(this.workers.map(w => w.terminate()));
+        await Promise.allSettled(this.workers.map(w => w.terminate()));
     }
 }

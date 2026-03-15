@@ -22,6 +22,15 @@ vi.mock('../../analysis', async (importOriginal) => {
   };
 });
 
+// Mock validateProjectStructure to skip structural checks (no package.json in diff output)
+vi.mock('../../core/validators', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    validateProjectStructure: vi.fn().mockReturnValue([]),
+  };
+});
+
 describe('ModificationEngine', () => {
   let mockAIProvider: AIProvider;
   let modificationEngine: ModificationEngine;

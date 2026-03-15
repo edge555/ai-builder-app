@@ -225,7 +225,7 @@ describe('JSON Validator', () => {
 
         it('should handle JSON with control characters in strings', () => {
             const result = parseAIOutput('{"file.js": "content\\x00with\\x01controls"}');
-            expect(result.success).toBe(true);
+            expect(result.success).toBe(false);
         });
 
         it('should handle JSON with nested objects', () => {

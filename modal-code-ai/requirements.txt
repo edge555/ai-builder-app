@@ -1,0 +1,7 @@
+modal==0.73.43
+torch==2.5.1
+transformers==4.47.1
+accelerate==1.2.1
+bitsandbytes==0.45.0
+fastapi[standard]==0.115.6
+pydantic==2.10.3

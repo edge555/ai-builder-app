@@ -8,13 +8,10 @@ import { parseJsonRequest } from '../request-parser';
 import { z } from 'zod';
 
 // Mock the zod-error module
+// Note: vi.mock factory is hoisted above imports, so external variables (like `z`) are
+// undefined at hoist time. Keep the factory free of outer-scope references.
 vi.mock('../zod-error', () => ({
-  formatZodError: vi.fn((error: unknown) => {
-    if (error instanceof z.ZodError) {
-      return error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ');
-    }
-    return 'Unknown validation error';
-  }),
+  formatZodError: vi.fn(() => 'mock validation error'),
 }));
 
 import { formatZodError } from '../zod-error';

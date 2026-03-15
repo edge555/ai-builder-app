@@ -7,6 +7,12 @@ vi.mock('../../logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
   }),
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
 }));
 
 // Mock shared package functions
@@ -59,9 +65,8 @@ describe('DiffEngine', () => {
       expect(Array.isArray(result)).toBe(true);
     });
 
-    it('should log debug information', () => {
-      const { createLogger } = require('../../logger');
-      const mockLogger = createLogger();
+    it('should log debug information', async () => {
+      const { logger: mockLogger } = await import('../../logger');
 
       const newState: ProjectState = {
         ...mockProjectState,

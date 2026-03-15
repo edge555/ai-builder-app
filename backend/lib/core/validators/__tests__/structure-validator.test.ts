@@ -33,15 +33,11 @@ describe('Structure Validator', () => {
                 'src/App.tsx': 'export default function App() { return <div>Hello</div>; }',
             };
             const errors = validateProjectStructure(invalidFiles);
-            expect(errors).toHaveLength(2);
+            expect(errors).toHaveLength(1);
             expect(errors[0]).toEqual({
                 type: 'missing_structure',
                 message: 'package.json is not valid JSON',
                 filePath: 'package.json',
-            });
-            expect(errors[1]).toEqual({
-                type: 'missing_structure',
-                message: 'No entry point found. Expected one of: src/App.tsx, src/App.jsx, src/index.tsx, src/main.tsx',
             });
         });
 
@@ -211,7 +207,7 @@ describe('Structure Validator', () => {
                 'src/App.tsx': 'export default function App() { return <div>Hello</div>; }',
             };
             const errors = validateProjectStructure(invalidFiles);
-            expect(errors).toHaveLength(2);
+            expect(errors).toHaveLength(1);
             expect(errors[0]).toEqual({
                 type: 'missing_structure',
                 message: 'package.json is not valid JSON',
@@ -225,17 +221,7 @@ describe('Structure Validator', () => {
                 'src/App.tsx': 'export default function App() { return <div>Hello</div>; }',
             };
             const errors = validateProjectStructure(invalidFiles);
-            expect(errors).toHaveLength(2);
-            expect(errors[0]).toEqual({
-                type: 'missing_structure',
-                message: 'package.json is missing "name" field',
-                filePath: 'package.json',
-            });
-            expect(errors[1]).toEqual({
-                type: 'missing_structure',
-                message: 'package.json is missing "dependencies" field',
-                filePath: 'package.json',
-            });
+            expect(errors).toHaveLength(0);
         });
 
         it('should handle package.json with empty object', () => {

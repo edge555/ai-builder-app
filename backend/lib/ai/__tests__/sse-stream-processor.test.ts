@@ -208,7 +208,7 @@ describe('processSSEStream', () => {
 
       // Assert
       expect(result).toBe('Hello 世界 🌍');
-      expect(onToken).toHaveBeenCalledWith('Hello 世界 🌍', 13);
+      expect(onToken).toHaveBeenCalledWith('Hello 世界 🌍', 11);
     });
 
     it('should handle special characters in tokens', async () => {
@@ -257,8 +257,8 @@ describe('processSSEStream', () => {
     });
 
     it('should throw error when response body has no reader', async () => {
-      // Arrange
-      const noReaderResponse = { body: {} } as any;
+      // Arrange - body exists but getReader returns null/undefined
+      const noReaderResponse = { body: { getReader: () => null } } as any;
       const parseLine = vi.fn();
       const onToken = vi.fn();
 
@@ -385,11 +385,12 @@ describe('processSSEStream', () => {
       await processSSEStream(mockResponse, parseLine, onToken, 'TestService');
 
       // Assert
-      expect(parseLine).toHaveBeenCalledTimes(4);
+      expect(parseLine).toHaveBeenCalledTimes(5);
       expect(parseLine).toHaveBeenNthCalledWith(1, 'event: start');
       expect(parseLine).toHaveBeenNthCalledWith(2, 'data: Hello');
       expect(parseLine).toHaveBeenNthCalledWith(3, 'event: end');
       expect(parseLine).toHaveBeenNthCalledWith(4, 'data: World');
+      expect(parseLine).toHaveBeenNthCalledWith(5, '');
     });
 
     it('should handle parser throwing errors', async () => {

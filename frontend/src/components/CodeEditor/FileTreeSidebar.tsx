@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { memo, useMemo, useState, useEffect, useRef, useCallback } from 'react';
 
 import { FileTreeNode } from './FileTreeNode';
 import { buildFileTree, TreeNode } from './utils/buildFileTree';
@@ -42,7 +42,7 @@ function getAllDirPaths(nodes: TreeNode[]): string[] {
   return paths;
 }
 
-export function FileTreeSidebar({
+function FileTreeSidebarComponent({
   files,
   activeFile,
   onFileSelect,
@@ -369,3 +369,21 @@ export function FileTreeSidebar({
     </div>
   );
 }
+
+function areFileTreePropsEqual(
+  prev: Readonly<FileTreeSidebarProps>,
+  next: Readonly<FileTreeSidebarProps>
+): boolean {
+  if (prev.activeFile !== next.activeFile) return false;
+  if (prev.onFileSelect !== next.onFileSelect) return false;
+
+  const prevKeys = Object.keys(prev.files);
+  const nextKeys = Object.keys(next.files);
+  if (prevKeys.length !== nextKeys.length) return false;
+  for (const key of prevKeys) {
+    if (!(key in next.files)) return false;
+  }
+  return true;
+}
+
+export const FileTreeSidebar = memo(FileTreeSidebarComponent, areFileTreePropsEqual);
