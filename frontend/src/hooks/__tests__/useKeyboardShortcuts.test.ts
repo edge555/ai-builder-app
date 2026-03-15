@@ -131,16 +131,18 @@ describe('useKeyboardShortcuts', () => {
 
         const div = document.createElement('div');
         div.contentEditable = 'true';
+        // jsdom may not update isContentEditable automatically; set it directly
+        Object.defineProperty(div, 'isContentEditable', { value: true, configurable: true });
         document.body.appendChild(div);
 
+        // Dispatch on the element so event.target is correctly set to the div
         const event = new KeyboardEvent('keydown', {
             key: 'z',
             ctrlKey: true,
             bubbles: true,
         });
 
-        Object.defineProperty(event, 'target', { value: div, configurable: true });
-        window.dispatchEvent(event);
+        div.dispatchEvent(event);
 
         expect(mockHandlers.onUndo).not.toHaveBeenCalled();
 

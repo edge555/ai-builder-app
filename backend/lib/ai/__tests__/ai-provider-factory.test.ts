@@ -577,7 +577,7 @@ describe('ai-provider-factory', () => {
       // Act
       const [result1, result2, result3] = await Promise.all([
         detectIntent('Create component'),
-        detectIntent('Debug issue'),
+        detectIntent('debug issue'),
         detectIntent('Write docs'),
       ]);
 
@@ -618,9 +618,12 @@ describe('ai-provider-factory', () => {
 
     it('should handle provider switch from openrouter to modal', async () => {
       // Arrange
+      // getEffectiveProvider is called twice per createAIProvider call:
+      // once in createAIProvider itself, once inside ensureInitialized
       vi.mocked(getEffectiveProvider)
-        .mockResolvedValueOnce('openrouter')
-        .mockResolvedValueOnce('modal');
+        .mockResolvedValueOnce('openrouter')  // createAIProvider 1st call
+        .mockResolvedValueOnce('openrouter')  // ensureInitialized 1st call
+        .mockResolvedValueOnce('modal');       // createAIProvider 2nd call (returns early)
       const mockProvider: AIProvider = {
         generate: vi.fn(),
         generateStreaming: vi.fn(),

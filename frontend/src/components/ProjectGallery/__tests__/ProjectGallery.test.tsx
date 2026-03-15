@@ -74,6 +74,7 @@ describe('ProjectGallery', () => {
 
     it('should filter projects by search query', () => {
         render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+        fireEvent.click(screen.getByRole('tab', { name: /all projects/i }));
 
         const searchInput = screen.getByPlaceholderText('Search projects...');
         fireEvent.change(searchInput, { target: { value: 'Alpha' } });
@@ -85,6 +86,7 @@ describe('ProjectGallery', () => {
 
     it('should show clear search button when search query exists', () => {
         render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+        fireEvent.click(screen.getByRole('tab', { name: /all projects/i }));
 
         const searchInput = screen.getByPlaceholderText('Search projects...');
         fireEvent.change(searchInput, { target: { value: 'test' } });
@@ -98,19 +100,21 @@ describe('ProjectGallery', () => {
 
     it('should sort projects by last modified (default)', () => {
         render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+        fireEvent.click(screen.getByRole('tab', { name: /all projects/i }));
 
-        const projectCards = screen.getAllByRole('article');
+        const projectCards = screen.getAllByRole('button', { name: /Open project/i });
         // Project Alpha has the most recent updatedAt
         expect(within(projectCards[0]).getByText('Project Alpha')).toBeInTheDocument();
     });
 
     it('should sort projects by name (A-Z)', () => {
         render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+        fireEvent.click(screen.getByRole('tab', { name: /all projects/i }));
 
         const sortSelect = screen.getByLabelText('Sort projects');
         fireEvent.change(sortSelect, { target: { value: 'nameAsc' } });
 
-        const projectCards = screen.getAllByRole('article');
+        const projectCards = screen.getAllByRole('button', { name: /Open project/i });
         expect(within(projectCards[0]).getByText('Project Alpha')).toBeInTheDocument();
         expect(within(projectCards[1]).getByText('Project Beta')).toBeInTheDocument();
         expect(within(projectCards[2]).getByText('Test Project')).toBeInTheDocument();
@@ -118,11 +122,12 @@ describe('ProjectGallery', () => {
 
     it('should sort projects by oldest first', () => {
         render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+        fireEvent.click(screen.getByRole('tab', { name: /all projects/i }));
 
         const sortSelect = screen.getByLabelText('Sort projects');
         fireEvent.change(sortSelect, { target: { value: 'oldestFirst' } });
 
-        const projectCards = screen.getAllByRole('article');
+        const projectCards = screen.getAllByRole('button', { name: /Open project/i });
         // Project Alpha and Test Project were created on 2024-01-01
         // Test Project was created later in the day
         expect(within(projectCards[0]).getByText('Project Alpha')).toBeInTheDocument();
@@ -156,6 +161,7 @@ describe('ProjectGallery', () => {
 
     it('should show empty search state when no projects match search', () => {
         render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+        fireEvent.click(screen.getByRole('tab', { name: /all projects/i }));
 
         const searchInput = screen.getByPlaceholderText('Search projects...');
         fireEvent.change(searchInput, { target: { value: 'NonExistentProject' } });
@@ -167,6 +173,7 @@ describe('ProjectGallery', () => {
 
     it('should clear search when "Clear Search" button is clicked in empty state', () => {
         render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+        fireEvent.click(screen.getByRole('tab', { name: /all projects/i }));
 
         const searchInput = screen.getByPlaceholderText('Search projects...');
         fireEvent.change(searchInput, { target: { value: 'xyz' } });
@@ -180,6 +187,7 @@ describe('ProjectGallery', () => {
 
     it('should have proper ARIA labels for accessibility', () => {
         render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+        fireEvent.click(screen.getByRole('tab', { name: /all projects/i }));
 
         expect(screen.getByRole('search')).toBeInTheDocument();
         expect(screen.getByLabelText('Search projects')).toBeInTheDocument();
@@ -188,6 +196,7 @@ describe('ProjectGallery', () => {
 
     it('should handle case-insensitive search', () => {
         render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+        fireEvent.click(screen.getByRole('tab', { name: /all projects/i }));
 
         const searchInput = screen.getByPlaceholderText('Search projects...');
         fireEvent.change(searchInput, { target: { value: 'ALPHA' } });
@@ -198,6 +207,7 @@ describe('ProjectGallery', () => {
 
     it('should trim whitespace from search query', () => {
         render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
+        fireEvent.click(screen.getByRole('tab', { name: /all projects/i }));
 
         const searchInput = screen.getByPlaceholderText('Search projects...');
         fireEvent.change(searchInput, { target: { value: '  Alpha  ' } });
@@ -271,7 +281,7 @@ describe('ProjectGallery', () => {
             render(<ProjectGallery projects={fourProjects} {...mockHandlers} />);
 
             // Should show the 3 most recently updated projects
-            const projectCards = screen.getAllByRole('article');
+            const projectCards = screen.getAllByRole('button', { name: /Open project/i });
             expect(projectCards.length).toBe(3);
         });
 
@@ -300,7 +310,7 @@ describe('ProjectGallery', () => {
         it('should sort recent projects by most recently updated', () => {
             render(<ProjectGallery projects={mockProjects} {...mockHandlers} />);
 
-            const projectCards = screen.getAllByRole('article');
+            const projectCards = screen.getAllByRole('button', { name: /Open project/i });
             // Project Alpha has updatedAt: 2024-01-03 (most recent)
             // Project Beta has updatedAt: 2024-01-02
             // Test Project has updatedAt: 2024-01-01 (oldest)

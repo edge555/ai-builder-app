@@ -123,6 +123,8 @@ describe('parseSSEStream', () => {
 
         expect(result.success).toBe(false);
         expect(result.error).toBe('Something went wrong');
-        expect(handlers.onError).toHaveBeenCalledWith('Something went wrong');
+        expect(handlers.onError).toHaveBeenCalledWith(
+            expect.objectContaining({ error: 'Something went wrong' })
+        );
     });
 });

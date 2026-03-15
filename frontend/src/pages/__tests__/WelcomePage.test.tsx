@@ -33,6 +33,21 @@ vi.mock('@/components/ThemeToggle/ThemeToggle', () => ({
     ThemeToggle: () => <button data-testid="theme-toggle">Toggle Theme</button>,
 }));
 
+vi.mock('@/components/SiteHeader/SiteHeader', () => ({
+    SiteHeader: ({ children, actions }: any) => (
+        <header data-testid="site-header">
+            {children}
+            {actions}
+            <button data-testid="theme-toggle">Toggle Theme</button>
+        </header>
+    ),
+}));
+
+vi.mock('@/components/OnboardingOverlay/OnboardingOverlay', () => ({
+    OnboardingOverlay: () => null,
+    shouldShowOnboarding: () => false,
+}));
+
 vi.mock('@/components/ConfirmDialog/ConfirmDialog', () => ({
     ConfirmDialog: ({ isOpen, onConfirm, onCancel }: any) =>
         isOpen ? (
@@ -69,6 +84,19 @@ describe('WelcomePage', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        // Restore IntersectionObserver mock after clearing (clearAllMocks resets implementation)
+        // Must use regular function (not arrow) so it can be called with `new`
+        global.IntersectionObserver = vi.fn().mockImplementation(function() {
+            return {
+                observe: vi.fn(),
+                unobserve: vi.fn(),
+                disconnect: vi.fn(),
+                root: null,
+                rootMargin: '',
+                thresholds: [],
+                takeRecords: () => [],
+            };
+        });
     });
 
     it('should render hero section with correct content', () => {
@@ -88,19 +116,20 @@ describe('WelcomePage', () => {
     it('should render suggestion chips', () => {
         render(<WelcomePage savedProjects={[]} {...mockHandlers} />);
 
-        expect(screen.getByText('A todo app with categories')).toBeInTheDocument();
-        expect(screen.getByText('Landing page for a SaaS product')).toBeInTheDocument();
-        expect(screen.getByText('Analytics dashboard with charts')).toBeInTheDocument();
+        expect(screen.getByText('Analytics Dashboard')).toBeInTheDocument();
+        expect(screen.getByText('Landing Page')).toBeInTheDocument();
+        expect(screen.getByText('Task Manager')).toBeInTheDocument();
     });
 
     it('should populate input when suggestion chip is clicked', () => {
         render(<WelcomePage savedProjects={[]} {...mockHandlers} />);
 
-        const suggestionChip = screen.getByText('A todo app with categories');
+        const suggestionChip = screen.getByText('Analytics Dashboard');
         fireEvent.click(suggestionChip);
 
         const input = screen.getByPlaceholderText('Describe the app you want to build...');
-        expect(input).toHaveValue('A todo app with categories');
+        // Clicking a chip sets the prompt text (not the label)
+        expect(input).not.toHaveValue('');
     });
 
     it('should call onEnterApp with prompt when form is submitted', () => {

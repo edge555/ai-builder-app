@@ -310,6 +310,7 @@ describe('diff-utils integration', () => {
       // Arrange
       const oldFiles: Record<string, string> = {
         'modified.ts': 'old',
+        'deleted.ts': 'to be deleted',
       };
       const newFiles: Record<string, string> = {
         'modified.ts': 'new',

@@ -1,14 +1,14 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-import { useProject } from '@/context';
+import { useProjectState } from '@/context';
 
 import { ExportButton } from '../ExportButton';
 
 
 // Mock the context
 vi.mock('@/context', () => ({
-    useProject: vi.fn(),
+    useProjectState: vi.fn(),
 }));
 
 // Mock the backend client
@@ -25,6 +25,12 @@ vi.mock('@/utils/logger', () => ({
         info: vi.fn(),
         debug: vi.fn(),
     }),
+}));
+
+// Mock shared utils
+vi.mock('@ai-app-builder/shared/utils', () => ({
+    validationError: vi.fn((msg: string) => new Error(msg)),
+    serviceError: vi.fn((msg: string) => new Error(msg)),
 }));
 
 describe('ExportButton', () => {
@@ -45,25 +51,18 @@ describe('ExportButton', () => {
         vi.clearAllMocks();
         global.fetch = vi.fn();
 
-        // Mock URL.createObjectURL and revokeObjectURL
-        global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-        global.URL.revokeObjectURL = vi.fn();
+        // URL mocks are set up in setup.ts via Object.defineProperty
+        vi.mocked(global.URL.createObjectURL).mockReturnValue('blob:mock-url');
+        vi.mocked(global.URL.revokeObjectURL).mockClear();
 
-        // Mock document methods
-        document.body.appendChild = vi.fn();
-        document.body.removeChild = vi.fn();
+        // Spy on document methods (don't replace - React needs real appendChild)
+        vi.spyOn(document.body, 'appendChild');
+        vi.spyOn(document.body, 'removeChild');
     });
 
     it('should render export button', () => {
-        vi.mocked(useProject).mockReturnValue({
+        vi.mocked(useProjectState).mockReturnValue({
             projectState: mockProjectState as any,
-            setProjectState: vi.fn(),
-            setVersionCallbacks: vi.fn(),
-            renameProject: vi.fn(),
-            undo: vi.fn(),
-            redo: vi.fn(),
-            canUndo: false,
-            canRedo: false,
         });
 
         render(<ExportButton />);
@@ -71,15 +70,8 @@ describe('ExportButton', () => {
     });
 
     it('should be disabled when no project state exists', () => {
-        vi.mocked(useProject).mockReturnValue({
+        vi.mocked(useProjectState).mockReturnValue({
             projectState: null,
-            setProjectState: vi.fn(),
-            setVersionCallbacks: vi.fn(),
-            renameProject: vi.fn(),
-            undo: vi.fn(),
-            redo: vi.fn(),
-            canUndo: false,
-            canRedo: false,
         });
 
         render(<ExportButton />);
@@ -89,15 +81,8 @@ describe('ExportButton', () => {
     });
 
     it('should trigger export on click', async () => {
-        vi.mocked(useProject).mockReturnValue({
+        vi.mocked(useProjectState).mockReturnValue({
             projectState: mockProjectState as any,
-            setProjectState: vi.fn(),
-            setVersionCallbacks: vi.fn(),
-            renameProject: vi.fn(),
-            undo: vi.fn(),
-            redo: vi.fn(),
-            canUndo: false,
-            canRedo: false,
         });
 
         const mockBlob = new Blob(['test'], { type: 'application/zip' });
@@ -126,15 +111,8 @@ describe('ExportButton', () => {
     });
 
     it('should show loading state during export', async () => {
-        vi.mocked(useProject).mockReturnValue({
+        vi.mocked(useProjectState).mockReturnValue({
             projectState: mockProjectState as any,
-            setProjectState: vi.fn(),
-            setVersionCallbacks: vi.fn(),
-            renameProject: vi.fn(),
-            undo: vi.fn(),
-            redo: vi.fn(),
-            canUndo: false,
-            canRedo: false,
         });
 
         const mockBlob = new Blob(['test'], { type: 'application/zip' });
@@ -157,15 +135,8 @@ describe('ExportButton', () => {
     });
 
     it('should create download link with correct filename', async () => {
-        vi.mocked(useProject).mockReturnValue({
+        vi.mocked(useProjectState).mockReturnValue({
             projectState: mockProjectState as any,
-            setProjectState: vi.fn(),
-            setVersionCallbacks: vi.fn(),
-            renameProject: vi.fn(),
-            undo: vi.fn(),
-            redo: vi.fn(),
-            canUndo: false,
-            canRedo: false,
         });
 
         const mockBlob = new Blob(['test'], { type: 'application/zip' });
@@ -184,22 +155,17 @@ describe('ExportButton', () => {
         });
 
         // Verify the link element was created with correct properties
-        const appendCall = (document.body.appendChild as any).mock.calls[0][0];
-        expect(appendCall.tagName).toBe('A');
-        expect(appendCall.download).toBe('Test Project.zip');
-        expect(appendCall.href).toBe('blob:mock-url');
+        const appendCall = (document.body.appendChild as any).mock.calls.find(
+            (call: any[]) => call[0]?.tagName === 'A'
+        );
+        expect(appendCall).toBeDefined();
+        expect(appendCall[0].download).toBe('Test Project.zip');
+        expect(appendCall[0].href).toBe('blob:mock-url');
     });
 
     it('should handle export errors gracefully', async () => {
-        vi.mocked(useProject).mockReturnValue({
+        vi.mocked(useProjectState).mockReturnValue({
             projectState: mockProjectState as any,
-            setProjectState: vi.fn(),
-            setVersionCallbacks: vi.fn(),
-            renameProject: vi.fn(),
-            undo: vi.fn(),
-            redo: vi.fn(),
-            canUndo: false,
-            canRedo: false,
         });
 
         (global.fetch as any).mockResolvedValue({
@@ -221,15 +187,8 @@ describe('ExportButton', () => {
     });
 
     it('should show error message in title on failure', async () => {
-        vi.mocked(useProject).mockReturnValue({
+        vi.mocked(useProjectState).mockReturnValue({
             projectState: mockProjectState as any,
-            setProjectState: vi.fn(),
-            setVersionCallbacks: vi.fn(),
-            renameProject: vi.fn(),
-            undo: vi.fn(),
-            redo: vi.fn(),
-            canUndo: false,
-            canRedo: false,
         });
 
         (global.fetch as any).mockRejectedValue(new Error('Network error'));
@@ -245,15 +204,8 @@ describe('ExportButton', () => {
     });
 
     it('should cleanup blob URL after download', async () => {
-        vi.mocked(useProject).mockReturnValue({
+        vi.mocked(useProjectState).mockReturnValue({
             projectState: mockProjectState as any,
-            setProjectState: vi.fn(),
-            setVersionCallbacks: vi.fn(),
-            renameProject: vi.fn(),
-            undo: vi.fn(),
-            redo: vi.fn(),
-            canUndo: false,
-            canRedo: false,
         });
 
         const mockBlob = new Blob(['test'], { type: 'application/zip' });
@@ -273,15 +225,8 @@ describe('ExportButton', () => {
     });
 
     it('should have proper ARIA label', () => {
-        vi.mocked(useProject).mockReturnValue({
+        vi.mocked(useProjectState).mockReturnValue({
             projectState: mockProjectState as any,
-            setProjectState: vi.fn(),
-            setVersionCallbacks: vi.fn(),
-            renameProject: vi.fn(),
-            undo: vi.fn(),
-            redo: vi.fn(),
-            canUndo: false,
-            canRedo: false,
         });
 
         render(<ExportButton />);
@@ -290,15 +235,8 @@ describe('ExportButton', () => {
     });
 
     it('should handle missing configuration', async () => {
-        vi.mocked(useProject).mockReturnValue({
+        vi.mocked(useProjectState).mockReturnValue({
             projectState: mockProjectState as any,
-            setProjectState: vi.fn(),
-            setVersionCallbacks: vi.fn(),
-            renameProject: vi.fn(),
-            undo: vi.fn(),
-            redo: vi.fn(),
-            canUndo: false,
-            canRedo: false,
         });
 
         // Re-mock with missing config

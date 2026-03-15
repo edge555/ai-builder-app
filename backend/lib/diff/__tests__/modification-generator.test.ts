@@ -49,8 +49,14 @@ describe('generateModifications', () => {
   let mockSlices: CodeSlice[];
   let mockAIProvider: any;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // Reset safeParse to default success implementation after any test that overrides it
+    const { ModificationOutputSchema } = await import('../../core/schemas');
+    vi.mocked(ModificationOutputSchema.safeParse).mockImplementation(() => ({
+      success: true,
+      data: { files: [] },
+    } as any));
     mockProjectState = {
       id: 'test-project',
       name: 'Test Project',

@@ -12,7 +12,7 @@ vi.mock('@/context/ErrorAggregatorContext', () => ({
 }));
 
 // Mock shared utilities
-vi.mock('@ai-app-builder/shared', () => ({
+vi.mock('@ai-app-builder/shared/utils', () => ({
     createRuntimeError: vi.fn((error, source, componentStack) => ({
         message: error.message,
         type: 'RUNTIME_ERROR',

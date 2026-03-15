@@ -1,7 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { useProjectState, useProjectActions, useChatMessages, useGenerationActions } from '../../context';
+import { useProjectState, useProjectActions, useChatMessages, useGenerationActions, useToastActions } from '../../context';
 import { useSubmitPrompt } from '../useSubmitPrompt';
 
 // Mock context hooks
@@ -10,6 +10,7 @@ vi.mock('../../context', () => ({
     useProjectActions: vi.fn(),
     useChatMessages: vi.fn(),
     useGenerationActions: vi.fn(),
+    useToastActions: vi.fn(),
 }));
 
 // Mock storage service
@@ -44,6 +45,7 @@ describe('useSubmitPrompt', () => {
             messages: [],
             addUserMessage: vi.fn().mockReturnValue({ id: 'user-1', role: 'user', content: '' }),
             addAssistantMessage: vi.fn().mockReturnValue({ id: 'asst-1', role: 'assistant', content: '' }),
+            addErrorMessage: vi.fn(),
         };
 
         mockGeneration = {
@@ -59,6 +61,7 @@ describe('useSubmitPrompt', () => {
         vi.mocked(useProjectActions).mockReturnValue(mockProjectActions);
         vi.mocked(useChatMessages).mockReturnValue(mockChatMessages);
         vi.mocked(useGenerationActions).mockReturnValue(mockGeneration);
+        vi.mocked(useToastActions).mockReturnValue({ addToast: vi.fn() });
     });
 
     it('should submit generation prompt and update state on success', async () => {
@@ -105,8 +108,9 @@ describe('useSubmitPrompt', () => {
         expect(mockChatMessages.addAssistantMessage).toHaveBeenCalledWith(
             expect.stringContaining('Retrying generation (2/3)')
         );
-        expect(mockChatMessages.addAssistantMessage).toHaveBeenCalledWith(
-            expect.stringContaining('Sorry, I couldn\'t generate the project after 3 attempts')
+        expect(mockChatMessages.addErrorMessage).toHaveBeenCalledWith(
+            expect.stringContaining('Sorry, I couldn\'t generate the project after 3 attempts'),
+            expect.any(String)
         );
     });
 

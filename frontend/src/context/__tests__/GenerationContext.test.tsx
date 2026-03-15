@@ -30,7 +30,7 @@ describe('GenerationContext Integration', () => {
             <div>
                 <div data-testid="is-streaming">{context.isStreaming.toString()}</div>
                 <div data-testid="loading-phase">{context.loadingPhase}</div>
-                <button onClick={() => context.generateProjectStreaming('test prompt')}>Start Stream</button>
+                <button onClick={() => context.generateProjectStreaming('test prompt').catch(() => {})}>Start Stream</button>
             </div>
         );
     };
@@ -87,12 +87,12 @@ describe('GenerationContext Integration', () => {
 
         const button = screen.getByText('Start Stream');
 
+        // The button click fires generateProjectStreaming which rejects on HTTP errors.
+        // Catch the unhandled rejection to prevent it from leaking out of the test.
         await act(async () => {
-            try {
-                await button.click();
-            } catch (e) {
-                // Expected error
-            }
+            button.click();
+            // Flush microtasks so the rejected promise is settled inside this act
+            await new Promise(resolve => setTimeout(resolve, 0));
         });
 
         expect(screen.getByTestId('is-streaming').textContent).toBe('false');

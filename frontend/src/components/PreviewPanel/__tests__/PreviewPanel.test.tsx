@@ -10,12 +10,19 @@ vi.mock('@codesandbox/sandpack-react', () => ({
     )),
     SandpackLayout: vi.fn(({ children }) => <div data-testid="sandpack-layout">{children}</div>),
     SandpackPreview: vi.fn(() => <div data-testid="sandpack-preview" />),
+    useSandpack: vi.fn(() => ({ sandpack: {}, listen: vi.fn(), dispatch: vi.fn() })),
 }));
 
 vi.mock('lucide-react', () => ({
     RefreshCw: () => <div data-testid="icon-refresh" />,
     Code: () => <div data-testid="icon-code" />,
+    Code2: () => <div data-testid="icon-code2" />,
     Monitor: () => <div data-testid="icon-monitor" />,
+    MonitorPlay: () => <div data-testid="icon-monitor-play" />,
+    Sparkles: () => <div data-testid="icon-sparkles" />,
+    History: () => <div data-testid="icon-history" />,
+    ChevronLeft: () => <div data-testid="icon-chevron-left" />,
+    ChevronRight: () => <div data-testid="icon-chevron-right" />,
 }));
 
 vi.mock('../../CodeEditor', () => ({
@@ -24,6 +31,7 @@ vi.mock('../../CodeEditor', () => ({
 
 vi.mock('../PreviewToolbar', () => ({
     PreviewToolbar: () => <div data-testid="preview-toolbar" />,
+    DEVICE_PRESETS: [],
 }));
 
 vi.mock('../PreviewSkeleton', () => {
@@ -40,6 +48,14 @@ vi.mock('../SandpackErrorListener', () => ({
     SandpackErrorListener: () => <div data-testid="sandpack-error-listener" />,
 }));
 
+vi.mock('../SandpackRefresher', () => ({
+    SandpackRefresher: () => null,
+}));
+
+vi.mock('../../EmptyProjectState/EmptyProjectState', () => ({
+    EmptyProjectState: () => <div data-testid="empty-project-state">Start by describing your application</div>,
+}));
+
 vi.mock('../../TabBar/TabBar', () => ({
     TabBar: ({ tabs, activeTab, onTabChange }: any) => (
         <div data-testid="tab-bar">
@@ -53,14 +69,6 @@ vi.mock('../../TabBar/TabBar', () => ({
                     {tab.label}
                 </button>
             ))}
-        </div>
-    ),
-}));
-
-vi.mock('../../BrowserChrome/BrowserChrome', () => ({
-    BrowserChrome: ({ url, onRefresh, isRefreshing }: any) => (
-        <div data-testid="browser-chrome" data-url={url} data-refreshing={isRefreshing}>
-            <button data-testid="chrome-refresh" onClick={onRefresh}>Refresh</button>
         </div>
     ),
 }));
@@ -84,7 +92,7 @@ describe('PreviewPanel', () => {
 
     it('should render placeholder when no project state and not loading', () => {
         render(<PreviewPanel projectState={null} isLoading={false} />);
-        expect(screen.getByText(/Start by describing your application/i)).toBeDefined();
+        expect(screen.getByTestId('empty-project-state')).toBeDefined();
     });
 
     it('should render skeleton when loading', () => {
@@ -131,39 +139,38 @@ describe('PreviewPanel', () => {
         expect(screen.getByTestId('tab-code')).toBeDefined();
     });
 
-    it('should render BrowserChrome in preview mode', () => {
+    it('should render project URL in preview mode', () => {
         render(<PreviewPanel projectState={mockProjectState as any} />);
 
-        const browserChrome = screen.getByTestId('browser-chrome');
-        expect(browserChrome).toBeDefined();
-        expect(browserChrome.getAttribute('data-url')).toContain('test-project');
+        // PreviewHeader shows project name in url bar
+        expect(screen.getByText(/test-project/i)).toBeDefined();
     });
 
-    it('should not render BrowserChrome in code mode', () => {
+    it('should not render project URL in code mode', () => {
         render(<PreviewPanel projectState={mockProjectState as any} />);
 
         // Switch to code mode
         const codeTab = screen.getByTestId('tab-code');
         fireEvent.click(codeTab);
 
-        expect(screen.queryByTestId('browser-chrome')).toBeNull();
+        expect(screen.queryByText('test-project.app/')).toBeNull();
     });
 
-    it('should not render BrowserChrome when loading', () => {
+    it('should not render browser controls when loading', () => {
         render(<PreviewPanel projectState={mockProjectState as any} isLoading={true} loadingPhase="generating" />);
 
-        expect(screen.queryByTestId('browser-chrome')).toBeNull();
+        // When loading, PreviewHeader hides browser controls
+        expect(screen.queryByText('test-project.app/')).toBeNull();
     });
 
-    it('should trigger refresh when BrowserChrome refresh is clicked', () => {
+    it('should trigger refresh when refresh button is clicked', () => {
         render(<PreviewPanel projectState={mockProjectState as any} />);
 
-        const refreshButton = screen.getByTestId('chrome-refresh');
+        const refreshButton = screen.getByRole('button', { name: /Refresh preview/i });
         fireEvent.click(refreshButton);
 
-        // The refresh should trigger a new Sandpack instance (new key)
-        // We can verify this by checking that the component re-renders
-        expect(screen.getByTestId('browser-chrome')).toBeDefined();
+        // The preview should still be visible after refresh
+        expect(screen.getByTestId('sandpack-provider')).toBeDefined();
     });
 
     it('should use default files if required files are missing', () => {

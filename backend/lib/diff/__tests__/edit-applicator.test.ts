@@ -94,7 +94,8 @@ describe('applyEdits', () => {
     });
 
     it('should handle escaped newlines in search string', () => {
-      const originalContent = 'line1\\nline2';
+      // applyEdits converts \\n to actual newlines before searching
+      const originalContent = 'line1\nline2';
       const edits = [
         {
           search: 'line1\\nline2',
@@ -108,7 +109,8 @@ describe('applyEdits', () => {
     });
 
     it('should handle escaped tabs in search string', () => {
-      const originalContent = 'tab\\there';
+      // applyEdits converts \\t to actual tabs before searching
+      const originalContent = 'tab\there';
       const edits = [
         {
           search: 'tab\\there',

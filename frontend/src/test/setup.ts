@@ -63,16 +63,18 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
     disconnect: vi.fn(),
 }));
 
-// Mock IntersectionObserver
-global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-    root: null,
-    rootMargin: '',
-    thresholds: [],
-    takeRecords: () => [],
-}));
+// Mock IntersectionObserver (must use regular function, not arrow, so `new` works)
+global.IntersectionObserver = vi.fn().mockImplementation(function() {
+    return {
+        observe: vi.fn(),
+        unobserve: vi.fn(),
+        disconnect: vi.fn(),
+        root: null,
+        rootMargin: '',
+        thresholds: [],
+        takeRecords: () => [],
+    };
+});
 
 // Mock IndexedDB
 const indexedDBMock = (() => {

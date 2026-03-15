@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('lucide-react', () => ({
     ChevronLeft: () => <div data-testid="icon-chevron-left" />,
     ChevronRight: () => <div data-testid="icon-chevron-right" />,
-    RefreshCw: () => <div data-testid="icon-refresh" />,
+    RefreshCw: ({ className }: any) => <div data-testid="icon-refresh" className={className || ''} />,
 }));
 
 import { BrowserChrome } from '../BrowserChrome';
