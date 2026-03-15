@@ -454,7 +454,7 @@ export function applySearchReplace(
   search: string,
   replace: string,
   occurrence: number = 1
-): { success: boolean; content?: string; warning?: string; error?: string } {
+): { success: boolean; content?: string; warning?: string; error?: string; tier?: number } {
   const matchResult = multiTierMatch(content, search, occurrence);
 
   if (!matchResult.found) {
@@ -469,6 +469,7 @@ export function applySearchReplace(
     return {
       success: false,
       error: errorMsg,
+      tier: 0,
     };
   }
 
@@ -479,6 +480,7 @@ export function applySearchReplace(
     return {
       success: true,
       content: before + replace + after,
+      tier: matchResult.tier,
     };
   }
 
@@ -492,5 +494,6 @@ export function applySearchReplace(
     success: true,
     content: before + replace + after,
     warning: matchResult.warning,
+    tier: matchResult.tier,
   };
 }

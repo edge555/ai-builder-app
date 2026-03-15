@@ -5,8 +5,10 @@
  * Extracted from ModificationEngine for better separation of concerns.
  */
 
-import type { ProjectState } from '@ai-app-builder/shared';
+import type { ProjectState, EditDetail } from '@ai-app-builder/shared';
 import type { CodeSlice } from '../analysis/file-planner/types';
+import type { FailedFileEdit } from './file-edit-applicator';
+import { findClosestRegion } from './multi-tier-matcher';
 
 /**
  * Build the modification prompt with relevant code slices.
@@ -190,6 +192,67 @@ function resolveRelative(dir: string, importPath: string): string {
         remaining = remaining.slice(3);
     }
     return `${parts.join('/')}/${remaining}`;
+}
+
+/**
+ * Build a focused retry prompt for failed edits (search/replace).
+ * Shows the current file content + failed edit details + closest-region hints.
+ */
+export function buildFailedEditRetryPrompt(
+    userPrompt: string,
+    failedFileEdits: FailedFileEdit[],
+): string {
+    let prompt = `User Request: ${userPrompt}\n\n`;
+    prompt += `[RETRY - SEARCH/REPLACE FAILED]\nSome edits failed to match. Below is the CURRENT content of each failed file and the edits that failed.\nMatch your search strings against the CURRENT content shown below (not the original).\n\n`;
+
+    for (const failed of failedFileEdits) {
+        const currentContent = failed.partialContent ?? failed.originalContent;
+        prompt += `=== FILE: ${failed.path} (current content) ===\n`;
+        prompt += `${currentContent}\n\n`;
+        prompt += `--- Failed edits for ${failed.path} ---\n`;
+        for (const detail of failed.failedEdits) {
+            prompt += `Edit #${detail.editIndex + 1}: ${detail.error}\n`;
+            // Add closest-region hint
+            const closest = findClosestRegion(currentContent, detail.edit.search);
+            if (closest) {
+                prompt += `Closest region (lines ${closest.startLine}-${closest.endLine}, ${Math.round(closest.similarity * 100)}% similar):\n${closest.regionText}\n`;
+            }
+            prompt += `\n`;
+        }
+    }
+
+    prompt += `Fix ONLY the failed files above. Use "modify" with corrected search strings, or "replace_file" with complete corrected content.\n`;
+    prompt += `Output ONLY the JSON with modified files.`;
+
+    return prompt;
+}
+
+/**
+ * Build a retry prompt requesting replace_file for remaining failures.
+ * Most reliable fallback — asks AI for complete corrected file content.
+ */
+export function buildReplaceFileRetryPrompt(
+    userPrompt: string,
+    failedFileEdits: FailedFileEdit[],
+): string {
+    let prompt = `User Request: ${userPrompt}\n\n`;
+    prompt += `[RETRY - USE replace_file]\nPrevious search/replace attempts failed for the files below. Provide the COMPLETE corrected file content using "replace_file" operation.\n\n`;
+
+    for (const failed of failedFileEdits) {
+        const currentContent = failed.partialContent ?? failed.originalContent;
+        prompt += `=== FILE: ${failed.path} (current content) ===\n`;
+        prompt += `${currentContent}\n\n`;
+        prompt += `Apply these changes that could not be matched:\n`;
+        for (const detail of failed.failedEdits) {
+            prompt += `- Replace region similar to: ${detail.edit.search.substring(0, 100)}...\n  With: ${detail.edit.replace.substring(0, 100)}...\n`;
+        }
+        prompt += `\n`;
+    }
+
+    prompt += `For each file above, use "replace_file" operation with the COMPLETE corrected file content.\n`;
+    prompt += `Output ONLY the JSON with the files.`;
+
+    return prompt;
 }
 
 /**

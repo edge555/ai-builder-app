@@ -5,8 +5,9 @@ import { getModificationPrompt, MODIFICATION_OUTPUT_SCHEMA } from './prompts/mod
 import { getMaxOutputTokens } from '../config';
 import { ModificationOutputSchema } from '../core/schemas';
 import { isSafePath } from '../utils';
-import { buildModificationPrompt } from './prompt-builder';
+import { buildModificationPrompt, buildFailedEditRetryPrompt, buildReplaceFileRetryPrompt } from './prompt-builder';
 import { applyFileEdits } from './file-edit-applicator';
+import type { FailedFileEdit } from './file-edit-applicator';
 import { createLogger } from '../logger';
 import { OperationTimer, formatMetrics } from '../metrics';
 
@@ -30,68 +31,128 @@ export async function generateModifications(
   const contextPrompt = buildModificationPrompt(prompt, slices, projectState);
 
   const MAX_ATTEMPTS = 4;
-  let lastEditError: string | null = null;
   const editErrors: string[] = [];
   const startTime = Date.now();
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    if (attempt > 1) await delay(attempt * 500);
+  // Accumulated results across retries — successful file updates are kept
+  let accumulatedUpdates: Record<string, string | null> = {};
+  let accumulatedDeleted: string[] = [];
+  let currentFailedFileEdits: FailedFileEdit[] = [];
+
+  // --- Attempt 1: Full generation (same as before) ---
+  {
+    const attempt = 1;
+    await attemptDelay(attempt);
     const attemptTimer = new OperationTimer(`modification-attempt-${attempt}`, requestId);
-    logger.info('Modification attempt', { attempt, maxAttempts: MAX_ATTEMPTS });
+    logger.info('Modification attempt', { attempt, maxAttempts: MAX_ATTEMPTS, strategy: 'full' });
 
-    // Build prompt with error feedback if this is a retry.
-    // lastEditError may contain a closest-region hint from the multi-tier matcher,
-    // e.g. "Closest matching region (lines 12-18, 60% similar):\n<code>"
-    // Surface this directly so the AI can correct its search string.
-    const userRequest = lastEditError
-      ? `${prompt}\n\n[PREVIOUS ATTEMPT FAILED]\n${lastEditError}\n\nUpdate your "search" string so it exactly matches the code shown above (including indentation and newlines). Use a smaller, more unique anchor if needed.`
-      : prompt;
-
-    const response = await callModificationAI(userRequest, contextPrompt, shouldIncludeDesignSystem, attempt, lastEditError, aiProvider, requestId);
+    const response = await callModificationAI(prompt, contextPrompt, shouldIncludeDesignSystem, attempt, null, aiProvider, requestId);
 
     if (!response.success || !response.content) {
-      logger.error('AI provider error', { error: response.error });
-      lastEditError = response.error ?? 'Failed to get modification from AI';
-      editErrors.push(lastEditError);
-      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(false, { retryCount: attempt - 1, error: lastEditError })));
-      continue;
+      const error = response.error ?? 'Failed to get modification from AI';
+      editErrors.push(error);
+      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(false, { retryCount: 0, error })));
+    } else {
+      const result = await processAIResponse(response.content, projectState);
+      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(result.success, { retryCount: 0, error: result.error })));
+
+      if (result.success) {
+        logSuccess(1, editErrors, startTime);
+        return { success: true, updatedFiles: result.updatedFiles, deletedFiles: result.deletedFiles };
+      }
+
+      // Merge successful files, track failures
+      if (result.updatedFiles) {
+        accumulatedUpdates = { ...accumulatedUpdates, ...result.updatedFiles };
+      }
+      if (result.deletedFiles) {
+        accumulatedDeleted = [...accumulatedDeleted, ...result.deletedFiles];
+      }
+      if (result.failedFileEdits && result.failedFileEdits.length > 0) {
+        currentFailedFileEdits = result.failedFileEdits;
+      }
+      editErrors.push(result.error ?? 'Edit application failed');
     }
+  }
 
-    const parseResult = parseModificationResponse(response.content);
-    if (!parseResult.success) {
-      lastEditError = parseResult.error!;
-      editErrors.push(lastEditError);
-      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(false, { retryCount: attempt - 1, error: lastEditError })));
-      continue;
+  // --- Attempt 2: Focused search/replace retry (failed files only) ---
+  if (currentFailedFileEdits.length > 0) {
+    const attempt = 2;
+    await attemptDelay(attempt);
+    const attemptTimer = new OperationTimer(`modification-attempt-${attempt}`, requestId);
+    logger.info('Modification attempt', { attempt, maxAttempts: MAX_ATTEMPTS, strategy: 'focused-retry', failedFiles: currentFailedFileEdits.map(f => f.path) });
+
+    const retryPrompt = buildFailedEditRetryPrompt(prompt, currentFailedFileEdits);
+    const response = await callModificationAI(prompt, retryPrompt, shouldIncludeDesignSystem, attempt, editErrors[editErrors.length - 1], aiProvider, requestId);
+
+    if (response.success && response.content) {
+      const result = await processAIResponse(response.content, buildProjectStateWithPartials(projectState, currentFailedFileEdits));
+      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(result.success, { retryCount: 1, error: result.error })));
+
+      if (result.success && result.updatedFiles) {
+        // Merge retry results into accumulated
+        accumulatedUpdates = { ...accumulatedUpdates, ...result.updatedFiles };
+        currentFailedFileEdits = [];
+        logSuccess(2, editErrors, startTime);
+        return { success: true, updatedFiles: accumulatedUpdates, deletedFiles: [...accumulatedDeleted, ...(result.deletedFiles ?? [])] };
+      }
+
+      // Update failures for next attempt
+      if (result.failedFileEdits && result.failedFileEdits.length > 0) {
+        currentFailedFileEdits = result.failedFileEdits;
+      }
+      if (result.updatedFiles) {
+        accumulatedUpdates = { ...accumulatedUpdates, ...result.updatedFiles };
+      }
+      editErrors.push(result.error ?? 'Focused retry failed');
+    } else {
+      editErrors.push(response.error ?? 'AI provider error on focused retry');
+      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(false, { retryCount: 1, error: editErrors[editErrors.length - 1] })));
     }
+  }
 
-    const aiFilesArray = parseResult.files!;
+  // --- Attempts 3-4: Force replace_file for remaining failures ---
+  for (let attempt = 3; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (currentFailedFileEdits.length === 0) break;
 
-    const pathError = validateFilePaths(aiFilesArray);
-    if (pathError) {
-      lastEditError = pathError;
-      editErrors.push(lastEditError);
-      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(false, { retryCount: attempt - 1, error: lastEditError })));
-      continue;
+    await attemptDelay(attempt);
+    const attemptTimer = new OperationTimer(`modification-attempt-${attempt}`, requestId);
+    logger.info('Modification attempt', { attempt, maxAttempts: MAX_ATTEMPTS, strategy: 'replace_file', failedFiles: currentFailedFileEdits.map(f => f.path) });
+
+    const retryPrompt = buildReplaceFileRetryPrompt(prompt, currentFailedFileEdits);
+    const response = await callModificationAI(prompt, retryPrompt, shouldIncludeDesignSystem, attempt, editErrors[editErrors.length - 1], aiProvider, requestId);
+
+    if (response.success && response.content) {
+      const result = await processAIResponse(response.content, buildProjectStateWithPartials(projectState, currentFailedFileEdits));
+      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(result.success, { retryCount: attempt - 1, error: result.error })));
+
+      if (result.updatedFiles) {
+        accumulatedUpdates = { ...accumulatedUpdates, ...result.updatedFiles };
+      }
+      if (result.success) {
+        currentFailedFileEdits = [];
+        logSuccess(attempt, editErrors, startTime);
+        return { success: true, updatedFiles: accumulatedUpdates, deletedFiles: [...accumulatedDeleted, ...(result.deletedFiles ?? [])] };
+      }
+      if (result.failedFileEdits && result.failedFileEdits.length > 0) {
+        currentFailedFileEdits = result.failedFileEdits;
+      }
+      editErrors.push(result.error ?? 'replace_file retry failed');
+    } else {
+      editErrors.push(response.error ?? 'AI provider error on replace_file retry');
+      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(false, { retryCount: attempt - 1, error: editErrors[editErrors.length - 1] })));
     }
+  }
 
-    const editResult = await applyFileEdits(aiFilesArray, projectState);
-    if (editResult.success) {
-      logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(true, { retryCount: attempt - 1 })));
-      logger.info('Modification succeeded', { attempt });
-      logger.info('generateModifications summary', {
-        totalAttempts: attempt,
-        successAttempt: attempt,
-        editErrors,
-        totalDurationMs: Date.now() - startTime,
-      });
-      return { success: true, updatedFiles: editResult.updatedFiles, deletedFiles: editResult.deletedFiles };
-    }
-
-    lastEditError = editResult.error!;
-    editErrors.push(lastEditError);
-    logger.info('Modification attempt metrics', formatMetrics(attemptTimer.complete(false, { retryCount: attempt - 1, error: lastEditError })));
-    logger.info('Retrying due to error', { error: lastEditError });
+  // --- After max retries: accept partial results ---
+  if (Object.keys(accumulatedUpdates).length > 0) {
+    logger.warn('Accepting partial results after max retries', {
+      totalAttempts: MAX_ATTEMPTS,
+      successfulFiles: Object.keys(accumulatedUpdates).length,
+      remainingFailures: currentFailedFileEdits.map(f => f.path),
+      totalDurationMs: Date.now() - startTime,
+    });
+    return { success: true, updatedFiles: accumulatedUpdates, deletedFiles: accumulatedDeleted };
   }
 
   logger.info('generateModifications summary', {
@@ -102,7 +163,70 @@ export async function generateModifications(
   });
   return {
     success: false,
-    error: `Failed after ${MAX_ATTEMPTS} attempts. Last error: ${lastEditError}`,
+    error: `Failed after ${MAX_ATTEMPTS} attempts. Last error: ${editErrors[editErrors.length - 1]}`,
+  };
+}
+
+function attemptDelay(attempt: number): Promise<void> {
+  if (attempt <= 1) return Promise.resolve();
+  return delay(attempt * 500);
+}
+
+function logSuccess(attempt: number, editErrors: string[], startTime: number): void {
+  logger.info('Modification succeeded', { attempt });
+  logger.info('generateModifications summary', {
+    totalAttempts: attempt,
+    successAttempt: attempt,
+    editErrors,
+    totalDurationMs: Date.now() - startTime,
+  });
+}
+
+/**
+ * Build a ProjectState with partial content from failed files merged in,
+ * so retry attempts see the current state of the files.
+ */
+function buildProjectStateWithPartials(
+  projectState: ProjectState,
+  failedFileEdits: FailedFileEdit[],
+): ProjectState {
+  const files = { ...projectState.files };
+  for (const failed of failedFileEdits) {
+    if (failed.partialContent) {
+      files[failed.path] = failed.partialContent;
+    }
+  }
+  return { ...projectState, files };
+}
+
+async function processAIResponse(
+  content: string,
+  projectState: ProjectState,
+): Promise<{
+  success: boolean;
+  error?: string;
+  updatedFiles?: Record<string, string | null>;
+  deletedFiles?: string[];
+  failedFileEdits?: FailedFileEdit[];
+}> {
+  const parseResult = parseModificationResponse(content);
+  if (!parseResult.success) {
+    return { success: false, error: parseResult.error };
+  }
+
+  const aiFilesArray = parseResult.files!;
+  const pathError = validateFilePaths(aiFilesArray);
+  if (pathError) {
+    return { success: false, error: pathError };
+  }
+
+  const editResult = await applyFileEdits(aiFilesArray, projectState);
+  return {
+    success: editResult.success,
+    error: editResult.error,
+    updatedFiles: editResult.updatedFiles,
+    deletedFiles: editResult.deletedFiles,
+    failedFileEdits: editResult.failedFileEdits,
   };
 }
 

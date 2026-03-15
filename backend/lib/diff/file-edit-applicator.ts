@@ -1,4 +1,4 @@
-import type { ProjectState } from '@ai-app-builder/shared';
+import type { ProjectState, EditDetail } from '@ai-app-builder/shared';
 import { formatCode } from '../prettier-config';
 import { applyEdits } from './edit-applicator';
 import { createLogger } from '../logger';
@@ -12,6 +12,13 @@ type FileEdit = {
   edits?: Array<{ search: string; replace: string }>;
 };
 
+export interface FailedFileEdit {
+  path: string;
+  failedEdits: EditDetail[];
+  partialContent?: string;
+  originalContent: string;
+}
+
 export async function applyFileEdits(
   aiFilesArray: FileEdit[],
   projectState: ProjectState
@@ -20,9 +27,11 @@ export async function applyFileEdits(
   updatedFiles?: Record<string, string | null>;
   deletedFiles?: string[];
   error?: string;
+  failedFileEdits?: FailedFileEdit[];
 }> {
   const updatedFiles: Record<string, string | null> = {};
   const deletedFiles: string[] = [];
+  const failedFileEdits: FailedFileEdit[] = [];
 
   for (const fileEdit of aiFilesArray) {
     if (!fileEdit.path) {
@@ -68,8 +77,17 @@ export async function applyFileEdits(
         }
         const editResult = applyEdits(originalContent, fileEdit.edits);
         if (!editResult.success) {
-          logger.warn('Failed to apply edits', { path: fileEdit.path, error: editResult.error });
-          return { success: false, error: `File: ${fileEdit.path} - ${editResult.error}` };
+          logger.warn('Failed to apply edits (partial applied)', { path: fileEdit.path, error: editResult.error });
+          // Store partial content and continue processing other files
+          updatedFiles[fileEdit.path] = editResult.partialContent ?? originalContent;
+          const failedEdits = (editResult.editDetails ?? []).filter(d => !d.success);
+          failedFileEdits.push({
+            path: fileEdit.path,
+            failedEdits,
+            partialContent: editResult.partialContent,
+            originalContent,
+          });
+          continue;
         }
         let modifiedContent = editResult.content!;
         try {
@@ -104,6 +122,10 @@ export async function applyFileEdits(
       default:
         logger.warn('Unknown operation type', { path: (fileEdit as any).path });
     }
+  }
+
+  if (failedFileEdits.length > 0) {
+    return { success: false, updatedFiles, deletedFiles, failedFileEdits, error: `Partial edit failures in: ${failedFileEdits.map(f => f.path).join(', ')}` };
   }
 
   return { success: true, updatedFiles, deletedFiles };
