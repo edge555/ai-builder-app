@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { RUNTIME_ERROR_TYPES, ERROR_PRIORITIES, ERROR_SOURCES } from '../types/runtime-error';
+
 // ============================================================================
 // Common Schemas
 // ============================================================================
@@ -42,13 +44,13 @@ export const ModifyProjectRequestSchema = z.object({
     runtimeError: z.object({
         message: z.string(),
         stack: z.string().optional(),
-        type: z.string().optional(),
-        source: z.string().optional(),
-        priority: z.string().optional(),
-    }).passthrough().optional(), // RuntimeError: validated structurally, passthrough allows extra fields
+        type: z.enum(RUNTIME_ERROR_TYPES),
+        source: z.enum(ERROR_SOURCES),
+        priority: z.enum(ERROR_PRIORITIES),
+    }).optional(),
     errorContext: z.object({
         affectedFiles: z.array(z.string()),
-        errorType: z.string(),
+        errorType: z.enum(RUNTIME_ERROR_TYPES),
     }).optional(),
 });
 
