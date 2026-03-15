@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getGenerationPrompt } from './generation-prompt';
+import { getGenerationPrompt, detectComplexity, getFileRequirements } from './generation-prompt';
 
 /**
  * Helper: check if the generated prompt includes the DESIGN PRINCIPLES section.
@@ -128,6 +128,42 @@ describe('detectComplexity (2.2)', () => {
       const longPrompt = Array(20).fill('please build me a very nice').join(' ') + ' dashboard';
       expect(getComplexity(longPrompt)).toBe('simple');
     });
+  });
+});
+
+describe('Phase 5: detectComplexity direct tests', () => {
+  it('classifies "build a todo app" as simple', () => {
+    expect(detectComplexity('build a todo app')).toBe('simple');
+  });
+
+  it('classifies prompt with 4 signals as complex', () => {
+    expect(detectComplexity('app with auth, dashboard, charts, and drag-drop')).toBe('complex');
+  });
+
+  it('classifies prompt with 2 signals as medium', () => {
+    expect(detectComplexity('app with search and filter')).toBe('medium');
+  });
+});
+
+describe('Phase 5: getFileRequirements structural patterns', () => {
+  it('medium mentions Layout and Modal', () => {
+    const req = getFileRequirements('medium');
+    expect(req).toContain('Layout');
+    expect(req).toContain('Modal');
+  });
+
+  it('complex mentions react-router-dom and SharedLayout', () => {
+    const req = getFileRequirements('complex');
+    expect(req).toContain('react-router-dom');
+    expect(req).toContain('SharedLayout');
+  });
+});
+
+describe('Phase 6: Few-Shot Quality Anchor', () => {
+  it('includes quality bar reference in generated prompt', () => {
+    const prompt = getGenerationPrompt('build a simple counter');
+    expect(prompt).toContain('QUALITY BAR REFERENCE');
+    expect(prompt).toContain('adapt to whatever the user requests');
   });
 });
 

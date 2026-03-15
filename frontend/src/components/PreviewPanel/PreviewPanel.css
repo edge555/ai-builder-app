@@ -236,34 +236,190 @@
   flex-direction: column;
 }
 
-/* Device Specific Sizes */
-.device-frame.mobile {
-  width: 375px;
-  height: 667px;
-  border-radius: 18px;
+/* Device frame now uses inline width/height set dynamically in PreviewPanel.tsx */
+
+/* ── Preset Dropdown ── */
+.preview-preset-dropdown {
+  position: relative;
 }
 
-.device-frame.mobile.rotated {
-  width: 667px;
-  height: 375px;
+.preview-preset-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: hsl(var(--pv-surface-2));
+  border: 1px solid hsl(var(--pv-border));
+  border-radius: 6px;
+  color: hsl(var(--pv-text));
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-width: 96px;
+  white-space: nowrap;
 }
 
-.device-frame.tablet {
-  width: 768px;
-  height: 1024px;
-  border-radius: 22px;
+.preview-preset-trigger:hover {
+  border-color: hsl(var(--pv-accent) / 0.5);
 }
 
-.device-frame.tablet.rotated {
-  width: 1024px;
-  height: 768px;
+.preview-preset-label {
+  flex: 1;
 }
 
-.device-frame.desktop {
+.preview-preset-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  min-width: 180px;
+  background: hsl(var(--pv-surface));
+  border: 1px solid hsl(var(--pv-border));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px hsl(0 0% 0% / 0.4);
+  overflow: hidden;
+  padding: 4px;
+}
+
+.preview-preset-group {
+  margin-bottom: 2px;
+}
+
+.preview-preset-group:last-child {
+  margin-bottom: 0;
+}
+
+.preview-preset-group-label {
+  padding: 4px 10px 2px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: hsl(var(--pv-text-muted));
+}
+
+.preview-preset-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: hsl(var(--pv-text));
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.preview-preset-option:hover {
+  background: hsl(var(--pv-surface-2));
+}
+
+.preview-preset-option.active {
+  background: hsl(var(--pv-accent) / 0.15);
+  color: hsl(212 100% 65%);
+}
+
+.preview-preset-dims {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 10px;
+  color: hsl(var(--pv-text-muted));
+  margin-left: 8px;
+}
+
+/* ── Custom Dimension Inputs ── */
+.preview-custom-dims {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.preview-dim-input {
+  width: 58px;
+  padding: 4px 6px;
+  background: hsl(var(--pv-surface-2));
+  border: 1px solid hsl(var(--pv-border));
+  border-radius: 4px;
+  color: hsl(var(--pv-text));
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  text-align: center;
+  /* Hide spinner arrows */
+  -moz-appearance: textfield;
+}
+
+.preview-dim-input::-webkit-outer-spin-button,
+.preview-dim-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.preview-dim-input:focus {
+  outline: none;
+  border-color: hsl(var(--pv-accent) / 0.6);
+}
+
+.preview-dim-sep {
+  font-size: 11px;
+  color: hsl(var(--pv-text-muted));
+}
+
+/* ── Zoom Control ── */
+.preview-zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.preview-zoom-label {
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  color: hsl(var(--pv-text-muted));
+  min-width: 30px;
+  text-align: right;
+}
+
+.preview-zoom-slider {
+  width: 72px;
+  height: 4px;
+  cursor: pointer;
+  accent-color: hsl(var(--pv-accent));
+}
+
+/* ── Compare Mode Layout ── */
+.device-compare-container {
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+  overflow-x: auto;
+  overflow-y: auto;
   height: 100%;
-  border-radius: 0;
-  box-shadow: none;
+  background-color: hsl(var(--pv-bg));
+  background-image:
+    radial-gradient(circle at 50% 0%, hsl(var(--pv-surface) / 0.5), transparent 50%),
+    radial-gradient(hsl(var(--pv-text-muted) / 0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 16px 16px;
+  align-items: flex-start;
+}
+
+.device-compare-frame {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.device-compare-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: hsl(var(--pv-text-muted));
+  text-align: center;
+  letter-spacing: 0.03em;
 }
 
 /* Sandpack Overrides for Device Mode */

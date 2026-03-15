@@ -76,6 +76,14 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
           } else {
             // Repair failed
             previewErrorActions.completeAutoRepair(false);
+
+            // Suggest revert after final attempt
+            const isLastAttempt = previewErrorState.repairAttempts + 1 >= previewErrorState.maxRepairAttempts;
+            if (isLastAttempt) {
+              chatMessages.addAssistantMessage(
+                `⚠️ Auto-repair failed after ${previewErrorState.maxRepairAttempts} attempts. Use the **↩ Undo** button in the toolbar to revert to the last working version.`
+              );
+            }
           }
         })
         .catch(error => {
@@ -150,6 +158,12 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
         );
       } else {
         previewErrorActions.completeAutoRepair(false);
+        const isLastAttempt = generationState.autoRepairAttempt + 1 >= previewErrorState.maxRepairAttempts;
+        if (isLastAttempt) {
+          chatMessages.addAssistantMessage(
+            `⚠️ Auto-repair failed after ${previewErrorState.maxRepairAttempts} attempts. Use the **↩ Undo** button in the toolbar to revert to the last working version.`
+          );
+        }
       }
 
       return success;
@@ -166,6 +180,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
     }
   }, [
     previewErrorState.currentError,
+    previewErrorState.maxRepairAttempts,
     previewErrorActions.startAutoRepair,
     previewErrorActions.completeAutoRepair,
     generationState.autoRepairAttempt,

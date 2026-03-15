@@ -1,5 +1,6 @@
 import { memo, forwardRef } from 'react';
 
+import { ErrorMessage, classifyError } from '../ErrorMessage';
 import { FileChangeSummary } from '../FileChangeSummary/FileChangeSummary';
 import { MarkdownRenderer } from '../MarkdownRenderer/MarkdownRenderer';
 import type { ChatMessage } from './ChatInterface';
@@ -7,6 +8,7 @@ import type { ChatMessage } from './ChatInterface';
 interface MessageItemProps {
   message: ChatMessage;
   onFileClick?: (filePath: string) => void;
+  onRetryPrompt?: (prompt: string) => void;
 }
 
 /**
@@ -14,7 +16,7 @@ interface MessageItemProps {
  * Accepts refs to avoid React dev warnings when something upstream attaches refs.
  */
 export const MessageItemWithRef = memo(
-  forwardRef<HTMLDivElement, MessageItemProps>(function MessageItemWithRef({ message, onFileClick }, ref) {
+  forwardRef<HTMLDivElement, MessageItemProps>(function MessageItemWithRef({ message, onFileClick, onRetryPrompt }, ref) {
     const isUser = message.role === 'user';
 
     return (
@@ -28,6 +30,16 @@ export const MessageItemWithRef = memo(
         <div className="chat-message-content">
           {isUser ? (
             message.content
+          ) : message.isError ? (
+            <ErrorMessage
+              message={message.content}
+              type={classifyError(message.content)}
+              recoverable={!!message.retryPrompt}
+              onRetry={message.retryPrompt && onRetryPrompt
+                ? () => onRetryPrompt(message.retryPrompt!)
+                : undefined
+              }
+            />
           ) : (
             <MarkdownRenderer content={message.content} />
           )}

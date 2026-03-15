@@ -31,6 +31,8 @@ export interface ChatMessage {
   changeSummary?: ChangeSummary;
   diffs?: FileDiff[];
   isError?: boolean;
+  /** Prompt to re-submit when the user retries an error message */
+  retryPrompt?: string;
 }
 
 /**
@@ -229,7 +231,7 @@ const ChatInterfaceComponent = function ChatInterface({
                     canCollapse={canCollapse(message.id)}
                     onToggle={toggle}
                   >
-                    <MessageItemWithRef message={message} onFileClick={onFileClick} />
+                    <MessageItemWithRef message={message} onFileClick={onFileClick} onRetryPrompt={onSubmitPrompt} />
                   </CollapsibleMessage>
                 </div>
               );
@@ -245,7 +247,7 @@ const ChatInterfaceComponent = function ChatInterface({
               canCollapse={canCollapse(message.id)}
               onToggle={toggle}
             >
-              <MessageItemWithRef message={message} onFileClick={onFileClick} />
+              <MessageItemWithRef message={message} onFileClick={onFileClick} onRetryPrompt={onSubmitPrompt} />
             </CollapsibleMessage>
           ))
         )}

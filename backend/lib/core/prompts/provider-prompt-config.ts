@@ -30,7 +30,7 @@ export function getProviderPromptConfig(): ProviderPromptConfig {
 
   return {
     provider: 'openrouter',
-    outputBudgetTokens: 15000,
+    outputBudgetTokens: 28000,
     includeDetailedGuidance: false,
   };
 }

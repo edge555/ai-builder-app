@@ -6,6 +6,8 @@
 
 import {
   LAYOUT_FUNDAMENTALS,
+  BASELINE_VISUAL_POLISH,
+  REALISTIC_DATA_GUIDANCE,
   DESIGN_SYSTEM_CONSTANTS,
   ACCESSIBILITY_GUIDANCE,
   DEPENDENCY_GUIDANCE,
@@ -88,7 +90,7 @@ type ComplexityLevel = 'simple' | 'medium' | 'complex';
  * Detect project complexity from the user prompt.
  * Counts distinct feature/scope signals to classify as simple, medium, or complex.
  */
-function detectComplexity(userPrompt: string): ComplexityLevel {
+export function detectComplexity(userPrompt: string): ComplexityLevel {
   const prompt = userPrompt.toLowerCase();
 
   // Feature signals — each match adds 1 point
@@ -116,13 +118,13 @@ function detectComplexity(userPrompt: string): ComplexityLevel {
     if (signal.test(prompt)) score++;
   }
 
-  if (score >= 5) return 'complex';
+  if (score >= 4) return 'complex';
   if (score >= 2) return 'medium';
   return 'simple';
 }
 
 /** Return scaled FILE REQUIREMENTS guidance based on detected complexity. */
-function getFileRequirements(complexity: ComplexityLevel): string {
+export function getFileRequirements(complexity: ComplexityLevel): string {
   switch (complexity) {
     case 'simple':
       return `=== FILE REQUIREMENTS (simple project) ===
@@ -132,12 +134,91 @@ Keep the project small and focused — do not over-engineer.`;
     case 'complex':
       return `=== FILE REQUIREMENTS (complex project) ===
 Generate a comprehensive file set: package.json, main.tsx, App.tsx (routing/layout only, max 50 lines), index.css, types, 4–6 UI components, 2–3 layout components, 4–6 feature components, 2–4 hooks.
-Use react-router-dom for multi-page apps. Split large features into sub-components. Create shared hooks for repeated logic.`;
+
+STRUCTURAL PATTERNS (complex):
+- Use react-router-dom with a SharedLayout component wrapping an <Outlet /> for consistent chrome across pages
+- Add a responsive sidebar with a hamburger toggle button for mobile (hidden by default on <768px)
+- Create a context provider for the primary data domain (e.g., TasksContext for a task manager)
+- Include search and filter controls on all list views
+- Add breadcrumb navigation for nested routes
+- Split large features into sub-components. Create shared hooks for repeated logic.`;
 
     default: // medium
       return `=== FILE REQUIREMENTS ===
-Generate files appropriate to complexity: package.json, main.tsx, App.tsx (max 50 lines), index.css, types, 2–3 UI components, 1–2 layout components, 2–3 feature components, 1–2 hooks.`;
+Generate files appropriate to complexity: package.json, main.tsx, App.tsx (max 50 lines), index.css, types, 2–3 UI components, 1–2 layout components, 2–3 feature components, 1–2 hooks.
+
+STRUCTURAL PATTERNS (medium):
+- Create a Layout wrapper component that provides consistent header/footer chrome
+- Extract a reusable Modal component for create/edit/confirm flows
+- Create a custom hook for the primary data operations (e.g., useTodos for a todo app)
+- Add client-side form validation with inline error messages`;
   }
+}
+
+/** Return a complexity-appropriate quality bar reference for the prompt. */
+function getQualityBarReference(complexity: ComplexityLevel): string {
+  if (complexity === 'simple') {
+    return `=== QUALITY BAR REFERENCE (adapt to whatever the user requests — do NOT copy this verbatim) ===
+Example: if the user asks "build a counter app", a production-quality result looks like:
+
+FILES:
+  package.json                        — dependencies (react, react-dom, lucide-react)
+  src/main.tsx                        — ReactDOM.createRoot entry point
+  src/App.tsx                         — layout shell, renders Counter
+  src/index.css                       — CSS variables, resets, global typography
+  src/types/index.ts                  — TypeScript interfaces
+  src/components/ui/Button.tsx + .css — reusable button with variants
+  src/components/features/Counter.tsx + .css — counter with increment/decrement/reset
+
+Keep it focused — no routing, no context providers, no extra abstractions for a simple app.`;
+  }
+
+  if (complexity === 'medium') {
+    return `=== QUALITY BAR REFERENCE (adapt to whatever the user requests — do NOT copy this verbatim) ===
+Example: if the user asks "build a todo app with search", a production-quality result looks like:
+
+FILES:
+  package.json                          — dependencies (react, react-dom, lucide-react, uuid)
+  src/main.tsx                          — ReactDOM.createRoot entry point
+  src/App.tsx                           — layout wrapper, renders main feature
+  src/index.css                         — CSS variables, resets, global typography
+  src/types/index.ts                    — Todo, FilterStatus interfaces
+  src/hooks/useTodos.ts                 — CRUD operations, search/filter logic
+  src/components/layout/Layout.tsx + .css — header + main content area
+  src/components/ui/Button.tsx + .css   — variants: primary, secondary, danger
+  src/components/ui/Modal.tsx + .css    — overlay, Escape to close
+  src/components/features/TodoList.tsx + .css  — list with search bar, empty state
+  src/components/features/TodoItem.tsx + .css  — item with status toggle, delete action
+  src/components/features/TodoForm.tsx + .css  — create/edit form with validation
+
+Adapt the file names, data shapes, and features to match the user's actual request.`;
+  }
+
+  return `=== QUALITY BAR REFERENCE (adapt to whatever the user requests — do NOT copy this verbatim) ===
+Example: if the user asks "build a task manager", a production-quality result looks like:
+
+FILES:
+  package.json                          — dependencies (react, react-dom, react-router-dom, lucide-react, uuid)
+  src/main.tsx                          — ReactDOM.createRoot, BrowserRouter wrapper
+  src/App.tsx                           — routes only (<Routes>, <Route>), imports SharedLayout
+  src/index.css                         — CSS variables, resets, global typography
+  src/types/index.ts                    — Task, Priority, Status interfaces
+  src/context/TasksContext.tsx           — tasks state, CRUD actions, provider
+  src/hooks/useFilteredTasks.ts         — search + status filter logic
+  src/components/layout/SharedLayout.tsx — sidebar + header + <Outlet />
+  src/components/layout/Sidebar.tsx     — nav links, hamburger toggle, responsive
+  src/components/ui/Button.tsx + .css   — variants: primary, secondary, danger, ghost
+  src/components/ui/Modal.tsx + .css    — overlay, Escape to close, focus trap
+  src/components/ui/Toast.tsx + .css    — auto-dismiss, success/error variants
+  src/components/features/TaskList.tsx + .css      — list with search bar, empty state, skeleton loader
+  src/components/features/TaskCard.tsx + .css      — card with status badge, priority indicator, actions
+  src/components/features/TaskForm.tsx + .css      — create/edit form with validation
+  src/components/features/Dashboard.tsx + .css     — stats cards, task breakdown chart
+
+DATA SHAPE:
+  interface Task { id: string; title: string; description: string; status: 'todo'|'in-progress'|'done'; priority: 'low'|'medium'|'high'; createdAt: string; }
+
+This is the quality bar — every generated app should have this level of structure, separation, and completeness. Adapt the file names, data shapes, and features to match the user's actual request.`;
 }
 
 function buildGenerationPrompt(userPrompt: string): string {
@@ -165,6 +246,10 @@ CRITICAL: NEVER put everything in App.tsx — use proper component separation.
 ${getFileRequirements(complexity)}
 
 ${LAYOUT_FUNDAMENTALS}
+
+${BASELINE_VISUAL_POLISH}
+
+${REALISTIC_DATA_GUIDANCE}
 
 ${shouldIncludeDesignSystem(userPrompt) ? `${DESIGN_SYSTEM_CONSTANTS}
 ` : ''}
@@ -198,6 +283,8 @@ ${DETAILED_CSS_GUIDANCE}
 ${DETAILED_JSON_OUTPUT_GUIDANCE}
 
 ` : ''}${getOutputBudgetGuidance(config.outputBudgetTokens)}
+
+${getQualityBarReference(complexity)}
 
 ${wrapUserInput(userPrompt)}
 

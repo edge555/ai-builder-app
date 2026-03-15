@@ -164,11 +164,10 @@ export function useSubmitPrompt() {
                                 errorType,
                                 originalMessage: errorMsg,
                             });
-                            chatMessages.addAssistantMessage(
-                                retryCount >= MAX_API_RETRIES
-                                    ? `Sorry, I couldn't generate the project after ${MAX_API_RETRIES} attempts. ${errorText}`
-                                    : errorText
-                            );
+                            const finalMsg = retryCount >= MAX_API_RETRIES
+                                ? `Sorry, I couldn't generate the project after ${MAX_API_RETRIES} attempts. ${errorText}`
+                                : errorText;
+                            chatMessages.addErrorMessage(finalMsg, prompt);
                             if (!isRetryableError(errorType)) {
                                 break; // Stop retrying non-retryable errors
                             }
@@ -230,11 +229,10 @@ export function useSubmitPrompt() {
                                 errorType,
                                 originalMessage: errorMsg,
                             });
-                            chatMessages.addAssistantMessage(
-                                retryCount >= MAX_API_RETRIES
-                                    ? `Sorry, I couldn't make those changes after ${MAX_API_RETRIES} attempts. ${errorText}`
-                                    : errorText
-                            );
+                            const finalMsg = retryCount >= MAX_API_RETRIES
+                                ? `Sorry, I couldn't make those changes after ${MAX_API_RETRIES} attempts. ${errorText}`
+                                : errorText;
+                            chatMessages.addErrorMessage(finalMsg, prompt);
                             if (!isRetryableError(errorType)) {
                                 break; // Stop retrying non-retryable errors
                             }
@@ -259,7 +257,7 @@ export function useSubmitPrompt() {
                     errorType,
                     originalMessage: errorMsg,
                 });
-                chatMessages.addAssistantMessage(`Sorry, something went wrong: ${errorText}`);
+                chatMessages.addErrorMessage(`Sorry, something went wrong: ${errorText}`, prompt);
             }
         } finally {
             // Only clean up if this is still the active request (not superseded by a new one)

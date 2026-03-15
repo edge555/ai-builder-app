@@ -35,6 +35,36 @@ export const LAYOUT_FUNDAMENTALS = `=== LAYOUT FUNDAMENTALS (ALWAYS APPLY) ===
    - Allow flex-wrap and auto-fill grids to reflow naturally`;
 
 /**
+ * Baseline visual polish — always included in every prompt regardless of design keywords.
+ * Ensures every generated app has minimum production-quality polish.
+ */
+export const BASELINE_VISUAL_POLISH = `=== VISUAL POLISH (ALWAYS APPLY) ===
+1. HOVER & INTERACTION:
+   - All clickable elements (buttons, cards, links, list items) MUST have visible hover states.
+   - Use subtle transforms on hover: translateY(-1px) or translateY(-2px) for cards, scale(1.02) for buttons.
+   - Add box-shadow increase on hover for elevated elements.
+
+2. TRANSITIONS:
+   - Add transition: all 0.2s ease to every interactive element. Never let state changes be instant.
+   - Smooth color, background, shadow, and transform transitions on hover, focus, and active states.
+
+3. DEPTH & ELEVATION:
+   - Use box-shadow to create visual hierarchy: cards float above background, modals float above cards.
+   - Apply var(--shadow-sm) for subtle depth, var(--shadow-md) for cards, stronger shadows for modals/dropdowns.
+   - Use subtle background color differences between page, surface, and card layers.
+
+4. VISUAL HIERARCHY:
+   - Headings must be visually distinct: larger size, bolder weight, darker color than body text.
+   - Use color contrast to guide attention: primary color for CTAs, muted colors for secondary actions.
+   - Group related content with consistent padding and subtle borders or background changes.
+
+5. POLISH DETAILS:
+   - Consistent border-radius using CSS variables (--radius-sm, --radius-md, --radius-lg).
+   - Use gap instead of margins for spacing between siblings.
+   - Buttons need padding (10px 20px minimum), never look like plain text links.
+   - Input fields need visible borders, focus rings (outline or box-shadow), and adequate padding.`;
+
+/**
  * Shared design system constants — premium aesthetics (conditional on design keywords).
  */
 export const DESIGN_SYSTEM_CONSTANTS = `=== DESIGN PRINCIPLES (CRITICAL) ===
@@ -63,6 +93,34 @@ export const ACCESSIBILITY_GUIDANCE = `=== ACCESSIBILITY & QUALITY ===
 3. KEYBOARD: All interactive elements reachable via keyboard. Visible focus states, logical tab order.
 4. STATES: Error boundaries with fallback UI. Loading indicators/skeletons for async. Helpful empty states with guidance or CTAs.
 5. DATES: The current year is ${new Date().getFullYear()}. Use it for copyright notices, footer years, and any date defaults.`;
+
+/**
+ * Realistic sample data guidance — always included to prevent placeholder/demo content.
+ */
+export const REALISTIC_DATA_GUIDANCE = `=== REALISTIC SAMPLE DATA (CRITICAL) ===
+NEVER use generic placeholder content. Generated apps must feel real and lived-in.
+
+1. BANNED PLACEHOLDERS:
+   - No "Lorem ipsum", "Item 1/2/3", "John Doe", "Jane Smith", "user@example.com"
+   - No "placeholder.com", "example.com", or broken image URLs
+   - No round numbers for stats (not 0, 100, 1000) — use realistic values like 847, 12.4k, 93%
+
+2. SAMPLE DATA RULES:
+   - Generate 5-8 realistic, domain-appropriate data items (e.g., a recipe app needs real recipe names, ingredients, prep times)
+   - Names should be diverse and realistic (mix of cultures, genders)
+   - Dates should be recent and relative to ${new Date().getFullYear()} (not 2020 or 1999)
+   - Prices should be realistic for the domain ($4.99 coffee, $29/mo subscription, $1,200 laptop)
+   - Descriptions should be 1-2 real sentences, not "This is a description"
+
+3. IMAGES:
+   - Use https://picsum.photos/WIDTH/HEIGHT for placeholder images (e.g., https://picsum.photos/400/300)
+   - Add ?random=N query param to get different images: https://picsum.photos/400/300?random=1
+   - For avatars: https://picsum.photos/80/80?random=N
+
+4. INITIAL STATE:
+   - Apps should load with pre-populated sample data — never start empty
+   - Dashboards should show realistic charts/metrics from day one
+   - Lists should have 5-8 items already present, not "No items yet" on first load`;
 
 /**
  * Prompt injection defense wrapper.
@@ -232,7 +290,15 @@ export const COMMON_REACT_PATTERNS = `=== COMMON UI PATTERNS ===
    - Trap focus inside the modal while open (move focus to first focusable element on open).
    - Close on Escape key: useEffect(() => { const h = (e) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [onClose]);
    - Close on backdrop click but NOT on dialog content click (stopPropagation on inner div).
-   - Prevent body scroll while open: document.body.style.overflow = 'hidden'; (restore on cleanup).`;
+   - Prevent body scroll while open: document.body.style.overflow = 'hidden'; (restore on cleanup).
+
+6. PRODUCTION UX PATTERNS (CRITICAL — these separate demos from real apps):
+   - TOAST NOTIFICATIONS: Create a simple Toast component. Show brief success/error messages on user actions (add, delete, save, copy). Auto-dismiss after 3-4 seconds. Position fixed at bottom-right or top-right.
+   - SKELETON LOADERS: Use CSS-animated placeholder blocks (pulsing gray rectangles) instead of spinners for initial data loading. Match the shape of the content being loaded (card skeletons for card lists, text line skeletons for text).
+   - EMPTY STATES: When a list/section has no data, show: an icon or illustration + descriptive text explaining what goes here + a primary CTA button to add the first item. Never just show blank space or "No items."
+   - CONFIRMATION FOR DESTRUCTIVE ACTIONS: Delete/remove operations must show a confirmation step — either an inline "Are you sure?" with Cancel/Confirm buttons, or a confirmation modal. Never delete on single click.
+   - FORM SUCCESS FEEDBACK: After successful form submission, show a success toast or inline success message. Clear the form. Never silently succeed with no visual feedback.
+   - SEARCH UX: Search inputs should include a clear/X button when text is present. Show a "No results found" state with helpful text (e.g., "Try a different search term"). Show result count.`;
 
 /**
  * Dependency guidance — blocklist of packages to avoid + allowlist of Sandpack-safe packages.

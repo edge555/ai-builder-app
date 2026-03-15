@@ -2,6 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## gstack
+
+Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools.
+
+Available gstack skills:
+- `/browse` — headless browser for QA testing, site dogfooding, and verification
+- `/qa` — systematic QA testing of web applications
+- `/plan-ceo-review` — CEO/founder-mode plan review
+- `/plan-eng-review` — engineering manager-mode plan review
+- `/review` — pre-landing PR review
+- `/ship` — ship workflow (merge, test, bump version, create PR)
+- `/retro` — weekly engineering retrospective
+- `/setup-browser-cookies` — import cookies from real browser into headless session
+
 ## Project Overview
 
 AI-powered app builder monorepo that generates web applications from natural language prompts. Uses a pluggable AI provider layer (OpenRouter by default, Modal as alternative) to generate complete React projects with live preview (Sandpack), code editing (Monaco), and version control.

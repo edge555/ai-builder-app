@@ -10,6 +10,8 @@ export interface ChatMessagesContextValue {
     messages: ChatMessage[];
     addUserMessage: (content: string) => ChatMessage;
     addAssistantMessage: (content: string, changeSummary?: ChangeSummary, diffs?: FileDiff[]) => ChatMessage;
+    /** Adds an error assistant message with an optional retry prompt. */
+    addErrorMessage: (content: string, retryPrompt?: string) => ChatMessage;
     clearMessages: () => void;
 }
 
