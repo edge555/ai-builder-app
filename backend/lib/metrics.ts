@@ -85,6 +85,79 @@ export function formatDuration(ms: number): string {
 }
 
 /**
+ * Per-operation aggregate stats tracked in memory.
+ */
+interface OperationStats {
+  count: number;
+  successCount: number;
+  totalDurationMs: number;
+  totalTokens: number;
+  totalRetries: number;
+  lastOperationAt?: number;
+}
+
+/**
+ * Summary of all operations since server start.
+ */
+export interface MetricsSummary {
+  startedAt: string;
+  uptimeMs: number;
+  operations: Record<string, {
+    count: number;
+    successRate: number;
+    avgDurationMs: number;
+    totalTokens: number;
+    totalRetries: number;
+    lastOperationAt?: string;
+  }>;
+}
+
+const statsMap = new Map<string, OperationStats>();
+const serverStartedAt = Date.now();
+
+/**
+ * Records completed operation metrics into the in-memory registry.
+ * Call this after each AI operation completes.
+ */
+export function recordOperation(metrics: AIOperationMetrics): void {
+  const key = metrics.operation;
+  const existing = statsMap.get(key) ?? {
+    count: 0, successCount: 0, totalDurationMs: 0,
+    totalTokens: 0, totalRetries: 0,
+  };
+  statsMap.set(key, {
+    count: existing.count + 1,
+    successCount: existing.successCount + (metrics.success ? 1 : 0),
+    totalDurationMs: existing.totalDurationMs + metrics.durationMs,
+    totalTokens: existing.totalTokens + (metrics.totalTokens ?? 0),
+    totalRetries: existing.totalRetries + (metrics.retryCount ?? 0),
+    lastOperationAt: metrics.endTime,
+  });
+}
+
+/**
+ * Returns aggregate metrics summary since server start.
+ */
+export function getMetricsSummary(): MetricsSummary {
+  const operations: MetricsSummary['operations'] = {};
+  for (const [op, stats] of statsMap) {
+    operations[op] = {
+      count: stats.count,
+      successRate: stats.count > 0 ? Math.round((stats.successCount / stats.count) * 100) / 100 : 0,
+      avgDurationMs: stats.count > 0 ? Math.round(stats.totalDurationMs / stats.count) : 0,
+      totalTokens: stats.totalTokens,
+      totalRetries: stats.totalRetries,
+      ...(stats.lastOperationAt && { lastOperationAt: new Date(stats.lastOperationAt).toISOString() }),
+    };
+  }
+  return {
+    startedAt: new Date(serverStartedAt).toISOString(),
+    uptimeMs: Date.now() - serverStartedAt,
+    operations,
+  };
+}
+
+/**
  * Formats metrics for logging
  */
 export function formatMetrics(metrics: AIOperationMetrics): Record<string, unknown> {

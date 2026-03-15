@@ -10,7 +10,7 @@
 
 import { createLogger } from '../logger';
 
-const logger = createLogger('build-validator');
+const logger = createLogger('core/build-validator');
 
 export interface BuildError {
     type: 'missing_dependency' | 'broken_import' | 'syntax_error' | 'missing_file' | 'import_export_mismatch';
@@ -298,11 +298,18 @@ export class BuildValidator {
         const allFilePaths = Object.keys(files);
         const normalizedFilesSet = new Set(allFilePaths.map(f => normalizePath(f)));
 
+        logger.debug('Starting build validation', { fileCount: allFilePaths.length });
+
         // Find package.json
         const packageJsonPath = allFilePaths.find(p => p.endsWith('package.json'));
         const declaredDeps = packageJsonPath
             ? parseDependencies(files[packageJsonPath])
             : new Set<string>();
+
+        logger.debug('Dependency check', {
+            hasPackageJson: !!packageJsonPath,
+            declaredDepCount: declaredDeps.size,
+        });
 
         // Add built-in React modules
         BUILT_IN_MODULES.forEach(m => declaredDeps.add(m));
@@ -418,6 +425,17 @@ export class BuildValidator {
                     });
                 }
             }
+        }
+
+        if (errors.length > 0) {
+            logger.warn('Build validation found issues', {
+                errorCount: errors.length,
+                errorTypes: [...new Set(errors.map(e => e.type))],
+                fixableCount: errors.filter(e => e.severity === 'fixable').length,
+                unfixableCount: errors.filter(e => e.severity === 'unfixable').length,
+            });
+        } else {
+            logger.debug('Build validation passed', { fileCount: allFilePaths.length });
         }
 
         return {

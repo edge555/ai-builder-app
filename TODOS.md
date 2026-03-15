@@ -11,12 +11,12 @@
 
 ## P2 — Test Coverage
 
-- [ ] Backend: `build-validator.ts` unit tests
-- [ ] Backend: `ai-retry.ts` unit tests
-- [ ] Backend: `agent-router.ts` unit tests
-- [ ] Backend: `auth.ts` unit tests
-- [ ] Backend: `streaming-generator.ts` integration tests
-- [ ] Frontend: `ChatInterface.tsx`, `AppLayout.tsx`, `AuthGuard`, `FileTreeSidebar` tests
+- [x] Backend: `build-validator.ts` unit tests (42 tests)
+- [x] Backend: `ai-retry.ts` unit tests (17 tests, recordOperation mock added)
+- [x] Backend: `agent-router.ts` unit tests (already existed — 23 tests)
+- [x] Backend: `auth.ts` unit tests (already existed — 13 tests)
+- [x] Backend: `streaming-generator.ts` integration tests (expanded to 17 tests)
+- [x] Frontend: `ChatInterface.tsx`, `AppLayout.tsx`, `AuthGuard`, `FileTreeSidebar` tests (64 tests)
 
 ## P2 — Type Safety
 
