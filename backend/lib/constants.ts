@@ -42,7 +42,7 @@ export const TOKEN_BUDGET = 4000;
 export const CHARS_PER_TOKEN = 4;
 
 // Max output tokens per operation type (OpenRouter)
-export const MAX_OUTPUT_TOKENS_GENERATION = 16384;
+export const MAX_OUTPUT_TOKENS_GENERATION = 32768;
 export const MAX_OUTPUT_TOKENS_MODIFICATION = 8192;
 export const MAX_OUTPUT_TOKENS_PLANNING = 1024;
 
