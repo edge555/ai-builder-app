@@ -20,7 +20,7 @@ const logger = createLogger('version-manager');
  * Maximum number of versions to keep per project.
  * When exceeded, oldest versions are evicted (FIFO).
  */
-const MAX_VERSIONS_PER_PROJECT = 5;
+const MAX_VERSIONS_PER_PROJECT = 50;
 
 /**
  * Maximum number of projects to keep in memory.
