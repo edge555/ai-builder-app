@@ -32,18 +32,20 @@ Additionally: `supabase/` (edge functions + config), `modal-code-ai/` (Python Mo
 ### Frontend Structure
 ```
 frontend/src/
-├── components/         # 36 component directories
+├── components/         # 39 component directories
 │   ├── AppLayout/     # Main layout (ChatPanel, PreviewSection, ResizablePanel, ErrorOverlay)
 │   ├── AuthGuard/     # Route protection for authenticated routes
-│   ├── ChatInterface/ # Chat UI with virtualization + MessageItem
+│   ├── ChatInterface/ # Chat UI with virtualization + MessageItem + LoadingIndicator
 │   ├── CodeEditor/    # Monaco editor + file tree sidebar
 │   ├── PreviewPanel/  # Sandpack preview + error handling
 │   ├── ProjectGallery/# Saved projects with virtualization
 │   ├── SiteHeader/    # Global header with theme toggle
 │   ├── UserMenu/      # Authenticated user menu
-│   └── ...            # TemplateGrid, ConfirmDialog, ErrorBoundary, UndoRedoButtons, etc.
+│   └── ...            # StreamingIndicator, QuickActions, StatusIndicator, PanelToggle,
+│                      #   TemplateGrid, ConfirmDialog, ErrorBoundary, UndoRedoButtons, etc.
 ├── context/           # React Context providers (split state/actions pattern)
-│   └── AuthContext    # Authentication state + actions (split pattern)
+│   └── AuthContext, ProjectContext, GenerationContext, ChatMessagesContext,
+│       PreviewErrorContext, AutoRepairContext, ErrorAggregatorContext, ToastContext
 ├── hooks/             # Custom hooks (useSubmitPrompt, useAutoSave, useUndoRedo,
 │                      #   useCountdown, useSidebarResize, useCollapsibleMessages, etc.)
 ├── pages/             # WelcomePage, BuilderPage, LoginPage, AgentSettingsPage (lazy-loaded)
@@ -65,12 +67,11 @@ backend/
 │   ├── modify-stream/    # Streaming modification (SSE)
 │   ├── generate/         # Non-streaming generation (gzipped JSON)
 │   ├── modify/           # Non-streaming modification (gzipped JSON)
-│   ├── plan/             # Modification planning
 │   ├── diff/             # Diff calculation
 │   ├── export/           # ZIP export
 │   ├── revert/           # Version revert
 │   ├── versions/         # Version listing
-│   ├── health/           # Health check
+│   ├── health/           # Health check (?deep=true for provider probe, ?metrics=true for stats)
 │   ├── agent-config/     # Per-task model config (GET/PUT)
 │   └── provider-config/  # Runtime provider override (GET/PUT)
 ├── lib/
@@ -98,12 +99,18 @@ backend/
 │   ├── streaming/     # SSE backpressure controller, SSEEncoder, stream-lifecycle
 │   │   └── stream-lifecycle.ts     # Heartbeat, timeout, abort, cleanup management
 │   ├── utils/         # Incremental JSON parser (O(n)), path security
+│   ├── security/      # Rate limiting, authentication, request guards
+│   │   ├── guard.ts               # applyRateLimit() + getClientIp() (rightmost-trusted IP)
+│   │   ├── rate-limiter.ts        # Sliding-window rate limiter
+│   │   ├── rate-limit-config.ts   # Tier configs (HIGH_COST, MEDIUM_COST, LOW_COST, CONFIG)
+│   │   └── auth.ts                # Supabase JWT verification
 │   ├── api/           # CORS, gzip, request ID, error helpers
 │   │   ├── request-parser.ts       # JSON parsing + Zod validation
-│   │   ├── route-context.ts        # Request ID + context logger middleware
+│   │   ├── route-context.ts        # Request ID + context logger + rate-limit header merging
+│   │   ├── utils.ts                # CORS headers, CSRF origin validation, gzip, error formatting
 │   │   └── zod-error.ts            # Zod error formatting
 │   ├── logger.ts      # Structured logging with redaction and category filtering
-│   ├── metrics.ts     # AI operation timing and token tracking
+│   ├── metrics.ts     # AI operation timing, token tracking, in-memory aggregate stats
 │   ├── config.ts      # Zod-validated env vars with provider-aware defaults
 │   └── constants.ts   # Centralized magic numbers and thresholds
 └── data/              # Runtime config (agent-config.json, provider-config.json)
@@ -158,7 +165,8 @@ npm run lint                   # All workspaces
 6. Files validated, formatted (Prettier), version-pinned (package.json deps), streamed back to frontend
 7. Progress events emitted during modification phases (planning → generating → validating → applying)
 8. Frontend updates ProjectContext → PreviewPanel (Sandpack) re-renders
-8. Auto-save to IndexedDB; auto-repair triggers if preview errors detected (max 3 attempts)
+9. Auto-save to IndexedDB; auto-repair triggers if preview errors detected (max 3 attempts)
+10. `beforeunload` warning prevents accidental tab close during active generation
 
 ### AI Provider System
 
@@ -186,7 +194,7 @@ Multi-provider architecture with runtime switching:
 - Components subscribe selectively: `useXxxState()` or `useXxxActions()`
 - Applied to: GenerationContext, PreviewErrorContext, ChatMessagesContext, VersionContext
 
-**Context Providers**: ProjectContext, ChatMessagesContext, GenerationContext, VersionContext, AutoRepairProvider, PreviewErrorProvider, ErrorAggregatorProvider, AuthContext
+**Context Providers**: ProjectContext, ChatMessagesContext, GenerationContext, AutoRepairContext, PreviewErrorContext, ErrorAggregatorContext, AuthContext, ToastContext
 
 ### Authentication
 
@@ -195,6 +203,7 @@ Multi-provider architecture with runtime switching:
 - `AuthGuard` component protects authenticated routes
 - `LoginPage` handles sign-in flow
 - Backend validates JWTs via `SUPABASE_JWT_SECRET`
+- Auto-redirect to `/login` on session expiry (via `wasAuthenticatedRef` tracking in `AuthContext`)
 
 ### Storage
 
@@ -208,8 +217,16 @@ Multi-provider architecture with runtime switching:
 ### Observability
 
 - **Structured logging** (`logger.ts`): Configurable levels (LOG_LEVEL), category filtering (LOG_CATEGORIES), text/JSON output (LOG_FORMAT), automatic sensitive field redaction, request ID correlation
-- **Metrics** (`metrics.ts`): `OperationTimer` for AI operation timing, token counts, retry tracking
+- **Metrics** (`metrics.ts`): `OperationTimer` for AI operation timing, token counts, retry tracking; `recordOperation()` accumulates in-memory stats; `getMetricsSummary()` returns aggregate stats (exposed via `/api/health?metrics=true`)
 - **Request ID propagation**: Generated at route entry, carried through all layers, returned in `X-Request-Id` header
+- **Request logging**: `withRouteContext` logs method, path, status, and duration for every route handler response
+
+### Security
+
+- **Rate limiting** (`security/guard.ts`): Per-IP sliding-window rate limiter with tiered configs (HIGH_COST, MEDIUM_COST, LOW_COST, CONFIG); body size enforcement (413); `X-RateLimit-*` headers on every response
+- **IP extraction**: Prefers platform `request.ip`, falls back to rightmost-trusted X-Forwarded-For IP (configurable via `TRUSTED_PROXY_DEPTH`)
+- **CSRF protection**: `getCorsHeaders(request, { rejectInvalidOrigin: true })` rejects mutations with missing/invalid Origin header (infrastructure ready, not yet wired on routes)
+- **Authentication**: Optional Supabase Auth with JWT verification; `AuthContext` auto-redirects to `/login` on session expiry
 
 ## Environment Variables
 
@@ -225,6 +242,7 @@ Multi-provider architecture with runtime switching:
 - `LOG_CATEGORIES`: ai,api,core,diff,analysis,streaming
 - `SUPABASE_JWT_SECRET`: JWT verification for Supabase Auth (optional)
 - `RATE_LIMIT_ENABLED`: Enable rate limiting (default: true)
+- `TRUSTED_PROXY_DEPTH`: How many rightmost X-Forwarded-For IPs to trust (default: 1)
 
 **Frontend** (`.env`):
 - `VITE_API_BASE_URL`: Backend URL (default: http://localhost:4000)
@@ -246,9 +264,9 @@ Multi-provider architecture with runtime switching:
 
 ## Testing
 
-- **Backend**: Vitest + Node env, 34 test files in `lib/**/*.test.ts` (unit, perf, integration)
-- **Frontend**: Vitest + jsdom + React Testing Library, tests in `src/**/*.{test,spec}.{ts,tsx}`
-- **Shared**: Vitest + Node env
+- **Backend**: Vitest + Node env, 88 test files in `lib/**/*.test.ts` and `app/api/__tests__/` (unit, perf, integration)
+- **Frontend**: Vitest + jsdom + React Testing Library, 25 test files in `src/**/__tests__/*.{test,spec}.{ts,tsx}`
+- **Shared**: Vitest + Node env, 5 test files
 
 ## Key Design Patterns
 
