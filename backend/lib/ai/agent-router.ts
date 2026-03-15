@@ -113,7 +113,16 @@ export class FallbackAIProvider implements AIProvider {
         total: this.clients.length,
       });
 
-      const response = await this.clients[i][method](request as AIStreamingRequest);
+      let response: AIResponse;
+      try {
+        response = await this.clients[i][method](request as AIStreamingRequest);
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        attemptTimer.complete(false);
+        logger.warn(`[agent-router] Client threw for ${this.taskType} | Model: ${modelId} | Error: ${errorMsg}`);
+        lastResponse = { success: false, error: errorMsg };
+        continue;
+      }
       lastResponse = response;
 
       const attemptMetrics = attemptTimer.complete(response.success);

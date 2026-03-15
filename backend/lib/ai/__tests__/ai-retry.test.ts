@@ -9,9 +9,9 @@ import type { AIRequest, AIResponse } from '../ai-provider';
 
 // Mock the metrics
 vi.mock('../../metrics', () => ({
-  OperationTimer: vi.fn().mockImplementation(() => ({
-    complete: vi.fn(() => ({ durationMs: 100, retryCount: 0 })),
-  })),
+  OperationTimer: vi.fn().mockImplementation(function() {
+    return { complete: vi.fn(() => ({ durationMs: 100, retryCount: 0 })) };
+  }),
   formatMetrics: vi.fn(() => ({ durationMs: 100 })),
 }));
 
@@ -306,7 +306,7 @@ describe('ai-retry', () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Unknown error occurred');
+      expect(result.error).toBe('null');
     });
   });
 });

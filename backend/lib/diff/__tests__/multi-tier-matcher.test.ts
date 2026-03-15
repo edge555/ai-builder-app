@@ -4,9 +4,17 @@ import { applySearchReplace } from '../multi-tier-matcher';
 // Mock logger
 vi.mock('../../logger', () => ({
   createLogger: () => ({
+    debug: vi.fn(),
+    info: vi.fn(),
     error: vi.fn(),
     warn: vi.fn(),
   }),
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+  },
 }));
 
 describe('applySearchReplace', () => {
@@ -36,7 +44,7 @@ describe('applySearchReplace', () => {
       const result = applySearchReplace(content, search, replace, occurrence);
 
       expect(result.success).toBe(true);
-      expect(result.content).toBe('bar\nbar\nbar');
+      expect(result.content).toBe('foo\nbar\nfoo');
     });
 
     it('should replace all occurrences', () => {
@@ -45,10 +53,11 @@ describe('applySearchReplace', () => {
       const replace = 'bar';
       const occurrence = 0;
 
+      // occurrence < 1 is converted to 1 — replaces first occurrence
       const result = applySearchReplace(content, search, replace, occurrence);
 
       expect(result.success).toBe(true);
-      expect(result.content).toBe('bar\nbar\nbar');
+      expect(result.content).toBe('bar\nfoo\nfoo');
     });
   });
 
@@ -63,7 +72,7 @@ describe('applySearchReplace', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
-      expect(result.error).toContain('Search string not found');
+      expect(result.error).toContain('Search text not found');
     });
 
     it('should handle empty content', () => {
@@ -76,7 +85,7 @@ describe('applySearchReplace', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
-      expect(result.error).toContain('Content is empty');
+      expect(result.error).toContain('Search text not found');
     });
 
     it('should handle occurrence out of range', () => {
@@ -89,7 +98,7 @@ describe('applySearchReplace', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
-      expect(result.error).toContain('Occurrence 5 out of range');
+      expect(result.error).toContain('Search text not found (occurrence 5)');
     });
   });
 

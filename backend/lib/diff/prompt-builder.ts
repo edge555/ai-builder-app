@@ -65,7 +65,10 @@ export function buildBuildFixPrompt(
     }
 
     let prompt = `User Request: ${userPrompt}\n\n`;
-    prompt += `=== FILES WITH BUILD ERRORS (current content) ===\n\n`;
+
+    if (errorFiles.size > 0) {
+        prompt += `=== FILES WITH BUILD ERRORS (current content) ===\n\n`;
+    }
 
     for (const filePath of errorFiles) {
         const content = allFiles[filePath];

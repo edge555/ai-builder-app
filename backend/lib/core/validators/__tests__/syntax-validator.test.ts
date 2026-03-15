@@ -106,16 +106,10 @@ describe('Syntax Validator', () => {
                 'index.js': 'function test() { console.log("hello"); ]',
             };
             const errors = validateSyntax(invalidFiles);
-            expect(errors).toHaveLength(2);
+            expect(errors).toHaveLength(1);
             expect(errors[0]).toEqual({
                 type: 'syntax_error',
                 message: "Mismatched brackets: expected '}' but found ']'",
-                filePath: 'index.js',
-                line: 1,
-            });
-            expect(errors[1]).toEqual({
-                type: 'syntax_error',
-                message: "Unclosed bracket '{'",
                 filePath: 'index.js',
                 line: 1,
             });

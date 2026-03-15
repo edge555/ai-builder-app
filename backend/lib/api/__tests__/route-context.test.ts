@@ -25,8 +25,11 @@ vi.mock('../../request-id', () => ({
 }));
 
 describe('route-context', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // Reset generateRequestId mock to return fixed value after any per-test overrides
+    const { generateRequestId } = await import('../../request-id');
+    vi.mocked(generateRequestId).mockReturnValue('req_1234567890_abcdefgh');
   });
 
   describe('createRouteContext', () => {
@@ -44,12 +47,10 @@ describe('route-context', () => {
     });
 
     it('should generate unique request IDs for each call', async () => {
-      let callCount = 0;
       const requestModule = await import('../../request-id');
-      vi.mocked(requestModule).generateRequestId = vi.fn(() => {
-        callCount++;
-        return `req_${callCount}_abcdefgh`;
-      });
+      vi.mocked(requestModule.generateRequestId)
+        .mockReturnValueOnce('req_1_abcdefgh')
+        .mockReturnValueOnce('req_2_abcdefgh');
 
       const context1 = createRouteContext('api/test1');
       const context2 = createRouteContext('api/test2');

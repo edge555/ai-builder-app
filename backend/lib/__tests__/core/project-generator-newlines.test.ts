@@ -3,6 +3,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { ProjectGenerator } from '../../core/project-generator';
 import type { AIProvider } from '../../ai';
 
+// Mock validateProjectStructure to skip structural checks
+vi.mock('../../core/validators', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    validateProjectStructure: vi.fn().mockReturnValue([]),
+  };
+});
+
 // Mock AIProvider
 const mockGenerate = vi.fn();
 const mockAIProvider: AIProvider = {

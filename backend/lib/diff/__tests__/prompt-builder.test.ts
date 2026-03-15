@@ -162,7 +162,7 @@ describe('buildBuildFixPrompt', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAllFiles = {
-      'src/index.ts': 'export const foo = "bar";',
+      'src/index.ts': 'import { utils } from "./utils";\nexport const foo = "bar";',
       'src/utils.ts': 'export const utils = {};',
       'package.json': '{"name":"test","dependencies":{}}',
     };

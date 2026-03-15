@@ -85,9 +85,7 @@ export function toSimpleJsonSchema(schema: z.ZodTypeAny): SimpleJsonSchema {
     }
 
     result.properties = properties;
-    if (required.length > 0) {
-      result.required = required;
-    }
+    result.required = required;
   } else if (schemaType === 'array' || schema instanceof z.ZodArray) {
     result.type = 'array';
     // Zod 4 uses .element for array inner type
@@ -150,9 +148,12 @@ export function toSimpleJsonSchema(schema: z.ZodTypeAny): SimpleJsonSchema {
         }
       }
 
-      result.properties = allProperties;
-      if (required.length > 0) {
+      if (Object.keys(allProperties).length > 0) {
+        result.properties = allProperties;
         result.required = required;
+      } else {
+        // No object variants — fall back to string
+        result.type = 'string';
       }
     } else {
       // Fallback if we can't get options

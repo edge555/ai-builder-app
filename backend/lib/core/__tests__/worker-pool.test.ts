@@ -7,11 +7,9 @@ import { Worker } from 'worker_threads';
 
 // Mock worker_threads
 vi.mock('worker_threads', () => ({
-  Worker: vi.fn().mockImplementation(() => ({
-    on: vi.fn(),
-    postMessage: vi.fn(),
-    terminate: vi.fn().mockResolvedValue(undefined),
-  })),
+  Worker: vi.fn().mockImplementation(function() {
+    return { on: vi.fn(), postMessage: vi.fn(), terminate: vi.fn().mockResolvedValue(undefined) };
+  }),
 }));
 
 // Mock the logger
@@ -48,8 +46,10 @@ describe('WorkerPool', () => {
     }
 
     // Mock Worker constructor to return our mock workers
-    vi.mocked(Worker).mockImplementation(() => {
-      const worker = mockWorkers[mockWorkers.length % mockWorkers.length] || mockWorkers[0];
+    let workerCallCount = 0;
+    vi.mocked(Worker).mockImplementation(function() {
+      const worker = mockWorkers[workerCallCount % mockWorkers.length] || mockWorkers[0];
+      workerCallCount++;
       return worker;
     });
   });
@@ -88,7 +88,7 @@ describe('WorkerPool', () => {
   describe('worker lifecycle', () => {
     it('should set up message handlers for each worker', () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       mockWorkers.forEach((worker, index) => {
         expect(worker.on).toHaveBeenCalledWith('message', expect.any(Function));
         expect(worker.on).toHaveBeenCalledWith('error', expect.any(Function));
@@ -106,17 +106,18 @@ describe('WorkerPool', () => {
   describe('task execution', () => {
     it('should execute a task successfully', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
-      // Simulate worker response
+
       const messageHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'message'
       )?.[1];
 
       const taskPromise = pool.runTask({ data: 'test data' });
-      
-      // Simulate worker completing the task
+
+      // Capture real task ID from postMessage call
+      const taskId = mockWorkers[0].postMessage.mock.calls[0][0].id;
+
       if (messageHandler) {
-        messageHandler({ id: expect.any(String), result: 'task completed' });
+        messageHandler({ id: taskId, result: 'task completed' });
       }
 
       const result = await taskPromise;
@@ -125,17 +126,17 @@ describe('WorkerPool', () => {
 
     it('should handle task errors', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
-      // Simulate worker response with error
+
       const messageHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'message'
       )?.[1];
 
       const taskPromise = pool.runTask({ data: 'test data' });
-      
-      // Simulate worker returning an error
+
+      const taskId = mockWorkers[0].postMessage.mock.calls[0][0].id;
+
       if (messageHandler) {
-        messageHandler({ id: expect.any(String), error: 'Task failed' });
+        messageHandler({ id: taskId, error: 'Task failed' });
       }
 
       await expect(taskPromise).rejects.toThrow('Task failed');
@@ -143,17 +144,17 @@ describe('WorkerPool', () => {
 
     it('should handle task errors with fallback result', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
-      // Simulate worker response with error but fallback result
+
       const messageHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'message'
       )?.[1];
 
       const taskPromise = pool.runTask({ data: 'test data' });
-      
-      // Simulate worker returning an error with fallback result
+
+      const taskId = mockWorkers[0].postMessage.mock.calls[0][0].id;
+
       if (messageHandler) {
-        messageHandler({ id: expect.any(String), error: 'Task failed', result: 'fallback result' });
+        messageHandler({ id: taskId, error: 'Task failed', result: 'fallback result' });
       }
 
       const result = await taskPromise;
@@ -162,9 +163,9 @@ describe('WorkerPool', () => {
 
     it('should timeout tasks after specified duration', async () => {
       const pool = new WorkerPool('test-worker.js', 4, 100);
-      
+
       const taskPromise = pool.runTask({ data: 'test data' });
-      
+
       // Fast-forward past timeout
       vi.advanceTimersByTime(150);
 
@@ -173,22 +174,21 @@ describe('WorkerPool', () => {
 
     it('should execute multiple tasks in parallel', async () => {
       const pool = new WorkerPool('test-worker.js', 4);
-      
+
       const task1 = pool.runTask({ data: 'task1' });
       const task2 = pool.runTask({ data: 'task2' });
       const task3 = pool.runTask({ data: 'task3' });
       const task4 = pool.runTask({ data: 'task4' });
 
-      // Simulate workers completing tasks
+      // Complete each task using its real task ID
       mockWorkers.forEach((worker, index) => {
         const messageHandler = worker.on.mock.calls.find(
           (call: any[]) => call[0] === 'message'
         )?.[1];
 
-        if (messageHandler) {
-          setTimeout(() => {
-            messageHandler({ id: expect.any(String), result: `task${index + 1} completed` });
-          }, index * 10);
+        if (messageHandler && worker.postMessage.mock.calls.length > 0) {
+          const taskId = worker.postMessage.mock.calls[0][0].id;
+          messageHandler({ id: taskId, result: `task${index + 1} completed` });
         }
       });
 
@@ -198,43 +198,35 @@ describe('WorkerPool', () => {
 
     it('should queue tasks when all workers are busy', async () => {
       const pool = new WorkerPool('test-worker.js', 2);
-      
-      // Start 4 tasks with only 2 workers
+
+      // Start 4 tasks with only 2 workers — first 2 run immediately, last 2 queue
       const task1 = pool.runTask({ data: 'task1' });
       const task2 = pool.runTask({ data: 'task2' });
       const task3 = pool.runTask({ data: 'task3' });
       const task4 = pool.runTask({ data: 'task4' });
 
-      // Simulate workers completing first two tasks
-      const messageHandler1 = mockWorkers[0].on.mock.calls.find(
+      const messageHandler0 = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'message'
       )?.[1];
-      const messageHandler2 = mockWorkers[1].on.mock.calls.find(
+      const messageHandler1 = mockWorkers[1].on.mock.calls.find(
         (call: any[]) => call[0] === 'message'
       )?.[1];
 
-      if (messageHandler1) {
-        setTimeout(() => {
-          messageHandler1({ id: expect.any(String), result: 'task1 completed' });
-        }, 50);
-      }
-      if (messageHandler2) {
-        setTimeout(() => {
-          messageHandler2({ id: expect.any(String), result: 'task2 completed' });
-        }, 50);
-      }
+      // Complete the first two tasks (batch 0)
+      const taskId0a = mockWorkers[0].postMessage.mock.calls[0][0].id;
+      const taskId1a = mockWorkers[1].postMessage.mock.calls[0][0].id;
+      if (messageHandler0) messageHandler0({ id: taskId0a, result: 'task1 completed' });
+      if (messageHandler1) messageHandler1({ id: taskId1a, result: 'task2 completed' });
 
-      // Complete remaining tasks
-      if (messageHandler1) {
-        setTimeout(() => {
-          messageHandler1({ id: expect.any(String), result: 'task3 completed' });
-        }, 100);
-      }
-      if (messageHandler2) {
-        setTimeout(() => {
-          messageHandler2({ id: expect.any(String), result: 'task4 completed' });
-        }, 100);
-      }
+      // Allow microtasks to process (queue dispatches next tasks to now-free workers)
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Complete the queued tasks (batch 1)
+      const taskId0b = mockWorkers[0].postMessage.mock.calls[1][0].id;
+      const taskId1b = mockWorkers[1].postMessage.mock.calls[1][0].id;
+      if (messageHandler0) messageHandler0({ id: taskId0b, result: 'task3 completed' });
+      if (messageHandler1) messageHandler1({ id: taskId1b, result: 'task4 completed' });
 
       const results = await Promise.all([task1, task2, task3, task4]);
       expect(results).toHaveLength(4);
@@ -244,13 +236,13 @@ describe('WorkerPool', () => {
   describe('error handling', () => {
     it('should handle worker errors gracefully', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       const errorHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'error'
       )?.[1];
 
       const taskPromise = pool.runTask({ data: 'test data' });
-      
+
       // Simulate worker error
       if (errorHandler) {
         errorHandler(new Error('Worker crashed'));
@@ -261,7 +253,7 @@ describe('WorkerPool', () => {
 
     it('should replace worker on error', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       const errorHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'error'
       )?.[1];
@@ -281,13 +273,13 @@ describe('WorkerPool', () => {
 
     it('should handle worker exit with non-zero code', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       const exitHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'exit'
       )?.[1];
 
       const taskPromise = pool.runTask({ data: 'test data' });
-      
+
       // Simulate worker exit with error code
       if (exitHandler) {
         exitHandler(1);
@@ -298,7 +290,7 @@ describe('WorkerPool', () => {
 
     it('should replace worker on non-zero exit', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       const exitHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'exit'
       )?.[1];
@@ -318,7 +310,7 @@ describe('WorkerPool', () => {
 
     it('should not replace worker on clean exit', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       const exitHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'exit'
       )?.[1];
@@ -340,35 +332,46 @@ describe('WorkerPool', () => {
   describe('task management', () => {
     it('should assign unique IDs to tasks', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
-      const messageHandler = mockWorkers[0].on.mock.calls.find(
+
+      const messageHandler0 = mockWorkers[0].on.mock.calls.find(
+        (call: any[]) => call[0] === 'message'
+      )?.[1];
+      const messageHandler1 = mockWorkers[1].on.mock.calls.find(
         (call: any[]) => call[0] === 'message'
       )?.[1];
 
       const task1 = pool.runTask({ data: 'task1' });
       const task2 = pool.runTask({ data: 'task2' });
 
-      // Complete tasks
-      if (messageHandler) {
-        messageHandler({ id: expect.any(String), result: 'task1 completed' });
-        messageHandler({ id: expect.any(String), result: 'task2 completed' });
-      }
+      const taskId1 = mockWorkers[0].postMessage.mock.calls[0][0].id;
+      const taskId2 = mockWorkers[1].postMessage.mock.calls[0][0].id;
+
+      // IDs should be unique
+      expect(taskId1).not.toBe(taskId2);
+
+      if (messageHandler0) messageHandler0({ id: taskId1, result: 'task1 completed' });
+      if (messageHandler1) messageHandler1({ id: taskId2, result: 'task2 completed' });
 
       await Promise.all([task1, task2]);
     });
 
     it('should map worker to task ID', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       const messageHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'message'
       )?.[1];
 
       const taskPromise = pool.runTask({ data: 'test data' });
-      
-      // Complete task
+
+      // postMessage should have been called with an id field
+      expect(mockWorkers[0].postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ id: expect.any(String) })
+      );
+
+      const taskId = mockWorkers[0].postMessage.mock.calls[0][0].id;
       if (messageHandler) {
-        messageHandler({ id: expect.any(String), result: 'completed' });
+        messageHandler({ id: taskId, result: 'completed' });
       }
 
       await taskPromise;
@@ -376,26 +379,28 @@ describe('WorkerPool', () => {
 
     it('should clean up task mappings after completion', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       const messageHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'message'
       )?.[1];
 
       const taskPromise = pool.runTask({ data: 'test data' });
-      
-      // Complete task
+
+      const taskId = mockWorkers[0].postMessage.mock.calls[0][0].id;
       if (messageHandler) {
-        messageHandler({ id: expect.any(String), result: 'completed' });
+        messageHandler({ id: taskId, result: 'completed' });
       }
 
       await taskPromise;
+      // After completion the activeTasks map should no longer contain the task
+      expect(pool.activeTasks ? pool.activeTasks.has(taskId) : false).toBe(false);
     });
   });
 
   describe('pool termination', () => {
     it('should terminate all workers', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       await pool.terminate();
 
       mockWorkers.forEach(worker => {
@@ -405,15 +410,13 @@ describe('WorkerPool', () => {
 
     it('should wait for all workers to terminate', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
-      const terminatePromise = pool.terminate();
-      
-      expect(terminatePromise).resolves.toBeUndefined();
+
+      await expect(pool.terminate()).resolves.toBeUndefined();
     });
 
     it('should handle termination errors gracefully', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       // Make one worker fail to terminate
       mockWorkers[0].terminate.mockRejectedValue(new Error('Termination failed'));
 
@@ -424,7 +427,7 @@ describe('WorkerPool', () => {
   describe('worker replacement delay', () => {
     it('should delay worker replacement by 1 second', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       const errorHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'error'
       )?.[1];
@@ -449,58 +452,66 @@ describe('WorkerPool', () => {
   describe('concurrent task handling', () => {
     it('should handle tasks faster than workers', async () => {
       const pool = new WorkerPool('test-worker.js', 2);
-      
-      // Submit more tasks than workers
-      const tasks = [];
+
+      const messageHandler0 = mockWorkers[0].on.mock.calls.find(
+        (call: any[]) => call[0] === 'message'
+      )?.[1];
+      const messageHandler1 = mockWorkers[1].on.mock.calls.find(
+        (call: any[]) => call[0] === 'message'
+      )?.[1];
+
+      // Submit all 10 tasks — only 2 run immediately (2 workers), rest queue
+      const taskPromises = [];
       for (let i = 0; i < 10; i++) {
-        tasks.push(pool.runTask({ data: `task${i}` }));
+        taskPromises.push(pool.runTask({ data: `task${i}` }));
       }
 
-      // Complete tasks one by one
-      let completed = 0;
-      mockWorkers.forEach((worker, workerIndex) => {
-        const messageHandler = worker.on.mock.calls.find(
-          (call: any[]) => call[0] === 'message'
-        )?.[1];
+      // Complete tasks in batches (2 at a time, since 2 workers)
+      for (let batch = 0; batch < 5; batch++) {
+        const id0 = mockWorkers[0].postMessage.mock.calls[batch][0].id;
+        const id1 = mockWorkers[1].postMessage.mock.calls[batch][0].id;
+        if (messageHandler0) messageHandler0({ id: id0, result: `batch${batch}-0` });
+        if (messageHandler1) messageHandler1({ id: id1, result: `batch${batch}-1` });
+        // Allow microtasks to flush so the queue dispatches next tasks
+        await Promise.resolve();
+        await Promise.resolve();
+      }
 
-        if (messageHandler) {
-          const completeTask = () => {
-            if (completed < 10) {
-              messageHandler({ id: expect.any(String), result: `task${completed} completed` });
-              completed++;
-              if (completed < 10) {
-                setTimeout(completeTask, 10);
-              }
-            }
-          };
-          setTimeout(completeTask, workerIndex * 5);
-        }
-      });
-
-      const results = await Promise.all(tasks);
+      const results = await Promise.all(taskPromises);
       expect(results).toHaveLength(10);
     });
 
     it('should maintain task order in queue', async () => {
       const pool = new WorkerPool('test-worker.js', 1);
-      
-      const tasks = [
-        pool.runTask({ data: 'task1' }),
-        pool.runTask({ data: 'task2' }),
-        pool.runTask({ data: 'task3' }),
-      ];
+
+      // With 1 worker, tasks execute sequentially in submission order
+      const task1 = pool.runTask({ data: 'task1' });
+      const task2 = pool.runTask({ data: 'task2' });
+      const task3 = pool.runTask({ data: 'task3' });
 
       const messageHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'message'
       )?.[1];
 
       if (messageHandler) {
-        setTimeout(() => messageHandler({ id: expect.any(String), result: 'result1' }), 10);
-        setTimeout(() => messageHandler({ id: expect.any(String), result: 'result2' }), 20);
-        setTimeout(() => messageHandler({ id: expect.any(String), result: 'result3' }), 30);
+        // Complete task1 (call index 0)
+        const id1 = mockWorkers[0].postMessage.mock.calls[0][0].id;
+        messageHandler({ id: id1, result: 'result1' });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // Complete task2 (call index 1, dispatched after task1 completes)
+        const id2 = mockWorkers[0].postMessage.mock.calls[1][0].id;
+        messageHandler({ id: id2, result: 'result2' });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // Complete task3 (call index 2)
+        const id3 = mockWorkers[0].postMessage.mock.calls[2][0].id;
+        messageHandler({ id: id3, result: 'result3' });
       }
 
-      const results = await Promise.all(tasks);
+      const results = await Promise.all([task1, task2, task3]);
       expect(results).toEqual(['result1', 'result2', 'result3']);
     });
   });
@@ -508,15 +519,16 @@ describe('WorkerPool', () => {
   describe('edge cases', () => {
     it('should handle empty task data', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       const messageHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'message'
       )?.[1];
 
       const taskPromise = pool.runTask({});
-      
+
+      const taskId = mockWorkers[0].postMessage.mock.calls[0][0].id;
       if (messageHandler) {
-        messageHandler({ id: expect.any(String), result: 'completed' });
+        messageHandler({ id: taskId, result: 'completed' });
       }
 
       const result = await taskPromise;
@@ -525,17 +537,18 @@ describe('WorkerPool', () => {
 
     it('should handle large task data', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       const largeData = 'x'.repeat(1000000);
-      
+
       const messageHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'message'
       )?.[1];
 
       const taskPromise = pool.runTask({ data: largeData });
-      
+
+      const taskId = mockWorkers[0].postMessage.mock.calls[0][0].id;
       if (messageHandler) {
-        messageHandler({ id: expect.any(String), result: 'completed' });
+        messageHandler({ id: taskId, result: 'completed' });
       }
 
       const result = await taskPromise;
@@ -544,7 +557,7 @@ describe('WorkerPool', () => {
 
     it('should handle task with complex data', async () => {
       const pool = new WorkerPool('test-worker.js');
-      
+
       const complexData = {
         nested: {
           array: [1, 2, 3],
@@ -553,15 +566,16 @@ describe('WorkerPool', () => {
         string: 'test',
         number: 42,
       };
-      
+
       const messageHandler = mockWorkers[0].on.mock.calls.find(
         (call: any[]) => call[0] === 'message'
       )?.[1];
 
       const taskPromise = pool.runTask(complexData);
-      
+
+      const taskId = mockWorkers[0].postMessage.mock.calls[0][0].id;
       if (messageHandler) {
-        messageHandler({ id: expect.any(String), result: 'completed' });
+        messageHandler({ id: taskId, result: 'completed' });
       }
 
       const result = await taskPromise;

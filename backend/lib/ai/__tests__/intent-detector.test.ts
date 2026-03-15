@@ -25,9 +25,9 @@ vi.mock('../logger', () => ({
 
 // Mock the metrics
 vi.mock('../metrics', () => ({
-  OperationTimer: vi.fn().mockImplementation(() => ({
-    complete: vi.fn(() => ({ durationMs: 100 })),
-  })),
+  OperationTimer: vi.fn().mockImplementation(function() {
+    return { complete: vi.fn(() => ({ durationMs: 100 })) };
+  }),
   formatMetrics: vi.fn(() => ({ durationMs: 100 })),
 }));
 

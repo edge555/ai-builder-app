@@ -93,7 +93,10 @@ describe('provider-config-store', () => {
 
   describe('getProviderConfigWithSource', () => {
     it('should return settings source when provider is set in config', async () => {
-      vi.mocked(readFile).mockResolvedValue(JSON.stringify({ aiProvider: 'modal' }));
+      // Use saveProvider to directly set the cached state (bypasses cache-hit in load())
+      vi.mocked(writeFile).mockResolvedValue(undefined);
+      vi.mocked(mkdir).mockResolvedValue(undefined);
+      await saveProvider('modal' as AIProviderName);
 
       const result = await getProviderConfigWithSource();
 
@@ -103,7 +106,10 @@ describe('provider-config-store', () => {
     });
 
     it('should return env source when provider is null', async () => {
-      vi.mocked(readFile).mockResolvedValue(JSON.stringify({ aiProvider: null }));
+      // Reset cached state to { aiProvider: null } via saveProvider
+      vi.mocked(writeFile).mockResolvedValue(undefined);
+      vi.mocked(mkdir).mockResolvedValue(undefined);
+      await saveProvider(null);
 
       const result = await getProviderConfigWithSource();
 
@@ -113,9 +119,10 @@ describe('provider-config-store', () => {
     });
 
     it('should return env source when config file does not exist', async () => {
-      const error = new Error('File not found') as NodeJS.ErrnoException;
-      error.code = 'ENOENT';
-      vi.mocked(readFile).mockRejectedValue(error);
+      // Reset cached state to { aiProvider: null } via saveProvider
+      vi.mocked(writeFile).mockResolvedValue(undefined);
+      vi.mocked(mkdir).mockResolvedValue(undefined);
+      await saveProvider(null);
 
       const result = await getProviderConfigWithSource();
 

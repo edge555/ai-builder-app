@@ -29,7 +29,8 @@ export default function myFunction() {
 
   it('should parse default constant exports', () => {
     const content = `
-export default const MY_CONSTANT = 'value';
+const MY_CONSTANT = 'value';
+export default MY_CONSTANT;
 `;
     const exports = parseExports(content);
     expect(exports).toHaveLength(1);

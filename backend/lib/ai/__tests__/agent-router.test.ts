@@ -15,10 +15,9 @@ vi.mock('../agent-config-store', () => ({
 
 // Mock the OpenRouterClient
 vi.mock('../openrouter-client', () => ({
-  OpenRouterClient: vi.fn().mockImplementation(() => ({
-    generate: vi.fn(),
-    generateStreaming: vi.fn(),
-  })),
+  OpenRouterClient: vi.fn().mockImplementation(function() {
+    return { generate: vi.fn(), generateStreaming: vi.fn() };
+  }),
 }));
 
 // Mock the config
@@ -47,9 +46,9 @@ vi.mock('../logger', () => ({
 
 // Mock the metrics
 vi.mock('../metrics', () => ({
-  OperationTimer: vi.fn().mockImplementation(() => ({
-    complete: vi.fn(() => ({ durationMs: 100 })),
-  })),
+  OperationTimer: vi.fn().mockImplementation(function() {
+    return { complete: vi.fn(() => ({ durationMs: 100 })) };
+  }),
   formatMetrics: vi.fn(() => ({ durationMs: 100 })),
 }));
 
@@ -169,7 +168,7 @@ describe('AgentRouter', () => {
     it('should throw error when no active models for task', () => {
       vi.mocked(getActiveModelsForTask).mockReturnValue([]);
       expect(() => router.createProviderForTask('coding')).toThrow(
-        'Active models not found for task type coding'
+        'Active models not found: task type coding'
       );
     });
   });
