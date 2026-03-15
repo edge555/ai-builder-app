@@ -22,8 +22,10 @@ export async function OPTIONS() {
   return handleOptions();
 }
 
-export const POST = withRouteContext('api/diff', async ({ contextLogger }, request: NextRequest) => {
-  const blocked = applyRateLimit(request, RateLimitTier.LOW_COST);
+export const POST = withRouteContext('api/diff', async (ctx, request: NextRequest) => {
+  const { contextLogger } = ctx;
+  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.LOW_COST);
+  ctx.setRateLimitHeaders(rlHeaders);
   if (blocked) return blocked as NextResponse<ComputeDiffResponse | ErrorResponse>;
 
   const parsed = await parseJsonRequest(request, ComputeDiffRequestSchema);

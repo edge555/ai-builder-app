@@ -40,7 +40,7 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest) {
-  const blocked = applyRateLimit(request, RateLimitTier.HIGH_COST);
+  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.HIGH_COST);
   if (blocked) return blocked;
 
   const requestId = generateRequestId();
@@ -211,6 +211,7 @@ export async function POST(request: NextRequest) {
     return new Response(stream, {
       headers: {
         ...getCorsHeaders(request),
+        ...rlHeaders,
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',

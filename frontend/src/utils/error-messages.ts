@@ -6,6 +6,7 @@ export type ErrorType =
   | 'timeout'
   | 'rate_limit'
   | 'api_error'
+  | 'provider_unavailable'
   | 'cancelled'
   | 'validation'
   | 'ai_output'
@@ -60,6 +61,9 @@ export function getUserFriendlyErrorMessage(context: ErrorContext): string {
     case 'cancelled':
       return `🚫 Request was cancelled`;
 
+    case 'provider_unavailable':
+      return `🔧 AI service is temporarily unavailable. Please try again in a few minutes.`;
+
     case 'api_error':
       if (originalMessage.includes('401') || originalMessage.includes('Unauthorized')) {
         return `🔐 Authentication error. Check your API key in Agent Settings.`;
@@ -95,6 +99,9 @@ export function detectErrorType(errorMessage: string): ErrorType {
   }
   if (msg.includes('cancel') || msg.includes('abort')) {
     return 'cancelled';
+  }
+  if (msg.includes('provider_unavailable') || msg.includes('provider unavailable') || msg.includes('service unavailable')) {
+    return 'provider_unavailable';
   }
   if (msg.includes('api error') || /[45]\d{2}/.test(msg)) {
     return 'api_error';

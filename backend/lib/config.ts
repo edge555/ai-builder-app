@@ -56,6 +56,7 @@ const envSchema = z.object({
     .transform((v) => v !== 'false' && v !== '0')
     .default('true'),
   SUPABASE_JWT_SECRET: z.string().optional(),
+  TRUSTED_PROXY_DEPTH: z.coerce.number().int().min(0).default(1),
 });
 
 /**
@@ -121,6 +122,9 @@ export interface BackendConfig {
     lowCostMax: number;
     configMax: number;
   };
+  security: {
+    trustedProxyDepth: number;
+  };
   auth: {
     supabaseJwtSecret?: string;
   };
@@ -169,6 +173,9 @@ export const config: BackendConfig = {
     mediumCostMax: RATE_LIMIT_MEDIUM_COST_MAX,
     lowCostMax: RATE_LIMIT_LOW_COST_MAX,
     configMax: RATE_LIMIT_CONFIG_MAX,
+  },
+  security: {
+    trustedProxyDepth: env.TRUSTED_PROXY_DEPTH,
   },
   auth: {
     supabaseJwtSecret: env.SUPABASE_JWT_SECRET,

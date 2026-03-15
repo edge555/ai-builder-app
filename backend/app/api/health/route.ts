@@ -8,7 +8,7 @@ export async function OPTIONS() {
 }
 
 export async function GET(request: NextRequest) {
-  const blocked = applyRateLimit(request, RateLimitTier.LOW_COST);
+  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.LOW_COST);
   if (blocked) return blocked;
 
   return Response.json(
@@ -20,6 +20,6 @@ export async function GET(request: NextRequest) {
         enabled: config.rateLimit.enabled,
       },
     },
-    { headers: getCorsHeaders(request) }
+    { headers: { ...getCorsHeaders(request), ...rlHeaders } }
   );
 }

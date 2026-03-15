@@ -209,7 +209,7 @@ describe('categorizeError', () => {
       expect(result.errorCode).toBe('INTERNAL_ERROR');
     });
 
-    it('should categorize 503 status codes', () => {
+    it('should categorize 503 status codes as provider unavailable', () => {
       // Arrange
       const error = new Error('HTTP 503 Service Unavailable');
       const apiErrorPrefix = 'test api error';
@@ -219,7 +219,7 @@ describe('categorizeError', () => {
 
       // Assert
       expect(result.errorType).toBe('api_error');
-      expect(result.errorCode).toBe('API_ERROR');
+      expect(result.errorCode).toBe('PROVIDER_UNAVAILABLE');
     });
 
     it('should not categorize 3xx status codes as API errors', () => {

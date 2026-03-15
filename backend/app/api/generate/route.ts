@@ -25,7 +25,7 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
-  const blocked = applyRateLimit(request, RateLimitTier.MEDIUM_COST);
+  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.MEDIUM_COST);
   if (blocked) return blocked;
 
   // Generate request ID for correlation
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       version: serializeVersion(result.version!),
     };
 
-    return gzipJson(response, { status: 201, headers: { ...getCorsHeaders(request), 'X-Request-Id': requestId }, request });
+    return gzipJson(response, { status: 201, headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId }, request });
 
   } catch (error) {
     contextLogger.error('Project generation failed', {

@@ -24,6 +24,15 @@ vi.mock('../../request-id', () => ({
   generateRequestId: vi.fn(() => 'req_1234567890_abcdefgh'),
 }));
 
+function makeMockRequest(overrides: Partial<NextRequest> = {}): NextRequest {
+  return {
+    method: 'GET',
+    url: 'http://localhost:4000/api/test',
+    headers: new Headers(),
+    ...overrides,
+  } as unknown as NextRequest;
+}
+
 describe('route-context', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -66,11 +75,17 @@ describe('route-context', () => {
         expect(context.requestId).toBeDefined();
       });
     });
+
+    it('should support setRateLimitHeaders', () => {
+      const context = createRouteContext('api/test');
+      context.setRateLimitHeaders({ 'X-RateLimit-Limit': '10' });
+      expect(context._rateLimitHeaders).toEqual({ 'X-RateLimit-Limit': '10' });
+    });
   });
 
   describe('withRouteContext', () => {
     it('should wrap handler and provide route context', async () => {
-      const mockRequest = {} as NextRequest;
+      const mockRequest = makeMockRequest();
       const handler = vi.fn(async (ctx, request) => {
         return new Response('ok', { status: 200 });
       });
@@ -82,6 +97,7 @@ describe('route-context', () => {
         expect.objectContaining({
           requestId: 'req_1234567890_abcdefgh',
           contextLogger: expect.any(Object),
+          setRateLimitHeaders: expect.any(Function),
         }),
         mockRequest
       );
@@ -89,7 +105,7 @@ describe('route-context', () => {
     });
 
     it('should add X-Request-Id header to response', async () => {
-      const mockRequest = {} as NextRequest;
+      const mockRequest = makeMockRequest();
       const handler = vi.fn(async (ctx, request) => {
         return new Response('ok', { status: 200 });
       });
@@ -101,7 +117,7 @@ describe('route-context', () => {
     });
 
     it('should not override existing X-Request-Id header', async () => {
-      const mockRequest = {} as NextRequest;
+      const mockRequest = makeMockRequest();
       const handler = vi.fn(async (ctx, request) => {
         return new Response('ok', {
           status: 200,
@@ -116,7 +132,7 @@ describe('route-context', () => {
     });
 
     it('should preserve response status and body', async () => {
-      const mockRequest = {} as NextRequest;
+      const mockRequest = makeMockRequest();
       const handler = vi.fn(async (ctx, request) => {
         return new Response(JSON.stringify({ data: 'test' }), {
           status: 201,
@@ -132,7 +148,7 @@ describe('route-context', () => {
     });
 
     it('should handle handler errors', async () => {
-      const mockRequest = {} as NextRequest;
+      const mockRequest = makeMockRequest();
       const handler = vi.fn(async (ctx, request) => {
         throw new Error('Handler error');
       });
@@ -143,10 +159,10 @@ describe('route-context', () => {
     });
 
     it('should pass through request object unchanged', async () => {
-      const mockRequest = {
+      const mockRequest = makeMockRequest({
         method: 'POST',
         headers: new Headers({ 'Content-Type': 'application/json' }),
-      } as NextRequest;
+      });
 
       const handler = vi.fn(async (ctx, request) => {
         return new Response('ok');
@@ -162,7 +178,7 @@ describe('route-context', () => {
     });
 
     it('should preserve other response headers', async () => {
-      const mockRequest = {} as NextRequest;
+      const mockRequest = makeMockRequest();
       const handler = vi.fn(async (ctx, request) => {
         return new Response('ok', {
           status: 200,
@@ -182,7 +198,7 @@ describe('route-context', () => {
     });
 
     it('should work with async handlers that return JSON', async () => {
-      const mockRequest = {} as NextRequest;
+      const mockRequest = makeMockRequest();
       const handler = vi.fn(async (ctx, request) => {
         return Response.json({ success: true, data: { id: 1 } });
       });
@@ -193,6 +209,45 @@ describe('route-context', () => {
       expect(response.status).toBe(200);
       const body = await response.json();
       expect(body).toEqual({ success: true, data: { id: 1 } });
+    });
+
+    it('should merge rate limit headers set via ctx.setRateLimitHeaders', async () => {
+      const mockRequest = makeMockRequest();
+      const handler = vi.fn(async (ctx, request) => {
+        ctx.setRateLimitHeaders({
+          'X-RateLimit-Limit': '10',
+          'X-RateLimit-Remaining': '9',
+        });
+        return new Response('ok', { status: 200 });
+      });
+
+      const wrappedHandler = withRouteContext('api/test', handler);
+      const response = await wrappedHandler(mockRequest);
+
+      expect(response.headers.get('X-RateLimit-Limit')).toBe('10');
+      expect(response.headers.get('X-RateLimit-Remaining')).toBe('9');
+    });
+
+    it('should log request completion with status and duration', async () => {
+      const mockRequest = makeMockRequest({ method: 'POST' });
+      const handler = vi.fn(async (ctx, request) => {
+        return new Response('ok', { status: 201 });
+      });
+
+      const wrappedHandler = withRouteContext('api/test', handler);
+      await wrappedHandler(mockRequest);
+
+      // Verify the context logger was called with request info
+      // The logger is mocked, so we verify the withRequestId mock was called
+      const { createLogger } = await import('../../logger');
+      const mockLogger = vi.mocked(createLogger).mock.results[0].value;
+      const contextLogger = mockLogger.withRequestId.mock.results[0].value;
+      expect(contextLogger.info).toHaveBeenCalledWith('Request completed', expect.objectContaining({
+        method: 'POST',
+        path: '/api/test',
+        status: 201,
+        durationMs: expect.any(Number),
+      }));
     });
   });
 });

@@ -34,6 +34,14 @@ export function categorizeError(
   if (message.includes('rate limit') || message.includes('rate_limit') || message.includes('429') || message.includes('quota')) {
     return { errorType: 'rate_limit', errorCode: 'RATE_LIMIT_EXCEEDED' };
   }
+  if (
+    message.includes('502') || message.includes('503') ||
+    message.includes('bad gateway') || message.includes('service unavailable') ||
+    message.includes('econnrefused') || message.includes('connection refused') ||
+    message.includes('enotfound') || message.includes('fetch failed')
+  ) {
+    return { errorType: 'api_error', errorCode: 'PROVIDER_UNAVAILABLE' };
+  }
   if (message.includes(apiErrorPrefix) || /5\d{2}/.test(message)) {
     return { errorType: 'api_error', errorCode: 'API_ERROR' };
   }

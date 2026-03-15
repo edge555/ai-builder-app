@@ -20,33 +20,54 @@ import { createLogger } from '../logger';
 const logger = createLogger('api/utils');
 const gzipAsync = promisify(gzip);
 
+/** Methods that mutate state and require origin validation for CSRF protection. */
+const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 /**
  * Gets CORS headers from configuration.
  * Validates the request origin against the allowed origins list.
  *
+ * When `rejectInvalidOrigin` is true and the request is a mutation (POST/PUT/PATCH/DELETE),
+ * throws AppError with 403 status if the Origin header is missing or not in ALLOWED_ORIGINS.
+ * This provides CSRF protection for SPA-to-API calls.
+ *
  * @param request - Optional request to check the Origin header
+ * @param options - Optional settings for origin validation
  * @returns Record of CORS headers to include in responses
+ * @throws {AppError} When rejectInvalidOrigin is true and origin is invalid on mutation
  */
-export function getCorsHeaders(request?: Request): Record<string, string> {
+export function getCorsHeaders(
+  request?: Request,
+  options?: { rejectInvalidOrigin?: boolean }
+): Record<string, string> {
   const { allowedOrigins } = config.cors;
-
-  // Get the origin from the request header
   const requestOrigin = request?.headers.get('origin');
+  const method = request?.method?.toUpperCase();
 
-  // Determine which origin to allow
+  // CSRF protection: reject mutations with missing/invalid origin
+  if (options?.rejectInvalidOrigin && method && MUTATION_METHODS.has(method)) {
+    if (!requestOrigin || !allowedOrigins.includes(requestOrigin)) {
+      throw new AppError({
+        type: 'api',
+        code: 'ORIGIN_REJECTED',
+        message: 'Request origin is not allowed',
+        details: { origin: requestOrigin ?? 'missing' },
+        recoverable: false,
+        statusCode: 403,
+      });
+    }
+  }
+
+  // Determine which origin to allow in CORS response
   let allowedOrigin: string;
 
   if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
-    // If the request origin is in our allowed list, use it
     allowedOrigin = requestOrigin;
   } else if (allowedOrigins.length === 1) {
-    // If there's only one allowed origin, use it (backward compatibility)
     allowedOrigin = allowedOrigins[0];
   } else {
-    // For preflight requests without origin, or invalid origins, use the first allowed origin
     allowedOrigin = allowedOrigins[0];
 
-    // Log warning if request origin doesn't match
     if (requestOrigin) {
       logger.warn('Request origin not in allowed list', {
         requestOrigin,
