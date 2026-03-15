@@ -1,4 +1,4 @@
-import type { RuntimeError } from '@/shared';
+import type { RuntimeError } from '@ai-app-builder/shared/types';
 import { useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 
 import { useProjectState, useGenerationState, useGenerationActions } from '@/context';

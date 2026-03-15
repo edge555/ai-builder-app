@@ -12,13 +12,19 @@ const LOADING_TIPS = [
 /**
  * Loading phase for progress indication.
  */
-export type LoadingPhase = 'idle' | 'generating' | 'modifying' | 'validating' | 'processing';
+export type LoadingPhase = 'idle' | 'planning' | 'generating' | 'modifying' | 'validating' | 'processing';
 
 /**
  * Detailed loading steps for different phases to simulate complex processing.
  */
 const LOADING_STEPS: Record<LoadingPhase, string[]> = {
   idle: ['Ready'],
+  planning: [
+    'Understanding your request...',
+    'Identifying affected files...',
+    'Planning modifications...',
+    'Prioritizing changes...',
+  ],
   generating: [
     'Analyzing requirements...',
     'Designing application architecture...',

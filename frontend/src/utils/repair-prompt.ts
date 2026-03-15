@@ -1,4 +1,4 @@
-import type { RuntimeError, RepairAttempt } from '@/shared';
+import type { RuntimeError, RepairAttempt } from '@ai-app-builder/shared/types';
 
 import type { ErrorAggregator } from '@/services/ErrorAggregator';
 

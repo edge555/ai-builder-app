@@ -1,4 +1,4 @@
-import type { RepairAttempt } from '@/shared';
+import type { RepairAttempt } from '@ai-app-builder/shared/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useProjectState, useProjectActions, useChatMessages, useGenerationActions, useToastActions } from '../context';
