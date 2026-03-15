@@ -25,16 +25,16 @@ export function categorizeError(
 ): { errorType: AIErrorType; errorCode: string } {
   const message = error.message.toLowerCase();
 
-  if (message.includes('timeout')) {
+  if (message.includes('timeout') || message.includes('timed out')) {
     return { errorType: 'timeout', errorCode: 'TIMEOUT' };
   }
   if (message.includes('cancel') || message.includes('abort')) {
     return { errorType: 'cancelled', errorCode: 'CANCELLED' };
   }
-  if (message.includes('rate limit') || message.includes('429') || message.includes('quota')) {
+  if (message.includes('rate limit') || message.includes('rate_limit') || message.includes('429') || message.includes('quota')) {
     return { errorType: 'rate_limit', errorCode: 'RATE_LIMIT_EXCEEDED' };
   }
-  if (message.includes(apiErrorPrefix) || /[45]\d{2}/.test(message)) {
+  if (message.includes(apiErrorPrefix) || /5\d{2}/.test(message)) {
     return { errorType: 'api_error', errorCode: 'API_ERROR' };
   }
   return { errorType: 'unknown', errorCode: 'INTERNAL_ERROR' };
