@@ -19,9 +19,6 @@ export const DEVICE_PRESETS: DevicePreset[] = [
     { id: 'custom',    label: 'Custom',    width: null, height: null, category: 'desktop' },
 ];
 
-/** @deprecated Use presetId + DEVICE_PRESETS instead. Kept for type compat. */
-export type DeviceMode = 'desktop' | 'tablet' | 'mobile';
-
 export interface PreviewToolbarProps {
     presetId: string;
     customWidth: number;
