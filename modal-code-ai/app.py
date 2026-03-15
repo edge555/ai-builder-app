@@ -161,6 +161,5 @@ async def generate_stream_api(request: GenerateRequest):
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
             "X-Content-Type-Options": "nosniff",
-            "Transfer-Encoding": "chunked",
         },
     )
