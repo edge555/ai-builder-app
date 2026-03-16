@@ -20,6 +20,7 @@ import { createHash } from 'crypto';
 import type { ProjectState } from '@ai-app-builder/shared';
 import type { AIProvider } from '../../ai/ai-provider';
 import { getMaxOutputTokens } from '../../config';
+import { getTokenBudget } from '../../constants';
 import { createLogger } from '../../logger';
 import type { ChunkIndex, CodeSlice, FilePlannerResult, PlanningResponse } from './types';
 import { ChunkIndexBuilder } from './chunk-index';
@@ -66,7 +67,7 @@ export class FilePlanner {
   constructor(aiProvider?: AIProvider) {
     this.aiProvider = aiProvider ?? null;
     this.fallbackSelector = new FallbackSelector();
-    this.tokenBudgetManager = new TokenBudgetManager();
+    this.tokenBudgetManager = new TokenBudgetManager(); // default budget, overridden per-call in planWithCategory
     this.chunkIndexBuilder = new ChunkIndexBuilder();
     this.chunkIndexCache = new Map();
     this.symbolLookupCache = new Map();
@@ -133,8 +134,10 @@ export class FilePlanner {
     // Step 4: Assemble CodeSlices from selected files
     let slices = this.assembleSlices(plannerResult, chunkIndex, projectState);
 
-    // Step 5: Apply token budget trimming
-    slices = this.tokenBudgetManager.trimToFit(slices, chunkIndex);
+    // Step 5: Apply token budget trimming (dynamic budget based on project size)
+    const fileCount = Object.keys(projectState.files).length;
+    const dynamicBudgetManager = new TokenBudgetManager(getTokenBudget(fileCount));
+    slices = dynamicBudgetManager.trimToFit(slices, chunkIndex);
 
     logger.info('File planning complete', { sliceCount: slices.length, category: plannerResult.category });
 

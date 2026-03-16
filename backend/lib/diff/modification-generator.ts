@@ -32,7 +32,7 @@ export async function generateModifications(
 }> {
   const contextPrompt = buildModificationPrompt(prompt, slices, projectState, conversationHistory);
 
-  const MAX_ATTEMPTS = 4;
+  const MAX_ATTEMPTS = 3;
   const editErrors: string[] = [];
   const startTime = Date.now();
 

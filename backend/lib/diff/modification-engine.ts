@@ -30,7 +30,9 @@ import { createLogger } from '../logger';
 import {
   FilePlanner,
   createFilePlanner,
+  TokenBudgetManager,
 } from '../analysis';
+import { getTokenBudget } from '../constants';
 import { buildSlicesFromFiles } from './prompt-builder';
 import { selectRepairFiles, type ErrorContext } from './repair-file-selector';
 import { createModificationResult } from './result-builder';
@@ -185,6 +187,9 @@ export class ModificationEngine {
       // When shouldSkipPlanning is true, treat all provided files as primary files
       // Build slices directly without calling FilePlanner
       slices = buildSlicesFromFiles(projectState);
+      const fileCount = Object.keys(projectState.files).length;
+      const budgetManager = new TokenBudgetManager(getTokenBudget(fileCount));
+      slices = budgetManager.trimToFit(slices, { chunks: new Map(), chunksByFile: new Map(), fileMetadata: new Map() });
       logger.info('Skipping FilePlanner, using all files as primary', {
         fileCount: slices.length
       });

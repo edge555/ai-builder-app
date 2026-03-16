@@ -41,9 +41,20 @@ export const OPENROUTER_TIMEOUT = 300000; // 5 minutes
 export const TOKEN_BUDGET = 4000;
 export const CHARS_PER_TOKEN = 4;
 
+/**
+ * Dynamic token budget based on project file count.
+ * Small projects get a tighter budget; larger projects get more room.
+ */
+export function getTokenBudget(fileCount: number): number {
+  if (fileCount <= 5) return 3000;
+  if (fileCount <= 12) return 6000;
+  if (fileCount <= 25) return 8000;
+  return 10000;
+}
+
 // Max output tokens per operation type (OpenRouter)
 export const MAX_OUTPUT_TOKENS_GENERATION = 32768;
-export const MAX_OUTPUT_TOKENS_MODIFICATION = 8192;
+export const MAX_OUTPUT_TOKENS_MODIFICATION = 16384;
 export const MAX_OUTPUT_TOKENS_PLANNING = 1024;
 
 // Max output tokens per operation type (Modal / Qwen 2.5-Coder-7B-Instruct)
