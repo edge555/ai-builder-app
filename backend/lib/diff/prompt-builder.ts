@@ -7,6 +7,7 @@
 
 import type { ProjectState, EditDetail, ConversationTurn } from '@ai-app-builder/shared';
 import type { CodeSlice } from '../analysis/file-planner/types';
+import { buildProjectMap } from '../analysis/project-map';
 import type { FailedFileEdit } from './file-edit-applicator';
 import { findClosestRegion } from './multi-tier-matcher';
 
@@ -16,7 +17,7 @@ import { findClosestRegion } from './multi-tier-matcher';
 export function buildModificationPrompt(
     userPrompt: string,
     slices: CodeSlice[],
-    _projectState: ProjectState,
+    projectState: ProjectState,
     conversationHistory?: ConversationTurn[]
 ): string {
     const primarySlices = slices.filter(s => s.relevance === 'primary');
@@ -28,6 +29,11 @@ export function buildModificationPrompt(
     const conversationContext = formatConversationContext(conversationHistory);
     if (conversationContext) {
         prompt += conversationContext;
+    }
+
+    const projectMap = buildProjectMap(projectState);
+    if (projectMap) {
+        prompt += `${projectMap}\n\n`;
     }
 
     prompt += `User Request: ${userPrompt}\n\n`;
