@@ -4,4 +4,4 @@
  * Re-exports AI-powered file planning used by the modification engine.
  */
 
-export { FilePlanner, createFilePlanner } from './file-planner';
+export { FilePlanner, createFilePlanner, TokenBudgetManager } from './file-planner';

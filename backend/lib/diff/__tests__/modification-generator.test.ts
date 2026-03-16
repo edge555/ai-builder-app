@@ -242,7 +242,7 @@ describe('generateModifications', () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Failed after 4 attempts');
+      expect(result.error).toContain('Failed after 3 attempts');
       expect(mockAIProvider.generate).toHaveBeenCalledTimes(1);
     });
 

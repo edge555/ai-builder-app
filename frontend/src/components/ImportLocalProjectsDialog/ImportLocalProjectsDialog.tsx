@@ -94,7 +94,7 @@ export function ImportLocalProjectsDialog({
     if (localProjects.length === 0 && isOpen) return null;
 
     return (
-        <dialog ref={dialogRef} className="import-dialog">
+        <dialog ref={dialogRef} className="import-dialog" aria-hidden={!isOpen}>
             <div className="import-dialog-content">
                 <h2 className="import-dialog-title">Import Local Projects</h2>
                 <p className="import-dialog-description">

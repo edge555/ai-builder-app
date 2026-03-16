@@ -161,6 +161,28 @@ describe('constants', () => {
     });
   });
 
+  describe('getTokenBudget', () => {
+    it('returns 3000 for small projects (≤5 files)', () => {
+      expect(constants.getTokenBudget(3)).toBe(3000);
+      expect(constants.getTokenBudget(5)).toBe(3000);
+    });
+
+    it('returns 6000 for medium-small projects (6–12 files)', () => {
+      expect(constants.getTokenBudget(8)).toBe(6000);
+      expect(constants.getTokenBudget(12)).toBe(6000);
+    });
+
+    it('returns 8000 for medium-large projects (13–25 files)', () => {
+      expect(constants.getTokenBudget(15)).toBe(8000);
+      expect(constants.getTokenBudget(25)).toBe(8000);
+    });
+
+    it('returns 10000 for large projects (>25 files)', () => {
+      expect(constants.getTokenBudget(30)).toBe(10000);
+      expect(constants.getTokenBudget(100)).toBe(10000);
+    });
+  });
+
   describe('Max output tokens', () => {
     it('should have MAX_OUTPUT_TOKENS_GENERATION defined', () => {
       // Assert

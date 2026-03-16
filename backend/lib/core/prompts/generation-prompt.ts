@@ -141,7 +141,10 @@ STRUCTURAL PATTERNS (complex):
 - Create a context provider for the primary data domain (e.g., TasksContext for a task manager)
 - Include search and filter controls on all list views
 - Add breadcrumb navigation for nested routes
-- Split large features into sub-components. Create shared hooks for repeated logic.`;
+- Split large features into sub-components. Create shared hooks for repeated logic.
+- Each page component should manage its own state or use a shared context — don't prop-drill across pages
+- Keep page components thin (delegate to feature components) so modifications can target individual features
+- Add barrel exports (index.ts) per directory for cleaner imports`;
 
     default: // medium
       return `=== FILE REQUIREMENTS ===
