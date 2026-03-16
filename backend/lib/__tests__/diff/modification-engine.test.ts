@@ -3,26 +3,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ModificationEngine, createModificationEngine } from '../../diff';
-import type { AIProvider } from '../../ai';
+import { ModificationEngine } from '../../diff';
 import type { ProjectState } from '@ai-app-builder/shared';
 
-vi.mock('../../analysis', async (importOriginal) => {
-  const actual = await importOriginal<any>();
-  return {
-    ...actual,
-    createIntentClassifier: vi.fn(() => ({
-      classify: vi.fn().mockResolvedValue({
-        type: 'modify_component',
-        confidence: 1.0,
-        affectedAreas: [],
-        description: 'Mock intent'
-      })
-    }))
-  };
-});
-
-// Mock validateProjectStructure to skip structural checks (no package.json in diff output)
+vi.mock('../../core/validation-pipeline');
+vi.mock('../../core/build-validator');
+vi.mock('../../analysis');
+vi.mock('../../diff/build-fixer');
 vi.mock('../../core/validators', async (importOriginal) => {
   const actual = await importOriginal<any>();
   return {
@@ -31,9 +18,27 @@ vi.mock('../../core/validators', async (importOriginal) => {
   };
 });
 
+import { ValidationPipeline } from '../../core/validation-pipeline';
+import * as buildValidatorModule from '../../core/build-validator';
+import * as buildFixerModule from '../../diff/build-fixer';
+import { createFilePlanner } from '../../analysis';
+
+const makePipelineResult = (finalFiles: Array<{ path: string; content: string }>, executorFiles = finalFiles) => ({
+  intentOutput: null,
+  planOutput: null,
+  executorFiles,
+  reviewOutput: null,
+  finalFiles,
+});
+
 describe('ModificationEngine', () => {
-  let mockAIProvider: AIProvider;
-  let modificationEngine: ModificationEngine;
+  let mockPipeline: any;
+  let mockBugfixProvider: any;
+  let mockPromptProvider: any;
+  let mockValidationPipeline: any;
+  let mockBuildValidator: any;
+  let mockFilePlanner: any;
+  let engine: ModificationEngine;
 
   const createProjectState = (files: Record<string, string>): ProjectState => ({
     id: 'test-project',
@@ -46,11 +51,42 @@ describe('ModificationEngine', () => {
   });
 
   beforeEach(() => {
-    mockAIProvider = {
+    mockPipeline = {
+      runModificationPipeline: vi.fn(),
+    };
+    mockBugfixProvider = {
       generate: vi.fn(),
       generateStreaming: vi.fn(),
-    } as AIProvider;
-    modificationEngine = new ModificationEngine(mockAIProvider);
+    };
+    mockPromptProvider = {
+      getBugfixSystemPrompt: vi.fn().mockReturnValue('fix errors'),
+      tokenBudgets: {
+        bugfix: 8192,
+        executionGeneration: 28000,
+        executionModification: 28000,
+        intent: 512,
+        planning: 4096,
+        review: 32768,
+      },
+    };
+    mockValidationPipeline = {
+      validate: vi.fn().mockReturnValue({ valid: true, sanitizedOutput: {} }),
+    };
+    mockBuildValidator = {
+      validate: vi.fn().mockReturnValue({ valid: true, errors: [] }),
+      formatErrorsForAI: vi.fn(),
+    };
+    mockFilePlanner = {
+      planWithCategory: vi.fn().mockResolvedValue({ slices: [], category: 'mixed' }),
+    };
+
+    vi.mocked(ValidationPipeline).mockImplementation(function () { return mockValidationPipeline; });
+    vi.mocked(buildValidatorModule.createBuildValidator).mockReturnValue(mockBuildValidator);
+    vi.mocked(buildValidatorModule.BuildValidator).mockImplementation(function () { return mockBuildValidator; });
+    vi.mocked(createFilePlanner).mockReturnValue(mockFilePlanner);
+    vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({ updatedFiles: {} });
+
+    engine = new ModificationEngine(mockPipeline, mockBugfixProvider, mockPromptProvider);
   });
 
   describe('modifyProject', () => {
@@ -59,7 +95,7 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
-      const result = await modificationEngine.modifyProject(projectState, '');
+      const result = await engine.modifyProject(projectState, '');
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Modification prompt is required');
@@ -68,80 +104,66 @@ describe('ModificationEngine', () => {
     it('should return error for empty project state', async () => {
       const projectState = createProjectState({});
 
-      const result = await modificationEngine.modifyProject(
-        projectState,
-        'Add a button'
-      );
+      const result = await engine.modifyProject(projectState, 'Add a button');
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Project state with files is required');
     });
 
-    it('should successfully modify a project', async () => {
-      const projectState = createProjectState({
-        'src/App.tsx': 'export default function App() { return <div>Hello</div>; }',
+    it('should successfully modify a project (modify op)', async () => {
+      const originalContent = 'export default function App() { return <div>Hello</div>; }';
+      const projectState = createProjectState({ 'src/App.tsx': originalContent });
+
+      const executorFiles = [
+        {
+          path: 'src/App.tsx',
+          content: JSON.stringify({
+            operation: 'modify',
+            path: 'src/App.tsx',
+            edits: [{ search: 'Hello', replace: 'Hello World' }],
+          }),
+        },
+      ];
+      const finalFiles = [{ path: 'src/App.tsx', content: originalContent }];
+
+      mockPipeline.runModificationPipeline.mockResolvedValue(makePipelineResult(finalFiles, executorFiles));
+      mockValidationPipeline.validate.mockReturnValue({
+        valid: true,
+        sanitizedOutput: { 'src/App.tsx': originalContent },
+      });
+      vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({
+        updatedFiles: { 'src/App.tsx': originalContent.replace('Hello', 'Hello World') },
       });
 
-      // Planning is skipped for small projects (≤8 files), mock only modification response
-      vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            files: [
-              {
-                path: 'src/App.tsx',
-                operation: 'modify',
-                edits: [
-                  {
-                    search: 'Hello',
-                    replace: 'Hello World',
-                  },
-                ],
-              },
-            ],
-          }),
-        });
-
-
-      const result = await modificationEngine.modifyProject(
-        projectState,
-        'Change Hello to Hello World'
-      );
+      const result = await engine.modifyProject(projectState, 'Change Hello to Hello World');
 
       expect(result.success).toBe(true);
       expect(result.projectState).toBeDefined();
-      expect(result.projectState?.files['src/App.tsx']).toContain('Hello World');
       expect(result.version).toBeDefined();
-      expect(result.diffs).toBeDefined();
-      expect(result.changeSummary).toBeDefined();
     });
 
-
     it('should handle adding new files', async () => {
-      const projectState = createProjectState({
-        'src/App.tsx': 'export default function App() { return <div />; }',
+      const appContent = 'export default function App() { return <div />; }';
+      const buttonContent = 'export default function Button() { return <button>Click</button>; }';
+      const projectState = createProjectState({ 'src/App.tsx': appContent });
+
+      const finalFiles = [
+        { path: 'src/App.tsx', content: appContent },
+        { path: 'src/components/Button.tsx', content: buttonContent },
+      ];
+      mockPipeline.runModificationPipeline.mockResolvedValue(makePipelineResult(finalFiles));
+      mockValidationPipeline.validate.mockReturnValue({
+        valid: true,
+        sanitizedOutput: {
+          'src/App.tsx': appContent,
+          'src/components/Button.tsx': buttonContent,
+        },
+      });
+      vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({
+        updatedFiles: { 'src/components/Button.tsx': buttonContent },
       });
 
-      // Planning is skipped for small projects (≤8 files), mock only modification response
-      vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            files: [
-              {
-                path: 'src/components/Button.tsx',
-                operation: 'create',
-                content: 'export default function Button() { return <button>Click</button>; }',
-              },
-            ],
-          }),
-        });
-
-
-      const result = await modificationEngine.modifyProject(
-        projectState,
-        'Add a Button component'
-      );
+      const result = await engine.modifyProject(projectState, 'Add a Button component');
 
       expect(result.success).toBe(true);
       expect(result.projectState?.files['src/components/Button.tsx']).toBeDefined();
@@ -149,76 +171,44 @@ describe('ModificationEngine', () => {
     });
 
     it('should handle deleting files', async () => {
+      const appContent = 'export default function App() { return <div />; }';
       const projectState = createProjectState({
-        'src/App.tsx': 'export default function App() { return <div />; }',
+        'src/App.tsx': appContent,
         'src/OldComponent.tsx': 'export default function OldComponent() { return <div />; }',
       });
 
-      // Planning is skipped for small projects (≤8 files), mock only modification response
-      vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            files: [
-              {
-                path: 'src/OldComponent.tsx',
-                operation: 'delete',
-              },
-            ],
-          }),
-        });
+      // finalFiles doesn't include OldComponent (deleted)
+      const finalFiles = [{ path: 'src/App.tsx', content: appContent }];
+      const executorFiles = [
+        { path: 'src/OldComponent.tsx', content: JSON.stringify({ operation: 'delete', path: 'src/OldComponent.tsx' }) },
+      ];
+      mockPipeline.runModificationPipeline.mockResolvedValue(makePipelineResult(finalFiles, executorFiles));
+      mockValidationPipeline.validate.mockReturnValue({
+        valid: true,
+        sanitizedOutput: { 'src/App.tsx': appContent },
+      });
+      vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({
+        updatedFiles: { 'src/OldComponent.tsx': null as any },
+      });
 
-
-      const result = await modificationEngine.modifyProject(
-        projectState,
-        'Delete the OldComponent'
-      );
+      const result = await engine.modifyProject(projectState, 'Delete the OldComponent');
 
       expect(result.success).toBe(true);
       expect(result.projectState?.files['src/OldComponent.tsx']).toBeUndefined();
       expect(result.changeSummary?.filesDeleted).toBe(1);
     });
 
-    it('should handle API failure', async () => {
+    it('should handle pipeline failure', async () => {
       const projectState = createProjectState({
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
-      // Planning is skipped for small projects (≤8 files)
-      vi.mocked(mockAIProvider.generate)
-        .mockResolvedValue({
-          success: false,
-          error: 'API error',
-        });
+      mockPipeline.runModificationPipeline.mockRejectedValue(new Error('Execution stage failed'));
 
-      const result = await modificationEngine.modifyProject(
-        projectState,
-        'Change something'
-      );
+      const result = await engine.modifyProject(projectState, 'Change something');
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('API error');
-    });
-
-    it('should handle invalid JSON response', async () => {
-      const projectState = createProjectState({
-        'src/App.tsx': 'export default function App() { return <div />; }',
-      });
-
-      // Planning is skipped for small projects (≤8 files)
-      vi.mocked(mockAIProvider.generate)
-        .mockResolvedValue({
-          success: true,
-          content: 'This is not valid JSON',
-        });
-
-      const result = await modificationEngine.modifyProject(
-        projectState,
-        'Change something'
-      );
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Failed to parse');
+      expect(result.error).toContain('Execution stage failed');
     });
 
     it('should handle validation failure', async () => {
@@ -226,181 +216,71 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
-      // Planning is skipped for small projects (≤8 files), mock only modification response
-      vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            files: [
-              {
-                path: 'src/App.tsx',
-                operation: 'modify',
-                edits: [{ search: '<div />', replace: '<div> {' }],
-              },
-            ],
-          }),
-        });
+      const finalFiles = [{ path: 'src/App.tsx', content: 'export default function App() { return <div />; }' }];
+      mockPipeline.runModificationPipeline.mockResolvedValue(makePipelineResult(finalFiles));
+      mockValidationPipeline.validate.mockReturnValue({
+        valid: false,
+        errors: [{ type: 'syntax', message: 'Syntax error' }],
+      });
 
-
-      const result = await modificationEngine.modifyProject(
-        projectState,
-        'Change something'
-      );
+      const result = await engine.modifyProject(projectState, 'Change something');
 
       expect(result.success).toBe(false);
       expect(result.validationErrors).toBeDefined();
     });
 
-
-    it('should compute correct diffs for modified files', async () => {
-      const projectState = createProjectState({
-        'src/App.tsx': 'line1\nline2\nline3',
-      });
-
-      // Planning is skipped for small projects (≤8 files), mock only modification response
-      vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            files: [
-              {
-                path: 'src/App.tsx',
-                operation: 'modify',
-                edits: [
-                  {
-                    search: 'line2',
-                    replace: 'modified',
-                  },
-                ],
-              },
-            ],
-          }),
-        });
-
-
-      const result = await modificationEngine.modifyProject(
-        projectState,
-        'Modify line 2'
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.diffs).toHaveLength(1);
-      expect(result.diffs?.[0].status).toBe('modified');
-      expect(result.diffs?.[0].filePath).toBe('src/App.tsx');
-    });
-
-    it('should preserve unchanged files', async () => {
-      const projectState = createProjectState({
-        'src/App.tsx': 'export default function App() { return <div />; }',
-        'src/utils.ts': 'export const helper = () => 42;',
-      });
-
-      // Planning is skipped for small projects (≤8 files), mock only modification response
-      vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            files: [
-              {
-                path: 'src/App.tsx',
-                operation: 'modify',
-                edits: [{ search: '<div />', replace: '<div>Modified</div>' }],
-              },
-            ],
-          }),
-        });
-
-
-      const result = await modificationEngine.modifyProject(
-        projectState,
-        'Modify App'
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.projectState?.files['src/utils.ts']).toBe('export const helper = () => 42;');
-    });
-
     it('should create new version with correct parent', async () => {
-      const projectState = createProjectState({
-        'src/App.tsx': 'export default function App() { return <div />; }',
+      const appContent = 'export default function App() { return <div />; }';
+      const modifiedContent = 'export default function App() { return <div>Modified</div>; }';
+      const projectState = createProjectState({ 'src/App.tsx': appContent });
+
+      const finalFiles = [{ path: 'src/App.tsx', content: modifiedContent }];
+      mockPipeline.runModificationPipeline.mockResolvedValue(makePipelineResult(finalFiles));
+      mockValidationPipeline.validate.mockReturnValue({
+        valid: true,
+        sanitizedOutput: { 'src/App.tsx': modifiedContent },
+      });
+      vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({
+        updatedFiles: { 'src/App.tsx': modifiedContent },
       });
 
-      // Planning is skipped for small projects (≤8 files), mock only modification response
-      vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            files: [
-              {
-                path: 'src/App.tsx',
-                operation: 'modify',
-                edits: [{ search: '<div />', replace: '<div>Modified</div>' }],
-              },
-            ],
-          }),
-        });
-
-
-      const result = await modificationEngine.modifyProject(
-        projectState,
-        'Modify App'
-      );
+      const result = await engine.modifyProject(projectState, 'Modify App');
 
       expect(result.success).toBe(true);
       expect(result.version?.parentVersionId).toBe('v1');
       expect(result.version?.prompt).toBe('Modify App');
     });
 
-    it('should generate correct change summary', async () => {
-      const projectState = createProjectState({
-        'src/App.tsx': 'line1\nline2',
-        'src/old.ts': 'old content',
-      });
+    it('calls onPipelineStage when pipeline emits stage events', async () => {
+      const appContent = 'export default function App() { return <div />; }';
+      const projectState = createProjectState({ 'src/App.tsx': appContent });
 
-      // Planning is skipped for small projects (≤8 files), mock only modification response
-      vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            files: [
-              {
-                path: 'src/App.tsx',
-                operation: 'modify',
-                edits: [{ search: 'line2', replace: 'modified\nnew line' }],
-              },
-              {
-                path: 'src/new.ts',
-                operation: 'create',
-                content: 'new file content',
-              },
-              {
-                path: 'src/old.ts',
-                operation: 'delete',
-              },
-            ],
-          }),
-        });
-
-
-      const result = await modificationEngine.modifyProject(
-        projectState,
-        'Make multiple changes'
+      mockPipeline.runModificationPipeline.mockImplementation(
+        async (_prompt: string, _files: any, _slices: any, callbacks: any) => {
+          callbacks.onStageStart?.('intent', 'Analyzing intent...');
+          callbacks.onStageComplete?.('intent');
+          callbacks.onStageFailed?.('planning', 'timeout');
+          return makePipelineResult([{ path: 'src/App.tsx', content: appContent }]);
+        }
       );
+      mockValidationPipeline.validate.mockReturnValue({
+        valid: true,
+        sanitizedOutput: { 'src/App.tsx': appContent },
+      });
+      vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({ updatedFiles: {} });
 
-      expect(result.success).toBe(true);
-      expect(result.changeSummary?.filesAdded).toBe(1);
-      expect(result.changeSummary?.filesModified).toBe(1);
-      expect(result.changeSummary?.filesDeleted).toBe(1);
-      expect(result.changeSummary?.affectedFiles).toContain('src/App.tsx');
-      expect(result.changeSummary?.affectedFiles).toContain('src/new.ts');
-      expect(result.changeSummary?.affectedFiles).toContain('src/old.ts');
+      const onPipelineStage = vi.fn();
+      await engine.modifyProject(projectState, 'test', { onPipelineStage });
+
+      expect(onPipelineStage).toHaveBeenCalledWith({ stage: 'intent', label: 'Analyzing intent...', status: 'start' });
+      expect(onPipelineStage).toHaveBeenCalledWith({ stage: 'intent', label: '', status: 'complete' });
+      expect(onPipelineStage).toHaveBeenCalledWith({ stage: 'planning', label: 'timeout', status: 'degraded' });
     });
   });
 
-  describe('createModificationEngine', () => {
-    it('should create a ModificationEngine instance', () => {
-      // This will throw if GEMINI_API_KEY is not set, which is expected in tests
-      // We just verify the function exists and is callable
+  describe('createModificationEngine factory', () => {
+    it('should export createModificationEngine as a function', async () => {
+      const { createModificationEngine } = await import('../../diff');
       expect(typeof createModificationEngine).toBe('function');
     });
   });

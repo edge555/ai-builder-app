@@ -48,36 +48,36 @@ vi.mock('../../../lib/ai/agent-config-store', () => ({
 
 describe('Agent Config API Endpoint', () => {
     const mockConfig = {
-        version: 1,
+        version: 1 as const,
         tasks: {
             intent: {
-                taskType: 'intent',
+                taskType: 'intent' as const,
                 models: [
                     { id: 'gpt-4', label: 'GPT-4', active: true, priority: 0 },
                     { id: 'claude-3', label: 'Claude 3', active: false, priority: 1 },
                 ],
             },
             planning: {
-                taskType: 'planning',
+                taskType: 'planning' as const,
                 models: [
                     { id: 'gpt-4', label: 'GPT-4', active: true, priority: 0 },
                 ],
             },
-            coding: {
-                taskType: 'coding',
+            execution: {
+                taskType: 'execution' as const,
                 models: [
                     { id: 'gpt-4', label: 'GPT-4', active: true, priority: 0 },
                     { id: 'claude-3', label: 'Claude 3', active: true, priority: 1 },
                 ],
             },
-            debugging: {
-                taskType: 'debugging',
+            bugfix: {
+                taskType: 'bugfix' as const,
                 models: [
                     { id: 'gpt-4', label: 'GPT-4', active: true, priority: 0 },
                 ],
             },
-            documentation: {
-                taskType: 'documentation',
+            review: {
+                taskType: 'review' as const,
                 models: [
                     { id: 'gpt-4', label: 'GPT-4', active: true, priority: 0 },
                 ],
@@ -134,7 +134,7 @@ describe('Agent Config API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            vi.mocked(applyRateLimit).mockReturnValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: rateLimitResponse, headers: {} });
 
             const request = new NextRequest('http://localhost/api/agent-config', {
                 method: 'GET',
@@ -257,7 +257,7 @@ describe('Agent Config API Endpoint', () => {
                 version: 1,
                 tasks: {
                     intent: { taskType: 'intent', models: [] },
-                    // Missing planning, coding, debugging, documentation
+                    // Missing planning, execution, bugfix, review
                 },
             };
 
@@ -281,9 +281,9 @@ describe('Agent Config API Endpoint', () => {
                 tasks: {
                     intent: { taskType: 'intent', models: [{ id: '', label: 'Test', active: true, priority: 0 }] },
                     planning: { taskType: 'planning', models: [] },
-                    coding: { taskType: 'coding', models: [] },
-                    debugging: { taskType: 'debugging', models: [] },
-                    documentation: { taskType: 'documentation', models: [] },
+                    execution: { taskType: 'execution', models: [] },
+                    bugfix: { taskType: 'bugfix', models: [] },
+                    review: { taskType: 'review', models: [] },
                 },
             };
 
@@ -322,7 +322,7 @@ describe('Agent Config API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            vi.mocked(applyRateLimit).mockReturnValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: rateLimitResponse, headers: {} });
 
             const request = new NextRequest('http://localhost/api/agent-config', {
                 method: 'PUT',

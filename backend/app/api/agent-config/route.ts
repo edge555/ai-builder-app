@@ -8,6 +8,15 @@ export async function OPTIONS() {
   return handleOptions();
 }
 
+// Env var names for per-task OpenRouter model overrides
+const TASK_ENV_VARS: Record<string, string> = {
+  intent: 'OPENROUTER_INTENT_MODEL',
+  planning: 'OPENROUTER_PLANNING_MODEL',
+  execution: 'OPENROUTER_EXECUTION_MODEL',
+  bugfix: 'OPENROUTER_BUGFIX_MODEL',
+  review: 'OPENROUTER_REVIEW_MODEL',
+};
+
 export const GET = withRouteContext('api/agent-config', async (ctx, request: NextRequest) => {
   const { contextLogger } = ctx;
   const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.CONFIG);
@@ -16,6 +25,15 @@ export const GET = withRouteContext('api/agent-config', async (ctx, request: Nex
 
   try {
     const config = await load();
+
+    // Augment each task with envOverride if the env var is explicitly set
+    for (const [taskType, envVar] of Object.entries(TASK_ENV_VARS)) {
+      const envValue = process.env[envVar];
+      if (envValue !== undefined) {
+        config.tasks[taskType as keyof typeof config.tasks].envOverride = envValue;
+      }
+    }
+
     contextLogger.info('Agent config fetched');
     return NextResponse.json(config, { status: 200, headers: getCorsHeaders(request) });
   } catch (error) {

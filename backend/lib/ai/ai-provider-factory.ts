@@ -20,15 +20,13 @@ import type { AIProvider } from './ai-provider';
 import type { TaskType } from './agent-config-types';
 import { createModalClientForTask } from './modal-pipeline-factory';
 import { AgentRouter } from './agent-router';
-import { IntentDetector } from './intent-detector';
 import { getEffectiveProvider } from './provider-config-store';
 import { createLogger } from '../logger';
 
 const logger = createLogger('ai-provider-factory');
 
-// Singleton AgentRouter & IntentDetector — initialized lazily on first use (OpenRouter mode only)
+// Singleton AgentRouter — initialized lazily on first use (OpenRouter mode only)
 let agentRouter: AgentRouter | null = null;
-let intentDetector: IntentDetector | null = null;
 let initPromise: Promise<void> | null = null;
 
 /**
@@ -37,7 +35,6 @@ let initPromise: Promise<void> | null = null;
  */
 export function resetProviderSingletons(): void {
   agentRouter = null;
-  intentDetector = null;
   initPromise = null;
   logger.info('Provider singletons reset');
 }
@@ -53,8 +50,7 @@ async function ensureInitialized(): Promise<void> {
     initPromise = (async () => {
       agentRouter = new AgentRouter();
       await agentRouter.init();
-      intentDetector = new IntentDetector(agentRouter);
-      logger.info('AgentRouter and IntentDetector initialized');
+      logger.info('AgentRouter initialized');
     })();
   }
 
@@ -81,21 +77,4 @@ export async function createAIProvider(taskType: TaskType = 'execution'): Promis
   return agentRouter!.createProviderForTask(taskType);
 }
 
-/**
- * Detects the intent (task type) of a user prompt.
- *
- * - Modal mode: always returns 'execution' (no intent detection)
- * - OpenRouter mode: classifies the prompt via IntentDetector
- *
- * Uses settings override if set, otherwise falls back to AI_PROVIDER env var.
- */
-export async function detectIntent(prompt: string, requestId?: string): Promise<TaskType> {
-  const provider = await getEffectiveProvider();
-  if (provider === 'modal') {
-    return 'execution';
-  }
-
-  await ensureInitialized();
-  return intentDetector!.detect(prompt, requestId);
-}
 

@@ -27,7 +27,19 @@ vi.mock('../../logger', () => ({
 
 // Import after mocking
 import { load, save, getActiveModelsForTask } from '../agent-config-store';
-import type { AgentConfig, TaskType, ModelEntry } from '../agent-config-types';
+import type { AgentConfig, TaskType } from '../agent-config-types';
+
+const makeFullConfig = (overrides: Partial<AgentConfig['tasks']> = {}): AgentConfig => ({
+  version: 1,
+  tasks: {
+    intent: { taskType: 'intent', models: [] },
+    planning: { taskType: 'planning', models: [] },
+    execution: { taskType: 'execution', models: [] },
+    bugfix: { taskType: 'bugfix', models: [] },
+    review: { taskType: 'review', models: [] },
+    ...overrides,
+  },
+});
 
 describe('agent-config-store', () => {
   beforeEach(() => {
@@ -40,16 +52,9 @@ describe('agent-config-store', () => {
 
   describe('load', () => {
     it('should load and parse a valid config file', async () => {
-      const mockConfig: AgentConfig = {
-        version: 1,
-        tasks: {
-          intent: { taskType: 'intent', models: [{ id: 'model-1', active: true, priority: 1 }] },
-          planning: { taskType: 'planning', models: [] },
-          coding: { taskType: 'coding', models: [] },
-          debugging: { taskType: 'debugging', models: [] },
-          documentation: { taskType: 'documentation', models: [] },
-        },
-      };
+      const mockConfig = makeFullConfig({
+        intent: { taskType: 'intent', models: [{ id: 'model-1', active: true, priority: 1 }] },
+      });
 
       vi.mocked(readFile).mockResolvedValue(JSON.stringify(mockConfig));
 
@@ -70,9 +75,9 @@ describe('agent-config-store', () => {
       expect(result.version).toBe(1);
       expect(result.tasks.intent.models).toEqual([]);
       expect(result.tasks.planning.models).toEqual([]);
-      expect(result.tasks.coding.models).toEqual([]);
-      expect(result.tasks.debugging.models).toEqual([]);
-      expect(result.tasks.documentation.models).toEqual([]);
+      expect(result.tasks.execution.models).toEqual([]);
+      expect(result.tasks.bugfix.models).toEqual([]);
+      expect(result.tasks.review.models).toEqual([]);
     });
 
     it('should return default config on other read errors', async () => {
@@ -89,7 +94,7 @@ describe('agent-config-store', () => {
         version: 1,
         tasks: {
           intent: { taskType: 'intent', models: [{ id: 'model-1', active: true, priority: 1 }] },
-          // Missing other task types
+          // Missing execution, bugfix, review
         },
       };
 
@@ -99,49 +104,13 @@ describe('agent-config-store', () => {
 
       expect(result.tasks.intent.models).toHaveLength(1);
       expect(result.tasks.planning).toBeDefined();
-      expect(result.tasks.coding).toBeDefined();
-      expect(result.tasks.debugging).toBeDefined();
-      expect(result.tasks.documentation).toBeDefined();
+      expect(result.tasks.execution).toBeDefined();
+      expect(result.tasks.bugfix).toBeDefined();
+      expect(result.tasks.review).toBeDefined();
     });
 
-    it('should handle malformed JSON gracefully', async () => {
-      vi.mocked(readFile).mockResolvedValue('not valid json');
-
-      const result = await load();
-
-      // Should return default config on parse error
-      expect(result.version).toBe(1);
-      expect(result.tasks).toBeDefined();
-    });
-  });
-
-  describe('save', () => {
-    it('should save config to file with proper formatting', async () => {
-      const config: AgentConfig = {
-        version: 1,
-        tasks: {
-          intent: { taskType: 'intent', models: [{ id: 'model-1', active: true, priority: 1 }] },
-          planning: { taskType: 'planning', models: [] },
-          coding: { taskType: 'coding', models: [] },
-          debugging: { taskType: 'debugging', models: [] },
-          documentation: { taskType: 'documentation', models: [] },
-        },
-      };
-
-      await save(config);
-
-      expect(mkdir).toHaveBeenCalled();
-      expect(writeFile).toHaveBeenCalled();
-      
-      // Verify the written content is properly formatted JSON
-      const writtenContent = vi.mocked(writeFile).mock.calls[0][1] as string;
-      const parsed = JSON.parse(writtenContent);
-      expect(parsed.version).toBe(1);
-      expect(parsed.tasks.intent.models[0].id).toBe('model-1');
-    });
-
-    it('should create directory if it does not exist', async () => {
-      const config: AgentConfig = {
+    it('should reset to defaults when config has unknown (old) task types', async () => {
+      const oldConfig = {
         version: 1,
         tasks: {
           intent: { taskType: 'intent', models: [] },
@@ -152,6 +121,46 @@ describe('agent-config-store', () => {
         },
       };
 
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify(oldConfig));
+
+      const result = await load();
+
+      // Should return default config since old task types are unknown
+      expect(result.version).toBe(1);
+      expect(result.tasks.execution).toBeDefined();
+      expect((result.tasks as any).coding).toBeUndefined();
+    });
+
+    it('should handle malformed JSON gracefully', async () => {
+      vi.mocked(readFile).mockResolvedValue('not valid json');
+
+      const result = await load();
+
+      expect(result.version).toBe(1);
+      expect(result.tasks).toBeDefined();
+    });
+  });
+
+  describe('save', () => {
+    it('should save config to file with proper formatting', async () => {
+      const config = makeFullConfig({
+        intent: { taskType: 'intent', models: [{ id: 'model-1', active: true, priority: 1 }] },
+      });
+
+      await save(config);
+
+      expect(mkdir).toHaveBeenCalled();
+      expect(writeFile).toHaveBeenCalled();
+
+      const writtenContent = vi.mocked(writeFile).mock.calls[0][1] as string;
+      const parsed = JSON.parse(writtenContent);
+      expect(parsed.version).toBe(1);
+      expect(parsed.tasks.intent.models[0].id).toBe('model-1');
+    });
+
+    it('should create directory if it does not exist', async () => {
+      const config = makeFullConfig();
+
       await save(config);
 
       expect(mkdir).toHaveBeenCalledWith(expect.any(String), { recursive: true });
@@ -160,23 +169,16 @@ describe('agent-config-store', () => {
 
   describe('getActiveModelsForTask', () => {
     it('should return active models sorted by priority', () => {
-      const config: AgentConfig = {
-        version: 1,
-        tasks: {
-          intent: {
-            taskType: 'intent',
-            models: [
-              { id: 'model-3', active: true, priority: 3 },
-              { id: 'model-1', active: true, priority: 1 },
-              { id: 'model-2', active: true, priority: 2 },
-            ],
-          },
-          planning: { taskType: 'planning', models: [] },
-          coding: { taskType: 'coding', models: [] },
-          debugging: { taskType: 'debugging', models: [] },
-          documentation: { taskType: 'documentation', models: [] },
+      const config = makeFullConfig({
+        intent: {
+          taskType: 'intent',
+          models: [
+            { id: 'model-3', active: true, priority: 3 },
+            { id: 'model-1', active: true, priority: 1 },
+            { id: 'model-2', active: true, priority: 2 },
+          ],
         },
-      };
+      });
 
       const result = getActiveModelsForTask(config, 'intent');
 
@@ -187,23 +189,16 @@ describe('agent-config-store', () => {
     });
 
     it('should filter out inactive models', () => {
-      const config: AgentConfig = {
-        version: 1,
-        tasks: {
-          intent: {
-            taskType: 'intent',
-            models: [
-              { id: 'model-1', active: true, priority: 1 },
-              { id: 'model-2', active: false, priority: 2 },
-              { id: 'model-3', active: true, priority: 3 },
-            ],
-          },
-          planning: { taskType: 'planning', models: [] },
-          coding: { taskType: 'coding', models: [] },
-          debugging: { taskType: 'debugging', models: [] },
-          documentation: { taskType: 'documentation', models: [] },
+      const config = makeFullConfig({
+        intent: {
+          taskType: 'intent',
+          models: [
+            { id: 'model-1', active: true, priority: 1 },
+            { id: 'model-2', active: false, priority: 2 },
+            { id: 'model-3', active: true, priority: 3 },
+          ],
         },
-      };
+      });
 
       const result = getActiveModelsForTask(config, 'intent');
 
@@ -212,16 +207,7 @@ describe('agent-config-store', () => {
     });
 
     it('should return empty array for non-existent task type', () => {
-      const config: AgentConfig = {
-        version: 1,
-        tasks: {
-          intent: { taskType: 'intent', models: [] },
-          planning: { taskType: 'planning', models: [] },
-          coding: { taskType: 'coding', models: [] },
-          debugging: { taskType: 'debugging', models: [] },
-          documentation: { taskType: 'documentation', models: [] },
-        },
-      };
+      const config = makeFullConfig();
 
       const result = getActiveModelsForTask(config, 'nonexistent' as TaskType);
 
@@ -229,16 +215,7 @@ describe('agent-config-store', () => {
     });
 
     it('should return empty array when no models are configured', () => {
-      const config: AgentConfig = {
-        version: 1,
-        tasks: {
-          intent: { taskType: 'intent', models: [] },
-          planning: { taskType: 'planning', models: [] },
-          coding: { taskType: 'coding', models: [] },
-          debugging: { taskType: 'debugging', models: [] },
-          documentation: { taskType: 'documentation', models: [] },
-        },
-      };
+      const config = makeFullConfig();
 
       const result = getActiveModelsForTask(config, 'intent');
 
@@ -246,18 +223,15 @@ describe('agent-config-store', () => {
     });
 
     it('should handle all task types', () => {
-      const taskTypes: TaskType[] = ['intent', 'planning', 'coding', 'debugging', 'documentation'];
-      
-      const config: AgentConfig = {
-        version: 1,
-        tasks: {
-          intent: { taskType: 'intent', models: [{ id: 'intent-model', active: true, priority: 1 }] },
-          planning: { taskType: 'planning', models: [{ id: 'planning-model', active: true, priority: 1 }] },
-          coding: { taskType: 'coding', models: [{ id: 'coding-model', active: true, priority: 1 }] },
-          debugging: { taskType: 'debugging', models: [{ id: 'debugging-model', active: true, priority: 1 }] },
-          documentation: { taskType: 'documentation', models: [{ id: 'docs-model', active: true, priority: 1 }] },
-        },
-      };
+      const taskTypes: TaskType[] = ['intent', 'planning', 'execution', 'bugfix', 'review'];
+
+      const config = makeFullConfig({
+        intent: { taskType: 'intent', models: [{ id: 'intent-model', active: true, priority: 1 }] },
+        planning: { taskType: 'planning', models: [{ id: 'planning-model', active: true, priority: 1 }] },
+        execution: { taskType: 'execution', models: [{ id: 'execution-model', active: true, priority: 1 }] },
+        bugfix: { taskType: 'bugfix', models: [{ id: 'bugfix-model', active: true, priority: 1 }] },
+        review: { taskType: 'review', models: [{ id: 'review-model', active: true, priority: 1 }] },
+      });
 
       taskTypes.forEach(taskType => {
         const result = getActiveModelsForTask(config, taskType);

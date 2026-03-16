@@ -151,6 +151,16 @@ export async function POST(request: NextRequest) {
               );
             },
 
+            onPipelineStage: (data) => {
+              // Pipeline stage events have normal priority (perceived responsiveness)
+              encoder.enqueueEvent(
+                controller,
+                'pipeline-stage',
+                data,
+                EventPriority.NORMAL
+              );
+            },
+
             onError: (error, errorData) => {
               // Error events are critical
               encoder.enqueueEvent(

@@ -1,15 +1,12 @@
 /**
  * @module diff/modification-engine
- * @description Orchestrates context-aware code modifications by:
- * 1. Classifying user intent
- * 2. Selecting relevant code slices via file-planner
- * 3. Sending only relevant context to the AI provider
- * 4. Validating and applying changes (with build-error auto-retry)
+ * @description Orchestrates context-aware code modifications via the 4-stage pipeline:
+ * 1. FilePlanner selects relevant code slices
+ * 2. Pipeline runs Intent → Planning → Execution → Review stages
+ * 3. Modify/delete ops from the executor are applied via applyFileEdits
+ * 4. Build validation with auto-retry (bugfix provider)
  *
- * Supports multiple modification types: full file replacement, JSON patch,
- * unified diff, and search/replace.
- *
- * @requires ../ai/ai-provider - AIProvider interface for generation and correction
+ * @requires ../core/pipeline-orchestrator - PipelineOrchestrator class
  * @requires ../core/build-validator - Build error detection
  * @requires ../logger - Structured logging
  * @requires @ai-app-builder/shared - ProjectState, ModificationResult types
@@ -23,7 +20,9 @@ import type {
 import type { CodeSlice } from '../analysis/file-planner/types';
 import type { AIProvider } from '../ai';
 import { createAIProvider } from '../ai';
-import type { TaskType } from '../ai';
+import type { IPromptProvider } from '../core/prompts/prompt-provider';
+import { createPromptProvider } from '../core/prompts/prompt-provider-factory';
+import { getEffectiveProvider } from '../ai/provider-config-store';
 import { ValidationPipeline } from '../core/validation-pipeline';
 import { BuildValidator, createBuildValidator } from '../core/build-validator';
 import { createLogger } from '../logger';
@@ -36,32 +35,44 @@ import { getTokenBudget } from '../constants';
 import { buildSlicesFromFiles } from './prompt-builder';
 import { selectRepairFiles, type ErrorContext } from './repair-file-selector';
 import { createModificationResult } from './result-builder';
-import { generateModifications } from './modification-generator';
 import { validateAndFixBuild } from './build-fixer';
+import { applyFileEdits } from './file-edit-applicator';
+import type { PipelineCallbacks, GeneratedFile, PipelineResult, PipelineStage } from '../core/pipeline-orchestrator';
+import { PipelineOrchestrator } from '../core/pipeline-orchestrator';
+import { createPipelineOrchestrator } from '../core/pipeline-factory';
 
 const logger = createLogger('ModificationEngine');
 
 const DESIGN_SYSTEM_CATEGORIES = new Set(['ui', 'style', 'mixed']);
 
-export type ModificationPhase = 'planning' | 'generating' | 'applying' | 'validating' | 'build-fixing';
+export type ModificationPhase =
+  | 'intent'
+  | 'planning'
+  | 'generating'
+  | 'reviewing'
+  | 'applying'
+  | 'validating'
+  | 'build-fixing';
 
 export type OnProgressCallback = (phase: ModificationPhase, label: string) => void;
 
 /**
  * Modification Engine service for modifying existing projects.
- * Includes build validation with auto-retry.
+ * Uses the 4-stage pipeline (Intent → Planning → Execution → Review).
  */
 export class ModificationEngine {
-  private readonly aiProvider: AIProvider;
   private readonly validationPipeline: ValidationPipeline;
   private readonly filePlanner: FilePlanner;
   private readonly buildValidator: BuildValidator;
   private readonly maxBuildRetries = 2;
 
-  constructor(aiProvider: AIProvider) {
-    this.aiProvider = aiProvider;
+  constructor(
+    private readonly pipeline: PipelineOrchestrator,
+    private readonly bugfixProvider: AIProvider,
+    private readonly promptProvider: IPromptProvider,
+  ) {
     this.validationPipeline = new ValidationPipeline();
-    this.filePlanner = createFilePlanner(this.aiProvider);
+    this.filePlanner = createFilePlanner(this.bugfixProvider);
     this.buildValidator = createBuildValidator();
   }
 
@@ -69,12 +80,19 @@ export class ModificationEngine {
    * Modify an existing project based on a user prompt.
    * @param projectState - The current project state with files
    * @param prompt - The modification prompt
-   * @param options - Optional configuration (e.g., shouldSkipPlanning to bypass FilePlanner)
+   * @param options - Optional configuration
    */
   async modifyProject(
     projectState: ProjectState,
     prompt: string,
-    options?: { shouldSkipPlanning?: boolean; errorContext?: ErrorContext; requestId?: string; onProgress?: OnProgressCallback; conversationHistory?: ConversationTurn[] }
+    options?: {
+      shouldSkipPlanning?: boolean;
+      errorContext?: ErrorContext;
+      requestId?: string;
+      onProgress?: OnProgressCallback;
+      onPipelineStage?: (data: { stage: PipelineStage; label: string; status: 'start' | 'complete' | 'degraded' }) => void;
+      conversationHistory?: ConversationTurn[];
+    }
   ): Promise<ModificationResult> {
     if (!prompt || prompt.trim() === '') {
       return {
@@ -93,39 +111,59 @@ export class ModificationEngine {
     const contextLogger = options?.requestId ? logger.withRequestId(options.requestId) : logger;
     const requestId = options?.requestId;
     const onProgress = options?.onProgress;
+    const onPipelineStage = options?.onPipelineStage;
 
     try {
-      // Step 1: Select code slices and determine category
+      // Step 1: Select code slices
       onProgress?.('planning', 'Analyzing project and planning changes...');
       const skipPlanning = options?.shouldSkipPlanning || shouldSkipPlanningHeuristic(prompt, projectState);
-      const { slices, category } = await this.selectCodeSlices(projectState, prompt, skipPlanning, options?.errorContext);
-
-      // Step 2: Determine if design system should be included based on category
-      const shouldIncludeDesignSystem = DESIGN_SYSTEM_CATEGORIES.has(category);
-      contextLogger.debug('System instruction determined', { category, shouldIncludeDesignSystem });
-
-      // Step 3: Generate modifications with retry logic
-      onProgress?.('generating', 'Generating code modifications...');
-      const modificationResult = await generateModifications(
-        prompt,
-        slices,
-        projectState,
-        shouldIncludeDesignSystem,
-        this.aiProvider,
-        requestId,
-        options?.conversationHistory
+      const { slices, category } = await this.selectCodeSlices(
+        projectState, prompt, skipPlanning, options?.errorContext
       );
 
-      if (!modificationResult.success || !modificationResult.updatedFiles || !modificationResult.deletedFiles) {
-        return {
-          success: false,
-          error: modificationResult.error ?? 'Modification failed with incomplete output',
-        };
-      }
+      // Step 2: Determine design system inclusion
+      const shouldIncludeDesignSystem = DESIGN_SYSTEM_CATEGORIES.has(category);
+      contextLogger.debug('Category determined', { category, shouldIncludeDesignSystem });
 
-      const { updatedFiles, deletedFiles } = modificationResult;
+      // Step 3: Build pipeline callbacks
+      const pipelineCallbacks: PipelineCallbacks = {
+        onStageStart: (stage, label) => {
+          contextLogger.debug('Pipeline stage start', { stage, label });
+          onPipelineStage?.({ stage, label, status: 'start' });
+          if (stage === 'intent') onProgress?.('intent', label);
+          else if (stage === 'planning') onProgress?.('planning', label);
+          else if (stage === 'execution') onProgress?.('generating', 'Generating code modifications...');
+          else if (stage === 'review') onProgress?.('reviewing', 'Reviewing changes...');
+        },
+        onStageComplete: (stage) => {
+          contextLogger.debug('Pipeline stage complete', { stage });
+          onPipelineStage?.({ stage, label: '', status: 'complete' });
+        },
+        onStageFailed: (stage, error) => {
+          contextLogger.warn('Pipeline stage failed (degraded)', { stage, error });
+          onPipelineStage?.({ stage, label: error, status: 'degraded' });
+        },
+        signal: undefined, // ModificationEngine doesn't have an abort signal from options
+      };
 
-      // Step 4: Validate AI output
+      // Step 4: Run the 4-stage modification pipeline
+      onProgress?.('generating', 'Generating code modifications...');
+      const pipelineResult = await this.pipeline.runModificationPipeline(
+        prompt,
+        projectState.files,
+        slices,
+        pipelineCallbacks,
+        { requestId, designSystem: shouldIncludeDesignSystem }
+      );
+
+      // Step 5: Resolve final files (apply modify ops + build diff vs currentFiles)
+      onProgress?.('applying', 'Applying modifications...');
+      const { updatedFiles, deletedFiles } = await this.resolveModifications(
+        projectState.files,
+        pipelineResult
+      );
+
+      // Step 6: Validate AI output
       onProgress?.('validating', 'Validating generated code...');
       const validationResult = await this.validateModifiedFiles(updatedFiles);
       if (!validationResult.valid) {
@@ -136,24 +174,23 @@ export class ModificationEngine {
         };
       }
 
-      // Step 5: Build validation with auto-retry
+      // Step 7: Build validation with auto-retry
       onProgress?.('validating', 'Running build validation...');
       const buildValidationResult = await validateAndFixBuild(
         projectState,
         updatedFiles,
         prompt,
         shouldIncludeDesignSystem,
-        this.aiProvider,
+        this.bugfixProvider,
         this.buildValidator,
         this.maxBuildRetries,
         requestId,
         onProgress
       );
 
-      // Use the potentially updated files from build validation
       const finalUpdatedFiles = buildValidationResult.updatedFiles;
 
-      // Step 6: Create final result with updated project state and metadata
+      // Step 8: Create final result
       onProgress?.('applying', 'Finalizing changes...');
       return await createModificationResult(projectState, finalUpdatedFiles, deletedFiles, prompt);
     } catch (error) {
@@ -162,6 +199,81 @@ export class ModificationEngine {
         error: error instanceof Error ? error.message : 'Unknown error during modification',
       };
     }
+  }
+
+  /**
+   * Resolve the pipeline result into a diff (updatedFiles + deletedFiles) by:
+   * 1. Using finalFiles (create/replace_file + review corrections) as the base
+   * 2. Applying any search/replace modify ops from executorFiles
+   * 3. Diffing the result against currentFiles
+   */
+  private async resolveModifications(
+    currentFiles: Record<string, string>,
+    pipelineResult: PipelineResult
+  ): Promise<{ updatedFiles: Record<string, string | null>; deletedFiles: string[] }> {
+    // Start from finalFiles (create/replace_file applied + review corrections)
+    const fileMap = new Map<string, string>(
+      pipelineResult.finalFiles.map(f => [f.path, f.content])
+    );
+
+    // Collect and apply modify operations from executorFiles
+    const modifyOps = this.extractModifyOps(pipelineResult.executorFiles);
+    if (modifyOps.length > 0) {
+      const tempState = { files: Object.fromEntries(fileMap) } as ProjectState;
+      const editResult = await applyFileEdits(modifyOps, tempState);
+      if (editResult.success && editResult.updatedFiles) {
+        for (const [path, content] of Object.entries(editResult.updatedFiles)) {
+          if (content !== null) {
+            fileMap.set(path, content);
+          }
+        }
+      } else {
+        logger.warn('Some modify ops failed to apply', { error: editResult.error });
+      }
+    }
+
+    // Build diff vs currentFiles
+    const updatedFiles: Record<string, string | null> = {};
+    const deletedFiles: string[] = [];
+
+    // Files deleted: in currentFiles but not in the resolved set
+    for (const path of Object.keys(currentFiles)) {
+      if (!fileMap.has(path)) {
+        updatedFiles[path] = null;
+        deletedFiles.push(path);
+      }
+    }
+
+    // Files changed or newly created
+    for (const [path, content] of fileMap) {
+      if (currentFiles[path] !== content) {
+        updatedFiles[path] = content;
+      }
+    }
+
+    return { updatedFiles, deletedFiles };
+  }
+
+  /**
+   * Extract search/replace modify operations from executorFiles.
+   * modify/delete ops are stored as JSON-encoded strings by the pipeline.
+   */
+  private extractModifyOps(
+    executorFiles: GeneratedFile[]
+  ): Array<{ path: string; operation: string; edits?: Array<{ search: string; replace: string }> }> {
+    const ops: Array<{ path: string; operation: string; edits?: Array<{ search: string; replace: string }> }> = [];
+    for (const file of executorFiles) {
+      if (file.path === '__pipeline_raw__') continue;
+      try {
+        const op = JSON.parse(file.content);
+        if (op && op.operation === 'modify' && Array.isArray(op.edits)) {
+          ops.push(op);
+        }
+      } catch {
+        // Not a JSON-encoded op — skip (create/replace_file already in finalFiles)
+      }
+    }
+    return ops;
   }
 
   /**
@@ -177,15 +289,12 @@ export class ModificationEngine {
     let category: 'ui' | 'logic' | 'style' | 'mixed' = 'mixed';
 
     if (shouldSkipPlanning && errorContext) {
-      // Repair mode: select only affected files + their dependents/dependencies
       slices = selectRepairFiles(projectState, errorContext);
       logger.info('Repair mode: selected targeted files', {
         fileCount: slices.length,
         errorType: errorContext.errorType,
       });
     } else if (shouldSkipPlanning) {
-      // When shouldSkipPlanning is true, treat all provided files as primary files
-      // Build slices directly without calling FilePlanner
       slices = buildSlicesFromFiles(projectState);
       const fileCount = Object.keys(projectState.files).length;
       const budgetManager = new TokenBudgetManager(getTokenBudget(fileCount));
@@ -194,8 +303,6 @@ export class ModificationEngine {
         fileCount: slices.length
       });
     } else {
-      // Use FilePlanner to select relevant code slices and determine category
-      // FilePlanner replaces IntentClassifier + SliceSelector with AI-powered file selection
       const planResult = await this.filePlanner.planWithCategory(prompt, projectState);
       slices = planResult.slices;
       category = planResult.category ?? 'mixed';
@@ -220,16 +327,12 @@ export class ModificationEngine {
         filesToValidate[path] = content;
       }
     }
-
     return this.validationPipeline.validate(filesToValidate);
   }
-
 }
 
 /**
  * Heuristic to skip the AI planning call for obvious cases.
- * - Small projects (<= 8 files): always skip — fallback heuristic is sufficient
- * - Prompt mentions an existing file/component name: skip
  */
 function shouldSkipPlanningHeuristic(prompt: string, projectState: ProjectState): boolean {
   const fileCount = Object.keys(projectState.files).length;
@@ -240,7 +343,6 @@ function shouldSkipPlanningHeuristic(prompt: string, projectState: ProjectState)
 
   const promptLower = prompt.toLowerCase();
   for (const filePath of Object.keys(projectState.files)) {
-    // Check filename (e.g., "Header.tsx")
     const fileName = filePath.split('/').pop() ?? '';
     const baseName = fileName.replace(/\.[^.]+$/, '');
     if (baseName.length >= 3 && promptLower.includes(baseName.toLowerCase())) {
@@ -253,9 +355,14 @@ function shouldSkipPlanningHeuristic(prompt: string, projectState: ProjectState)
 }
 
 /**
- * Creates a ModificationEngine instance with the AI provider for the given task type.
+ * Creates a ModificationEngine with the full pipeline + bugfix provider.
  */
-export async function createModificationEngine(taskType: TaskType = 'execution'): Promise<ModificationEngine> {
-  const aiProvider = await createAIProvider(taskType);
-  return new ModificationEngine(aiProvider);
+export async function createModificationEngine(): Promise<ModificationEngine> {
+  const [pipeline, bugfixProvider, providerName] = await Promise.all([
+    createPipelineOrchestrator(),
+    createAIProvider('bugfix'),
+    getEffectiveProvider(),
+  ]);
+  const promptProvider = createPromptProvider(providerName);
+  return new ModificationEngine(pipeline, bugfixProvider, promptProvider);
 }

@@ -6,28 +6,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   createAIProvider,
-  detectIntent,
   resetProviderSingletons,
 } from '../ai-provider-factory';
 import type { AIProvider } from '../ai-provider';
 import type { TaskType } from '../agent-config-types';
 
-// Mock the modal-client
-vi.mock('../modal-client', () => ({
-  createModalClient: vi.fn(),
+// Mock the modal-pipeline-factory
+vi.mock('../modal-pipeline-factory', () => ({
+  createModalClientForTask: vi.fn(),
 }));
 
 // Mock the agent-router
 vi.mock('../agent-router', () => ({
   AgentRouter: vi.fn().mockImplementation(function() {
     return { init: vi.fn().mockResolvedValue(undefined), createProviderForTask: vi.fn() };
-  }),
-}));
-
-// Mock the intent-detector
-vi.mock('../intent-detector', () => ({
-  IntentDetector: vi.fn().mockImplementation(function() {
-    return { detect: vi.fn() };
   }),
 }));
 
@@ -46,9 +38,8 @@ vi.mock('../../logger', () => ({
   })),
 }));
 
-import { createModalClient } from '../modal-client';
+import { createModalClientForTask } from '../modal-pipeline-factory';
 import { AgentRouter } from '../agent-router';
-import { IntentDetector } from '../intent-detector';
 import { getEffectiveProvider } from '../provider-config-store';
 
 describe('ai-provider-factory', () => {
@@ -59,30 +50,19 @@ describe('ai-provider-factory', () => {
 
   describe('resetProviderSingletons', () => {
     it('should reset all provider singletons', () => {
-      // Arrange
-      // No arrangement needed
-
-      // Act
-      resetProviderSingletons();
-
-      // Assert
-      // The function should complete without errors
       expect(() => resetProviderSingletons()).not.toThrow();
     });
 
     it('should allow reinitialization after reset', async () => {
-      // Arrange
       vi.mocked(getEffectiveProvider).mockResolvedValue('openrouter');
       vi.mocked(AgentRouter).mockImplementation(function() {
         return { init: vi.fn().mockResolvedValue(undefined), createProviderForTask: vi.fn() };
       });
 
-      // Act
-      await createAIProvider('coding');
+      await createAIProvider('execution');
       resetProviderSingletons();
-      await createAIProvider('coding');
+      await createAIProvider('execution');
 
-      // Assert
       expect(AgentRouter).toHaveBeenCalledTimes(2);
     });
   });
@@ -93,69 +73,60 @@ describe('ai-provider-factory', () => {
     });
 
     it('should create ModalClient when provider is modal', async () => {
-      // Arrange
       const mockProvider: AIProvider = {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
       };
-      vi.mocked(createModalClient).mockReturnValue(mockProvider);
+      vi.mocked(createModalClientForTask).mockReturnValue(mockProvider as any);
 
-      // Act
-      const result = await createAIProvider('coding');
+      const result = await createAIProvider('execution');
 
-      // Assert
-      expect(createModalClient).toHaveBeenCalledTimes(1);
+      expect(createModalClientForTask).toHaveBeenCalledTimes(1);
       expect(result).toBe(mockProvider);
     });
 
-    it('should ignore taskType in modal mode', async () => {
-      // Arrange
+    it('should pass taskType to createModalClientForTask in modal mode', async () => {
       const mockProvider: AIProvider = {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
       };
-      vi.mocked(createModalClient).mockReturnValue(mockProvider);
+      vi.mocked(createModalClientForTask).mockReturnValue(mockProvider as any);
 
-      // Act
-      const result1 = await createAIProvider('coding');
+      const result1 = await createAIProvider('execution');
       const result2 = await createAIProvider('planning');
-      const result3 = await createAIProvider('debugging');
+      const result3 = await createAIProvider('bugfix');
 
-      // Assert
-      expect(createModalClient).toHaveBeenCalledTimes(3);
+      expect(createModalClientForTask).toHaveBeenCalledTimes(3);
+      expect(createModalClientForTask).toHaveBeenNthCalledWith(1, 'execution');
+      expect(createModalClientForTask).toHaveBeenNthCalledWith(2, 'planning');
+      expect(createModalClientForTask).toHaveBeenNthCalledWith(3, 'bugfix');
       expect(result1).toBe(mockProvider);
       expect(result2).toBe(mockProvider);
       expect(result3).toBe(mockProvider);
     });
 
     it('should use default taskType when not provided', async () => {
-      // Arrange
       const mockProvider: AIProvider = {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
       };
-      vi.mocked(createModalClient).mockReturnValue(mockProvider);
+      vi.mocked(createModalClientForTask).mockReturnValue(mockProvider as any);
 
-      // Act
       const result = await createAIProvider();
 
-      // Assert
-      expect(createModalClient).toHaveBeenCalledTimes(1);
+      expect(createModalClientForTask).toHaveBeenCalledTimes(1);
       expect(result).toBe(mockProvider);
     });
 
     it('should not initialize AgentRouter in modal mode', async () => {
-      // Arrange
       const mockProvider: AIProvider = {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
       };
-      vi.mocked(createModalClient).mockReturnValue(mockProvider);
+      vi.mocked(createModalClientForTask).mockReturnValue(mockProvider as any);
 
-      // Act
-      await createAIProvider('coding');
+      await createAIProvider('execution');
 
-      // Assert
       expect(AgentRouter).not.toHaveBeenCalled();
     });
   });
@@ -166,7 +137,6 @@ describe('ai-provider-factory', () => {
     });
 
     it('should initialize AgentRouter on first call', async () => {
-      // Arrange
       const mockProvider: AIProvider = {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
@@ -177,16 +147,13 @@ describe('ai-provider-factory', () => {
       };
       vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
-      // Act
-      await createAIProvider('coding');
+      await createAIProvider('execution');
 
-      // Assert
       expect(AgentRouter).toHaveBeenCalledTimes(1);
       expect(mockRouter.init).toHaveBeenCalledTimes(1);
     });
 
     it('should create provider for specific task type', async () => {
-      // Arrange
       const mockProvider: AIProvider = {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
@@ -197,16 +164,13 @@ describe('ai-provider-factory', () => {
       };
       vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
-      // Act
       const result = await createAIProvider('planning');
 
-      // Assert
       expect(mockRouter.createProviderForTask).toHaveBeenCalledWith('planning');
       expect(result).toBe(mockProvider);
     });
 
-    it('should use default taskType when not provided', async () => {
-      // Arrange
+    it('should use default taskType (execution) when not provided', async () => {
       const mockProvider: AIProvider = {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
@@ -217,16 +181,13 @@ describe('ai-provider-factory', () => {
       };
       vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
-      // Act
       const result = await createAIProvider();
 
-      // Assert
-      expect(mockRouter.createProviderForTask).toHaveBeenCalledWith('coding');
+      expect(mockRouter.createProviderForTask).toHaveBeenCalledWith('execution');
       expect(result).toBe(mockProvider);
     });
 
     it('should reuse AgentRouter instance on subsequent calls', async () => {
-      // Arrange
       const mockProvider: AIProvider = {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
@@ -237,19 +198,16 @@ describe('ai-provider-factory', () => {
       };
       vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
-      // Act
-      await createAIProvider('coding');
+      await createAIProvider('execution');
       await createAIProvider('planning');
-      await createAIProvider('debugging');
+      await createAIProvider('bugfix');
 
-      // Assert
       expect(AgentRouter).toHaveBeenCalledTimes(1);
       expect(mockRouter.init).toHaveBeenCalledTimes(1);
       expect(mockRouter.createProviderForTask).toHaveBeenCalledTimes(3);
     });
 
     it('should handle all task types', async () => {
-      // Arrange
       const mockProvider: AIProvider = {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
@@ -260,14 +218,12 @@ describe('ai-provider-factory', () => {
       };
       vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
-      const taskTypes: TaskType[] = ['intent', 'planning', 'coding', 'debugging', 'documentation'];
+      const taskTypes: TaskType[] = ['intent', 'planning', 'execution', 'bugfix', 'review'];
 
-      // Act
       for (const taskType of taskTypes) {
         await createAIProvider(taskType);
       }
 
-      // Assert
       expect(mockRouter.createProviderForTask).toHaveBeenCalledTimes(taskTypes.length);
       taskTypes.forEach((taskType, index) => {
         expect(mockRouter.createProviderForTask).toHaveBeenNthCalledWith(index + 1, taskType);
@@ -277,7 +233,6 @@ describe('ai-provider-factory', () => {
 
   describe('createAIProvider - initialization errors', () => {
     it('should handle AgentRouter initialization errors', async () => {
-      // Arrange
       vi.mocked(getEffectiveProvider).mockResolvedValue('openrouter');
       const mockRouter = {
         init: vi.fn().mockRejectedValue(new Error('Initialization failed')),
@@ -285,25 +240,21 @@ describe('ai-provider-factory', () => {
       };
       vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
-      // Act & Assert
-      await expect(createAIProvider('coding')).rejects.toThrow('Initialization failed');
+      await expect(createAIProvider('execution')).rejects.toThrow('Initialization failed');
     });
 
-    it('should handle createModalClient errors', async () => {
-      // Arrange
+    it('should handle createModalClientForTask errors', async () => {
       vi.mocked(getEffectiveProvider).mockResolvedValue('modal');
-      vi.mocked(createModalClient).mockImplementation(() => {
+      vi.mocked(createModalClientForTask).mockImplementation(() => {
         throw new Error('Failed to create Modal client');
       });
 
-      // Act & Assert
-      await expect(createAIProvider('coding')).rejects.toThrow('Failed to create Modal client');
+      await expect(createAIProvider('execution')).rejects.toThrow('Failed to create Modal client');
     });
   });
 
   describe('createAIProvider - concurrent calls', () => {
     it('should handle concurrent initialization calls', async () => {
-      // Arrange
       vi.mocked(getEffectiveProvider).mockResolvedValue('openrouter');
       const mockProvider: AIProvider = {
         generate: vi.fn(),
@@ -315,14 +266,12 @@ describe('ai-provider-factory', () => {
       };
       vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
-      // Act
       const [result1, result2, result3] = await Promise.all([
-        createAIProvider('coding'),
+        createAIProvider('execution'),
         createAIProvider('planning'),
-        createAIProvider('debugging'),
+        createAIProvider('bugfix'),
       ]);
 
-      // Assert
       expect(AgentRouter).toHaveBeenCalledTimes(1);
       expect(mockRouter.init).toHaveBeenCalledTimes(1);
       expect(result1).toBe(mockProvider);
@@ -331,7 +280,6 @@ describe('ai-provider-factory', () => {
     });
 
     it('should handle initialization failure in concurrent calls', async () => {
-      // Arrange
       vi.mocked(getEffectiveProvider).mockResolvedValue('openrouter');
       const mockRouter = {
         init: vi.fn().mockRejectedValue(new Error('Init failed')),
@@ -339,259 +287,18 @@ describe('ai-provider-factory', () => {
       };
       vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
-      // Act & Assert
       await expect(
         Promise.all([
-          createAIProvider('coding'),
+          createAIProvider('execution'),
           createAIProvider('planning'),
-          createAIProvider('debugging'),
+          createAIProvider('bugfix'),
         ])
       ).rejects.toThrow('Init failed');
     });
   });
 
-  describe('detectIntent - modal mode', () => {
-    beforeEach(() => {
-      vi.mocked(getEffectiveProvider).mockResolvedValue('modal');
-    });
-
-    it('should return coding task type in modal mode', async () => {
-      // Arrange
-      const prompt = 'Create a new component';
-
-      // Act
-      const result = await detectIntent(prompt);
-
-      // Assert
-      expect(result).toBe('coding');
-    });
-
-    it('should ignore prompt content in modal mode', async () => {
-      // Arrange
-      const prompts = [
-        'Create a new component',
-        'Debug this issue',
-        'Write documentation',
-        'Plan the architecture',
-      ];
-
-      // Act
-      const results = await Promise.all(prompts.map(p => detectIntent(p)));
-
-      // Assert
-      results.forEach(result => {
-        expect(result).toBe('coding');
-      });
-    });
-
-    it('should accept optional requestId parameter', async () => {
-      // Arrange
-      const prompt = 'Test prompt';
-      const requestId = 'test-request-123';
-
-      // Act
-      const result = await detectIntent(prompt, requestId);
-
-      // Assert
-      expect(result).toBe('coding');
-    });
-
-    it('should not initialize IntentDetector in modal mode', async () => {
-      // Arrange
-      const prompt = 'Test prompt';
-
-      // Act
-      await detectIntent(prompt);
-
-      // Assert
-      expect(IntentDetector).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('detectIntent - openrouter mode', () => {
-    beforeEach(() => {
-      vi.mocked(getEffectiveProvider).mockResolvedValue('openrouter');
-    });
-
-    it('should initialize IntentDetector on first call', async () => {
-      // Arrange
-      const mockRouter = {
-        init: vi.fn().mockResolvedValue(undefined),
-        createProviderForTask: vi.fn(),
-      };
-      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
-      const mockDetector = {
-        detect: vi.fn().mockResolvedValue('coding' as TaskType),
-      };
-      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
-
-      // Act
-      await detectIntent('Test prompt');
-
-      // Assert
-      expect(IntentDetector).toHaveBeenCalledTimes(1);
-    });
-
-    it('should detect intent from prompt', async () => {
-      // Arrange
-      const mockRouter = {
-        init: vi.fn().mockResolvedValue(undefined),
-        createProviderForTask: vi.fn(),
-      };
-      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
-      const mockDetector = {
-        detect: vi.fn().mockResolvedValue('debugging' as TaskType),
-      };
-      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
-
-      // Act
-      const result = await detectIntent('Debug this issue');
-
-      // Assert
-      expect(mockDetector.detect).toHaveBeenCalledWith('Debug this issue', undefined);
-      expect(result).toBe('debugging');
-    });
-
-    it('should pass requestId to IntentDetector', async () => {
-      // Arrange
-      const mockRouter = {
-        init: vi.fn().mockResolvedValue(undefined),
-        createProviderForTask: vi.fn(),
-      };
-      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
-      const mockDetector = {
-        detect: vi.fn().mockResolvedValue('coding' as TaskType),
-      };
-      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
-
-      // Act
-      await detectIntent('Test prompt', 'test-request-123');
-
-      // Assert
-      expect(mockDetector.detect).toHaveBeenCalledWith('Test prompt', 'test-request-123');
-    });
-
-    it('should reuse IntentDetector instance on subsequent calls', async () => {
-      // Arrange
-      const mockRouter = {
-        init: vi.fn().mockResolvedValue(undefined),
-        createProviderForTask: vi.fn(),
-      };
-      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
-      const mockDetector = {
-        detect: vi.fn().mockResolvedValue('coding' as TaskType),
-      };
-      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
-
-      // Act
-      await detectIntent('Prompt 1');
-      await detectIntent('Prompt 2');
-      await detectIntent('Prompt 3');
-
-      // Assert
-      expect(IntentDetector).toHaveBeenCalledTimes(1);
-      expect(mockDetector.detect).toHaveBeenCalledTimes(3);
-    });
-
-    it('should handle all detected task types', async () => {
-      // Arrange
-      const mockRouter = {
-        init: vi.fn().mockResolvedValue(undefined),
-        createProviderForTask: vi.fn(),
-      };
-      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
-      const taskTypes: TaskType[] = ['intent', 'planning', 'coding', 'debugging', 'documentation'];
-      let callIndex = 0;
-      const mockDetector = {
-        detect: vi.fn().mockImplementation(() => {
-          return Promise.resolve(taskTypes[callIndex++ % taskTypes.length]);
-        }),
-      };
-      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
-
-      // Act
-      const results = await Promise.all([
-        detectIntent('Prompt 1'),
-        detectIntent('Prompt 2'),
-        detectIntent('Prompt 3'),
-        detectIntent('Prompt 4'),
-        detectIntent('Prompt 5'),
-      ]);
-
-      // Assert
-      expect(results).toHaveLength(5);
-      results.forEach(result => {
-        expect(taskTypes).toContain(result);
-      });
-    });
-  });
-
-  describe('detectIntent - initialization errors', () => {
-    it('should handle AgentRouter initialization errors', async () => {
-      // Arrange
-      vi.mocked(getEffectiveProvider).mockResolvedValue('openrouter');
-      const mockRouter = {
-        init: vi.fn().mockRejectedValue(new Error('Init failed')),
-        createProviderForTask: vi.fn(),
-      };
-      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
-
-      // Act & Assert
-      await expect(detectIntent('Test prompt')).rejects.toThrow('Init failed');
-    });
-
-    it('should handle IntentDetector detection errors', async () => {
-      // Arrange
-      vi.mocked(getEffectiveProvider).mockResolvedValue('openrouter');
-      const mockRouter = {
-        init: vi.fn().mockResolvedValue(undefined),
-        createProviderForTask: vi.fn(),
-      };
-      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
-      const mockDetector = {
-        detect: vi.fn().mockRejectedValue(new Error('Detection failed')),
-      };
-      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
-
-      // Act & Assert
-      await expect(detectIntent('Test prompt')).rejects.toThrow('Detection failed');
-    });
-  });
-
-  describe('detectIntent - concurrent calls', () => {
-    it('should handle concurrent detection calls', async () => {
-      // Arrange
-      vi.mocked(getEffectiveProvider).mockResolvedValue('openrouter');
-      const mockRouter = {
-        init: vi.fn().mockResolvedValue(undefined),
-        createProviderForTask: vi.fn(),
-      };
-      vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
-      const mockDetector = {
-        detect: vi.fn().mockImplementation((prompt: string) => {
-          return Promise.resolve(prompt.includes('debug') ? 'debugging' : 'coding');
-        }),
-      };
-      vi.mocked(IntentDetector).mockImplementation(function() { return mockDetector; });
-
-      // Act
-      const [result1, result2, result3] = await Promise.all([
-        detectIntent('Create component'),
-        detectIntent('debug issue'),
-        detectIntent('Write docs'),
-      ]);
-
-      // Assert
-      expect(IntentDetector).toHaveBeenCalledTimes(1);
-      expect(result1).toBe('coding');
-      expect(result2).toBe('debugging');
-      expect(result3).toBe('coding');
-    });
-  });
-
   describe('integration - mixed provider modes', () => {
     it('should handle provider switch from modal to openrouter', async () => {
-      // Arrange
       vi.mocked(getEffectiveProvider)
         .mockResolvedValueOnce('modal')
         .mockResolvedValueOnce('openrouter');
@@ -599,25 +306,22 @@ describe('ai-provider-factory', () => {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
       };
-      vi.mocked(createModalClient).mockReturnValue(mockProvider);
+      vi.mocked(createModalClientForTask).mockReturnValue(mockProvider as any);
       const mockRouter = {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn().mockReturnValue(mockProvider),
       };
       vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
-      // Act
-      await createAIProvider('coding');
+      await createAIProvider('execution');
       resetProviderSingletons();
-      await createAIProvider('coding');
+      await createAIProvider('execution');
 
-      // Assert
-      expect(createModalClient).toHaveBeenCalledTimes(1);
+      expect(createModalClientForTask).toHaveBeenCalledTimes(1);
       expect(AgentRouter).toHaveBeenCalledTimes(1);
     });
 
     it('should handle provider switch from openrouter to modal', async () => {
-      // Arrange
       // getEffectiveProvider is called twice per createAIProvider call:
       // once in createAIProvider itself, once inside ensureInitialized
       vi.mocked(getEffectiveProvider)
@@ -628,21 +332,19 @@ describe('ai-provider-factory', () => {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
       };
-      vi.mocked(createModalClient).mockReturnValue(mockProvider);
+      vi.mocked(createModalClientForTask).mockReturnValue(mockProvider as any);
       const mockRouter = {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn().mockReturnValue(mockProvider),
       };
       vi.mocked(AgentRouter).mockImplementation(function() { return mockRouter; });
 
-      // Act
-      await createAIProvider('coding');
+      await createAIProvider('execution');
       resetProviderSingletons();
-      await createAIProvider('coding');
+      await createAIProvider('execution');
 
-      // Assert
       expect(AgentRouter).toHaveBeenCalledTimes(1);
-      expect(createModalClient).toHaveBeenCalledTimes(1);
+      expect(createModalClientForTask).toHaveBeenCalledTimes(1);
     });
   });
 });

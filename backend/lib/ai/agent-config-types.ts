@@ -23,6 +23,8 @@ export interface ModelEntry {
 export interface TaskConfig {
   taskType: TaskType;
   models: ModelEntry[];
+  /** Set by the GET /agent-config handler when OPENROUTER_<TASK>_MODEL env var is explicitly set. Read-only; never persisted. */
+  envOverride?: string;
 }
 
 export interface AgentConfig {

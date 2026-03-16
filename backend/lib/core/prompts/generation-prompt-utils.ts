@@ -133,6 +133,15 @@ STRUCTURAL PATTERNS (medium):
   }
 }
 
+import { ProjectOutputSchema } from '../schemas';
+import { toSimpleJsonSchema } from '../zod-to-json-schema';
+
+/**
+ * JSON Schema for project generation output.
+ * Forces the AI to return properly structured JSON.
+ */
+export const PROJECT_OUTPUT_SCHEMA = toSimpleJsonSchema(ProjectOutputSchema);
+
 /** Return a complexity-appropriate quality bar reference for the prompt. */
 export function getQualityBarReference(complexity: ComplexityLevel): string {
   if (complexity === 'simple') {

@@ -1,20 +1,22 @@
 /**
  * Streaming Project Generator
- * Generates projects with incremental file streaming via SSE.
+ * Generates projects with incremental file streaming via SSE using the 4-stage pipeline.
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared/types';
+import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared';
 import type { AIProvider } from '../ai';
 import { createAIProvider } from '../ai';
-import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
-import { buildFixPrompt } from './prompts/build-fix-prompt';
+import type { IPromptProvider } from './prompts/prompt-provider';
+import { createPromptProvider } from './prompts/prompt-provider-factory';
+import { getEffectiveProvider } from '../ai/provider-config-store';
 import { processFiles } from './file-processor';
-import { ProjectOutputSchema } from './schemas';
 import { createLogger } from '../logger';
-import { getMaxOutputTokens } from '../config';
 import { parseIncrementalFiles, estimateTotalFiles } from '../utils/incremental-json-parser';
 import { BaseProjectGenerator } from './base-project-generator';
+import type { PipelineCallbacks, PipelineStage } from './pipeline-orchestrator';
+import { PipelineOrchestrator } from './pipeline-orchestrator';
+import { createPipelineOrchestrator } from './pipeline-factory';
 
 const logger = createLogger('StreamingGenerator');
 
@@ -30,6 +32,8 @@ export interface StreamingCallbacks {
   onComplete?: (result: { projectState: ProjectState; version: Version }) => void;
   onError?: (error: string, errorData?: { errorCode?: string; errorType?: string; partialContent?: string }) => void;
   onHeartbeat?: () => void;
+  /** Emitted at each pipeline stage transition (start/complete/degraded) */
+  onPipelineStage?: (data: { stage: PipelineStage; label: string; status: 'start' | 'complete' | 'degraded' }) => void;
   /** Optional abort signal to cancel generation on client disconnect */
   signal?: AbortSignal;
 }
@@ -42,14 +46,19 @@ export type StreamingGenerationResult = OperationResult;
 
 /**
  * Streaming Project Generator that emits files as they're generated.
+ * Delegates to the 4-stage PipelineOrchestrator for Intent → Planning → Execution → Review.
  */
 export class StreamingProjectGenerator extends BaseProjectGenerator {
-  constructor(aiProvider: AIProvider) {
-    super(aiProvider);
+  constructor(
+    private readonly pipeline: PipelineOrchestrator,
+    bugfixProvider: AIProvider,
+    promptProvider: IPromptProvider
+  ) {
+    super(bugfixProvider, promptProvider);
   }
 
   /**
-   * Generates a project with streaming file emission.
+   * Generates a project with streaming file emission via the pipeline.
    * @param description - The project description
    * @param callbacks - Streaming event callbacks
    * @param options - Optional configuration
@@ -69,47 +78,42 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
 
     const contextLogger = options?.requestId ? logger.withRequestId(options.requestId) : logger;
 
-    contextLogger.debug('Starting streaming project generation', {
+    contextLogger.debug('Starting streaming project generation via pipeline', {
       descriptionLength: description.length,
     });
 
     callbacks.onStart?.();
 
-    // Build prompt with proper injection defense
-    const systemInstruction = getGenerationPrompt(description);
-
-    contextLogger.info('Sending streaming request to AI provider', {
-      systemInstructionLength: systemInstruction.length,
-      temperature: 0.7,
-      maxOutputTokens: getMaxOutputTokens('generation'),
-    });
-
-    // Track parsed files to emit them incrementally
-    let lastParsedIndex = 0;
+    // Track parsed files for incremental emission during streaming
     let accumulatedText = '';
+    let lastParsedIndex = 0;
     const emittedFiles = new Set<string>();
     let warningCount = 0;
 
-    // Call AI provider with structured output and streaming
-    const response = await this.aiProvider.generateStreaming({
-      prompt: 'Generate the project based on the user request in the system instruction.',
-      systemInstruction: systemInstruction,
-      temperature: 0.7,
-      maxOutputTokens: getMaxOutputTokens('generation'),
-      responseSchema: PROJECT_OUTPUT_SCHEMA,
-      signal: callbacks.signal,
-      requestId: options?.requestId,
-      onChunk: (chunk: string, accumulatedLength: number) => {
+    // Map pipeline callbacks to StreamingCallbacks
+    const pipelineCallbacks: PipelineCallbacks = {
+      onStageStart: (stage, label) => {
+        contextLogger.debug('Pipeline stage start', { stage, label });
+        callbacks.onPipelineStage?.({ stage, label, status: 'start' });
+      },
+      onStageComplete: (stage) => {
+        contextLogger.debug('Pipeline stage complete', { stage });
+        callbacks.onPipelineStage?.({ stage, label: '', status: 'complete' });
+      },
+      onStageFailed: (stage, error) => {
+        contextLogger.warn('Pipeline stage failed (degraded)', { stage, error });
+        callbacks.onPipelineStage?.({ stage, label: error, status: 'degraded' });
+      },
+      onExecutionChunk: (chunk, accumulatedLength) => {
         accumulatedText += chunk;
         callbacks.onProgress?.(accumulatedLength);
 
-        // Try to parse incrementally for complete file objects
+        // Incremental parse for partial file emission during streaming
         const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
 
         if (parseResult.files.length > 0) {
           const totalEstimate = estimateTotalFiles(accumulatedText);
 
-          // Emit newly parsed files with 'partial' status during streaming
           for (const file of parseResult.files) {
             if (!emittedFiles.has(file.path)) {
               emittedFiles.add(file.path);
@@ -118,7 +122,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
                 content: file.content,
                 index: emittedFiles.size - 1,
                 total: totalEstimate,
-                status: 'partial', // Mark as partial during streaming
+                status: 'partial',
               });
             }
           }
@@ -126,60 +130,40 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
           lastParsedIndex = parseResult.lastParsedIndex;
         }
       },
-    });
+      signal: callbacks.signal,
+    };
 
-    if (!response.success || !response.content) {
-      const error = response.error ?? 'Failed to generate project from AI';
-      callbacks.onError?.(error, {
-        errorCode: response.errorCode,
-        errorType: response.errorType,
-        partialContent: response.partialContent,
-      });
-      // Emit stream-end even on error to indicate partial files
+    // Run the 4-stage generation pipeline
+    let pipelineResult;
+    try {
+      pipelineResult = await this.pipeline.runGenerationPipeline(
+        description,
+        pipelineCallbacks,
+        { requestId: options?.requestId }
+      );
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Pipeline execution failed';
+      callbacks.onError?.(error);
       callbacks.onStreamEnd?.({
         totalFiles: emittedFiles.size,
         successfulFiles: 0,
         failedFiles: emittedFiles.size,
         warnings: warningCount,
       });
-      return {
-        success: false,
-        error,
-      };
+      return { success: false, error };
     }
 
-    // Parse and validate the complete structured output
-    let parsedData: unknown;
-    try {
-      parsedData = JSON.parse(response.content);
-    } catch (e) {
-      const error = `Failed to parse AI response: ${e instanceof Error ? e.message : 'Invalid JSON'}`;
-      callbacks.onError?.(error);
-      return {
-        success: false,
-        error,
-      };
-    }
-
-    const zodResult = ProjectOutputSchema.safeParse(parsedData);
-
-    if (!zodResult.success) {
-      const error = `Invalid AI response structure: ${zodResult.error.message}`;
-      callbacks.onError?.(error);
-      return {
-        success: false,
-        error,
-      };
-    }
-
-    const parsedOutput = zodResult.data;
-    const files = parsedOutput.files;
+    contextLogger.info('Pipeline complete, processing files', {
+      fileCount: pipelineResult.finalFiles.length,
+      intentCompleted: !!pipelineResult.intentOutput,
+      planCompleted: !!pipelineResult.planOutput,
+      reviewCompleted: !!pipelineResult.reviewOutput,
+    });
 
     // Process files: sanitize paths, normalize newlines, format with Prettier
-    const processResult = await processFiles(files, { addFrontendPrefix: false });
+    const processResult = await processFiles(pipelineResult.finalFiles, { addFrontendPrefix: false });
     const prefixedFiles = processResult.files;
 
-    // Emit warnings for formatting failures
     for (const warning of processResult.warnings) {
       callbacks.onWarning?.({
         path: warning.path,
@@ -193,7 +177,6 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     contextLogger.debug('Validating files', { files: Object.keys(prefixedFiles) });
     const validationResult = this.validationPipeline.validate(prefixedFiles);
 
-    // Surface quality warnings via SSE instead of just logging
     if (validationResult.warnings && validationResult.warnings.length > 0) {
       for (const warning of validationResult.warnings) {
         callbacks.onWarning?.({
@@ -216,7 +199,6 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       };
     }
 
-
     // If aborted, skip build-fix and downstream work
     if (callbacks.signal?.aborted) {
       contextLogger.info('Generation aborted by client before build-fix loop');
@@ -226,15 +208,13 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       };
     }
 
-    // Build validation with auto-retry using universal retry loop
+    // Build validation with auto-retry using the injected bugfix provider
     const finalFiles = await this.runBuildFixLoop(
       validationResult.sanitizedOutput!,
-      'generation',
       description,
       options?.requestId
     );
 
-    // If aborted after build-fix, skip file emission
     if (callbacks.signal?.aborted) {
       contextLogger.info('Generation aborted by client after build-fix loop');
       return {
@@ -244,7 +224,6 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     }
 
     // Create project state
-
     const now = new Date();
     const projectId = uuidv4();
     const versionId = uuidv4();
@@ -269,7 +248,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       parentVersionId: null,
     };
 
-    // Emit files one by one with 'complete' status
+    // Emit files with 'complete' status
     const fileEntries = Object.entries(finalFiles);
     for (let i = 0; i < fileEntries.length; i++) {
       const [path, content] = fileEntries[i];
@@ -278,13 +257,12 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
         content,
         index: i,
         total: fileEntries.length,
-        status: 'complete', // Mark as complete after processing
+        status: 'complete',
       });
     }
 
     callbacks.onComplete?.({ projectState, version });
 
-    // Emit stream-end summary
     callbacks.onStreamEnd?.({
       totalFiles: fileEntries.length,
       successfulFiles: fileEntries.length,
@@ -298,13 +276,17 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       version,
     };
   }
-
 }
 
 /**
- * Creates a StreamingProjectGenerator instance with the default AI provider for coding tasks.
+ * Creates a StreamingProjectGenerator with the full pipeline + bugfix provider.
  */
 export async function createStreamingProjectGenerator(): Promise<StreamingProjectGenerator> {
-  const aiProvider = await createAIProvider('execution');
-  return new StreamingProjectGenerator(aiProvider);
+  const [pipeline, bugfixProvider, providerName] = await Promise.all([
+    createPipelineOrchestrator(),
+    createAIProvider('bugfix'),
+    getEffectiveProvider(),
+  ]);
+  const promptProvider = createPromptProvider(providerName);
+  return new StreamingProjectGenerator(pipeline, bugfixProvider, promptProvider);
 }
