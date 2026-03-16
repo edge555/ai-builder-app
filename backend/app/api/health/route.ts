@@ -31,7 +31,7 @@ async function checkProviderReachability(): Promise<{
         headers['Authorization'] = `Bearer ${config.provider.openrouterApiKey}`;
       }
     } else {
-      url = config.provider.modalApiUrl!;
+      url = config.provider.modalDefaultUrl!;
     }
 
     const response = await fetch(url, { signal: controller.signal, headers });

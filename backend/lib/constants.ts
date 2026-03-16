@@ -57,12 +57,21 @@ export const MAX_OUTPUT_TOKENS_GENERATION = 32768;
 export const MAX_OUTPUT_TOKENS_MODIFICATION = 16384;
 export const MAX_OUTPUT_TOKENS_PLANNING = 1024;
 
-// Max output tokens per operation type (Modal / Qwen 2.5-Coder-7B-Instruct)
+// Max output tokens per operation type (Modal)
 // Billed per GPU hour — not per token — so larger limits cost only wall-clock time.
-// Qwen 2.5-Coder-7B-Instruct has a 32 K context window; typical input is 3–8 K tokens.
 export const MODAL_MAX_OUTPUT_TOKENS_GENERATION = 32768;
 export const MODAL_MAX_OUTPUT_TOKENS_MODIFICATION = 16384;
 export const MODAL_MAX_OUTPUT_TOKENS_PLANNING = 2048;
+
+// Per-stage token budgets for the multi-stage pipeline (OpenRouter)
+export const MAX_OUTPUT_TOKENS_INTENT = 512;
+export const MAX_OUTPUT_TOKENS_PLANNING_STAGE = 4096;
+export const MAX_OUTPUT_TOKENS_REVIEW = 32768; // full-file corrections; must match execution budget
+
+// Per-stage token budgets for the multi-stage pipeline (Modal)
+export const MODAL_MAX_OUTPUT_TOKENS_INTENT = 1024;
+export const MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE = 8192;
+export const MODAL_MAX_OUTPUT_TOKENS_REVIEW = 32768;
 
 // Route operation timeouts
 export const DIFF_TIMEOUT_MS = 30_000;   // 30 seconds

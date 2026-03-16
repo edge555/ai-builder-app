@@ -305,6 +305,6 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
  * Creates a StreamingProjectGenerator instance with the default AI provider for coding tasks.
  */
 export async function createStreamingProjectGenerator(): Promise<StreamingProjectGenerator> {
-  const aiProvider = await createAIProvider('coding');
+  const aiProvider = await createAIProvider('execution');
   return new StreamingProjectGenerator(aiProvider);
 }

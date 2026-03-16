@@ -255,7 +255,7 @@ function shouldSkipPlanningHeuristic(prompt: string, projectState: ProjectState)
 /**
  * Creates a ModificationEngine instance with the AI provider for the given task type.
  */
-export async function createModificationEngine(taskType: TaskType = 'coding'): Promise<ModificationEngine> {
+export async function createModificationEngine(taskType: TaskType = 'execution'): Promise<ModificationEngine> {
   const aiProvider = await createAIProvider(taskType);
   return new ModificationEngine(aiProvider);
 }

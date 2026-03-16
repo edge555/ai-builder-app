@@ -3,31 +3,88 @@
   "tasks": {
     "intent": {
       "taskType": "intent",
-      "models": []
+      "models": [
+        {
+          "id": "thudm/glm-4.5-air",
+          "label": "GLM-4.5-Air",
+          "active": true,
+          "priority": 0
+        },
+        {
+          "id": "anthropic/claude-haiku-4-5",
+          "label": "Claude Haiku 4.5",
+          "active": true,
+          "priority": 1
+        }
+      ]
     },
     "planning": {
       "taskType": "planning",
-      "models": []
-    },
-    "coding": {
-      "taskType": "coding",
       "models": [
         {
           "id": "google/gemini-2.5-flash",
           "label": "Gemini 2.5 Flash",
           "active": true,
           "priority": 0
+        },
+        {
+          "id": "deepseek/deepseek-r1",
+          "label": "DeepSeek R1",
+          "active": true,
+          "priority": 1
         }
       ]
     },
-
-    "debugging": {
-      "taskType": "debugging",
-      "models": []
+    "execution": {
+      "taskType": "execution",
+      "models": [
+        {
+          "id": "google/gemini-2.5-flash",
+          "label": "Gemini 2.5 Flash",
+          "active": true,
+          "priority": 0
+        },
+        {
+          "id": "anthropic/claude-haiku-4-5",
+          "label": "Claude Haiku 4.5",
+          "active": true,
+          "priority": 1
+        }
+      ]
     },
-    "documentation": {
-      "taskType": "documentation",
-      "models": []
+    "bugfix": {
+      "taskType": "bugfix",
+      "models": [
+        {
+          "id": "thudm/glm-5",
+          "label": "GLM-5",
+          "active": true,
+          "priority": 0
+        },
+        {
+          "id": "anthropic/claude-haiku-4-5",
+          "label": "Claude Haiku 4.5",
+          "active": true,
+          "priority": 1
+        }
+      ]
+    },
+    "review": {
+      "taskType": "review",
+      "models": [
+        {
+          "id": "thudm/glm-5",
+          "label": "GLM-5",
+          "active": true,
+          "priority": 0
+        },
+        {
+          "id": "anthropic/claude-haiku-4-5",
+          "label": "Claude Haiku 4.5",
+          "active": true,
+          "priority": 1
+        }
+      ]
     }
   }
 }

@@ -3,15 +3,15 @@
  * @description Type definitions for the per-task agent configuration system.
  * Defines the shape of the persisted agent config file (`data/agent-config.json`).
  *
- * TaskType determines which set of models is used for each AI operation:
- * - `intent` – prompt classification
- * - `planning` – file selection before modification
- * - `coding` – code generation and modification
- * - `debugging` – build-error fixing
- * - `documentation` – comment and doc generation
+ * TaskType determines which set of models is used for each AI pipeline stage:
+ * - `intent`    – classify and clarify the user request
+ * - `planning`  – file structure and architecture planning
+ * - `execution` – code generation and modification (streaming)
+ * - `bugfix`    – build-error fixing
+ * - `review`    – holistic code review after generation
  */
 
-export type TaskType = 'intent' | 'planning' | 'coding' | 'debugging' | 'documentation';
+export type TaskType = 'intent' | 'planning' | 'execution' | 'bugfix' | 'review';
 
 export interface ModelEntry {
   id: string;

@@ -32,7 +32,7 @@ const ModelEntrySchema = z.object({
   priority: z.number().int().min(0),
 });
 
-const TASK_TYPES = ['intent', 'planning', 'coding', 'debugging', 'documentation'] as const;
+const TASK_TYPES = ['intent', 'planning', 'execution', 'bugfix', 'review'] as const;
 
 const TaskConfigSchema = z.object({
   taskType: z.enum(TASK_TYPES),
@@ -44,9 +44,9 @@ const AgentConfigSchema = z.object({
   tasks: z.object({
     intent: TaskConfigSchema,
     planning: TaskConfigSchema,
-    coding: TaskConfigSchema,
-    debugging: TaskConfigSchema,
-    documentation: TaskConfigSchema,
+    execution: TaskConfigSchema,
+    bugfix: TaskConfigSchema,
+    review: TaskConfigSchema,
   }),
 });
 

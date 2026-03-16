@@ -68,3 +68,40 @@ export const PlanningResponseSchema = z.object({
 });
 
 export type PlanningResponse = z.infer<typeof PlanningResponseSchema>;
+
+// ─── Pipeline Stage Schemas ────────────────────────────────────────────────
+
+// Intent stage output
+export const IntentOutputSchema = z.object({
+  clarifiedGoal: z.string().describe('Refined version of the user goal'),
+  complexity: z.enum(['simple', 'medium', 'complex']).describe('Estimated project complexity'),
+  features: z.array(z.string()).describe('Key features to implement'),
+  technicalApproach: z.string().describe('Recommended technical approach'),
+});
+
+export type IntentOutput = z.infer<typeof IntentOutputSchema>;
+
+// Planning stage output
+export const PlanOutputSchema = z.object({
+  files: z.array(z.object({
+    path: z.string().describe('File path relative to project root'),
+    purpose: z.string().describe('What this file does'),
+  })).describe('Files to create or modify'),
+  components: z.array(z.string()).describe('React components to implement'),
+  dependencies: z.array(z.string()).describe('npm packages to include'),
+  routing: z.array(z.string()).describe('Routes to define'),
+});
+
+export type PlanOutput = z.infer<typeof PlanOutputSchema>;
+
+// Review stage output
+export const ReviewOutputSchema = z.object({
+  verdict: z.enum(['pass', 'fixed']).describe('pass = no changes needed; fixed = corrections provided'),
+  corrections: z.array(z.object({
+    path: z.string().describe('File path to replace'),
+    content: z.string().describe('Full replacement file content'),
+    reason: z.string().describe('Why this correction was made'),
+  })).describe('Files to replace (empty when verdict is pass)'),
+});
+
+export type ReviewOutput = z.infer<typeof ReviewOutputSchema>;

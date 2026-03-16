@@ -18,7 +18,7 @@
 
 import type { AIProvider } from './ai-provider';
 import type { TaskType } from './agent-config-types';
-import { createModalClient } from './modal-client';
+import { createModalClientForTask } from './modal-pipeline-factory';
 import { AgentRouter } from './agent-router';
 import { IntentDetector } from './intent-detector';
 import { getEffectiveProvider } from './provider-config-store';
@@ -69,11 +69,11 @@ async function ensureInitialized(): Promise<void> {
  *
  * Uses settings override if set, otherwise falls back to AI_PROVIDER env var.
  */
-export async function createAIProvider(taskType: TaskType = 'coding'): Promise<AIProvider> {
+export async function createAIProvider(taskType: TaskType = 'execution'): Promise<AIProvider> {
   const provider = await getEffectiveProvider();
   if (provider === 'modal') {
-    logger.info('Initializing Modal AI Provider');
-    return createModalClient();
+    logger.info('Initializing Modal AI Provider', { taskType });
+    return createModalClientForTask(taskType);
   }
 
   await ensureInitialized();
@@ -84,7 +84,7 @@ export async function createAIProvider(taskType: TaskType = 'coding'): Promise<A
 /**
  * Detects the intent (task type) of a user prompt.
  *
- * - Modal mode: always returns 'coding' (no intent detection)
+ * - Modal mode: always returns 'execution' (no intent detection)
  * - OpenRouter mode: classifies the prompt via IntentDetector
  *
  * Uses settings override if set, otherwise falls back to AI_PROVIDER env var.
@@ -92,7 +92,7 @@ export async function createAIProvider(taskType: TaskType = 'coding'): Promise<A
 export async function detectIntent(prompt: string, requestId?: string): Promise<TaskType> {
   const provider = await getEffectiveProvider();
   if (provider === 'modal') {
-    return 'coding';
+    return 'execution';
   }
 
   await ensureInitialized();

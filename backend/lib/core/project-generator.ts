@@ -211,6 +211,6 @@ export class ProjectGenerator extends BaseProjectGenerator {
  * Creates a ProjectGenerator instance with the default AI provider for coding tasks.
  */
 export async function createProjectGenerator(): Promise<ProjectGenerator> {
-  const aiProvider = await createAIProvider('coding');
+  const aiProvider = await createAIProvider('execution');
   return new ProjectGenerator(aiProvider);
 }
