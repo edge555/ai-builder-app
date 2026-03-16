@@ -226,7 +226,8 @@ describe('generateModifications', () => {
 
   describe('error handling', () => {
     it('should return error after max retries', async () => {
-      // Use failed responses (not thrown errors) so the retry loop runs
+      // With the new retry strategy, retries 2-4 only trigger when there are
+      // failed file edits. A raw API failure on attempt 1 exits immediately.
       mockAIProvider.generate.mockResolvedValue({
         success: false,
         error: 'Persistent error',
@@ -242,7 +243,7 @@ describe('generateModifications', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Failed after 4 attempts');
-      expect(mockAIProvider.generate).toHaveBeenCalledTimes(4);
+      expect(mockAIProvider.generate).toHaveBeenCalledTimes(1);
     });
 
     it('should return error when AI returns success but no content', async () => {

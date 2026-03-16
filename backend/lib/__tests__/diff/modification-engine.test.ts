@@ -82,17 +82,8 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div>Hello</div>; }',
       });
 
-      // Mock FilePlanner planning response (selects files)
+      // Planning is skipped for small projects (≤8 files), mock only modification response
       vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            primaryFiles: ['src/App.tsx'],
-            contextFiles: [],
-            reasoning: 'App.tsx needs modification',
-          }),
-        })
-        // Mock modification response
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -131,15 +122,8 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
+      // Planning is skipped for small projects (≤8 files), mock only modification response
       vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            primaryFiles: ['src/App.tsx'],
-            contextFiles: [],
-            reasoning: 'Need to add Button component',
-          }),
-        })
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -170,15 +154,8 @@ describe('ModificationEngine', () => {
         'src/OldComponent.tsx': 'export default function OldComponent() { return <div />; }',
       });
 
+      // Planning is skipped for small projects (≤8 files), mock only modification response
       vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            primaryFiles: ['src/OldComponent.tsx'],
-            contextFiles: [],
-            reasoning: 'Delete OldComponent',
-          }),
-        })
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -207,15 +184,8 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
+      // Planning is skipped for small projects (≤8 files)
       vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            primaryFiles: ['src/App.tsx'],
-            contextFiles: [],
-            reasoning: 'Modify App',
-          }),
-        })
         .mockResolvedValue({
           success: false,
           error: 'API error',
@@ -235,15 +205,8 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
+      // Planning is skipped for small projects (≤8 files)
       vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            primaryFiles: ['src/App.tsx'],
-            contextFiles: [],
-            reasoning: 'Modify App',
-          }),
-        })
         .mockResolvedValue({
           success: true,
           content: 'This is not valid JSON',
@@ -263,15 +226,8 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
+      // Planning is skipped for small projects (≤8 files), mock only modification response
       vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            primaryFiles: ['src/App.tsx'],
-            contextFiles: [],
-            reasoning: 'Modify App',
-          }),
-        })
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -301,15 +257,8 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'line1\nline2\nline3',
       });
 
+      // Planning is skipped for small projects (≤8 files), mock only modification response
       vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            primaryFiles: ['src/App.tsx'],
-            contextFiles: [],
-            reasoning: 'Modify App',
-          }),
-        })
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -346,15 +295,8 @@ describe('ModificationEngine', () => {
         'src/utils.ts': 'export const helper = () => 42;',
       });
 
+      // Planning is skipped for small projects (≤8 files), mock only modification response
       vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            primaryFiles: ['src/App.tsx'],
-            contextFiles: [],
-            reasoning: 'Modify App',
-          }),
-        })
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -383,15 +325,8 @@ describe('ModificationEngine', () => {
         'src/App.tsx': 'export default function App() { return <div />; }',
       });
 
+      // Planning is skipped for small projects (≤8 files), mock only modification response
       vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            primaryFiles: ['src/App.tsx'],
-            contextFiles: [],
-            reasoning: 'Modify App',
-          }),
-        })
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
@@ -422,15 +357,8 @@ describe('ModificationEngine', () => {
         'src/old.ts': 'old content',
       });
 
+      // Planning is skipped for small projects (≤8 files), mock only modification response
       vi.mocked(mockAIProvider.generate)
-        .mockResolvedValueOnce({
-          success: true,
-          content: JSON.stringify({
-            primaryFiles: ['src/App.tsx', 'src/old.ts'],
-            contextFiles: [],
-            reasoning: 'Multiple changes',
-          }),
-        })
         .mockResolvedValueOnce({
           success: true,
           content: JSON.stringify({
