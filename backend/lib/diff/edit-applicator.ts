@@ -20,6 +20,8 @@ export function applyEdits(
     originalContent: string,
     edits: EditOperation[]
 ): EditApplicationResult {
+    // `content` tracks the running state after all successful edits.
+    // On failure, it becomes `partialContent` — the file with only successful edits applied.
     let content = originalContent;
     let partialContent = originalContent;
     const warnings: string[] = [];

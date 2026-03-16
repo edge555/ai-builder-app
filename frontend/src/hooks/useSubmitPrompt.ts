@@ -20,6 +20,7 @@ const MAX_CONVERSATION_CHARS = 6000;
 /**
  * Build a condensed conversation history from recent chat messages.
  * Filters to user+assistant pairs, truncates content, and respects a char budget.
+ * Note: stops adding turns once the budget is exceeded — later (smaller) turns are dropped.
  */
 export function buildConversationHistory(
     messages: ChatMessage[],

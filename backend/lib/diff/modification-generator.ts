@@ -10,6 +10,7 @@ import { applyFileEdits } from './file-edit-applicator';
 import type { FailedFileEdit } from './file-edit-applicator';
 import { createLogger } from '../logger';
 import { OperationTimer, formatMetrics } from '../metrics';
+import { MODIFICATION_RETRY_DELAY_MULTIPLIER_MS } from '../constants';
 
 const logger = createLogger('ModificationGenerator');
 
@@ -170,7 +171,7 @@ export async function generateModifications(
 
 function attemptDelay(attempt: number): Promise<void> {
   if (attempt <= 1) return Promise.resolve();
-  return delay(attempt * 500);
+  return delay(attempt * MODIFICATION_RETRY_DELAY_MULTIPLIER_MS);
 }
 
 function logSuccess(attempt: number, editErrors: string[], startTime: number): void {

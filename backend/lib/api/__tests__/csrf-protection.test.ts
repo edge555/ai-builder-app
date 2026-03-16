@@ -63,28 +63,24 @@ describe('CSRF protection via getCorsHeaders', () => {
 
     it('should reject POST with missing origin', () => {
       const request = makeRequest('POST');
-      expect(() => getCorsHeaders(request, opts)).toThrow(AppError);
-      try {
-        getCorsHeaders(request, opts);
-      } catch (e) {
-        const err = e as AppError;
-        expect(err.statusCode).toBe(403);
-        expect(err.code).toBe('ORIGIN_REJECTED');
-        expect(err.details).toEqual({ origin: 'missing' });
-      }
+      let caughtErr: unknown;
+      try { getCorsHeaders(request, opts); } catch (e) { caughtErr = e; }
+      expect(caughtErr).toBeInstanceOf(AppError);
+      const err = caughtErr as AppError;
+      expect(err.statusCode).toBe(403);
+      expect(err.code).toBe('ORIGIN_REJECTED');
+      expect(err.details).toEqual({ origin: 'missing' });
     });
 
     it('should reject POST with invalid origin', () => {
       const request = makeRequest('POST', 'https://evil.com');
-      expect(() => getCorsHeaders(request, opts)).toThrow(AppError);
-      try {
-        getCorsHeaders(request, opts);
-      } catch (e) {
-        const err = e as AppError;
-        expect(err.statusCode).toBe(403);
-        expect(err.code).toBe('ORIGIN_REJECTED');
-        expect(err.details).toEqual({ origin: 'https://evil.com' });
-      }
+      let caughtErr: unknown;
+      try { getCorsHeaders(request, opts); } catch (e) { caughtErr = e; }
+      expect(caughtErr).toBeInstanceOf(AppError);
+      const err = caughtErr as AppError;
+      expect(err.statusCode).toBe(403);
+      expect(err.code).toBe('ORIGIN_REJECTED');
+      expect(err.details).toEqual({ origin: 'https://evil.com' });
     });
 
     it('should reject PUT with missing origin', () => {
