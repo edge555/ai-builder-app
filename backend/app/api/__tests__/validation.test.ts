@@ -36,7 +36,7 @@ describe('API Validation Integration', () => {
         try {
             schema.parse();
         } catch (error) {
-            const response = handleError(error, 'test/route') as any;
+            const response = handleError(error, 'test/route') as unknown as { status: number; data: { success: boolean; error: { type: string; code: string; details: { issues: Array<{ path: string[] }> } } } };
 
             expect(response.status).toBe(422);
             expect(response.data.success).toBe(false);
@@ -48,12 +48,12 @@ describe('API Validation Integration', () => {
     });
 
     it('should handle malformed JSON as an API error', async () => {
-        // This is typically handled by request.json() or our manual check if we kept it, 
+        // This is typically handled by request.json() or our manual check if we kept it,
         // but in our new flow we let request.json() throw or handle it.
         // Let's simulate what happens if body parsing fails before validation.
 
         const error = new Error('Unexpected token'); // Simulating JSON parse error
-        const response = handleError(error, 'test/route') as any;
+        const response = handleError(error, 'test/route') as unknown as { status: number; data: { success: boolean; error: { code: string } } };
 
         // Generic errors are 500 by default in our current handleError if not AppError or ZodError
         expect(response.status).toBe(500);

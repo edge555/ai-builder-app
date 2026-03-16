@@ -2,6 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FilePlanner } from '../../analysis/file-planner/file-planner';
 import type { ProjectState } from '@ai-app-builder/shared';
 
+type FilePlannerInternals = {
+  currentCacheMemoryUsage: number;
+  MAX_CACHE_MEMORY_BYTES: number;
+  chunkIndexCache: Map<string, { estimatedSize: number }>;
+  symbolLookupCache: Map<string, unknown>;
+  chunkIndexBuilder: { build: (...args: unknown[]) => unknown };
+};
+
 describe('FilePlanner Cache Management', () => {
   let planner: FilePlanner;
 
@@ -34,7 +42,7 @@ describe('FilePlanner Cache Management', () => {
       planner.clear();
 
       // Verify caches are empty by checking memory usage
-      const stats = (planner as any).currentCacheMemoryUsage;
+      const stats = (planner as unknown as FilePlannerInternals).currentCacheMemoryUsage;
       expect(stats).toBe(0);
     });
   });
@@ -56,7 +64,7 @@ describe('FilePlanner Cache Management', () => {
       }
 
       // Cache should only have 3 entries (MAX_CACHE_ENTRIES)
-      const cacheSize = (planner as any).chunkIndexCache.size;
+      const cacheSize = (planner as unknown as FilePlannerInternals).chunkIndexCache.size;
       expect(cacheSize).toBeLessThanOrEqual(3);
     });
 
@@ -77,7 +85,7 @@ describe('FilePlanner Cache Management', () => {
       // Add proj4 - should evict proj2 (oldest)
       await planner.plan('test', proj4);
 
-      const cache = (planner as any).chunkIndexCache;
+      const cache = (planner as unknown as FilePlannerInternals).chunkIndexCache;
       const cacheKeys = Array.from(cache.keys());
       const cacheSize = cache.size;
 
@@ -91,8 +99,8 @@ describe('FilePlanner Cache Management', () => {
 
       await planner.plan('test', largeProject);
 
-      const memoryUsage = (planner as any).currentCacheMemoryUsage;
-      const maxMemory = (planner as any).MAX_CACHE_MEMORY_BYTES;
+      const memoryUsage = (planner as unknown as FilePlannerInternals).currentCacheMemoryUsage;
+      const maxMemory = (planner as unknown as FilePlannerInternals).MAX_CACHE_MEMORY_BYTES;
 
       // Memory usage should not exceed the limit
       expect(memoryUsage).toBeLessThanOrEqual(maxMemory);
@@ -105,8 +113,8 @@ describe('FilePlanner Cache Management', () => {
 
       await planner.plan('test', project);
 
-      const chunkCacheKeys = Array.from((planner as any).chunkIndexCache.keys());
-      const symbolCacheKeys = Array.from((planner as any).symbolLookupCache.keys());
+      const chunkCacheKeys = Array.from((planner as unknown as FilePlannerInternals).chunkIndexCache.keys());
+      const symbolCacheKeys = Array.from((planner as unknown as FilePlannerInternals).symbolLookupCache.keys());
 
       // If symbolLookupCache has entries, they should match chunkIndexCache keys
       if (symbolCacheKeys.length > 0) {
@@ -129,15 +137,15 @@ describe('FilePlanner Cache Management', () => {
         await planner.plan('test', project);
       }
 
-      const chunkCacheSize = (planner as any).chunkIndexCache.size;
-      const symbolCacheSize = (planner as any).symbolLookupCache.size;
+      const chunkCacheSize = (planner as unknown as FilePlannerInternals).chunkIndexCache.size;
+      const symbolCacheSize = (planner as unknown as FilePlannerInternals).symbolLookupCache.size;
 
       // symbolLookupCache should not have more entries than chunkIndexCache
       expect(symbolCacheSize).toBeLessThanOrEqual(chunkCacheSize);
 
       // No orphaned entries - all symbol cache keys should exist in chunk cache
-      const chunkKeys = new Set((planner as any).chunkIndexCache.keys());
-      const symbolKeys = Array.from((planner as any).symbolLookupCache.keys());
+      const chunkKeys = new Set((planner as unknown as FilePlannerInternals).chunkIndexCache.keys());
+      const symbolKeys = Array.from((planner as unknown as FilePlannerInternals).symbolLookupCache.keys());
 
       symbolKeys.forEach(key => {
         expect(chunkKeys.has(key)).toBe(true);
@@ -151,11 +159,11 @@ describe('FilePlanner Cache Management', () => {
 
       await planner.plan('test', project);
 
-      const cache = (planner as any).chunkIndexCache;
+      const cache = (planner as unknown as FilePlannerInternals).chunkIndexCache;
       const entries = Array.from(cache.values());
 
       // Each cache entry should have an estimated size
-      entries.forEach((entry: any) => {
+      entries.forEach((entry: { estimatedSize: number }) => {
         expect(entry.estimatedSize).toBeGreaterThan(0);
       });
     });
@@ -165,10 +173,10 @@ describe('FilePlanner Cache Management', () => {
       const project2 = createMockProject('test2', 5, 500);
 
       await planner.plan('test', project1);
-      const memoryAfter1 = (planner as any).currentCacheMemoryUsage;
+      const memoryAfter1 = (planner as unknown as FilePlannerInternals).currentCacheMemoryUsage;
 
       await planner.plan('test', project2);
-      const memoryAfter2 = (planner as any).currentCacheMemoryUsage;
+      const memoryAfter2 = (planner as unknown as FilePlannerInternals).currentCacheMemoryUsage;
 
       // Memory should increase after adding second project
       expect(memoryAfter2).toBeGreaterThan(memoryAfter1);
@@ -183,7 +191,7 @@ describe('FilePlanner Cache Management', () => {
       await planner.plan('test1', project);
 
       // Spy on chunkIndexBuilder.build to see if it's called
-      const buildSpy = vi.spyOn((planner as any).chunkIndexBuilder, 'build');
+      const buildSpy = vi.spyOn((planner as unknown as FilePlannerInternals).chunkIndexBuilder, 'build');
 
       // Second plan with same project - should use cache
       await planner.plan('test2', project);
@@ -202,7 +210,7 @@ describe('FilePlanner Cache Management', () => {
       // Second plan with modified project - should rebuild
       await planner.plan('test', project2);
 
-      const cacheSize = (planner as any).chunkIndexCache.size;
+      const cacheSize = (planner as unknown as FilePlannerInternals).chunkIndexCache.size;
 
       // Should have 2 entries (one for each project state)
       expect(cacheSize).toBe(2);

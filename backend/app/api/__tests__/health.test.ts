@@ -44,48 +44,48 @@ describe('Health API', () => {
 
   describe('GET /api/health', () => {
     it('returns 200', async () => {
-      const response = await GET(mockRequest as any);
+      const response = await GET(mockRequest as unknown as NextRequest);
       expect(response.status).toBe(200);
     });
 
     it('returns status: ok', async () => {
-      const response = await GET(mockRequest as any);
+      const response = await GET(mockRequest as unknown as NextRequest);
       const body = await response.json();
       expect(body.status).toBe('ok');
     });
 
     it('returns ISO timestamp', async () => {
-      const response = await GET(mockRequest as any);
+      const response = await GET(mockRequest as unknown as NextRequest);
       const body = await response.json();
       expect(body.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     });
 
     it('returns provider name', async () => {
-      const response = await GET(mockRequest as any);
+      const response = await GET(mockRequest as unknown as NextRequest);
       const body = await response.json();
       expect(body.provider).toBe('openrouter');
     });
 
     it('returns rateLimiter info', async () => {
-      const response = await GET(mockRequest as any);
+      const response = await GET(mockRequest as unknown as NextRequest);
       const body = await response.json();
       expect(body.rateLimiter).toEqual({ enabled: true });
     });
 
     it('returns CORS headers', async () => {
-      const response = await GET(mockRequest as any);
+      const response = await GET(mockRequest as unknown as NextRequest);
       expect(response.headers.get('Access-Control-Allow-Origin')).toBeTruthy();
     });
 
     it('responds quickly (under 100ms)', async () => {
       const start = Date.now();
-      await GET(mockRequest as any);
+      await GET(mockRequest as unknown as NextRequest);
       expect(Date.now() - start).toBeLessThan(100);
     });
 
     it('handles concurrent requests', async () => {
       const responses = await Promise.all(
-        Array.from({ length: 5 }, () => GET(mockRequest as any))
+        Array.from({ length: 5 }, () => GET(mockRequest as unknown as NextRequest))
       );
       responses.forEach((r) => expect(r.status).toBe(200));
     });

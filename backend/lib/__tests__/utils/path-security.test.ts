@@ -72,8 +72,8 @@ describe('path-security', () => {
     it('should reject empty or invalid paths', () => {
       expect(isSafePath('')).toBe(false);
       expect(isSafePath('   ')).toBe(false);
-      expect(isSafePath(null as any)).toBe(false);
-      expect(isSafePath(undefined as any)).toBe(false);
+      expect(isSafePath(null as unknown as string)).toBe(false);
+      expect(isSafePath(undefined as unknown as string)).toBe(false);
     });
 
     it('should reject blocked directory paths', () => {

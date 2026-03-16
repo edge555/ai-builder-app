@@ -4,8 +4,8 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { useUndoRedo } from '../useUndoRedo';
 
 describe('useUndoRedo', () => {
-    const mockState1 = { id: '1', name: 'state1', files: {} } as any;
-    const mockState2 = { id: '2', name: 'state2', files: {} } as any;
+    const mockState1 = { id: '1', name: 'state1', description: '', files: {}, createdAt: '', updatedAt: '', currentVersionId: '' };
+    const mockState2 = { id: '2', name: 'state2', description: '', files: {}, createdAt: '', updatedAt: '', currentVersionId: '' };
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -83,7 +83,7 @@ describe('useUndoRedo', () => {
     it('should have stable callback references across renders', () => {
         const { result, rerender } = renderHook(
             ({ state }) => useUndoRedo(state),
-            { initialProps: { state: mockState1 as any } }
+            { initialProps: { state: mockState1 } }
         );
 
         const firstPushState = result.current.pushState;
@@ -92,7 +92,7 @@ describe('useUndoRedo', () => {
         const firstClear = result.current.clear;
 
         // Re-render with different state
-        rerender({ state: mockState2 as any });
+        rerender({ state: mockState2 });
 
         expect(result.current.pushState).toBe(firstPushState);
         expect(result.current.undo).toBe(firstUndo);

@@ -316,7 +316,7 @@ describe('constants', () => {
 
       // Act & Assert
       numericConstants.forEach(constName => {
-        expect(typeof (constants as any)[constName]).toBe('number');
+        expect(typeof (constants as Record<string, number>)[constName]).toBe('number');
       });
     });
 
@@ -353,7 +353,7 @@ describe('constants', () => {
 
       // Act & Assert
       numericConstants.forEach(constName => {
-        expect((constants as any)[constName]).toBeGreaterThan(0);
+        expect((constants as Record<string, number>)[constName]).toBeGreaterThan(0);
       });
     });
   });

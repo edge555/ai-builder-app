@@ -1,4 +1,5 @@
 import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState } from '@ai-app-builder/shared/types';
+import type { ConversationTurn } from '@ai-app-builder/shared';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { createContext, useContext } from 'react';
 
@@ -54,8 +55,8 @@ export interface GenerationStateValue {
 export interface GenerationActionsValue {
     generateProject: (description: string) => Promise<GenerateProjectResponse>;
     generateProjectStreaming: (description: string) => Promise<GenerateProjectResponse>;
-    modifyProject: (currentState: SerializedProjectState, prompt: string, runtimeError?: RuntimeError, options?: { shouldSkipPlanning?: boolean }) => Promise<ModifyProjectResponse>;
-    modifyProjectStreaming: (currentState: SerializedProjectState, prompt: string, runtimeError?: RuntimeError, options?: { shouldSkipPlanning?: boolean }) => Promise<ModifyProjectResponse>;
+    modifyProject: (currentState: SerializedProjectState, prompt: string, runtimeError?: RuntimeError, options?: { shouldSkipPlanning?: boolean; conversationHistory?: ConversationTurn[] }) => Promise<ModifyProjectResponse>;
+    modifyProjectStreaming: (currentState: SerializedProjectState, prompt: string, runtimeError?: RuntimeError, options?: { shouldSkipPlanning?: boolean; conversationHistory?: ConversationTurn[]; errorContext?: { affectedFiles: string[]; errorType: string } }) => Promise<ModifyProjectResponse>;
     autoRepair: (runtimeError: RuntimeError, projectState: SerializedProjectState | null, aggregatedErrors?: AggregatedErrors | null) => Promise<boolean>;
     resetAutoRepair: () => void;
     setIsLoading: (loading: boolean) => void;

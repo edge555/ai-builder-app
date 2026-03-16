@@ -101,8 +101,8 @@ describe('Agent Config API Endpoint', () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { load } = await import('../../../lib/ai/agent-config-store');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (load as any).mockResolvedValue(mockConfig);
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(load).mockResolvedValue(mockConfig);
 
             const request = new NextRequest('http://localhost/api/agent-config', {
                 method: 'GET',
@@ -119,8 +119,8 @@ describe('Agent Config API Endpoint', () => {
             const { applyRateLimit, RateLimitTier } = await import('../../../lib/security');
             const { load } = await import('../../../lib/ai/agent-config-store');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (load as any).mockResolvedValue(mockConfig);
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(load).mockResolvedValue(mockConfig);
 
             const request = new NextRequest('http://localhost/api/agent-config', {
                 method: 'GET',
@@ -134,7 +134,7 @@ describe('Agent Config API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            (applyRateLimit as any).mockReturnValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockReturnValue(rateLimitResponse);
 
             const request = new NextRequest('http://localhost/api/agent-config', {
                 method: 'GET',
@@ -150,8 +150,8 @@ describe('Agent Config API Endpoint', () => {
             const { load } = await import('../../../lib/ai/agent-config-store');
             const { handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (load as any).mockRejectedValue(new Error('Failed to load config'));
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(load).mockRejectedValue(new Error('Failed to load config'));
 
             const request = new NextRequest('http://localhost/api/agent-config', {
                 method: 'GET',
@@ -171,15 +171,15 @@ describe('Agent Config API Endpoint', () => {
             const { load } = await import('../../../lib/ai/agent-config-store');
             const { getCorsHeaders } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (load as any).mockResolvedValue(mockConfig);
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(load).mockResolvedValue(mockConfig);
             
             const mockCorsHeaders = {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type',
             };
-            (getCorsHeaders as any).mockReturnValue(mockCorsHeaders);
+            vi.mocked(getCorsHeaders).mockReturnValue(mockCorsHeaders);
 
             const request = new NextRequest('http://localhost/api/agent-config', {
                 method: 'GET',
@@ -196,8 +196,8 @@ describe('Agent Config API Endpoint', () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { save } = await import('../../../lib/ai/agent-config-store');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (save as any).mockResolvedValue(undefined);
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(save).mockResolvedValue(undefined);
 
             const request = new NextRequest('http://localhost/api/agent-config', {
                 method: 'PUT',
@@ -215,8 +215,8 @@ describe('Agent Config API Endpoint', () => {
             const { applyRateLimit, RateLimitTier } = await import('../../../lib/security');
             const { save } = await import('../../../lib/ai/agent-config-store');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (save as any).mockResolvedValue(undefined);
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(save).mockResolvedValue(undefined);
 
             const request = new NextRequest('http://localhost/api/agent-config', {
                 method: 'PUT',
@@ -231,7 +231,7 @@ describe('Agent Config API Endpoint', () => {
         it('should return 400 when request body fails schema validation', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
 
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
 
             const invalidConfig = {
                 version: 2, // Invalid version (schema expects literal 1)
@@ -251,7 +251,7 @@ describe('Agent Config API Endpoint', () => {
         it('should return 400 when required task types are missing', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
 
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
 
             const incompleteConfig = {
                 version: 1,
@@ -274,7 +274,7 @@ describe('Agent Config API Endpoint', () => {
         it('should return 400 when model entry has empty id', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
 
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
 
             const invalidModelConfig = {
                 version: 1,
@@ -302,8 +302,8 @@ describe('Agent Config API Endpoint', () => {
             const { save } = await import('../../../lib/ai/agent-config-store');
             const { handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (save as any).mockRejectedValue(new Error('Failed to save config'));
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(save).mockRejectedValue(new Error('Failed to save config'));
 
             const request = new NextRequest('http://localhost/api/agent-config', {
                 method: 'PUT',
@@ -322,7 +322,7 @@ describe('Agent Config API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            (applyRateLimit as any).mockReturnValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockReturnValue(rateLimitResponse);
 
             const request = new NextRequest('http://localhost/api/agent-config', {
                 method: 'PUT',

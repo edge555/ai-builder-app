@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     // Deserialize project state
     const projectState = deserializeProjectState(body.projectState);
-    const { shouldSkipPlanning, errorContext } = body;
+    const { shouldSkipPlanning, errorContext, conversationHistory } = body;
 
     // Detect intent for task-specific model routing
     const detectedTaskType = await detectIntent(body.prompt, requestId);
@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
             shouldSkipPlanning,
             errorContext,
             requestId,
+            conversationHistory,
             onProgress: (phase: ModificationPhase, label: string) => {
               if (isComplete()) return;
               encoder.enqueueEvent(

@@ -56,7 +56,7 @@ describe('generateModifications', () => {
     vi.mocked(ModificationOutputSchema.safeParse).mockImplementation(() => ({
       success: true,
       data: { files: [] },
-    } as any));
+    }) as ReturnType<typeof ModificationOutputSchema.safeParse>);
     mockProjectState = {
       id: 'test-project',
       name: 'Test Project',
@@ -287,8 +287,8 @@ describe('generateModifications', () => {
         error: {
           issues: [{ message: 'Schema validation failed' }],
           message: 'Schema validation failed',
-        } as any,
-      });
+        },
+      } as ReturnType<typeof ModificationOutputSchema.safeParse>);
 
       const mockResponse = {
         success: true,

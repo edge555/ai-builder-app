@@ -5,7 +5,7 @@
  * Extracted from ModificationEngine for better separation of concerns.
  */
 
-import type { ProjectState, EditDetail } from '@ai-app-builder/shared';
+import type { ProjectState, EditDetail, ConversationTurn } from '@ai-app-builder/shared';
 import type { CodeSlice } from '../analysis/file-planner/types';
 import type { FailedFileEdit } from './file-edit-applicator';
 import { findClosestRegion } from './multi-tier-matcher';
@@ -16,12 +16,21 @@ import { findClosestRegion } from './multi-tier-matcher';
 export function buildModificationPrompt(
     userPrompt: string,
     slices: CodeSlice[],
-    _projectState: ProjectState
+    _projectState: ProjectState,
+    conversationHistory?: ConversationTurn[]
 ): string {
     const primarySlices = slices.filter(s => s.relevance === 'primary');
     const contextSlices = slices.filter(s => s.relevance === 'context');
 
-    let prompt = `User Request: ${userPrompt}\n\n`;
+    let prompt = '';
+
+    // Insert conversation context before the user request if available
+    const conversationContext = formatConversationContext(conversationHistory);
+    if (conversationContext) {
+        prompt += conversationContext;
+    }
+
+    prompt += `User Request: ${userPrompt}\n\n`;
 
     if (primarySlices.length > 0) {
         prompt += `=== PRIMARY FILES (likely need modification) ===\n\n`;
@@ -253,6 +262,34 @@ export function buildReplaceFileRetryPrompt(
     prompt += `Output ONLY the JSON with the files.`;
 
     return prompt;
+}
+
+/**
+ * Format conversation history into a prompt section.
+ * Returns null if no meaningful history is provided.
+ */
+export function formatConversationContext(history?: ConversationTurn[]): string | null {
+    if (!history || history.length === 0) return null;
+
+    let section = `=== CONVERSATION HISTORY (recent turns) ===\n\n`;
+
+    for (const turn of history) {
+        if (turn.role === 'user') {
+            section += `User: ${turn.content}\n`;
+        } else {
+            const files = turn.changeSummary?.affectedFiles;
+            const desc = turn.changeSummary?.description;
+            if (desc || (files && files.length > 0)) {
+                const fileList = files && files.length > 0 ? ` [files: ${files.join(', ')}]` : '';
+                section += `Assistant: ${desc ?? turn.content}${fileList}\n`;
+            } else {
+                section += `Assistant: ${turn.content}\n`;
+            }
+        }
+        section += '\n';
+    }
+
+    return section;
 }
 
 /**

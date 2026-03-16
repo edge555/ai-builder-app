@@ -69,7 +69,7 @@ describe('AppError', () => {
 describe('handleError', () => {
     it('should return correct response for AppError', () => {
         const error = AppError.validation('Validation failed');
-        const response = handleError(error, 'test/route') as any;
+        const response = handleError(error, 'test/route') as unknown as { status: number; data: { success: boolean; error: { type: string; code: string; details: Record<string, unknown> } } };
 
         expect(NextResponse.json).toHaveBeenCalled();
         expect(response.status).toBe(422);
@@ -79,7 +79,7 @@ describe('handleError', () => {
 
     it('should return 500 for unknown errors', () => {
         const error = new Error('Database down');
-        const response = handleError(error, 'test/route') as any;
+        const response = handleError(error, 'test/route') as unknown as { status: number; data: { success: boolean; error: { type: string; code: string; details: { originalError: string } } } };
 
         expect(response.status).toBe(500);
         expect(response.data.success).toBe(false);

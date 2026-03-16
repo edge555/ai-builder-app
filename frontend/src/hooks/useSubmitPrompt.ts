@@ -1,6 +1,8 @@
 import type { RepairAttempt } from '@ai-app-builder/shared/types';
+import type { ConversationTurn } from '@ai-app-builder/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { ChatMessage } from '../components/ChatInterface';
 import { useProjectState, useProjectActions, useChatMessages, useGenerationActions, useToastActions } from '../context';
 import { storageService, toStoredProject } from '../services/storage';
 import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError, extractRetryAfterSeconds } from '../utils/error-messages';
@@ -11,6 +13,49 @@ const DEFAULT_RATE_LIMIT_WAIT_MS = 30_000;
 const submitLogger = createLogger('SubmitPrompt');
 
 const MAX_API_RETRIES = 3;
+
+const MAX_CONVERSATION_TURNS = 5;
+const MAX_CONVERSATION_CHARS = 6000;
+
+/**
+ * Build a condensed conversation history from recent chat messages.
+ * Filters to user+assistant pairs, truncates content, and respects a char budget.
+ */
+export function buildConversationHistory(
+    messages: ChatMessage[],
+    maxTurns: number = MAX_CONVERSATION_TURNS,
+    maxChars: number = MAX_CONVERSATION_CHARS
+): ConversationTurn[] {
+    // Filter to user and assistant messages (exclude errors)
+    const relevant = messages.filter(m => !m.isError && (m.role === 'user' || m.role === 'assistant'));
+
+    // Take last N*2 messages (N pairs)
+    const recentMessages = relevant.slice(-(maxTurns * 2));
+
+    const turns: ConversationTurn[] = [];
+    let totalChars = 0;
+
+    for (const msg of recentMessages) {
+        const turn: ConversationTurn = {
+            role: msg.role,
+            content: msg.content.slice(0, 500),
+        };
+
+        if (msg.role === 'assistant' && msg.changeSummary) {
+            turn.changeSummary = {
+                description: (msg.changeSummary.description ?? '').slice(0, 300),
+                affectedFiles: (msg.changeSummary.affectedFiles ?? []).slice(0, 20),
+            };
+        }
+
+        const turnChars = turn.content.length + (turn.changeSummary?.description.length ?? 0);
+        if (totalChars + turnChars > maxChars) break;
+        totalChars += turnChars;
+        turns.push(turn);
+    }
+
+    return turns;
+}
 
 /**
  * Hook to handle high-level orchestration for submitting prompts.
@@ -204,7 +249,8 @@ export function useSubmitPrompt() {
                         );
                     }
 
-                    const result = await generation.modifyProject(projectState, prompt);
+                    const conversationHistory = buildConversationHistory(chatMessages.messages);
+                    const result = await generation.modifyProject(projectState, prompt, undefined, { conversationHistory });
                     if (abortController.signal.aborted) break;
 
                     generation.setLoadingPhase('validating');

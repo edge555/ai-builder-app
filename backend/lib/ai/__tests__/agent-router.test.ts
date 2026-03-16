@@ -176,11 +176,11 @@ describe('AgentRouter', () => {
 
 describe('FallbackAIProvider', () => {
   let provider: FallbackAIProvider;
-  let mockClients: any[];
+  let mockClients: AIProvider[];
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Create mock clients
     mockClients = [
       {
@@ -200,7 +200,7 @@ describe('FallbackAIProvider', () => {
     provider = new FallbackAIProvider(
       'coding',
       ['model-1', 'model-2', 'model-3'],
-      mockClients as any
+      mockClients
     );
   });
 

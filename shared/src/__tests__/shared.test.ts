@@ -165,7 +165,7 @@ describe('Shared Package Tests', () => {
                 }
             ];
 
-            const summary = generateChangeSummary(diffs as any);
+            const summary = generateChangeSummary(diffs as Parameters<typeof generateChangeSummary>[0]);
             expect(summary.filesAdded).toBe(1);
             expect(summary.filesModified).toBe(1);
             expect(summary.linesAdded).toBe(2);

@@ -1,4 +1,4 @@
-import type { ProjectState } from '@ai-app-builder/shared';
+import type { ProjectState, ConversationTurn } from '@ai-app-builder/shared';
 import type { AIProvider, AIResponse } from '../ai';
 import type { CodeSlice } from '../analysis/file-planner/types';
 import { getModificationPrompt, MODIFICATION_OUTPUT_SCHEMA } from './prompts/modification-prompt';
@@ -21,14 +21,15 @@ export async function generateModifications(
   projectState: ProjectState,
   shouldIncludeDesignSystem: boolean,
   aiProvider: AIProvider,
-  requestId?: string
+  requestId?: string,
+  conversationHistory?: ConversationTurn[]
 ): Promise<{
   success: boolean;
   error?: string;
   updatedFiles?: Record<string, string | null>;
   deletedFiles?: string[];
 }> {
-  const contextPrompt = buildModificationPrompt(prompt, slices, projectState);
+  const contextPrompt = buildModificationPrompt(prompt, slices, projectState, conversationHistory);
 
   const MAX_ATTEMPTS = 4;
   const editErrors: string[] = [];

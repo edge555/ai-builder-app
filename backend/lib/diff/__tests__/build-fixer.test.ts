@@ -143,7 +143,7 @@ describe('buildProjectView', () => {
     it('should handle null project files gracefully', () => {
       const projectWithNullFiles: ProjectState = {
         ...mockProjectState,
-        files: null as any,
+        files: null as unknown as Record<string, string>,
       };
       const updatedFiles = {};
 
@@ -155,7 +155,7 @@ describe('buildProjectView', () => {
     it('should handle undefined project files gracefully', () => {
       const projectWithUndefinedFiles: ProjectState = {
         ...mockProjectState,
-        files: undefined as any,
+        files: undefined as unknown as Record<string, string>,
       };
       const updatedFiles = {};
 

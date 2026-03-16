@@ -111,8 +111,8 @@ describe('ValidationPipeline class', () => {
       // Arrange
       const aiOutput = { 'file.ts': 'content' };
       vi.mocked(validateJsonStructure).mockReturnValue([
-        { type: 'invalid_json' as any, message: 'Invalid JSON structure' },
-      ]);
+        { type: 'invalid_json', message: 'Invalid JSON structure' },
+      ] as ReturnType<typeof validateJsonStructure>);
 
       // Act
       const result = pipeline.validate(aiOutput);
@@ -126,9 +126,9 @@ describe('ValidationPipeline class', () => {
       // Arrange
       const aiOutput = { 'file.ts': 'content' };
       const warnings = [
-        { type: 'architecture_warning' as any, message: 'Quality warning 1' },
-        { type: 'styling_warning' as any, message: 'Quality warning 2' },
-      ];
+        { type: 'architecture_warning', message: 'Quality warning 1' },
+        { type: 'styling_warning', message: 'Quality warning 2' },
+      ] as ReturnType<typeof validateProjectQuality>;
       vi.mocked(validateJsonStructure).mockReturnValue([]);
       vi.mocked(validateProjectStructure).mockReturnValue([]);
       vi.mocked(validateFilePaths).mockReturnValue([]);

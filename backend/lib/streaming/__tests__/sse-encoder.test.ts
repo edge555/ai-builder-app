@@ -206,10 +206,10 @@ describe('SSEEncoder', () => {
             
             encoder.enqueueEvent(mockController, 'test', { key: 'value' });
             
-            const enqueueCall = mockBackpressureController.enqueue as any;
+            const enqueueCall = vi.mocked(mockBackpressureController.enqueue);
             const encodedData = enqueueCall.mock.calls[0][1];
             const decoded = new TextDecoder().decode(encodedData);
-            
+
             expect(decoded).toContain('event: test');
             expect(decoded).toContain('data: {"key":"value"}');
         });
@@ -249,10 +249,10 @@ describe('SSEEncoder', () => {
             
             encoder.enqueueHeartbeat(mockController);
             
-            const enqueueCall = mockBackpressureController.enqueue as any;
+            const enqueueCall = vi.mocked(mockBackpressureController.enqueue);
             const encodedData = enqueueCall.mock.calls[0][1];
             const decoded = new TextDecoder().decode(encodedData);
-            
+
             expect(decoded).toBe(': heartbeat\n\n');
         });
     });

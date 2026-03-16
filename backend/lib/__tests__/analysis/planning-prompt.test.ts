@@ -65,13 +65,13 @@ describe('PLANNING_OUTPUT_SCHEMA', () => {
   });
 
   it('should define primaryFiles as array of strings', () => {
-    const props = PLANNING_OUTPUT_SCHEMA.properties as any;
+    const props = PLANNING_OUTPUT_SCHEMA.properties as Record<string, { type: string; items?: { type: string } }>;
     expect(props.primaryFiles.type).toBe('array');
     expect(props.primaryFiles.items.type).toBe('string');
   });
 
   it('should define contextFiles as array of strings', () => {
-    const props = PLANNING_OUTPUT_SCHEMA.properties as any;
+    const props = PLANNING_OUTPUT_SCHEMA.properties as Record<string, { type: string; items?: { type: string } }>;
     expect(props.contextFiles.type).toBe('array');
     expect(props.contextFiles.items.type).toBe('string');
   });

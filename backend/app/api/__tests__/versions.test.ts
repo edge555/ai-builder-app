@@ -77,15 +77,15 @@ describe('Versions API Endpoint', () => {
             const { getVersionManager } = await import('../../../lib/core');
             const { GetVersionsRequestSchema, serializeVersion } = await import('@ai-app-builder/shared');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (GetVersionsRequestSchema.parse as any).mockReturnValue({ projectId: 'test-project' });
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(GetVersionsRequestSchema.parse).mockReturnValue({ projectId: 'test-project' });
             
             const mockVersionManager = {
                 getAllVersions: vi.fn().mockReturnValue(mockVersions),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
             
-            (serializeVersion as any).mockImplementation((v: any) => v);
+            vi.mocked(serializeVersion).mockImplementation((v: any) => v);
 
             const request = new NextRequest('http://localhost/api/versions?projectId=test-project', {
                 method: 'GET',
@@ -103,8 +103,8 @@ describe('Versions API Endpoint', () => {
             const { applyRateLimit, RateLimitTier } = await import('../../../lib/security');
             const { GetVersionsRequestSchema } = await import('@ai-app-builder/shared');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (GetVersionsRequestSchema.parse as any).mockReturnValue({ projectId: 'test-project' });
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(GetVersionsRequestSchema.parse).mockReturnValue({ projectId: 'test-project' });
 
             const request = new NextRequest('http://localhost/api/versions?projectId=test-project', {
                 method: 'GET',
@@ -120,14 +120,14 @@ describe('Versions API Endpoint', () => {
             const { getVersionManager } = await import('../../../lib/core');
             const { GetVersionsRequestSchema, serializeVersion } = await import('@ai-app-builder/shared');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (GetVersionsRequestSchema.parse as any).mockReturnValue({ projectId: 'my-project' });
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(GetVersionsRequestSchema.parse).mockReturnValue({ projectId: 'my-project' });
             
             const mockVersionManager = {
                 getAllVersions: vi.fn().mockReturnValue([]),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
-            (serializeVersion as any).mockImplementation((v: any) => v);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
+            vi.mocked(serializeVersion).mockImplementation((v: any) => v);
 
             const request = new NextRequest('http://localhost/api/versions?projectId=my-project', {
                 method: 'GET',
@@ -142,7 +142,7 @@ describe('Versions API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            (applyRateLimit as any).mockReturnValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockReturnValue(rateLimitResponse);
 
             const request = new NextRequest('http://localhost/api/versions?projectId=test-project', {
                 method: 'GET',
@@ -158,8 +158,8 @@ describe('Versions API Endpoint', () => {
             const { GetVersionsRequestSchema } = await import('@ai-app-builder/shared');
             const { handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (GetVersionsRequestSchema.parse as any).mockImplementation(() => {
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(GetVersionsRequestSchema.parse).mockImplementation(() => {
                 throw new Error('Invalid projectId');
             });
 
@@ -181,15 +181,15 @@ describe('Versions API Endpoint', () => {
             const { getVersionManager } = await import('../../../lib/core');
             const { GetVersionsRequestSchema, serializeVersion } = await import('@ai-app-builder/shared');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (GetVersionsRequestSchema.parse as any).mockReturnValue({ projectId: 'test-project' });
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(GetVersionsRequestSchema.parse).mockReturnValue({ projectId: 'test-project' });
             
             const mockVersionManager = {
                 getAllVersions: vi.fn().mockReturnValue(mockVersions),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
             
-            (serializeVersion as any).mockImplementation((version: any) => ({
+            vi.mocked(serializeVersion).mockImplementation((version: any) => ({
                 ...version,
                 serialized: true,
             }));
@@ -214,21 +214,21 @@ describe('Versions API Endpoint', () => {
             const { GetVersionsRequestSchema, serializeVersion } = await import('@ai-app-builder/shared');
             const { getCorsHeaders } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (GetVersionsRequestSchema.parse as any).mockReturnValue({ projectId: 'test-project' });
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(GetVersionsRequestSchema.parse).mockReturnValue({ projectId: 'test-project' });
             
             const mockVersionManager = {
                 getAllVersions: vi.fn().mockReturnValue([]),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
-            (serializeVersion as any).mockImplementation((v: any) => v);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
+            vi.mocked(serializeVersion).mockImplementation((v: any) => v);
             
             const mockCorsHeaders = {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type',
             };
-            (getCorsHeaders as any).mockReturnValue(mockCorsHeaders);
+            vi.mocked(getCorsHeaders).mockReturnValue(mockCorsHeaders);
 
             const request = new NextRequest('http://localhost/api/versions?projectId=test-project', {
                 method: 'GET',
@@ -244,14 +244,14 @@ describe('Versions API Endpoint', () => {
             const { getVersionManager } = await import('../../../lib/core');
             const { GetVersionsRequestSchema, serializeVersion } = await import('@ai-app-builder/shared');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (GetVersionsRequestSchema.parse as any).mockReturnValue({ projectId: 'new-project' });
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(GetVersionsRequestSchema.parse).mockReturnValue({ projectId: 'new-project' });
             
             const mockVersionManager = {
                 getAllVersions: vi.fn().mockReturnValue([]),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
-            (serializeVersion as any).mockImplementation((v: any) => v);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
+            vi.mocked(serializeVersion).mockImplementation((v: any) => v);
 
             const request = new NextRequest('http://localhost/api/versions?projectId=new-project', {
                 method: 'GET',
