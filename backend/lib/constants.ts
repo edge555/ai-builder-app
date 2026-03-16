@@ -69,6 +69,9 @@ export const RATE_LIMIT_MEDIUM_COST_MAX = 10; // generate, modify, plan
 export const RATE_LIMIT_LOW_COST_MAX = 60;    // diff, revert, export, versions, health
 export const RATE_LIMIT_CONFIG_MAX = 20;      // agent-config, provider-config
 
+// Modification retry
+export const MODIFICATION_RETRY_DELAY_MULTIPLIER_MS = 500; // delay = attempt * this value
+
 // Per-tier request body size limits
 export const MAX_BODY_HIGH_COST_BYTES = 2 * 1024 * 1024;   // 2 MB
 export const MAX_BODY_MEDIUM_COST_BYTES = 2 * 1024 * 1024; // 2 MB

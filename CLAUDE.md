@@ -9,6 +9,7 @@ Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude
 Available gstack skills:
 - `/browse` — headless browser for QA testing, site dogfooding, and verification
 - `/qa` — systematic QA testing of web applications
+- `/qa-only` — QA testing without browsing setup
 - `/plan-ceo-review` — CEO/founder-mode plan review
 - `/plan-eng-review` — engineering manager-mode plan review
 - `/review` — pre-landing PR review

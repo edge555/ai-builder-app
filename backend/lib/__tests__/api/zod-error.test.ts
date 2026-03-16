@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ZodError } from 'zod';
+import { ZodError, type ZodIssue } from 'zod';
 import { formatZodError } from '../../api/zod-error';
 
 describe('formatZodError', () => {
@@ -16,7 +16,7 @@ describe('formatZodError', () => {
         received: 'number',
         path: ['name'],
         message: 'Expected string, received number',
-      } as any,
+      } as ZodIssue,
     ]);
 
     const result = formatZodError(zodError);
@@ -31,7 +31,7 @@ describe('formatZodError', () => {
         received: 'number',
         path: ['user', 'name'],
         message: 'Expected string, received number',
-      } as any,
+      } as ZodIssue,
     ]);
 
     const result = formatZodError(zodError);
@@ -46,7 +46,7 @@ describe('formatZodError', () => {
         received: 'number',
         path: ['data', 'user', 'profile', 'name'],
         message: 'Expected string, received number',
-      } as any,
+      } as ZodIssue,
     ]);
 
     const result = formatZodError(zodError);
@@ -61,7 +61,7 @@ describe('formatZodError', () => {
         received: 'number',
         path: ['name'],
         message: 'Expected string, received number',
-      } as any,
+      } as ZodIssue,
       {
         code: 'too_small',
         minimum: 18,
@@ -69,14 +69,14 @@ describe('formatZodError', () => {
         inclusive: true,
         path: ['age'],
         message: 'Number must be greater than or equal to 18',
-      } as any,
+      } as ZodIssue,
       {
         code: 'invalid_type',
         expected: 'boolean',
         received: 'undefined',
         path: ['active'],
         message: 'Required',
-      } as any,
+      } as ZodIssue,
     ]);
 
     const result = formatZodError(zodError);
@@ -93,7 +93,7 @@ describe('formatZodError', () => {
         received: 'number',
         path: ['items', 0, 'name'],
         message: 'Expected string, received number',
-      } as any,
+      } as ZodIssue,
     ]);
 
     const result = formatZodError(zodError);
@@ -108,7 +108,7 @@ describe('formatZodError', () => {
         received: 'number',
         path: [],
         message: 'Expected string, received number',
-      } as any,
+      } as ZodIssue,
     ]);
 
     const result = formatZodError(zodError);
@@ -122,7 +122,7 @@ describe('formatZodError', () => {
         validation: 'email',
         path: ['email'],
         message: 'Invalid email',
-      } as any,
+      } as ZodIssue,
       {
         code: 'too_small',
         minimum: 8,
@@ -130,14 +130,14 @@ describe('formatZodError', () => {
         inclusive: true,
         path: ['password'],
         message: 'String must contain at least 8 character(s)',
-      } as any,
+      } as ZodIssue,
       {
         code: 'invalid_enum',
         received: 'invalid',
         options: ['active', 'inactive'],
         path: ['status'],
         message: "Invalid enum value. Expected 'active' | 'inactive', received 'invalid'",
-      } as any,
+      } as ZodIssue,
     ]);
 
     const result = formatZodError(zodError);
@@ -182,20 +182,20 @@ describe('formatZodError', () => {
         received: 'undefined',
         path: ['user', 'profile'],
         message: 'Required',
-      } as any,
+      } as ZodIssue,
       {
         code: 'invalid_type',
         expected: 'string',
         received: 'number',
         path: ['items', 0],
         message: 'Expected string, received number',
-      } as any,
+      } as ZodIssue,
       {
         code: 'invalid_union',
         unionErrors: [],
         path: ['metadata'],
         message: 'Invalid input',
-      } as any,
+      } as ZodIssue,
     ]);
 
     const result = formatZodError(zodError);
@@ -212,7 +212,7 @@ describe('formatZodError', () => {
         received: 'number',
         path: ['user-name', 'email_address'],
         message: 'Expected string, received number',
-      } as any,
+      } as ZodIssue,
     ]);
 
     const result = formatZodError(zodError);
@@ -225,7 +225,7 @@ describe('formatZodError', () => {
         code: 'custom',
         path: ['customField'],
         message: 'This is a custom validation error',
-      } as any,
+      } as ZodIssue,
     ]);
 
     const result = formatZodError(zodError);
@@ -246,7 +246,7 @@ describe('formatZodError', () => {
         received: 'number',
         path: ['field'],
         message: 'Expected string, received number at index 0',
-      } as any,
+      } as ZodIssue,
     ]);
 
     const result = formatZodError(zodError);
@@ -261,7 +261,7 @@ describe('formatZodError', () => {
         received: 'number',
         path: ['level1', 'level2', 'level3', 'level4', 'level5', 'field'],
         message: 'Expected string, received number',
-      } as any,
+      } as ZodIssue,
     ]);
 
     const result = formatZodError(zodError);

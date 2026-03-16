@@ -18,6 +18,7 @@
 import type {
   ProjectState,
   ModificationResult,
+  ConversationTurn,
 } from '@ai-app-builder/shared';
 import type { CodeSlice } from '../analysis/file-planner/types';
 import type { AIProvider } from '../ai';
@@ -71,7 +72,7 @@ export class ModificationEngine {
   async modifyProject(
     projectState: ProjectState,
     prompt: string,
-    options?: { shouldSkipPlanning?: boolean; errorContext?: ErrorContext; requestId?: string; onProgress?: OnProgressCallback }
+    options?: { shouldSkipPlanning?: boolean; errorContext?: ErrorContext; requestId?: string; onProgress?: OnProgressCallback; conversationHistory?: ConversationTurn[] }
   ): Promise<ModificationResult> {
     if (!prompt || prompt.trim() === '') {
       return {
@@ -94,7 +95,8 @@ export class ModificationEngine {
     try {
       // Step 1: Select code slices and determine category
       onProgress?.('planning', 'Analyzing project and planning changes...');
-      const { slices, category } = await this.selectCodeSlices(projectState, prompt, options?.shouldSkipPlanning, options?.errorContext);
+      const skipPlanning = options?.shouldSkipPlanning || shouldSkipPlanningHeuristic(prompt, projectState);
+      const { slices, category } = await this.selectCodeSlices(projectState, prompt, skipPlanning, options?.errorContext);
 
       // Step 2: Determine if design system should be included based on category
       const shouldIncludeDesignSystem = DESIGN_SYSTEM_CATEGORIES.has(category);
@@ -108,7 +110,8 @@ export class ModificationEngine {
         projectState,
         shouldIncludeDesignSystem,
         this.aiProvider,
-        requestId
+        requestId,
+        options?.conversationHistory
       );
 
       if (!modificationResult.success || !modificationResult.updatedFiles || !modificationResult.deletedFiles) {
@@ -216,6 +219,32 @@ export class ModificationEngine {
     return this.validationPipeline.validate(filesToValidate);
   }
 
+}
+
+/**
+ * Heuristic to skip the AI planning call for obvious cases.
+ * - Small projects (<= 8 files): always skip — fallback heuristic is sufficient
+ * - Prompt mentions an existing file/component name: skip
+ */
+function shouldSkipPlanningHeuristic(prompt: string, projectState: ProjectState): boolean {
+  const fileCount = Object.keys(projectState.files).length;
+  if (fileCount <= 8) {
+    logger.info('Skipping planning: small project', { fileCount });
+    return true;
+  }
+
+  const promptLower = prompt.toLowerCase();
+  for (const filePath of Object.keys(projectState.files)) {
+    // Check filename (e.g., "Header.tsx")
+    const fileName = filePath.split('/').pop() ?? '';
+    const baseName = fileName.replace(/\.[^.]+$/, '');
+    if (baseName.length >= 3 && promptLower.includes(baseName.toLowerCase())) {
+      logger.info('Skipping planning: prompt mentions file', { file: filePath, baseName });
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

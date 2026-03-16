@@ -47,6 +47,9 @@ export async function POST(
   const contextLogger = logger.withRequestId(requestId);
 
   try {
+    // CSRF: reject mutations with missing/invalid origin
+    getCorsHeaders(request, { rejectInvalidOrigin: true });
+
     // Parse and validate request body
     const parsed = await parseJsonRequest(request, ModifyProjectRequestSchema);
     if (!parsed.ok) return parsed.response;
@@ -60,8 +63,8 @@ export async function POST(
     // Deserialize project state
     const projectState = deserializeProjectState(validatedRequest.projectState);
 
-    // Extract shouldSkipPlanning and errorContext options from request
-    const { shouldSkipPlanning, errorContext } = validatedRequest;
+    // Extract shouldSkipPlanning, errorContext, and conversationHistory from request
+    const { shouldSkipPlanning, errorContext, conversationHistory } = validatedRequest;
 
     // Detect intent to route to the appropriate task-specific models
     const detectedTaskType = await detectIntent(validatedRequest.prompt, requestId);
@@ -70,7 +73,7 @@ export async function POST(
     // Modify project with timeout
     const engine = await createModificationEngine(detectedTaskType);
     const result = await withTimeout(
-      engine.modifyProject(projectState, validatedRequest.prompt, { shouldSkipPlanning, errorContext, requestId }),
+      engine.modifyProject(projectState, validatedRequest.prompt, { shouldSkipPlanning, errorContext, requestId, conversationHistory }),
       {
         timeoutMs: MODIFY_TIMEOUT_MS,
         operationName: 'project modification',

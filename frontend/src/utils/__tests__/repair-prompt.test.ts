@@ -1,4 +1,7 @@
+import type { RuntimeError } from '@ai-app-builder/shared/types';
 import { describe, expect, it } from 'vitest';
+
+import type { ErrorAggregator } from '@/services/ErrorAggregator';
 
 import { buildRepairPrompt, getRepairHints } from '../repair-prompt';
 
@@ -15,15 +18,15 @@ describe('repair-prompt', () => {
         });
 
         it('should return default hints for unknown error type', () => {
-            const hints = getRepairHints('UNKNOWN_ERROR' as any);
+            const hints = getRepairHints('UNKNOWN_ERROR');
             expect(hints).toContain('- Check for undefined values');
         });
     });
 
     describe('buildRepairPrompt', () => {
         it('should build a prompt for a single runtime error', () => {
-            const error: any = {
-                type: 'REFERENCE_ERROR' as const,
+            const error: RuntimeError = {
+                type: 'REFERENCE_ERROR',
                 message: 'x is not defined',
                 filePath: 'App.tsx',
                 line: 10,
@@ -43,8 +46,8 @@ describe('repair-prompt', () => {
         });
 
         it('should include suggested fixes if provided', () => {
-            const error: any = {
-                type: 'TYPE_ERROR' as const,
+            const error: RuntimeError = {
+                type: 'TYPE_ERROR',
                 message: 'Cannot read property x of undefined',
                 suggestedFixes: ['Add null check', 'Initialize variable'],
                 priority: 'medium',
@@ -60,8 +63,8 @@ describe('repair-prompt', () => {
         });
 
         it('should use errorAggregator if provided and has report', () => {
-            const error: any = {
-                type: 'TYPE_ERROR' as const,
+            const error: RuntimeError = {
+                type: 'TYPE_ERROR',
                 message: 'err',
                 priority: 'low',
                 timestamp: new Date().toISOString(),
@@ -69,7 +72,7 @@ describe('repair-prompt', () => {
             };
             const mockAggregator = {
                 buildErrorReport: () => 'Aggregated Error Report',
-            } as any;
+            } as unknown as ErrorAggregator;
 
             const prompt = buildRepairPrompt(error, {}, mockAggregator);
 

@@ -62,7 +62,7 @@ export const PUT = withRouteContext('api/agent-config', async (ctx, request: Nex
   try {
     await save(parsed.data);
     contextLogger.info('Agent config saved');
-    return NextResponse.json(parsed.data, { status: 200, headers: getCorsHeaders(request) });
+    return NextResponse.json(parsed.data, { status: 200, headers: getCorsHeaders(request, { rejectInvalidOrigin: true }) });
   } catch (error) {
     return handleError(error, 'api/agent-config PUT', request);
   }

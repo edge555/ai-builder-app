@@ -40,7 +40,7 @@ describe('POST /api/generate-stream', () => {
             }),
         };
 
-        (createStreamingProjectGenerator as any).mockReturnValue(mockGenerator);
+        vi.mocked(createStreamingProjectGenerator).mockReturnValue(mockGenerator);
     });
 
     afterEach(() => {

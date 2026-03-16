@@ -30,9 +30,9 @@ describe('StreamingProjectGenerator', () => {
             formatErrorsForAI: vi.fn(),
         };
 
-        (ValidationPipeline as any).mockImplementation(function () { return mockValidationPipeline; });
-        (buildValidatorModule.BuildValidator as any).mockImplementation(function () { return mockBuildValidator; });
-        (buildValidatorModule.createBuildValidator as any).mockReturnValue(mockBuildValidator);
+        vi.mocked(ValidationPipeline).mockImplementation(function () { return mockValidationPipeline; });
+        vi.mocked(buildValidatorModule.BuildValidator).mockImplementation(function () { return mockBuildValidator; });
+        vi.mocked(buildValidatorModule.createBuildValidator).mockReturnValue(mockBuildValidator);
 
         generator = new StreamingProjectGenerator(mockAIProvider);
     });

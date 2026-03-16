@@ -21,7 +21,7 @@ describe('parseSSEStream', () => {
                 }
                 return { done: true, value: undefined };
             }),
-        } as any;
+        } as unknown as ReadableStreamDefaultReader<Uint8Array>;
 
         const handlers = {
             onStart: vi.fn(),
@@ -57,7 +57,7 @@ describe('parseSSEStream', () => {
                 }
                 return { done: true, value: undefined };
             }),
-        } as any;
+        } as unknown as ReadableStreamDefaultReader<Uint8Array>;
 
         const handlers = {
             onFile: vi.fn(),
@@ -88,7 +88,7 @@ describe('parseSSEStream', () => {
                 }
                 return { done: true, value: undefined };
             }),
-        } as any;
+        } as unknown as ReadableStreamDefaultReader<Uint8Array>;
 
         const handlers = {
             onHeartbeat: vi.fn(),
@@ -113,7 +113,7 @@ describe('parseSSEStream', () => {
                     value: new TextEncoder().encode(mockEvents[0]),
                 })
                 .mockResolvedValueOnce({ done: true, value: undefined }),
-        } as any;
+        } as unknown as ReadableStreamDefaultReader<Uint8Array>;
 
         const handlers = {
             onError: vi.fn(),

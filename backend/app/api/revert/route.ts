@@ -55,7 +55,7 @@ export const POST = withRouteContext('api/revert', async (ctx, request: NextRequ
       version: serializeVersion(result.version!),
     };
 
-    return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
+    return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request, { rejectInvalidOrigin: true }) });
 
   } catch (error) {
     if (error instanceof TimeoutError) {

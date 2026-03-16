@@ -348,3 +348,34 @@ export function parseBundlerError(message: string): Partial<RuntimeError> {
 export function getErrorKey(error: RuntimeError): string {
     return `${error.type}:${error.message.slice(0, 100)}:${error.filePath || ''}:${error.line || ''}`;
 }
+
+/**
+ * JSON-safe representation of RuntimeError (rawError stringified).
+ */
+export type SerializedRuntimeError = Omit<RuntimeError, 'rawError'> & { rawError?: string };
+
+/**
+ * Serializes a RuntimeError for JSON transport.
+ * Converts the `rawError` field (which can be any object) to a string.
+ */
+export function serializeRuntimeError(error: RuntimeError): SerializedRuntimeError {
+    const { rawError, ...rest } = error;
+    const serialized: SerializedRuntimeError = { ...rest };
+    if (rawError !== undefined) {
+        serialized.rawError = rawError instanceof Error
+            ? `${rawError.name}: ${rawError.message}`
+            : String(rawError);
+    }
+    return serialized;
+}
+
+/**
+ * Deserializes a SerializedRuntimeError back to RuntimeError.
+ * The `rawError` field remains as a string (original object is lost).
+ */
+export function deserializeRuntimeError(serialized: SerializedRuntimeError): RuntimeError {
+    return {
+        ...serialized,
+        rawError: serialized.rawError,
+    };
+}

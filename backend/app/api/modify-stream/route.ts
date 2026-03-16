@@ -47,6 +47,9 @@ export async function POST(request: NextRequest) {
   const contextLogger = logger.withRequestId(requestId);
 
   try {
+    // CSRF: reject mutations with missing/invalid origin
+    getCorsHeaders(request, { rejectInvalidOrigin: true });
+
     // Parse and validate request body
     const parsed = await parseJsonRequest(request, ModifyProjectRequestSchema);
     if (!parsed.ok) return parsed.response;
@@ -59,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     // Deserialize project state
     const projectState = deserializeProjectState(body.projectState);
-    const { shouldSkipPlanning, errorContext } = body;
+    const { shouldSkipPlanning, errorContext, conversationHistory } = body;
 
     // Detect intent for task-specific model routing
     const detectedTaskType = await detectIntent(body.prompt, requestId);
@@ -99,6 +102,7 @@ export async function POST(request: NextRequest) {
             shouldSkipPlanning,
             errorContext,
             requestId,
+            conversationHistory,
             onProgress: (phase: ModificationPhase, label: string) => {
               if (isComplete()) return;
               encoder.enqueueEvent(

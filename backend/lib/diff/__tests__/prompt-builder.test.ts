@@ -3,8 +3,9 @@ import {
   buildModificationPrompt,
   buildBuildFixPrompt,
   buildSlicesFromFiles,
+  formatConversationContext,
 } from '../prompt-builder';
-import type { ProjectState } from '@ai-app-builder/shared';
+import type { ProjectState, ConversationTurn } from '@ai-app-builder/shared';
 import type { CodeSlice } from '../../analysis/file-planner/types';
 
 describe('buildModificationPrompt', () => {
@@ -393,5 +394,53 @@ describe('buildSlicesFromFiles', () => {
 
       expect(mockProjectState.files).toEqual(originalFiles);
     });
+  });
+});
+
+describe('formatConversationContext', () => {
+  it('should return null for undefined history', () => {
+    expect(formatConversationContext(undefined)).toBeNull();
+  });
+
+  it('should return null for empty history', () => {
+    expect(formatConversationContext([])).toBeNull();
+  });
+
+  it('should format user and assistant turns', () => {
+    const history: ConversationTurn[] = [
+      { role: 'user', content: 'Add a button' },
+      { role: 'assistant', content: 'Done' },
+    ];
+    const result = formatConversationContext(history);
+
+    expect(result).toContain('=== CONVERSATION HISTORY (recent turns) ===');
+    expect(result).toContain('User: Add a button');
+    expect(result).toContain('Assistant: Done');
+  });
+
+  it('should include changeSummary description and files when present', () => {
+    const history: ConversationTurn[] = [
+      {
+        role: 'assistant',
+        content: 'I added the feature',
+        changeSummary: { description: 'Added a login form', affectedFiles: ['src/Login.tsx', 'src/App.tsx'] },
+      },
+    ];
+    const result = formatConversationContext(history)!;
+
+    expect(result).toContain('Assistant: Added a login form [files: src/Login.tsx, src/App.tsx]');
+  });
+
+  it('should fall back to content when changeSummary has no description or files', () => {
+    const history: ConversationTurn[] = [
+      {
+        role: 'assistant',
+        content: 'Some response',
+        changeSummary: { description: '', affectedFiles: [] },
+      },
+    ];
+    const result = formatConversationContext(history)!;
+
+    expect(result).toContain('Assistant: Some response');
   });
 });

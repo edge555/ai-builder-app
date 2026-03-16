@@ -22,7 +22,7 @@ vi.mock('@ai-app-builder/shared/utils', () => ({
 }));
 
 describe('processSSEStream', () => {
-  let mockReader: any;
+  let mockReader: { read: ReturnType<typeof vi.fn> };
   let mockResponse: Response;
 
   beforeEach(() => {
@@ -33,7 +33,7 @@ describe('processSSEStream', () => {
       body: {
         getReader: vi.fn(() => mockReader),
       },
-    } as any;
+    } as unknown as Response;
   });
 
   describe('happy path', () => {
@@ -246,7 +246,7 @@ describe('processSSEStream', () => {
   describe('error handling', () => {
     it('should throw error when response body is null', async () => {
       // Arrange
-      const nullBodyResponse = { body: null } as any;
+      const nullBodyResponse = { body: null } as unknown as Response;
       const parseLine = vi.fn();
       const onToken = vi.fn();
 
@@ -258,7 +258,7 @@ describe('processSSEStream', () => {
 
     it('should throw error when response body has no reader', async () => {
       // Arrange - body exists but getReader returns null/undefined
-      const noReaderResponse = { body: { getReader: () => null } } as any;
+      const noReaderResponse = { body: { getReader: () => null } } as unknown as Response;
       const parseLine = vi.fn();
       const onToken = vi.fn();
 
@@ -282,7 +282,7 @@ describe('processSSEStream', () => {
 
     it('should include service name in error message', async () => {
       // Arrange
-      const nullBodyResponse = { body: null } as any;
+      const nullBodyResponse = { body: null } as unknown as Response;
       const parseLine = vi.fn();
       const onToken = vi.fn();
 
@@ -473,7 +473,7 @@ describe('processSSEStream', () => {
   describe('different service names', () => {
     it('should work with OpenRouter service name', async () => {
       // Arrange
-      const nullBodyResponse = { body: null } as any;
+      const nullBodyResponse = { body: null } as unknown as Response;
       const parseLine = vi.fn();
       const onToken = vi.fn();
 
@@ -485,7 +485,7 @@ describe('processSSEStream', () => {
 
     it('should work with Modal service name', async () => {
       // Arrange
-      const nullBodyResponse = { body: null } as any;
+      const nullBodyResponse = { body: null } as unknown as Response;
       const parseLine = vi.fn();
       const onToken = vi.fn();
 
@@ -497,7 +497,7 @@ describe('processSSEStream', () => {
 
     it('should work with custom service name', async () => {
       // Arrange
-      const nullBodyResponse = { body: null } as any;
+      const nullBodyResponse = { body: null } as unknown as Response;
       const parseLine = vi.fn();
       const onToken = vi.fn();
 

@@ -143,7 +143,8 @@ export const SEARCH_REPLACE_GUIDANCE = `=== SEARCH/REPLACE RULES (CRITICAL) ===
 3. ORDERING: Edits run top-to-bottom; later edits see earlier results. Don't let one replacement break a later search.
 4. IMPORTS: Add imports for new components/utilities at top. Remove unused imports; group logically (framework, third-party, local).
 5. FALLBACKS: If target file doesn't exist, create it. If search can't match reliably, create a new file with full correct implementation.
-6. WHOLE-FILE REPLACEMENT: When a file needs extensive changes (>5 edits or >60% rewrite), use "replace_file" operation with complete new content instead of fragile multi-edit "modify". This avoids cascading search/replace failures.`;
+6. WHOLE-FILE REPLACEMENT: When a file needs extensive changes (>5 edits or >60% rewrite), use "replace_file" operation with complete new content instead of fragile multi-edit "modify". This avoids cascading search/replace failures.
+7. RETRY SAFETY: If you receive a retry prompt showing current file content, match your search strings against THAT content, not the original.`;
 
 /**
  * Output budget guidance.

@@ -1,4 +1,5 @@
 import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState, RepairAttempt } from '@ai-app-builder/shared/types';
+import type { ConversationTurn } from '@ai-app-builder/shared';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { useState, useCallback, useMemo, useRef, useEffect, type ReactNode } from 'react';
 
@@ -309,7 +310,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     currentState: SerializedProjectState,
     prompt: string,
     runtimeError?: RuntimeError,
-    options?: { shouldSkipPlanning?: boolean }
+    options?: { shouldSkipPlanning?: boolean; conversationHistory?: ConversationTurn[] }
   ): Promise<ModifyProjectResponse> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), appConfig.api.timeout);
@@ -323,7 +324,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'apikey': SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ projectState: currentState, prompt, runtimeError, shouldSkipPlanning: options?.shouldSkipPlanning }),
+        body: JSON.stringify({ projectState: currentState, prompt, runtimeError, shouldSkipPlanning: options?.shouldSkipPlanning, conversationHistory: options?.conversationHistory }),
         signal: controller.signal,
       });
 
@@ -355,7 +356,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     currentState: SerializedProjectState,
     prompt: string,
     runtimeError?: RuntimeError,
-    options?: { shouldSkipPlanning?: boolean; errorContext?: { affectedFiles: string[]; errorType: string } }
+    options?: { shouldSkipPlanning?: boolean; conversationHistory?: ConversationTurn[]; errorContext?: { affectedFiles: string[]; errorType: string } }
   ): Promise<ModifyProjectResponse> => {
     streamAbortRef.current?.abort();
     const controller = new AbortController();
@@ -407,6 +408,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           runtimeError,
           shouldSkipPlanning: options?.shouldSkipPlanning,
           errorContext: options?.errorContext,
+          conversationHistory: options?.conversationHistory,
         }),
         signal: controller.signal,
       });

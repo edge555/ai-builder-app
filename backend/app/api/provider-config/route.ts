@@ -42,7 +42,7 @@ export const PUT = withRouteContext('api/provider-config', async (ctx, request: 
     resetProviderSingletons();
     const result = await getProviderConfigWithSource();
     contextLogger.info('Provider config updated', { aiProvider: parsed.data.aiProvider });
-    return NextResponse.json(result, { status: 200, headers: getCorsHeaders(request) });
+    return NextResponse.json(result, { status: 200, headers: getCorsHeaders(request, { rejectInvalidOrigin: true }) });
   } catch (error) {
     return handleError(error, 'api/provider-config PUT', request);
   }

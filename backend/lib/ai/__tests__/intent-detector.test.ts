@@ -240,7 +240,7 @@ describe('IntentDetector', () => {
     it('should handle null response content', async () => {
       const mockResponse: AIResponse = {
         success: true,
-        content: null as any,
+        content: null as unknown as string,
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);

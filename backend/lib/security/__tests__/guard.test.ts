@@ -67,7 +67,7 @@ function makeRequest(options: {
     ip: 'ip' in options ? options.ip : '1.2.3.4',
     headers: new Headers(options.headers ?? {}),
   };
-  return req as any;
+  return req as { method: string; ip: string | undefined; headers: Headers };
 }
 
 async function parseBody(response: Response) {

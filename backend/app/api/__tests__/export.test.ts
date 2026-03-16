@@ -40,7 +40,7 @@ vi.mock('../../../lib/api', () => ({
     },
     withRouteContext: vi.fn().mockImplementation((_module: string, handler: any) => {
         return (request: any) => handler(
-            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } },
+            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, setRateLimitHeaders: vi.fn() },
             request
         );
     }),
@@ -109,13 +109,13 @@ describe('Export API Endpoint', () => {
             const { exportAsZipBuffer } = await import('../../../lib/core');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ExportProjectRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
-            (deserializeProjectState as any).mockReturnValue(mockProjectState);
-            (exportAsZipBuffer as any).mockResolvedValue(mockZipBuffer);
-            (withTimeout as any).mockResolvedValue(mockZipBuffer);
+            vi.mocked(deserializeProjectState).mockReturnValue(mockProjectState);
+            vi.mocked(exportAsZipBuffer).mockResolvedValue(mockZipBuffer);
+            vi.mocked(withTimeout).mockResolvedValue(mockZipBuffer);
 
             const request = new NextRequest('http://localhost/api/export', {
                 method: 'POST',
@@ -135,11 +135,11 @@ describe('Export API Endpoint', () => {
             const { ExportProjectRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ExportProjectRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
-            (withTimeout as any).mockResolvedValue(mockZipBuffer);
+            vi.mocked(withTimeout).mockResolvedValue(mockZipBuffer);
 
             const request = new NextRequest('http://localhost/api/export', {
                 method: 'POST',
@@ -155,8 +155,8 @@ describe('Export API Endpoint', () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { ExportProjectRequestSchema } = await import('@ai-app-builder/shared');
 
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ExportProjectRequestSchema.parse as any).mockImplementation(() => {
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ExportProjectRequestSchema.parse).mockImplementation(() => {
                 throw new Error('Invalid project state');
             });
 
@@ -175,12 +175,12 @@ describe('Export API Endpoint', () => {
             const { ExportProjectRequestSchema, deserializeProjectState } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ExportProjectRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
-            (deserializeProjectState as any).mockReturnValue(mockProjectState);
-            (withTimeout as any).mockResolvedValue(mockZipBuffer);
+            vi.mocked(deserializeProjectState).mockReturnValue(mockProjectState);
+            vi.mocked(withTimeout).mockResolvedValue(mockZipBuffer);
 
             const request = new NextRequest('http://localhost/api/export', {
                 method: 'POST',
@@ -198,13 +198,13 @@ describe('Export API Endpoint', () => {
             const { exportAsZipBuffer } = await import('../../../lib/core');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ExportProjectRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
-            (deserializeProjectState as any).mockReturnValue(mockProjectState);
-            (exportAsZipBuffer as any).mockResolvedValue(mockZipBuffer);
-            (withTimeout as any).mockImplementation((promise: any, options: any) => promise);
+            vi.mocked(deserializeProjectState).mockReturnValue(mockProjectState);
+            vi.mocked(exportAsZipBuffer).mockResolvedValue(mockZipBuffer);
+            vi.mocked(withTimeout).mockImplementation((promise: any, options: any) => promise);
 
             const request = new NextRequest('http://localhost/api/export', {
                 method: 'POST',
@@ -228,13 +228,13 @@ describe('Export API Endpoint', () => {
             const { exportAsZipBuffer } = await import('../../../lib/core');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ExportProjectRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
-            (deserializeProjectState as any).mockReturnValue(mockProjectState);
-            (exportAsZipBuffer as any).mockResolvedValue(mockZipBuffer);
-            (withTimeout as any).mockResolvedValue(mockZipBuffer);
+            vi.mocked(deserializeProjectState).mockReturnValue(mockProjectState);
+            vi.mocked(exportAsZipBuffer).mockResolvedValue(mockZipBuffer);
+            vi.mocked(withTimeout).mockResolvedValue(mockZipBuffer);
 
             const request = new NextRequest('http://localhost/api/export', {
                 method: 'POST',
@@ -258,13 +258,13 @@ describe('Export API Endpoint', () => {
                 name: 'My Test Project!!!',
             };
 
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ExportProjectRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: specialNameProject,
             });
-            (deserializeProjectState as any).mockReturnValue(specialNameProject);
-            (exportAsZipBuffer as any).mockResolvedValue(mockZipBuffer);
-            (withTimeout as any).mockResolvedValue(mockZipBuffer);
+            vi.mocked(deserializeProjectState).mockReturnValue(specialNameProject);
+            vi.mocked(exportAsZipBuffer).mockResolvedValue(mockZipBuffer);
+            vi.mocked(withTimeout).mockResolvedValue(mockZipBuffer);
 
             const request = new NextRequest('http://localhost/api/export', {
                 method: 'POST',
@@ -280,7 +280,7 @@ describe('Export API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            (applyRateLimit as any).mockReturnValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockReturnValue(rateLimitResponse);
 
             const request = new NextRequest('http://localhost/api/export', {
                 method: 'POST',
@@ -297,14 +297,14 @@ describe('Export API Endpoint', () => {
             const { ExportProjectRequestSchema, deserializeProjectState } = await import('@ai-app-builder/shared');
             const { withTimeout, TimeoutError, AppError, handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ExportProjectRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
-            (deserializeProjectState as any).mockReturnValue(mockProjectState);
+            vi.mocked(deserializeProjectState).mockReturnValue(mockProjectState);
             
             const timeoutError = new TimeoutError('Operation timed out', 60000);
-            (withTimeout as any).mockRejectedValue(timeoutError);
+            vi.mocked(withTimeout).mockRejectedValue(timeoutError);
 
             const request = new NextRequest('http://localhost/api/export', {
                 method: 'POST',
@@ -328,20 +328,20 @@ describe('Export API Endpoint', () => {
             const { exportAsZipBuffer } = await import('../../../lib/core');
             const { withTimeout, getCorsHeaders } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ExportProjectRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
-            (deserializeProjectState as any).mockReturnValue(mockProjectState);
-            (exportAsZipBuffer as any).mockResolvedValue(mockZipBuffer);
-            (withTimeout as any).mockResolvedValue(mockZipBuffer);
+            vi.mocked(deserializeProjectState).mockReturnValue(mockProjectState);
+            vi.mocked(exportAsZipBuffer).mockResolvedValue(mockZipBuffer);
+            vi.mocked(withTimeout).mockResolvedValue(mockZipBuffer);
             
             const mockCorsHeaders = {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type',
             };
-            (getCorsHeaders as any).mockReturnValue(mockCorsHeaders);
+            vi.mocked(getCorsHeaders).mockReturnValue(mockCorsHeaders);
 
             const request = new NextRequest('http://localhost/api/export', {
                 method: 'POST',

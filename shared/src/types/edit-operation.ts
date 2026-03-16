@@ -42,6 +42,18 @@ export interface ModificationOutput {
 }
 
 /**
+ * Per-edit detail tracking for partial application.
+ */
+export interface EditDetail {
+    editIndex: number;
+    success: boolean;
+    matchTier?: number;  // 1-4, or 0 if no match
+    warning?: string;
+    error?: string;
+    edit: EditOperation;
+}
+
+/**
  * Result of applying edits to a file.
  */
 export interface EditApplicationResult {
@@ -55,4 +67,8 @@ export interface EditApplicationResult {
     failedEditIndex?: number;
     /** Warning messages from edit application (e.g., fuzzy matching) */
     warnings?: string[];
+    /** Per-edit success/failure info */
+    editDetails?: EditDetail[];
+    /** Content after applying only successful edits */
+    partialContent?: string;
 }

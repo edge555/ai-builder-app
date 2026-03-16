@@ -85,8 +85,8 @@ describe('useAutoSave', () => {
     });
 
     it('should debounce save operations', async () => {
-        (hybridStorageService.saveProject as any).mockResolvedValue(undefined);
-        (hybridStorageService.setMetadata as any).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.saveProject).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.setMetadata).mockResolvedValue(undefined);
 
         const { rerender } = renderHook(
             ({ projectState, messages }) => useAutoSave(projectState, messages),
@@ -115,8 +115,8 @@ describe('useAutoSave', () => {
     });
 
     it('should save to IndexedDB after debounce delay', async () => {
-        (hybridStorageService.saveProject as any).mockResolvedValue(undefined);
-        (hybridStorageService.setMetadata as any).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.saveProject).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.setMetadata).mockResolvedValue(undefined);
 
         renderHook(() => useAutoSave(mockProjectState, mockMessages));
 
@@ -131,8 +131,8 @@ describe('useAutoSave', () => {
         const savePromise = new Promise<void>((resolve) => {
             resolveSave = resolve;
         });
-        (hybridStorageService.saveProject as any).mockReturnValue(savePromise);
-        (hybridStorageService.setMetadata as any).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.saveProject).mockReturnValue(savePromise);
+        vi.mocked(hybridStorageService.setMetadata).mockResolvedValue(undefined);
 
         const { result } = renderHook(() => useAutoSave(mockProjectState, mockMessages));
 
@@ -156,8 +156,8 @@ describe('useAutoSave', () => {
     });
 
     it('should update lastSavedAt on successful save', async () => {
-        (hybridStorageService.saveProject as any).mockResolvedValue(undefined);
-        (hybridStorageService.setMetadata as any).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.saveProject).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.setMetadata).mockResolvedValue(undefined);
 
         const { result } = renderHook(() => useAutoSave(mockProjectState, mockMessages));
 
@@ -170,7 +170,7 @@ describe('useAutoSave', () => {
 
     it('should handle save errors gracefully', async () => {
         const saveError = new Error('IndexedDB quota exceeded');
-        (hybridStorageService.saveProject as any).mockRejectedValue(saveError);
+        vi.mocked(hybridStorageService.saveProject).mockRejectedValue(saveError);
 
         const { result } = renderHook(() => useAutoSave(mockProjectState, mockMessages));
 
@@ -182,7 +182,7 @@ describe('useAutoSave', () => {
 
     it('should clear saveError on next successful save', async () => {
         // First save fails
-        (hybridStorageService.saveProject as any).mockRejectedValueOnce(new Error('Save failed'));
+        vi.mocked(hybridStorageService.saveProject).mockRejectedValueOnce(new Error('Save failed'));
 
         const { result, rerender } = renderHook(
             ({ projectState, messages }) => useAutoSave(projectState, messages),
@@ -196,8 +196,8 @@ describe('useAutoSave', () => {
         expect(result.current.saveError).toBeTruthy();
 
         // Second save succeeds
-        (hybridStorageService.saveProject as any).mockResolvedValue(undefined);
-        (hybridStorageService.setMetadata as any).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.saveProject).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.setMetadata).mockResolvedValue(undefined);
 
         // Simulate a real update: name and updatedAt both change (updatedAt is a meaningful primitive)
         rerender({ projectState: { ...mockProjectState, name: 'Updated', updatedAt: new Date(Date.now() + 1000).toISOString() }, messages: mockMessages });
@@ -207,8 +207,8 @@ describe('useAutoSave', () => {
     });
 
     it('should use custom debounce delay', async () => {
-        (hybridStorageService.saveProject as any).mockResolvedValue(undefined);
-        (hybridStorageService.setMetadata as any).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.saveProject).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.setMetadata).mockResolvedValue(undefined);
 
         renderHook(() => useAutoSave(mockProjectState, mockMessages, { debounceMs: 500 }));
 
@@ -231,8 +231,8 @@ describe('useAutoSave', () => {
     });
 
     it('should save with updated messages', async () => {
-        (hybridStorageService.saveProject as any).mockResolvedValue(undefined);
-        (hybridStorageService.setMetadata as any).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.saveProject).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.setMetadata).mockResolvedValue(undefined);
 
         const updatedMessages: ChatMessage[] = [
             ...mockMessages,
@@ -256,8 +256,8 @@ describe('useAutoSave', () => {
         const savePromise = new Promise<void>((resolve) => {
             resolveSave = resolve;
         });
-        (hybridStorageService.saveProject as any).mockReturnValue(savePromise);
-        (hybridStorageService.setMetadata as any).mockResolvedValue(undefined);
+        vi.mocked(hybridStorageService.saveProject).mockReturnValue(savePromise);
+        vi.mocked(hybridStorageService.setMetadata).mockResolvedValue(undefined);
 
         const { result, unmount } = renderHook(() => useAutoSave(mockProjectState, mockMessages));
 
@@ -289,7 +289,7 @@ describe('useAutoSave', () => {
         const savePromise = new Promise<void>((_, reject) => {
             rejectSave = reject;
         });
-        (hybridStorageService.saveProject as any).mockReturnValue(savePromise);
+        vi.mocked(hybridStorageService.saveProject).mockReturnValue(savePromise);
 
         const { result, unmount } = renderHook(() => useAutoSave(mockProjectState, mockMessages));
 

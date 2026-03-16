@@ -21,7 +21,7 @@ describe('BackpressureController', () => {
             desiredSize: 1000, // Positive desiredSize = no backpressure
             close: vi.fn(),
             error: vi.fn(),
-        } as any;
+        } as unknown as ReadableStreamDefaultController<Uint8Array>;
     });
 
     describe('enqueue without backpressure', () => {

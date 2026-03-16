@@ -20,7 +20,7 @@ describe('API Integration Tests', () => {
             const mockProjectState = { name: 'test-project', files: [] };
             const mockVersion = { id: 'v1', timestamp: Date.now() };
 
-            (createProjectGenerator as any).mockReturnValue({
+            vi.mocked(createProjectGenerator).mockReturnValue({
                 generateProject: vi.fn().mockResolvedValue({
                     success: true,
                     projectState: mockProjectState,
@@ -57,7 +57,7 @@ describe('API Integration Tests', () => {
             const mockProjectState = { name: 'test-project', files: [] };
             const mockVersion = { id: 'v2', timestamp: Date.now() };
 
-            (createModificationEngine as any).mockReturnValue({
+            vi.mocked(createModificationEngine).mockReturnValue({
                 modifyProject: vi.fn().mockResolvedValue({
                     success: true,
                     projectState: mockProjectState,

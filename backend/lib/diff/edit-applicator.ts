@@ -5,7 +5,7 @@
  * Extracted from ModificationEngine for better separation of concerns.
  */
 
-import type { EditOperation, EditApplicationResult } from '@ai-app-builder/shared';
+import type { EditOperation, EditApplicationResult, EditDetail } from '@ai-app-builder/shared';
 import { applySearchReplace } from './multi-tier-matcher';
 import { createLogger } from '../logger';
 
@@ -13,24 +13,30 @@ const logger = createLogger('EditApplicator');
 
 /**
  * Apply search/replace edits to file content.
- * Returns the modified content or an error if edits cannot be applied.
+ * Processes ALL edits (continue-on-failure), tracking partial content from successful edits.
+ * Returns success: false if any edit fails, but includes partialContent and editDetails.
  */
 export function applyEdits(
     originalContent: string,
     edits: EditOperation[]
 ): EditApplicationResult {
+    // `content` tracks the running state after all successful edits.
+    // On failure, it becomes `partialContent` — the file with only successful edits applied.
     let content = originalContent;
+    let partialContent = originalContent;
     const warnings: string[] = [];
+    const editDetails: EditDetail[] = [];
+    let hasFailure = false;
+    let firstFailedIndex: number | undefined;
+    let firstError: string | undefined;
 
     for (let i = 0; i < edits.length; i++) {
         const edit = edits[i];
 
         // Normalize escape sequences in search and replace strings
-        // Note: With structured output, this should be less necessary, but keep for safety
         let search = edit.search;
         let replace = edit.replace;
 
-        // Handle escaped newlines and tabs from JSON
         if (search.includes('\\n')) search = search.replace(/\\n/g, '\n');
         if (search.includes('\\t')) search = search.replace(/\\t/g, '\t');
         if (replace.includes('\\n')) replace = replace.replace(/\\n/g, '\n');
@@ -46,16 +52,32 @@ export function applyEdits(
                 error: result.error,
                 searchPreview: search.substring(0, 100),
             });
-            return {
+            editDetails.push({
+                editIndex: i,
                 success: false,
+                matchTier: result.tier ?? 0,
                 error: result.error ?? 'Unknown error applying edit',
-                failedEditIndex: i,
-            };
+                edit,
+            });
+            if (!hasFailure) {
+                hasFailure = true;
+                firstFailedIndex = i;
+                firstError = result.error ?? 'Unknown error applying edit';
+            }
+            continue;
         }
 
         content = result.content!;
+        partialContent = result.content!;
 
-        // Log warnings from fuzzy matching
+        editDetails.push({
+            editIndex: i,
+            success: true,
+            matchTier: result.tier,
+            warning: result.warning,
+            edit,
+        });
+
         if (result.warning) {
             logger.warn('Edit applied with warning', {
                 editIndex: i,
@@ -65,10 +87,23 @@ export function applyEdits(
         }
     }
 
+    if (hasFailure) {
+        return {
+            success: false,
+            content,
+            error: firstError,
+            failedEditIndex: firstFailedIndex,
+            warnings: warnings.length > 0 ? warnings : undefined,
+            editDetails,
+            partialContent,
+        };
+    }
+
     return {
         success: true,
         content,
         warnings: warnings.length > 0 ? warnings : undefined,
+        editDetails,
     };
 }
 

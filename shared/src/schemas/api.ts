@@ -24,6 +24,55 @@ export const SerializedProjectStateSchema = z.object({
 });
 
 // ============================================================================
+// Response Schemas (shared between frontend validation and backend responses)
+// ============================================================================
+
+export const DiffChangeSchema = z.object({
+    type: z.enum(['add', 'delete', 'context']),
+    lineNumber: z.number().int(),
+    content: z.string(),
+});
+
+export const DiffHunkSchema = z.object({
+    oldStart: z.number().int(),
+    oldLines: z.number().int(),
+    newStart: z.number().int(),
+    newLines: z.number().int(),
+    changes: z.array(DiffChangeSchema),
+});
+
+export const FileDiffSchema = z.object({
+    filePath: z.string(),
+    status: z.enum(['added', 'modified', 'deleted']),
+    hunks: z.array(DiffHunkSchema),
+});
+
+export const SerializedVersionSchema = z.object({
+    id: z.string(),
+    projectId: z.string(),
+    prompt: z.string(),
+    timestamp: z.string(),
+    files: z.record(z.string(), z.string()),
+    diffs: z.array(FileDiffSchema),
+    parentVersionId: z.string().nullable(),
+});
+
+export const RuntimeErrorSchema = z.object({
+    message: z.string(),
+    stack: z.string().optional(),
+    componentStack: z.string().optional(),
+    filePath: z.string().optional(),
+    line: z.number().optional(),
+    column: z.number().optional(),
+    type: z.enum(RUNTIME_ERROR_TYPES),
+    priority: z.enum(ERROR_PRIORITIES),
+    timestamp: z.string(),
+    source: z.enum(ERROR_SOURCES),
+    suggestedFixes: z.array(z.string()).optional(),
+    rawError: z.unknown().optional(),
+});
+
+// ============================================================================
 // Request Schemas
 // ============================================================================
 
@@ -33,6 +82,21 @@ export const SerializedProjectStateSchema = z.object({
 export const GenerateProjectRequestSchema = z.object({
     description: z.string().min(1, 'Project description is required').max(50000, 'Project description is too long (max 50,000 characters)'),
 });
+
+/**
+ * Schema for a single conversation turn (user or assistant).
+ * Used to send recent conversation history with modification requests.
+ */
+export const ConversationTurnSchema = z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string().max(500),
+    changeSummary: z.object({
+        description: z.string().max(300),
+        affectedFiles: z.array(z.string()).max(20),
+    }).optional(),
+});
+
+export type ConversationTurn = z.infer<typeof ConversationTurnSchema>;
 
 /**
  * Schema for /api/modify
@@ -52,6 +116,7 @@ export const ModifyProjectRequestSchema = z.object({
         affectedFiles: z.array(z.string()),
         errorType: z.enum(RUNTIME_ERROR_TYPES),
     }).optional(),
+    conversationHistory: z.array(ConversationTurnSchema).max(10).optional(),
 });
 
 /**

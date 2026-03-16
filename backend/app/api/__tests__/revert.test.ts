@@ -46,7 +46,7 @@ vi.mock('../../../lib/api', () => ({
     },
     withRouteContext: vi.fn().mockImplementation((_module: string, handler: any) => {
         return (request: any) => handler(
-            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } },
+            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, setRateLimitHeaders: vi.fn() },
             request
         );
     }),
@@ -127,8 +127,8 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema, serializeProjectState, serializeVersion } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (RevertVersionRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(RevertVersionRequestSchema.parse).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
             });
@@ -136,11 +136,11 @@ describe('Revert API Endpoint', () => {
             const mockVersionManager = {
                 revertToVersion: vi.fn().mockResolvedValue(mockRevertResult),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
             
-            (withTimeout as any).mockResolvedValue(mockRevertResult);
-            (serializeProjectState as any).mockReturnValue(mockProjectState);
-            (serializeVersion as any).mockReturnValue(mockVersion);
+            vi.mocked(withTimeout).mockResolvedValue(mockRevertResult);
+            vi.mocked(serializeProjectState).mockReturnValue(mockProjectState);
+            vi.mocked(serializeVersion).mockReturnValue(mockVersion);
 
             const request = new NextRequest('http://localhost/api/revert', {
                 method: 'POST',
@@ -161,12 +161,12 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (RevertVersionRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(RevertVersionRequestSchema.parse).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
             });
-            (withTimeout as any).mockResolvedValue(mockRevertResult);
+            vi.mocked(withTimeout).mockResolvedValue(mockRevertResult);
 
             const request = new NextRequest('http://localhost/api/revert', {
                 method: 'POST',
@@ -182,8 +182,8 @@ describe('Revert API Endpoint', () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { RevertVersionRequestSchema } = await import('@ai-app-builder/shared');
 
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (RevertVersionRequestSchema.parse as any).mockImplementation(() => {
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(RevertVersionRequestSchema.parse).mockImplementation(() => {
                 throw new Error('Invalid request');
             });
 
@@ -203,8 +203,8 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (RevertVersionRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(RevertVersionRequestSchema.parse).mockReturnValue({
                 projectId: 'my-project',
                 versionId: 'v2',
             });
@@ -212,8 +212,8 @@ describe('Revert API Endpoint', () => {
             const mockVersionManager = {
                 revertToVersion: vi.fn().mockResolvedValue(mockRevertResult),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
-            (withTimeout as any).mockImplementation((promise: any) => promise);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
+            vi.mocked(withTimeout).mockImplementation((promise: any) => promise);
 
             const request = new NextRequest('http://localhost/api/revert', {
                 method: 'POST',
@@ -231,8 +231,8 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (RevertVersionRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(RevertVersionRequestSchema.parse).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
             });
@@ -240,8 +240,8 @@ describe('Revert API Endpoint', () => {
             const mockVersionManager = {
                 revertToVersion: vi.fn().mockResolvedValue(mockRevertResult),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
-            (withTimeout as any).mockImplementation((promise: any, options: any) => promise);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
+            vi.mocked(withTimeout).mockImplementation((promise: any, options: any) => promise);
 
             const request = new NextRequest('http://localhost/api/revert', {
                 method: 'POST',
@@ -265,8 +265,8 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout, AppError, handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (RevertVersionRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(RevertVersionRequestSchema.parse).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
             });
@@ -279,8 +279,8 @@ describe('Revert API Endpoint', () => {
             const mockVersionManager = {
                 revertToVersion: vi.fn().mockResolvedValue(mockFailedResult),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
-            (withTimeout as any).mockResolvedValue(mockFailedResult);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
+            vi.mocked(withTimeout).mockResolvedValue(mockFailedResult);
 
             const request = new NextRequest('http://localhost/api/revert', {
                 method: 'POST',
@@ -303,14 +303,14 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout, TimeoutError, AppError, handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (RevertVersionRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(RevertVersionRequestSchema.parse).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
             });
             
             const timeoutError = new TimeoutError('Operation timed out', 30000);
-            (withTimeout as any).mockRejectedValue(timeoutError);
+            vi.mocked(withTimeout).mockRejectedValue(timeoutError);
 
             const request = new NextRequest('http://localhost/api/revert', {
                 method: 'POST',
@@ -331,7 +331,7 @@ describe('Revert API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            (applyRateLimit as any).mockReturnValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockReturnValue(rateLimitResponse);
 
             const request = new NextRequest('http://localhost/api/revert', {
                 method: 'POST',
@@ -349,8 +349,8 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema, serializeProjectState, serializeVersion } = await import('@ai-app-builder/shared');
             const { withTimeout, getCorsHeaders } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (RevertVersionRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(RevertVersionRequestSchema.parse).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
             });
@@ -358,17 +358,17 @@ describe('Revert API Endpoint', () => {
             const mockVersionManager = {
                 revertToVersion: vi.fn().mockResolvedValue(mockRevertResult),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
-            (withTimeout as any).mockResolvedValue(mockRevertResult);
-            (serializeProjectState as any).mockReturnValue(mockProjectState);
-            (serializeVersion as any).mockReturnValue(mockVersion);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
+            vi.mocked(withTimeout).mockResolvedValue(mockRevertResult);
+            vi.mocked(serializeProjectState).mockReturnValue(mockProjectState);
+            vi.mocked(serializeVersion).mockReturnValue(mockVersion);
             
             const mockCorsHeaders = {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type',
             };
-            (getCorsHeaders as any).mockReturnValue(mockCorsHeaders);
+            vi.mocked(getCorsHeaders).mockReturnValue(mockCorsHeaders);
 
             const request = new NextRequest('http://localhost/api/revert', {
                 method: 'POST',
@@ -386,8 +386,8 @@ describe('Revert API Endpoint', () => {
             const { RevertVersionRequestSchema, serializeProjectState, serializeVersion } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (RevertVersionRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(RevertVersionRequestSchema.parse).mockReturnValue({
                 projectId: 'test-project',
                 versionId: 'v1',
             });
@@ -395,13 +395,13 @@ describe('Revert API Endpoint', () => {
             const mockVersionManager = {
                 revertToVersion: vi.fn().mockResolvedValue(mockRevertResult),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
-            (withTimeout as any).mockResolvedValue(mockRevertResult);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
+            vi.mocked(withTimeout).mockResolvedValue(mockRevertResult);
             
             const serializedState = { ...mockProjectState, serialized: true };
             const serializedVersion = { ...mockVersion, serialized: true };
-            (serializeProjectState as any).mockReturnValue(serializedState);
-            (serializeVersion as any).mockReturnValue(serializedVersion);
+            vi.mocked(serializeProjectState).mockReturnValue(serializedState);
+            vi.mocked(serializeVersion).mockReturnValue(serializedVersion);
 
             const request = new NextRequest('http://localhost/api/revert', {
                 method: 'POST',

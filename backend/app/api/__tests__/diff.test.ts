@@ -46,7 +46,7 @@ vi.mock('../../../lib/api', () => ({
     },
     withRouteContext: vi.fn().mockImplementation((_module: string, handler: any) => {
         return (request: any) => handler(
-            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } },
+            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, setRateLimitHeaders: vi.fn() },
             request
         );
     }),
@@ -146,8 +146,8 @@ describe('Diff API Endpoint', () => {
             const { ComputeDiffRequestSchema } = await import('@ai-app-builder/shared/schemas');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ComputeDiffRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ComputeDiffRequestSchema.parse).mockReturnValue({
                 fromVersionId: 'v1',
                 toVersionId: 'v2',
                 projectId: 'test-project',
@@ -158,13 +158,13 @@ describe('Diff API Endpoint', () => {
                     .mockReturnValueOnce(mockFromVersion)
                     .mockReturnValueOnce(mockToVersion),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
             
             const mockDiffEngine = {
                 computeDiffsFromFiles: vi.fn().mockResolvedValue(mockDiffs),
             };
-            (getDiffEngine as any).mockReturnValue(mockDiffEngine);
-            (withTimeout as any).mockResolvedValue(mockDiffs);
+            vi.mocked(getDiffEngine).mockReturnValue(mockDiffEngine);
+            vi.mocked(withTimeout).mockResolvedValue(mockDiffs);
 
             const request = new NextRequest('http://localhost/api/diff', {
                 method: 'POST',
@@ -192,8 +192,8 @@ describe('Diff API Endpoint', () => {
             const { ComputeDiffRequestSchema } = await import('@ai-app-builder/shared/schemas');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ComputeDiffRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ComputeDiffRequestSchema.parse).mockReturnValue({
                 fromVersionId: 'v1',
                 toVersionId: 'v2',
             });
@@ -203,13 +203,13 @@ describe('Diff API Endpoint', () => {
                     .mockReturnValueOnce({ version: mockFromVersion, projectId: 'test-project' })
                     .mockReturnValueOnce({ version: mockToVersion, projectId: 'test-project' }),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
             
             const mockDiffEngine = {
                 computeDiffsFromFiles: vi.fn().mockResolvedValue(mockDiffs),
             };
-            (getDiffEngine as any).mockReturnValue(mockDiffEngine);
-            (withTimeout as any).mockResolvedValue(mockDiffs);
+            vi.mocked(getDiffEngine).mockReturnValue(mockDiffEngine);
+            vi.mocked(withTimeout).mockResolvedValue(mockDiffs);
 
             const request = new NextRequest('http://localhost/api/diff', {
                 method: 'POST',
@@ -233,13 +233,13 @@ describe('Diff API Endpoint', () => {
             const { ComputeDiffRequestSchema } = await import('@ai-app-builder/shared/schemas');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ComputeDiffRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ComputeDiffRequestSchema.parse).mockReturnValue({
                 fromVersionId: 'v1',
                 toVersionId: 'v2',
                 projectId: 'test-project',
             });
-            (withTimeout as any).mockResolvedValue(mockDiffs);
+            vi.mocked(withTimeout).mockResolvedValue(mockDiffs);
 
             const request = new NextRequest('http://localhost/api/diff', {
                 method: 'POST',
@@ -259,8 +259,8 @@ describe('Diff API Endpoint', () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { ComputeDiffRequestSchema } = await import('@ai-app-builder/shared/schemas');
 
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ComputeDiffRequestSchema.parse as any).mockImplementation(() => {
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ComputeDiffRequestSchema.parse).mockImplementation(() => {
                 throw new Error('Invalid request');
             });
 
@@ -280,8 +280,8 @@ describe('Diff API Endpoint', () => {
             const { ComputeDiffRequestSchema } = await import('@ai-app-builder/shared/schemas');
             const { AppError, handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ComputeDiffRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ComputeDiffRequestSchema.parse).mockReturnValue({
                 fromVersionId: 'v1',
                 toVersionId: 'v2',
                 projectId: 'test-project',
@@ -290,7 +290,7 @@ describe('Diff API Endpoint', () => {
             const mockVersionManager = {
                 getVersion: vi.fn().mockReturnValue(null),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
 
             const request = new NextRequest('http://localhost/api/diff', {
                 method: 'POST',
@@ -318,8 +318,8 @@ describe('Diff API Endpoint', () => {
             const { ComputeDiffRequestSchema } = await import('@ai-app-builder/shared/schemas');
             const { AppError, handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ComputeDiffRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ComputeDiffRequestSchema.parse).mockReturnValue({
                 fromVersionId: 'v1',
                 toVersionId: 'v2',
                 projectId: 'test-project',
@@ -330,7 +330,7 @@ describe('Diff API Endpoint', () => {
                     .mockReturnValueOnce(mockFromVersion)
                     .mockReturnValueOnce(null),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
 
             const request = new NextRequest('http://localhost/api/diff', {
                 method: 'POST',
@@ -358,8 +358,8 @@ describe('Diff API Endpoint', () => {
             const { ComputeDiffRequestSchema } = await import('@ai-app-builder/shared/schemas');
             const { AppError, handleError: apiHandleError } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ComputeDiffRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ComputeDiffRequestSchema.parse).mockReturnValue({
                 fromVersionId: 'v1',
                 toVersionId: 'v2',
             });
@@ -369,7 +369,7 @@ describe('Diff API Endpoint', () => {
                     .mockReturnValueOnce({ version: mockFromVersion, projectId: 'project-1' })
                     .mockReturnValueOnce({ version: mockToVersion, projectId: 'project-2' }),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
 
             const request = new NextRequest('http://localhost/api/diff', {
                 method: 'POST',
@@ -396,8 +396,8 @@ describe('Diff API Endpoint', () => {
             const { ComputeDiffRequestSchema } = await import('@ai-app-builder/shared/schemas');
             const { withTimeout } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ComputeDiffRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ComputeDiffRequestSchema.parse).mockReturnValue({
                 fromVersionId: 'v1',
                 toVersionId: 'v2',
                 projectId: 'test-project',
@@ -408,13 +408,13 @@ describe('Diff API Endpoint', () => {
                     .mockReturnValueOnce(mockFromVersion)
                     .mockReturnValueOnce(mockToVersion),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
             
             const mockDiffEngine = {
                 computeDiffsFromFiles: vi.fn().mockResolvedValue(mockDiffs),
             };
-            (getDiffEngine as any).mockReturnValue(mockDiffEngine);
-            (withTimeout as any).mockImplementation((promise: any, options: any) => promise);
+            vi.mocked(getDiffEngine).mockReturnValue(mockDiffEngine);
+            vi.mocked(withTimeout).mockImplementation((promise: any, options: any) => promise);
 
             const request = new NextRequest('http://localhost/api/diff', {
                 method: 'POST',
@@ -442,8 +442,8 @@ describe('Diff API Endpoint', () => {
             const { ComputeDiffRequestSchema } = await import('@ai-app-builder/shared/schemas');
             const { withTimeout, TimeoutError, AppError, handleError: apiHandleError } = await import('../../../lib/api');
 
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ComputeDiffRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ComputeDiffRequestSchema.parse).mockReturnValue({
                 fromVersionId: 'v1',
                 toVersionId: 'v2',
                 projectId: 'test-project',
@@ -454,10 +454,10 @@ describe('Diff API Endpoint', () => {
                     .mockReturnValueOnce(mockFromVersion)
                     .mockReturnValueOnce(mockToVersion),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
 
             const timeoutError = new TimeoutError('Operation timed out', 30000);
-            (withTimeout as any).mockRejectedValue(timeoutError);
+            vi.mocked(withTimeout).mockRejectedValue(timeoutError);
 
             const request = new NextRequest('http://localhost/api/diff', {
                 method: 'POST',
@@ -482,7 +482,7 @@ describe('Diff API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            (applyRateLimit as any).mockReturnValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockReturnValue(rateLimitResponse);
 
             const request = new NextRequest('http://localhost/api/diff', {
                 method: 'POST',
@@ -505,8 +505,8 @@ describe('Diff API Endpoint', () => {
             const { ComputeDiffRequestSchema } = await import('@ai-app-builder/shared/schemas');
             const { withTimeout, getCorsHeaders } = await import('../../../lib/api');
             
-            (applyRateLimit as any).mockReturnValue({ blocked: null, headers: {} });
-            (ComputeDiffRequestSchema.parse as any).mockReturnValue({
+            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(ComputeDiffRequestSchema.parse).mockReturnValue({
                 fromVersionId: 'v1',
                 toVersionId: 'v2',
                 projectId: 'test-project',
@@ -517,20 +517,20 @@ describe('Diff API Endpoint', () => {
                     .mockReturnValueOnce(mockFromVersion)
                     .mockReturnValueOnce(mockToVersion),
             };
-            (getVersionManager as any).mockReturnValue(mockVersionManager);
+            vi.mocked(getVersionManager).mockReturnValue(mockVersionManager);
             
             const mockDiffEngine = {
                 computeDiffsFromFiles: vi.fn().mockResolvedValue(mockDiffs),
             };
-            (getDiffEngine as any).mockReturnValue(mockDiffEngine);
-            (withTimeout as any).mockResolvedValue(mockDiffs);
+            vi.mocked(getDiffEngine).mockReturnValue(mockDiffEngine);
+            vi.mocked(withTimeout).mockResolvedValue(mockDiffs);
             
             const mockCorsHeaders = {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type',
             };
-            (getCorsHeaders as any).mockReturnValue(mockCorsHeaders);
+            vi.mocked(getCorsHeaders).mockReturnValue(mockCorsHeaders);
 
             const request = new NextRequest('http://localhost/api/diff', {
                 method: 'POST',

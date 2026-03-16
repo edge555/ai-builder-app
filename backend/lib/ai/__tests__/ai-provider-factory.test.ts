@@ -98,7 +98,7 @@ describe('ai-provider-factory', () => {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
       };
-      vi.mocked(createModalClient).mockReturnValue(mockProvider as any);
+      vi.mocked(createModalClient).mockReturnValue(mockProvider);
 
       // Act
       const result = await createAIProvider('coding');
@@ -114,7 +114,7 @@ describe('ai-provider-factory', () => {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
       };
-      vi.mocked(createModalClient).mockReturnValue(mockProvider as any);
+      vi.mocked(createModalClient).mockReturnValue(mockProvider);
 
       // Act
       const result1 = await createAIProvider('coding');
@@ -134,7 +134,7 @@ describe('ai-provider-factory', () => {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
       };
-      vi.mocked(createModalClient).mockReturnValue(mockProvider as any);
+      vi.mocked(createModalClient).mockReturnValue(mockProvider);
 
       // Act
       const result = await createAIProvider();
@@ -150,7 +150,7 @@ describe('ai-provider-factory', () => {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
       };
-      vi.mocked(createModalClient).mockReturnValue(mockProvider as any);
+      vi.mocked(createModalClient).mockReturnValue(mockProvider);
 
       // Act
       await createAIProvider('coding');
@@ -599,7 +599,7 @@ describe('ai-provider-factory', () => {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
       };
-      vi.mocked(createModalClient).mockReturnValue(mockProvider as any);
+      vi.mocked(createModalClient).mockReturnValue(mockProvider);
       const mockRouter = {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn().mockReturnValue(mockProvider),
@@ -628,7 +628,7 @@ describe('ai-provider-factory', () => {
         generate: vi.fn(),
         generateStreaming: vi.fn(),
       };
-      vi.mocked(createModalClient).mockReturnValue(mockProvider as any);
+      vi.mocked(createModalClient).mockReturnValue(mockProvider);
       const mockRouter = {
         init: vi.fn().mockResolvedValue(undefined),
         createProviderForTask: vi.fn().mockReturnValue(mockProvider),

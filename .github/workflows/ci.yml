@@ -31,3 +31,5 @@ jobs:
 
       - run: npm test --workspace=@ai-app-builder/shared
       - run: npm test --workspace=@ai-app-builder/backend
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096

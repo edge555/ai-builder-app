@@ -643,7 +643,7 @@ describe('extractJsonFromResponse - complex scenarios', () => {
 
   it('should handle very deeply nested JSON', () => {
     // Arrange
-    let obj = { value: 'deep' } as any;
+    let obj: Record<string, unknown> = { value: 'deep' };
     for (let i = 0; i < 50; i++) {
       obj = { level: i, nested: obj };
     }

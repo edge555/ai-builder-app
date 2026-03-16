@@ -48,13 +48,17 @@ export class FilePlanner {
 
   // Cache for chunk index to avoid rebuilding on retries
   private chunkIndexCache: Map<string, { index: ChunkIndex; timestamp: number; estimatedSize: number }>;
-  private readonly CACHE_TTL_MS = 60000; // 1 minute TTL
+  private readonly CACHE_TTL_MS = 300000; // 5 minute TTL
   private readonly MAX_CACHE_ENTRIES = 3; // Reduced from 5 to 3
   private readonly MAX_CACHE_MEMORY_BYTES = 50 * 1024 * 1024; // 50MB limit
   private currentCacheMemoryUsage = 0;
 
   // Optimized symbol lookup map (uses same key as chunkIndexCache)
   private symbolLookupCache: Map<string, Map<string, { filePath: string; signature: string; symbolName: string }>>;
+
+  // Planning result cache — keyed by (projectStateHash, promptHash), 2-min TTL
+  private planningResultCache: Map<string, { result: FilePlannerResult; timestamp: number }>;
+  private readonly PLANNING_CACHE_TTL_MS = 120000; // 2 minute TTL
 
   // Current cache key for the active chunk index (ensures consistency)
   private currentCacheKey: string | null = null;
@@ -66,6 +70,7 @@ export class FilePlanner {
     this.chunkIndexBuilder = new ChunkIndexBuilder();
     this.chunkIndexCache = new Map();
     this.symbolLookupCache = new Map();
+    this.planningResultCache = new Map();
   }
 
   /**
@@ -96,11 +101,23 @@ export class FilePlanner {
     const metadata = generateFileTreeMetadata(chunkIndex);
     logger.debug('Generated metadata', { metadataLength: metadata.length });
 
-    // Step 3: Call AI for planning (or fall back to heuristics)
+    // Step 3: Check planning result cache or call AI
     let plannerResult: FilePlannerResult;
 
-    if (this.aiProvider) {
+    const planningCacheKey = this.getPlanningCacheKey(projectState, prompt);
+    const cachedPlanning = this.planningResultCache.get(planningCacheKey);
+    if (cachedPlanning && (Date.now() - cachedPlanning.timestamp) < this.PLANNING_CACHE_TTL_MS) {
+      logger.info('Using cached planning result', { cacheKey: planningCacheKey.substring(0, 16) });
+      plannerResult = cachedPlanning.result;
+    } else if (this.aiProvider) {
       plannerResult = await this.callPlanningAI(prompt, metadata, chunkIndex, projectState);
+      // Cache the result
+      this.planningResultCache.set(planningCacheKey, { result: plannerResult, timestamp: Date.now() });
+      // Evict old entries
+      if (this.planningResultCache.size > 10) {
+        const oldestKey = this.planningResultCache.keys().next().value;
+        if (oldestKey) this.planningResultCache.delete(oldestKey);
+      }
     } else {
       logger.info('No AI provider available, using fallback selector');
       plannerResult = this.fallbackSelector.select(prompt, chunkIndex, projectState);
@@ -486,6 +503,7 @@ export class FilePlanner {
   clear(): void {
     this.chunkIndexCache.clear();
     this.symbolLookupCache.clear();
+    this.planningResultCache.clear();
     this.currentCacheMemoryUsage = 0;
     logger.info('Cache cleared');
   }
@@ -620,6 +638,15 @@ export class FilePlanner {
     keysToRemove.forEach(key => this.symbolLookupCache.delete(key));
   }
 
+
+  /**
+   * Generate a cache key for planning results based on project state hash + prompt hash.
+   */
+  private getPlanningCacheKey(projectState: ProjectState, prompt: string): string {
+    const stateKey = this.getProjectStateCacheKey(projectState);
+    const promptHash = createHash('sha256').update(prompt).digest('hex').substring(0, 16);
+    return `${stateKey}:${promptHash}`;
+  }
 
   /**
    * Generate a content-aware cache key for project state.
