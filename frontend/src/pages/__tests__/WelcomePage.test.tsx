@@ -18,12 +18,19 @@ vi.mock('@/components/TemplateGrid/TemplateGrid', () => ({
 }));
 
 vi.mock('@/components/ProjectGallery/ProjectGallery', () => ({
-    ProjectGallery: ({ projects, onCreateProject }: any) => (
+    ProjectGallery: ({ projects, onCreateProject, onDeleteProject }: any) => (
         <div data-testid="project-gallery">
             {projects.length === 0 ? (
                 <button onClick={onCreateProject}>Create Project</button>
             ) : (
-                <div>{projects.length} projects</div>
+                <>
+                    <div>{projects.length} projects</div>
+                    {projects.map((p: any) => (
+                        <button key={p.id} onClick={() => onDeleteProject(p.id)}>
+                            Delete {p.name}
+                        </button>
+                    ))}
+                </>
             )}
         </div>
     ),
@@ -49,9 +56,11 @@ vi.mock('@/components/OnboardingOverlay/OnboardingOverlay', () => ({
 }));
 
 vi.mock('@/components/ConfirmDialog/ConfirmDialog', () => ({
-    ConfirmDialog: ({ isOpen, onConfirm, onCancel }: any) =>
+    ConfirmDialog: ({ isOpen, title, message, onConfirm, onCancel }: any) =>
         isOpen ? (
             <div data-testid="confirm-dialog">
+                <p data-testid="confirm-dialog-title">{title}</p>
+                <p data-testid="confirm-dialog-message">{message}</p>
                 <button onClick={onConfirm}>Confirm</button>
                 <button onClick={onCancel}>Cancel</button>
             </div>
@@ -269,5 +278,42 @@ describe('WelcomePage', () => {
 
         rerender(<WelcomePage savedProjects={[]} {...mockHandlers} isLoadingProjects={false} />);
         expect(screen.getByTestId('project-gallery')).toBeInTheDocument();
+    });
+
+    describe('delete confirmation dialog', () => {
+        it('shows the project name in the confirmation message', () => {
+            render(<WelcomePage savedProjects={mockProjects} {...mockHandlers} />);
+
+            fireEvent.click(screen.getByText('Delete Test Project'));
+
+            expect(screen.getByTestId('confirm-dialog-message')).toHaveTextContent('"Test Project"');
+        });
+
+        it('never shows "null" in the confirmation message', () => {
+            render(<WelcomePage savedProjects={mockProjects} {...mockHandlers} />);
+
+            fireEvent.click(screen.getByText('Delete Test Project'));
+
+            expect(screen.getByTestId('confirm-dialog-message')).not.toHaveTextContent('"null"');
+        });
+
+        it('calls onDeleteProject with the correct id when confirmed', () => {
+            render(<WelcomePage savedProjects={mockProjects} {...mockHandlers} />);
+
+            fireEvent.click(screen.getByText('Delete Test Project'));
+            fireEvent.click(screen.getByText('Confirm'));
+
+            expect(mockHandlers.onDeleteProject).toHaveBeenCalledWith('1');
+        });
+
+        it('does not call onDeleteProject when cancelled', () => {
+            render(<WelcomePage savedProjects={mockProjects} {...mockHandlers} />);
+
+            fireEvent.click(screen.getByText('Delete Test Project'));
+            fireEvent.click(screen.getByText('Cancel'));
+
+            expect(mockHandlers.onDeleteProject).not.toHaveBeenCalled();
+            expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument();
+        });
     });
 });
