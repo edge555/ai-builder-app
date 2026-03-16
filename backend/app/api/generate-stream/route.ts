@@ -46,6 +46,9 @@ export async function POST(request: NextRequest) {
   const contextLogger = logger.withRequestId(requestId);
 
   try {
+    // CSRF: reject mutations with missing/invalid origin
+    getCorsHeaders(request, { rejectInvalidOrigin: true });
+
     // Parse and validate request body
     const parsed = await parseJsonRequest(request, GenerateProjectRequestSchema);
     if (!parsed.ok) return parsed.response;

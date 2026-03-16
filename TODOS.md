@@ -4,9 +4,7 @@
 
 - [x] Rate limiter: Fix X-Forwarded-For IP spoofing — implemented rightmost-trusted IP pattern with `TRUSTED_PROXY_DEPTH` config in `guard.ts`
 
-- [ ] CSRF: Wire up origin-based CSRF protection on mutation endpoints
-  Context: `getCorsHeaders(request, { rejectInvalidOrigin: true })` is implemented in `backend/lib/api/utils.ts`.
-  Remaining: call it with `rejectInvalidOrigin: true` on POST/PUT routes (`/api/generate`, `/api/modify`, etc.) and add integration tests verifying 403 on missing/invalid Origin. Note: will reject non-browser clients (curl, server-to-server) — confirm this is acceptable before enabling.
+- [x] CSRF: Wire up origin-based CSRF protection on mutation endpoints — enabled `rejectInvalidOrigin: true` on all 9 mutation routes (generate, modify, generate-stream, modify-stream, diff, export, revert, agent-config PUT, provider-config PUT) + 13 integration tests in `csrf-protection.test.ts`
 
 ## P2 — Test Coverage
 

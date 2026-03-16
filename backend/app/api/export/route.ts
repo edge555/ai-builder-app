@@ -26,12 +26,11 @@ export const POST = withRouteContext('api/export', async (ctx, request: NextRequ
   ctx.setRateLimitHeaders(rlHeaders);
   if (blocked) return blocked as NextResponse;
 
-  const corsHeaders = getCorsHeaders(request);
-
   const parsed = await parseJsonRequest(request, ExportProjectRequestSchema);
   if (!parsed.ok) return parsed.response;
 
   try {
+    const corsHeaders = getCorsHeaders(request, { rejectInvalidOrigin: true });
     const start = Date.now();
 
     // Deserialize project state

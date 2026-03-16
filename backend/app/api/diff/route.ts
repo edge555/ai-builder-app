@@ -99,7 +99,7 @@ export const POST = withRouteContext('api/diff', async (ctx, request: NextReques
     contextLogger.info('Diff complete', { durationMs: Date.now() - start });
 
     const response: ComputeDiffResponse = { success: true, diffs };
-    return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request) });
+    return NextResponse.json(response, { status: 200, headers: getCorsHeaders(request, { rejectInvalidOrigin: true }) });
 
   } catch (error) {
     if (error instanceof TimeoutError) {

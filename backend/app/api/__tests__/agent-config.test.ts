@@ -25,7 +25,7 @@ vi.mock('../../../lib/api', () => ({
     }),
     withRouteContext: vi.fn().mockImplementation((_module: string, handler: any) => {
         return (request: any) => handler(
-            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } },
+            { requestId: 'test-id', contextLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }, setRateLimitHeaders: vi.fn() },
             request
         );
     }),
