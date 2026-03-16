@@ -317,7 +317,7 @@ export function WelcomePage({
       <ConfirmDialog
         isOpen={deleteConfirm.isOpen}
         title="Delete Project"
-        message={`Are you sure you want to delete "${deleteConfirm.projectName}"? This action cannot be undone.`}
+        message={`Are you sure you want to delete "${deleteConfirm.projectName ?? 'this project'}"? This action cannot be undone.`}
         confirmLabel="Delete"
         confirmVariant="destructive"
         onConfirm={handleDeleteConfirm}
