@@ -304,7 +304,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 11px 16px;
+  min-height: 44px;
   border: 1px solid hsl(var(--border));
   border-radius: 20px;
   background: hsl(var(--muted) / 0.5);
