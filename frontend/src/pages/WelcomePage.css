@@ -318,8 +318,8 @@
 }
 
 .welcome-hero-suggestion-icon {
-  font-size: 1rem;
-  line-height: 1;
+  flex-shrink: 0;
+  color: hsl(var(--primary));
 }
 
 .welcome-hero-suggestion-chip:hover {
@@ -361,15 +361,8 @@
 }
 
 .welcome-feature-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--accent-color) 15%, transparent);
   color: var(--accent-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .welcome-feature-title {

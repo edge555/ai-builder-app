@@ -1,5 +1,5 @@
-import { ArrowRight, Sparkles, Plus, Eye, Zap, Download, Code } from 'lucide-react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { ArrowRight, Sparkles, Plus, Eye, Zap, Download, Code, BarChart2, Globe, CheckSquare, ShoppingCart } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog/ConfirmDialog';
 import { OnboardingOverlay, shouldShowOnboarding } from '@/components/OnboardingOverlay/OnboardingOverlay';
@@ -54,10 +54,17 @@ const features = [
   },
 ];
 
+const SUGGESTION_ICONS: Record<string, React.ElementType> = {
+  dashboard: BarChart2,
+  landing: Globe,
+  todo: CheckSquare,
+  ecommerce: ShoppingCart,
+};
+
 const suggestionChips = initialSuggestions.map(s => ({
   label: s.label,
   prompt: s.prompt,
-  icon: s.icon,
+  icon: SUGGESTION_ICONS[s.id] ?? Sparkles,
 }));
 
 export function WelcomePage({
@@ -254,7 +261,7 @@ export function WelcomePage({
               onMouseEnter={preloadBuilderPage}
               type="button"
             >
-              <span className="welcome-hero-suggestion-icon">{chip.icon}</span>
+              <chip.icon size={15} className="welcome-hero-suggestion-icon" />
               {chip.label}
             </button>
           ))}
