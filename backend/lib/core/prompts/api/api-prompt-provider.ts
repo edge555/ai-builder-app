@@ -220,7 +220,7 @@ Respond with valid JSON only.`;
 
   getBugfixSystemPrompt(errorContext: string, failureHistory: string[]): string {
     const historyBlock = failureHistory.length > 0
-      ? `\n=== PREVIOUS FAILED ATTEMPTS ===\nDo NOT repeat these approaches:\n${failureHistory.map((h, i) => `Attempt ${i + 1}: ${h}`).join('\n')}\n`
+      ? `\n=== PREVIOUS FAILED ATTEMPTS ===\nDo NOT repeat these approaches:\n${failureHistory.map((h, i) => `Attempt ${i + 1}: ${h.replace(/[`$\\]/g, ' ').slice(0, 500)}`).join('\n')}\n`
       : '';
 
     return `You are a SENIOR React developer fixing build errors in an existing project.

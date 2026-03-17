@@ -3,7 +3,7 @@
  * @description Classifies user prompts into `TaskType` values for model routing.
  * Calls the `intent` task models configured in agent config with a low-token,
  * low-temperature request for fast deterministic classification.
- * Falls back to `coding` when no intent models are configured or on any failure.
+ * Falls back to `execution` when no intent models are configured or on any failure.
  * Only used in OpenRouter mode.
  *
  * @requires ./agent-router - AgentRouter for obtaining intent provider
@@ -21,6 +21,7 @@ const logger = createLogger('intent-detector');
 
 const FALLBACK_TASK: TaskType = 'execution';
 
+// 'intent' and 'review' are pipeline-internal stages, not detectable from user prompts
 const VALID_TASK_TYPES: TaskType[] = ['execution', 'bugfix', 'planning'];
 
 const SYSTEM_PROMPT = `You are a task classifier. Given a user prompt, output exactly one word — the task type.

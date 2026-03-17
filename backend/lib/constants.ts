@@ -97,3 +97,6 @@ export const MAX_BODY_HIGH_COST_BYTES = 2 * 1024 * 1024;   // 2 MB
 export const MAX_BODY_MEDIUM_COST_BYTES = 2 * 1024 * 1024; // 2 MB
 export const MAX_BODY_LOW_COST_BYTES = 5 * 1024 * 1024;    // 5 MB
 export const MAX_BODY_CONFIG_BYTES = 64 * 1024;             // 64 KB
+
+// Pipeline review stage
+export const MAX_REVIEW_CONTENT_CHARS = 128_000; // ~128k chars ≈ ~32k tokens; keeps within review budget

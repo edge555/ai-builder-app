@@ -23,6 +23,7 @@ import { IntentOutputSchema, PlanOutputSchema, ReviewOutputSchema } from './sche
 import { toSimpleJsonSchema } from './zod-to-json-schema';
 import { createLogger } from '../logger';
 import type { CodeSlice } from '../analysis/file-planner/types';
+import { MAX_REVIEW_CONTENT_CHARS } from '../constants';
 
 const logger = createLogger('PipelineOrchestrator');
 
@@ -30,10 +31,6 @@ const logger = createLogger('PipelineOrchestrator');
 const INTENT_JSON_SCHEMA = toSimpleJsonSchema(IntentOutputSchema);
 const PLAN_JSON_SCHEMA = toSimpleJsonSchema(PlanOutputSchema);
 const REVIEW_JSON_SCHEMA = toSimpleJsonSchema(ReviewOutputSchema);
-
-// Maximum characters of generated content sent to the review stage
-// (~128k chars ≈ ~32k tokens; keeps us inside the review budget)
-const MAX_REVIEW_CONTENT_CHARS = 128_000;
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 
