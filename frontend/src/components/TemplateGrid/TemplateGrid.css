@@ -282,8 +282,18 @@
 }
 
 .template-card-icon {
-  font-size: 32px;
+  /* icon color inherits from category-specific stroke color below */
 }
+
+/* Category-based icon colors to match the card backgrounds */
+.template-card-icon-container[data-category="Dashboard"] .template-card-icon { color: hsl(210 80% 50%); }
+.template-card-icon-container[data-category="Marketing"] .template-card-icon { color: hsl(340 80% 55%); }
+.template-card-icon-container[data-category="Productivity"] .template-card-icon { color: hsl(160 70% 40%); }
+.template-card-icon-container[data-category="E-Commerce"] .template-card-icon { color: hsl(45 90% 45%); }
+.template-card-icon-container[data-category="Social"] .template-card-icon { color: hsl(280 70% 55%); }
+.template-card-icon-container[data-category="Utility"] .template-card-icon { color: hsl(200 70% 50%); }
+.template-card-icon-container[data-category="Content"] .template-card-icon { color: hsl(30 80% 50%); }
+.template-card-icon-container[data-category="My Templates"] .template-card-icon { color: hsl(260 70% 55%); }
 
 /* Card Content */
 .template-card-content {
