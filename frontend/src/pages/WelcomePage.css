@@ -7,15 +7,6 @@
   position: relative;
 }
 
-/* Subtle page-level background decoration */
-.welcome-page::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: radial-gradient(ellipse 80% 60% at 50% 0%, hsl(262 83% 58% / 0.03), transparent 70%);
-  pointer-events: none;
-  z-index: 0;
-}
 
 .welcome-page>* {
   position: relative;
@@ -68,7 +59,7 @@
   justify-content: center;
   font-size: 18px;
   color: white;
-  box-shadow: 0 4px 12px hsl(262 83% 58% / 0.3);
+  box-shadow: 0 4px 12px hsl(20 67% 50% / 0.3);
 }
 
 .welcome-header-title {
@@ -142,29 +133,6 @@
   isolation: isolate;
 }
 
-/* Subtle radial glow behind hero with edge vignette */
-.welcome-hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 100% 100% at 50% 50%, transparent 40%, hsl(var(--foreground) / 0.02) 100%),
-    radial-gradient(circle at 50% 40%, hsl(262 83% 58% / 0.05) 0%, transparent 60%);
-  pointer-events: none;
-  z-index: -3;
-}
-
-/* Dot grid pattern */
-.welcome-hero::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, hsl(var(--foreground) / 0.04) 1px, transparent 1px);
-  background-size: 24px 24px;
-  pointer-events: none;
-  z-index: -2;
-  opacity: 0.6;
-}
 
 .welcome-hero>* {
   position: relative;
@@ -182,16 +150,18 @@
   font-size: 24px;
   color: white;
   margin-bottom: 24px;
-  box-shadow: 0 4px 12px hsl(262 83% 58% / 0.2);
+  box-shadow: 0 4px 12px hsl(20 67% 50% / 0.2);
 }
 
 .welcome-hero-headline {
   font-size: clamp(2.5rem, 6vw, 3.75rem);
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
   line-height: 1.1;
   letter-spacing: -0.03em;
   margin-bottom: 20px;
-  background: linear-gradient(135deg, hsl(var(--foreground)) 0%, hsl(262 83% 58%) 100%);
+  background: linear-gradient(135deg, hsl(var(--foreground)) 0%, hsl(20 67% 50%) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -273,12 +243,12 @@
   justify-content: center;
   cursor: pointer;
   transition: all 200ms ease;
-  box-shadow: 0 2px 8px hsl(262 83% 58% / 0.3);
+  box-shadow: 0 2px 8px hsl(20 67% 50% / 0.3);
 }
 
 .welcome-hero-prompt-submit:hover:not(:disabled) {
   transform: scale(1.05);
-  box-shadow: 0 4px 12px hsl(262 83% 58% / 0.4);
+  box-shadow: 0 4px 12px hsl(20 67% 50% / 0.4);
 }
 
 .welcome-hero-prompt-submit:active:not(:disabled) {

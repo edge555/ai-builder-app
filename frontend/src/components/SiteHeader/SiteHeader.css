@@ -37,7 +37,7 @@
   align-items: center;
   justify-content: center;
   color: white;
-  box-shadow: 0 4px 12px hsl(262 83% 58% / 0.3);
+  box-shadow: 0 4px 12px hsl(20 67% 50% / 0.3);
   flex-shrink: 0;
 }
 
