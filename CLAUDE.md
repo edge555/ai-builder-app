@@ -27,10 +27,13 @@ Available gstack skills:
 - `/browse` — headless browser for QA testing, site dogfooding, and verification
 - `/qa` — systematic QA testing of web applications
 - `/qa-only` — QA testing without browsing setup
+- `/qa-design-review` — designer's eye QA: finds and fixes visual/spacing/typography issues
 - `/plan-ceo-review` — CEO/founder-mode plan review
 - `/plan-eng-review` — engineering manager-mode plan review
+- `/plan-design-review` — designer's eye audit of a live site (report only)
 - `/review` — pre-landing PR review
 - `/ship` — ship workflow (merge, test, bump version, create PR)
+- `/document-release` — post-ship documentation update
 - `/retro` — weekly engineering retrospective
 - `/setup-browser-cookies` — import cookies from real browser into headless session
 
