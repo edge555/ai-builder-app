@@ -54,17 +54,17 @@ describe('IntentDetector', () => {
   });
 
   describe('detect', () => {
-    it('should classify coding intent correctly', async () => {
+    it('should classify execution intent correctly', async () => {
       const mockResponse: AIResponse = {
         success: true,
-        content: 'coding',
+        content: 'execution',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Create a new React component');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
       expect(mockProvider.generate).toHaveBeenCalledWith({
         prompt: 'Create a new React component',
         systemInstruction: expect.stringContaining('task classifier'),
@@ -74,17 +74,17 @@ describe('IntentDetector', () => {
       });
     });
 
-    it('should classify debugging intent correctly', async () => {
+    it('should classify bugfix intent correctly', async () => {
       const mockResponse: AIResponse = {
         success: true,
-        content: 'debugging',
+        content: 'bugfix',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Fix the bug in the login function');
-      expect(result).toBe('debugging');
+      expect(result).toBe('bugfix');
     });
 
     it('should classify planning intent correctly', async () => {
@@ -100,7 +100,7 @@ describe('IntentDetector', () => {
       expect(result).toBe('planning');
     });
 
-    it('should classify documentation intent correctly', async () => {
+    it('should default to execution for removed task types (e.g. documentation)', async () => {
       const mockResponse: AIResponse = {
         success: true,
         content: 'documentation',
@@ -110,10 +110,10 @@ describe('IntentDetector', () => {
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Write documentation for the API');
-      expect(result).toBe('documentation');
+      expect(result).toBe('execution');
     });
 
-    it('should default to coding when intent is not recognized', async () => {
+    it('should default to execution when intent is not recognized', async () => {
       const mockResponse: AIResponse = {
         success: true,
         content: 'unknown-task',
@@ -123,49 +123,49 @@ describe('IntentDetector', () => {
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Do something');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
 
     it('should handle case-insensitive responses', async () => {
       const mockResponse: AIResponse = {
         success: true,
-        content: 'CODING',
+        content: 'EXECUTION',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Create a new component');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
 
     it('should handle responses with extra whitespace', async () => {
       const mockResponse: AIResponse = {
         success: true,
-        content: '  coding  ',
+        content: '  execution  ',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Create a new component');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
 
     it('should handle responses with partial matches', async () => {
       const mockResponse: AIResponse = {
         success: true,
-        content: 'I think this is a coding task',
+        content: 'I think this is an execution task',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Create a new component');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
 
-    it('should default to coding when provider returns unsuccessful response', async () => {
+    it('should default to execution when provider returns unsuccessful response', async () => {
       const mockResponse: AIResponse = {
         success: false,
         error: 'API error',
@@ -174,10 +174,10 @@ describe('IntentDetector', () => {
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Create a new component');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
 
-    it('should default to coding when provider returns no content', async () => {
+    it('should default to execution when provider returns no content', async () => {
       const mockResponse: AIResponse = {
         success: true,
         content: undefined,
@@ -186,37 +186,37 @@ describe('IntentDetector', () => {
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Create a new component');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
 
-    it('should default to coding when no intent models are configured', async () => {
+    it('should default to execution when no intent models are configured', async () => {
       vi.mocked(mockAgentRouter.createProviderForTask).mockImplementation(() => {
         throw new Error('No active intent models');
       });
 
       const result = await detector.detect('Create a new component');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
 
-    it('should default to coding when provider throws an error', async () => {
+    it('should default to execution when provider throws an error', async () => {
       mockProvider.generate = vi.fn().mockRejectedValue(new Error('Network error'));
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Create a new component');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
 
     it('should pass requestId to provider', async () => {
       const mockResponse: AIResponse = {
         success: true,
-        content: 'coding',
+        content: 'execution',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Create a new component', 'test-request-id');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
       expect(mockProvider.generate).toHaveBeenCalledWith(
         expect.objectContaining({
           requestId: 'test-request-id',
@@ -234,7 +234,7 @@ describe('IntentDetector', () => {
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Create a new component');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
 
     it('should handle null response content', async () => {
@@ -247,26 +247,26 @@ describe('IntentDetector', () => {
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Create a new component');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
 
     it('should handle response with punctuation', async () => {
       const mockResponse: AIResponse = {
         success: true,
-        content: 'coding.',
+        content: 'execution.',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect('Create a new component');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
 
     it('should use low temperature for deterministic classification', async () => {
       const mockResponse: AIResponse = {
         success: true,
-        content: 'coding',
+        content: 'execution',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
@@ -283,7 +283,7 @@ describe('IntentDetector', () => {
     it('should limit output tokens for efficiency', async () => {
       const mockResponse: AIResponse = {
         success: true,
-        content: 'coding',
+        content: 'execution',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
@@ -300,7 +300,7 @@ describe('IntentDetector', () => {
     it('should include system instruction for task classification', async () => {
       const mockResponse: AIResponse = {
         success: true,
-        content: 'coding',
+        content: 'execution',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
@@ -317,7 +317,7 @@ describe('IntentDetector', () => {
     it('should handle multiple valid task types in response', async () => {
       const mockResponse: AIResponse = {
         success: true,
-        content: 'This involves both coding and debugging',
+        content: 'This involves both execution and bugfix',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
@@ -325,21 +325,21 @@ describe('IntentDetector', () => {
 
       const result = await detector.detect('Fix the bug and add new feature');
       // Should match the first valid task type found
-      expect(['coding', 'debugging']).toContain(result);
+      expect(['execution', 'bugfix']).toContain(result);
     });
 
     it('should handle very long prompts', async () => {
       const longPrompt = 'Create a component '.repeat(1000);
       const mockResponse: AIResponse = {
         success: true,
-        content: 'coding',
+        content: 'execution',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect(longPrompt);
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
       expect(mockProvider.generate).toHaveBeenCalledWith(
         expect.objectContaining({
           prompt: longPrompt,
@@ -351,19 +351,19 @@ describe('IntentDetector', () => {
       const specialPrompt = 'Create a component with emojis 🎉 and symbols @#$%';
       const mockResponse: AIResponse = {
         success: true,
-        content: 'coding',
+        content: 'execution',
         modelId: 'model-1',
       };
       mockProvider.generate = vi.fn().mockResolvedValue(mockResponse);
       vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
       const result = await detector.detect(specialPrompt);
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
   });
 
   describe('fallback behavior', () => {
-    it('should consistently fallback to coding on errors', async () => {
+    it('should consistently fallback to execution on errors', async () => {
       const testCases = [
         { error: 'Network error', method: 'reject' },
         { error: 'Timeout', method: 'reject' },
@@ -386,23 +386,23 @@ describe('IntentDetector', () => {
         vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
         const result = await detector.detect('Test prompt');
-        expect(result).toBe('coding');
+        expect(result).toBe('execution');
       }
     });
 
-    it('should fallback to coding when no active models', async () => {
+    it('should fallback to execution when no active models', async () => {
       vi.mocked(mockAgentRouter.createProviderForTask).mockImplementation(() => {
         throw new Error('No active models for intent task');
       });
 
       const result = await detector.detect('Test prompt');
-      expect(result).toBe('coding');
+      expect(result).toBe('execution');
     });
   });
 
   describe('valid task types', () => {
     it('should only recognize valid task types', async () => {
-      const validTaskTypes = ['coding', 'debugging', 'planning', 'documentation'];
+      const validTaskTypes = ['execution', 'bugfix', 'planning'];
 
       for (const taskType of validTaskTypes) {
         vi.clearAllMocks();
@@ -435,7 +435,7 @@ describe('IntentDetector', () => {
         vi.mocked(mockAgentRouter.createProviderForTask).mockReturnValue(mockProvider);
 
         const result = await detector.detect('Test prompt');
-        expect(result).toBe('coding'); // Should fallback to default
+        expect(result).toBe('execution'); // Should fallback to default
       }
     });
   });

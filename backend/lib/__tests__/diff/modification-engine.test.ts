@@ -21,7 +21,7 @@ vi.mock('../../core/validators', async (importOriginal) => {
 import { ValidationPipeline } from '../../core/validation-pipeline';
 import * as buildValidatorModule from '../../core/build-validator';
 import * as buildFixerModule from '../../diff/build-fixer';
-import { createFilePlanner } from '../../analysis';
+import { createFilePlanner, TokenBudgetManager } from '../../analysis';
 
 const makePipelineResult = (finalFiles: Array<{ path: string; content: string }>, executorFiles = finalFiles) => ({
   intentOutput: null,
@@ -85,6 +85,10 @@ describe('ModificationEngine', () => {
     vi.mocked(buildValidatorModule.BuildValidator).mockImplementation(function () { return mockBuildValidator; });
     vi.mocked(createFilePlanner).mockReturnValue(mockFilePlanner);
     vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({ updatedFiles: {} });
+    // TokenBudgetManager.trimToFit must return an array (not undefined) to avoid slices.length TypeError
+    vi.mocked(TokenBudgetManager).mockImplementation(function () {
+      return { trimToFit: vi.fn((slices: any[]) => slices) };
+    } as any);
 
     engine = new ModificationEngine(mockPipeline, mockBugfixProvider, mockPromptProvider);
   });

@@ -19,15 +19,40 @@ vi.mock('../../core/validators', async (importOriginal) => {
 
 describe('ProjectGenerator', () => {
   let mockAIProvider: AIProvider;
+  let mockBugfixProvider: AIProvider;
+  let mockPromptProvider: any;
   let generator: ProjectGenerator;
 
   beforeEach(() => {
-    // Create a mock AI provider
+    // Create a mock AI provider (execution)
     mockAIProvider = {
       generate: vi.fn(),
     } as unknown as AIProvider;
 
-    generator = new ProjectGenerator(mockAIProvider);
+    // Create a mock bugfix provider
+    mockBugfixProvider = {
+      generate: vi.fn(),
+    } as unknown as AIProvider;
+
+    // Create a mock prompt provider
+    mockPromptProvider = {
+      getIntentSystemPrompt: vi.fn().mockReturnValue('intent prompt'),
+      getPlanningSystemPrompt: vi.fn().mockReturnValue('planning prompt'),
+      getExecutionGenerationSystemPrompt: vi.fn().mockReturnValue('generation prompt'),
+      getExecutionModificationSystemPrompt: vi.fn().mockReturnValue('modification prompt'),
+      getReviewSystemPrompt: vi.fn().mockReturnValue('review prompt'),
+      getBugfixSystemPrompt: vi.fn().mockReturnValue('bugfix prompt'),
+      tokenBudgets: {
+        intent: 512,
+        planning: 4096,
+        executionGeneration: 32768,
+        executionModification: 16384,
+        review: 32768,
+        bugfix: 16384,
+      },
+    };
+
+    generator = new ProjectGenerator(mockAIProvider, mockBugfixProvider, mockPromptProvider);
   });
 
   afterEach(() => {
