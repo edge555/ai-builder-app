@@ -11,8 +11,8 @@
 :root {
   /* Light Theme - Neutral, clean colors without blue tint */
   /* Core surfaces */
-  --background: 0 0% 98%;
-  /* #fafafa - near-white */
+  --background: 35 14% 98%;
+  /* #FAFAF8 - warm near-white */
   --foreground: 0 0% 4%;
   /* #0a0a0a */
 
@@ -33,21 +33,21 @@
   --border: 0 0% 90%;
   /* #e5e5e5 - neutral gray */
   --input: 0 0% 90%;
-  --ring: 262 80% 57%;
-  /* violet-600 for focus ring */
+  --ring: 20 67% 50%;
+  /* amber-orange for focus ring */
 
-  /* Brand - Violet palette */
-  --primary: 262 80% 57%;
-  /* #7c3aed - violet-600, slightly deeper */
+  /* Brand - Amber-Orange palette */
+  --primary: 20 67% 50%;
+  /* #D4622A - amber-orange */
   --primary-foreground: 0 0% 100%;
   /* #ffffff */
 
   --secondary: 0 0% 96%;
   --secondary-foreground: 0 0% 4%;
 
-  --accent: 262 100% 97%;
-  /* #f3f0ff - very light violet */
-  --accent-foreground: 262 80% 57%;
+  --accent: 20 100% 96%;
+  /* warm orange tint */
+  --accent-foreground: 20 67% 50%;
 
   /* Status */
   --destructive: 0 84% 60%;
@@ -71,7 +71,7 @@
   --shadow-xl: 0 16px 48px hsl(0 0% 0% / 0.12), 0 8px 16px hsl(0 0% 0% / 0.06);
 
   /* Gradient accents */
-  --gradient-primary: linear-gradient(135deg, hsl(262 80% 57%), hsl(280 85% 60%));
+  --gradient-primary: linear-gradient(135deg, hsl(20 67% 50%), hsl(25 72% 42%));
   --gradient-surface: linear-gradient(180deg, hsl(var(--card)), hsl(var(--muted)));
 
   /* Layout dimensions */
@@ -92,6 +92,11 @@
   /* Chat message colors */
   --msg-user-bg: var(--primary) / 0.1;
   --msg-ai-bg: var(--card);
+
+  /* Typography */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-ui: 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'Fira Code', monospace;
 }
 
 /* Dark Theme - Deep, modern dark colors */
@@ -119,20 +124,20 @@
   --border: 240 4% 16%;
   /* #27272a */
   --input: 240 4% 16%;
-  --ring: 262 83% 70%;
-  /* violet-500 for focus ring */
+  --ring: 17 80% 54%;
+  /* amber-orange for focus ring */
 
-  /* Brand - Violet palette */
-  --primary: 262 83% 70%;
-  /* #8b5cf6 - violet-500 */
+  /* Brand - Amber-Orange palette */
+  --primary: 17 80% 54%;
+  /* #E8612A - amber-orange-500 */
   --primary-foreground: 0 0% 100%;
 
   --secondary: 240 4% 16%;
   --secondary-foreground: 0 0% 98%;
 
-  --accent: 251 91% 20%;
-  /* #1e1b4b - dark violet */
-  --accent-foreground: 262 83% 70%;
+  --accent: 20 60% 15%;
+  /* dark orange */
+  --accent-foreground: 17 80% 54%;
 
   /* Status */
   --destructive: 0 84% 60%;
@@ -144,13 +149,13 @@
 
   /* Shadows - subtle glow in dark mode */
   --shadow-xs: 0 1px 2px hsl(0 0% 0% / 0.3);
-  --shadow-sm: 0 2px 4px hsl(0 0% 0% / 0.4), 0 0px 8px hsl(262 83% 70% / 0.05);
-  --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.5), 0 0px 16px hsl(262 83% 70% / 0.08);
-  --shadow-lg: 0 8px 24px hsl(0 0% 0% / 0.6), 0 0px 32px hsl(262 83% 70% / 0.10);
-  --shadow-xl: 0 16px 48px hsl(0 0% 0% / 0.7), 0 0px 64px hsl(262 83% 70% / 0.12);
+  --shadow-sm: 0 2px 4px hsl(0 0% 0% / 0.4), 0 0px 8px hsl(20 75% 50% / 0.05);
+  --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.5), 0 0px 16px hsl(20 75% 50% / 0.08);
+  --shadow-lg: 0 8px 24px hsl(0 0% 0% / 0.6), 0 0px 32px hsl(20 75% 50% / 0.10);
+  --shadow-xl: 0 16px 48px hsl(0 0% 0% / 0.7), 0 0px 64px hsl(20 75% 50% / 0.12);
 
   /* Gradient accents */
-  --gradient-primary: linear-gradient(135deg, hsl(262 83% 70%), hsl(280 85% 75%));
+  --gradient-primary: linear-gradient(135deg, hsl(17 80% 54%), hsl(22 78% 48%));
   --gradient-surface: linear-gradient(180deg, hsl(var(--card)), hsl(var(--muted)));
 
   /* Browser chrome colors (dark theme) */
@@ -167,8 +172,7 @@ body,
 }
 
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji';
+  font-family: var(--font-ui);
   line-height: 1.6;
   letter-spacing: -0.011em;
   /* Tighter letter-spacing for cleaner look */

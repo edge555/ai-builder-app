@@ -44,7 +44,7 @@
 
 .agent-settings-save-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px hsl(262 83% 58% / 0.3);
+  box-shadow: 0 2px 8px hsl(20 67% 50% / 0.3);
 }
 
 .agent-settings-save-btn:disabled {
@@ -132,9 +132,9 @@
 }
 
 .agent-settings-provider-badge-override {
-  background: hsl(262 83% 58% / 0.1);
+  background: hsl(20 67% 50% / 0.1);
   color: hsl(var(--primary));
-  border: 1px solid hsl(262 83% 58% / 0.2);
+  border: 1px solid hsl(20 67% 50% / 0.2);
 }
 
 .agent-settings-provider-options {

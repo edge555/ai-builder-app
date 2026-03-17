@@ -4,7 +4,6 @@
   position: fixed;
   inset: 0;
   background: hsl(0 0% 0% / 0.4);
-  backdrop-filter: blur(4px);
   z-index: 199;
   animation: version-backdrop-in 0.2s ease;
 }

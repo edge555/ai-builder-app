@@ -117,3 +117,5 @@ npm run lint                 # All workspaces
 ```
 
 For full technical details — architecture decisions, design patterns, pitfalls — see [CLAUDE.md](CLAUDE.md).
+
+For visual design — color palette, typography, spacing, and UI guidelines — see [DESIGN.md](DESIGN.md).

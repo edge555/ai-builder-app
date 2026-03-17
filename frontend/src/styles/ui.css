@@ -3,12 +3,10 @@
   Imported once in src/main.tsx.
 */
 
-/* Glass effect utility - Now theme-aware and minimal */
+/* Glass effect utility - solid surface (glassmorphism forbidden by DESIGN.md) */
 .ui-glass {
-  background: hsl(var(--card) / 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid hsl(var(--border) / 0.8);
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
 }
 
 .ui-surface {

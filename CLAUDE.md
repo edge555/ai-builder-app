@@ -2,6 +2,23 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Design System
+
+Always read `DESIGN.md` before making any visual or UI decisions.
+All font choices, colors, spacing, and aesthetic direction are defined there.
+Do not deviate without explicit user approval.
+
+Key rules (do not violate without approval):
+- Primary color is **amber-orange #D4622A** — never use violet, indigo, or purple
+- Display font is **Fraunces** (serif, italic) — for headlines ≥ 24px only
+- UI font is **Geist Sans** — for all body, labels, buttons
+- Code font is **Geist Mono**
+- Light mode is the **default** — dark mode is fully supported via `[data-theme="dark"]`
+- Do NOT use uniform `border-radius: 9999px` on buttons or cards
+- Do NOT add Inter, gradient blobs, glassmorphism, or 3-column icon card patterns
+
+In QA mode, flag any code that doesn't match DESIGN.md.
+
 ## gstack
 
 Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools.
@@ -10,10 +27,13 @@ Available gstack skills:
 - `/browse` — headless browser for QA testing, site dogfooding, and verification
 - `/qa` — systematic QA testing of web applications
 - `/qa-only` — QA testing without browsing setup
+- `/qa-design-review` — designer's eye QA: finds and fixes visual/spacing/typography issues
 - `/plan-ceo-review` — CEO/founder-mode plan review
 - `/plan-eng-review` — engineering manager-mode plan review
+- `/plan-design-review` — designer's eye audit of a live site (report only)
 - `/review` — pre-landing PR review
 - `/ship` — ship workflow (merge, test, bump version, create PR)
+- `/document-release` — post-ship documentation update
 - `/retro` — weekly engineering retrospective
 - `/setup-browser-cookies` — import cookies from real browser into headless session
 

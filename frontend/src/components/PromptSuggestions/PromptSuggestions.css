@@ -18,14 +18,13 @@
   padding: 8px 12px;
   border: 1px solid hsl(var(--border));
   border-radius: 20px;
-  background: hsl(var(--card) / 0.8);
+  background: hsl(var(--card));
   color: hsl(var(--foreground));
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 150ms ease;
   white-space: nowrap;
-  backdrop-filter: blur(4px);
 }
 
 .prompt-suggestion:hover:not(:disabled) {

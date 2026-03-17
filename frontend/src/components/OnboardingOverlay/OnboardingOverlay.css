@@ -13,7 +13,6 @@
 
 .onboarding-overlay::backdrop {
   background: hsl(var(--foreground) / 0.5);
-  backdrop-filter: blur(4px);
 }
 
 .onboarding-content {
@@ -102,12 +101,12 @@
 .onboarding-btn--primary {
   background: var(--gradient-primary);
   color: white;
-  box-shadow: 0 2px 8px hsl(262 83% 58% / 0.3);
+  box-shadow: 0 2px 8px hsl(20 67% 50% / 0.3);
 }
 
 .onboarding-btn--primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px hsl(262 83% 58% / 0.4);
+  box-shadow: 0 4px 12px hsl(20 67% 50% / 0.4);
 }
 
 .onboarding-btn--secondary {
