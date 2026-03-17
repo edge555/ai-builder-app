@@ -28,6 +28,20 @@
   flex: 1;
   min-width: 0;
   /* Allow shrinking */
+  position: relative;
+}
+
+/* Gradient fade on right edge indicates scrollable content */
+.template-filters::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 48px;
+  background: linear-gradient(to right, transparent, hsl(var(--background)));
+  pointer-events: none;
+  z-index: 1;
 }
 
 .template-filters-scroll {
