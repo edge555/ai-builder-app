@@ -16,11 +16,11 @@ import {
 import './AgentSettingsPage.css';
 
 const TASK_TYPES: { type: TaskType; label: string }[] = [
-  { type: 'intent', label: 'Intent Detection' },
+  { type: 'intent', label: 'Intent Analysis' },
   { type: 'planning', label: 'Planning' },
-  { type: 'coding', label: 'Coding' },
-  { type: 'debugging', label: 'Debugging' },
-  { type: 'documentation', label: 'Documentation' },
+  { type: 'execution', label: 'Execution' },
+  { type: 'bugfix', label: 'Bug Fix' },
+  { type: 'review', label: 'Review' },
 ];
 
 function createDefaultConfig(): AgentConfig {
@@ -259,8 +259,9 @@ export function AgentSettingsPage() {
         <div className="agent-settings-tabs-wrapper">
           {selectedProvider === 'modal' && (
             <p className="agent-settings-modal-notice">
-              Model routing is not used in Modal mode. Switch to OpenRouter to configure per-task
-              models.
+              In Modal mode, each stage uses a dedicated endpoint configured via{' '}
+              <code>MODAL_&lt;TASK&gt;_URL</code> env vars. Switch to OpenRouter to configure
+              per-task models.
             </p>
           )}
           <div className="agent-settings-tabs">
@@ -275,6 +276,11 @@ export function AgentSettingsPage() {
                 <span className="agent-settings-tab-count">
                   {config.tasks[type]?.models.length ?? 0}
                 </span>
+                {config.tasks[type]?.envOverride && (
+                  <span className="agent-settings-tab-env-badge" title={`env: ${config.tasks[type].envOverride}`}>
+                    env override
+                  </span>
+                )}
               </button>
             ))}
           </div>

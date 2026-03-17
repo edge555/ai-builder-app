@@ -80,7 +80,8 @@ backend/
 │   │   ├── ai-provider.ts          # AIProvider interface
 │   │   ├── ai-provider-factory.ts  # Factory (reads AI_PROVIDER env + runtime override)
 │   │   ├── openrouter-client.ts    # OpenRouter API client (primary)
-│   │   ├── modal-client.ts         # Modal client (alternative)
+│   │   ├── modal-client.ts         # Modal client (used by ModalPipelineFactory)
+│   │   ├── modal-pipeline-factory.ts # Per-task Modal endpoint resolution (MODAL_<TASK>_URL)
 │   │   ├── agent-router.ts         # Task-specific provider routing + FallbackAIProvider
 │   │   ├── intent-detector.ts      # Prompt classification for model routing
 │   │   ├── agent-config-store.ts   # Per-task model config persistence
@@ -88,12 +89,20 @@ backend/
 │   │   ├── ai-retry.ts             # Shared retry-with-backoff logic (executeWithRetry)
 │   │   └── sse-stream-processor.ts # Provider-agnostic SSE stream parsing
 │   ├── core/          # Generation, validation, formatting
-│   │   ├── streaming-generator.ts  # SSE streaming orchestrator
+│   │   ├── pipeline-orchestrator.ts # 4-stage AI pipeline: Intent → Planning → Execution → Review
+│   │   ├── pipeline-factory.ts     # Wires PipelineOrchestrator + generators/engines per request
+│   │   ├── schemas.ts              # Zod schemas for pipeline stage outputs (IntentOutput, PlanOutput, ReviewOutput)
+│   │   ├── streaming-generator.ts  # SSE streaming orchestrator (uses PipelineOrchestrator)
 │   │   ├── build-validator.ts      # Missing deps, broken imports, syntax errors, import/export mismatch
 │   │   ├── file-processor.ts       # File validation + Prettier formatting + version pinning
 │   │   ├── validation-pipeline.ts  # Multi-stage validation workflow
 │   │   ├── validators/             # Composable validators (path, syntax, JSON, pattern, architecture)
 │   │   ├── prompts/                # Provider-specific prompt assembly
+│   │   │   ├── prompt-provider.ts          # IPromptProvider interface
+│   │   │   ├── prompt-provider-factory.ts  # Creates ApiPromptProvider or ModalPromptProvider
+│   │   │   ├── generation-prompt-utils.ts  # Shared prompt building utilities
+│   │   │   ├── api/api-prompt-provider.ts  # OpenRouter prompt implementation
+│   │   │   └── modal/modal-prompt-provider.ts # Modal prompt implementation
 │   │   └── version-manager.ts      # FIFO/LRU version eviction
 │   ├── analysis/      # Dependency graph, file indexing, AI-powered file planner
 │   ├── diff/          # Modification engine (with progress callbacks), multi-tier matcher, prompt builder
@@ -160,7 +169,7 @@ npm run lint                   # All workspaces
 
 1. User prompt → frontend ChatInterface → backend `/api/generate-stream` or `/api/modify-stream`
 2. Backend resolves AI provider (env var or runtime override from `provider-config.json`)
-3. In OpenRouter mode: `IntentDetector` classifies prompt → `AgentRouter` selects models per task type
+3. `PipelineOrchestrator` runs a 4-stage pipeline: Intent (classify) → Planning (structure) → Execution (generate) → Review (validate). On OpenRouter, `IntentDetector` + `AgentRouter` route each stage to the optimal model. On Modal, `ModalPipelineFactory` resolves per-task endpoints.
 4. AI provider streams response via SSE with backpressure control (SSEEncoder utility)
 5. Incremental JSON parser extracts files as they arrive
 6. Files validated, formatted (Prettier), version-pinned (package.json deps), streamed back to frontend
@@ -176,7 +185,9 @@ Multi-provider architecture with runtime switching:
 - **`AIProvider` interface**: `generate()` and `generateStreaming()` — all providers implement this
 - **`AIProviderFactory`**: Reads `AI_PROVIDER` env var + runtime override, returns singleton
 - **OpenRouter** (default): OpenAI-compatible API with retry/backoff, structured output, SSE streaming
-- **Modal**: Self-hosted models (e.g., Qwen) with SSE streaming
+- **Modal**: Self-hosted models with per-task endpoint resolution via `ModalPipelineFactory` (resolves `MODAL_<TASK>_URL` → `MODAL_DEFAULT_URL`)
+- **`PipelineOrchestrator`**: Stateless 4-stage pipeline (Intent → Planning → Execution → Review) used by both providers; Execution is hard-fail, other stages degrade gracefully
+- **`IPromptProvider`**: Abstracts system prompts and token budgets; `ApiPromptProvider` (OpenRouter) and `ModalPromptProvider` (Modal) implement it
 - **`AgentRouter`** (OpenRouter only): Task-specific routing with `FallbackAIProvider` (tries models in priority order)
 - **`IntentDetector`** (OpenRouter only): Classifies prompts into task types (intent, planning, coding, debugging, documentation)
 - **Runtime config**: `provider-config-store.ts` persists overrides to `data/provider-config.json`; `agent-config-store.ts` persists per-task model config to `data/agent-config.json`
@@ -234,8 +245,9 @@ Multi-provider architecture with runtime switching:
 **Backend** (`.env`):
 - `AI_PROVIDER`: `openrouter` (default) or `modal`
 - `OPENROUTER_API_KEY`: OpenRouter API key (required when using openrouter)
-- `MODAL_API_URL` / `MODAL_STREAM_API_URL`: Modal endpoints (required when using modal)
-- `MODAL_TIMEOUT`: Request timeout in ms (default: 900,000 — 15 min)
+- `MODAL_DEFAULT_URL`: Default Modal endpoint (required when using modal)
+- `MODAL_DEFAULT_STREAM_URL`: Default Modal streaming endpoint (optional)
+- `MODAL_<TASK>_URL` / `MODAL_<TASK>_STREAM_URL`: Per-task Modal endpoints for `INTENT`, `PLANNING`, `EXECUTION`, `BUGFIX`, `REVIEW` (optional; fall back to `MODAL_DEFAULT_URL`)
 - `MAX_OUTPUT_TOKENS`: Token limit (default: 16384)
 - `ALLOWED_ORIGINS`: Comma-separated CORS origins (default: http://localhost:8080)
 - `LOG_LEVEL`: debug/info/warn/error (default: info)
@@ -268,6 +280,8 @@ Multi-provider architecture with runtime switching:
 - **Backend**: Vitest + Node env, 88 test files in `lib/**/*.test.ts` and `app/api/__tests__/` (unit, perf, integration)
 - **Frontend**: Vitest + jsdom + React Testing Library, 25 test files in `src/**/__tests__/*.{test,spec}.{ts,tsx}`
 - **Shared**: Vitest + Node env, 5 test files
+
+See [testing_guide.md](testing_guide.md) for file naming conventions, mock patterns, and per-framework examples.
 
 ## Key Design Patterns
 

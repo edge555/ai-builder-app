@@ -16,7 +16,6 @@ import {
   ModifyProjectRequestSchema,
 } from '@ai-app-builder/shared';
 import { createModificationEngine, type ModificationPhase } from '../../../lib/diff';
-import { detectIntent } from '../../../lib/ai/ai-provider-factory';
 import { handleOptions, getCorsHeaders, parseJsonRequest } from '../../../lib/api';
 import { createLogger } from '../../../lib/logger';
 import { generateRequestId } from '../../../lib/request-id';
@@ -64,10 +63,6 @@ export async function POST(request: NextRequest) {
     const projectState = deserializeProjectState(body.projectState);
     const { shouldSkipPlanning, errorContext, conversationHistory } = body;
 
-    // Detect intent for task-specific model routing
-    const detectedTaskType = await detectIntent(body.prompt, requestId);
-    contextLogger.info('Intent detected for modification', { taskType: detectedTaskType });
-
     // Create backpressure controller
     const backpressure = new BackpressureController({
       maxBufferSize: 1024 * 1024, // 1MB
@@ -97,7 +92,7 @@ export async function POST(request: NextRequest) {
           );
 
           // Run modification engine (blocking call — emits files post-hoc)
-          const engine = await createModificationEngine(detectedTaskType);
+          const engine = await createModificationEngine();
           const result = await engine.modifyProject(projectState, body.prompt, {
             shouldSkipPlanning,
             errorContext,
@@ -109,6 +104,15 @@ export async function POST(request: NextRequest) {
                 controller,
                 'progress',
                 { phase, label },
+                EventPriority.NORMAL
+              );
+            },
+            onPipelineStage: (data) => {
+              if (isComplete()) return;
+              encoder.enqueueEvent(
+                controller,
+                'pipeline-stage',
+                data,
                 EventPriority.NORMAL
               );
             },

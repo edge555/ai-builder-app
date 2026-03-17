@@ -277,6 +277,26 @@
   color: hsl(var(--primary));
 }
 
+.agent-settings-tab-env-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: hsl(142 71% 45% / 0.12);
+  color: hsl(142 71% 35%);
+  border: 1px solid hsl(142 71% 45% / 0.25);
+}
+
+[data-theme='dark'] .agent-settings-tab-env-badge {
+  color: hsl(142 71% 55%);
+  background: hsl(142 71% 45% / 0.15);
+  border-color: hsl(142 71% 45% / 0.3);
+}
+
 /* Content */
 .agent-settings-content {
   padding: 24px 0;

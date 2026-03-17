@@ -1,8 +1,20 @@
+import { BarChart2, Globe, CheckSquare, ShoppingCart, MessageCircle, Cloud, FileText, Sparkles, type LucideIcon } from 'lucide-react';
 import { useState, useMemo, useRef } from 'react';
 
 import type { StarterTemplate } from '@/data/templates';
 import type { UserTemplate } from '@/services/storage';
 import './TemplateGrid.css';
+
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  Dashboard: BarChart2,
+  Marketing: Globe,
+  Productivity: CheckSquare,
+  'E-Commerce': ShoppingCart,
+  Social: MessageCircle,
+  Utility: Cloud,
+  Content: FileText,
+  'My Templates': Sparkles,
+};
 
 interface TemplateGridProps {
   templates: StarterTemplate[];
@@ -171,7 +183,7 @@ export function TemplateGrid({ templates, onSelect, userTemplates = [], onSelect
               </div>
             ) : (
               <div className="template-card-icon-container" data-category="My Templates">
-                <span className="template-card-icon">{template.icon}</span>
+                {(() => { const Icon = CATEGORY_ICONS['My Templates'] ?? Sparkles; return <Icon size={28} className="template-card-icon" strokeWidth={1.5} />; })()}
               </div>
             )}
             <div className="template-card-content">
@@ -211,7 +223,7 @@ export function TemplateGrid({ templates, onSelect, userTemplates = [], onSelect
             data-category={template.category}
           >
             <div className="template-card-icon-container" data-category={template.category}>
-              <span className="template-card-icon">{template.icon}</span>
+              {(() => { const Icon = CATEGORY_ICONS[template.category] ?? Sparkles; return <Icon size={28} className="template-card-icon" strokeWidth={1.5} />; })()}
             </div>
             <div className="template-card-content">
               <h3 className="template-card-title">{template.name}</h3>

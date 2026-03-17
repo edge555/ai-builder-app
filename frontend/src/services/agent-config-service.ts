@@ -1,7 +1,7 @@
 import { FUNCTIONS_BASE_URL } from '@/integrations/backend/client';
 import { serviceError } from '@ai-app-builder/shared/utils';
 
-export type TaskType = 'intent' | 'planning' | 'coding' | 'debugging' | 'documentation';
+export type TaskType = 'intent' | 'planning' | 'execution' | 'bugfix' | 'review';
 
 export interface ModelEntry {
   id: string;
@@ -13,6 +13,8 @@ export interface ModelEntry {
 export interface TaskConfig {
   taskType: TaskType;
   models: ModelEntry[];
+  /** Populated by the backend when OPENROUTER_<TASK>_MODEL env var is explicitly set. Read-only. */
+  envOverride?: string;
 }
 
 export interface AgentConfig {

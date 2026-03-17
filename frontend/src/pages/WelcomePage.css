@@ -304,7 +304,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 11px 16px;
+  min-height: 44px;
   border: 1px solid hsl(var(--border));
   border-radius: 20px;
   background: hsl(var(--muted) / 0.5);
@@ -317,8 +318,8 @@
 }
 
 .welcome-hero-suggestion-icon {
-  font-size: 1rem;
-  line-height: 1;
+  flex-shrink: 0;
+  color: hsl(var(--primary));
 }
 
 .welcome-hero-suggestion-chip:hover {
@@ -350,25 +351,18 @@
 .welcome-feature-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   padding: 24px 20px;
   border-radius: var(--radius-lg);
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  text-align: center;
+  text-align: left;
   /* No hover effects - these are informational, not interactive */
 }
 
 .welcome-feature-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--accent-color) 15%, transparent);
   color: var(--accent-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .welcome-feature-title {

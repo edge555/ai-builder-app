@@ -3,7 +3,7 @@
  * @description Classifies user prompts into `TaskType` values for model routing.
  * Calls the `intent` task models configured in agent config with a low-token,
  * low-temperature request for fast deterministic classification.
- * Falls back to `coding` when no intent models are configured or on any failure.
+ * Falls back to `execution` when no intent models are configured or on any failure.
  * Only used in OpenRouter mode.
  *
  * @requires ./agent-router - AgentRouter for obtaining intent provider
@@ -19,22 +19,22 @@ import type { TaskType } from './agent-config-types';
 
 const logger = createLogger('intent-detector');
 
-const FALLBACK_TASK: TaskType = 'coding';
+const FALLBACK_TASK: TaskType = 'execution';
 
-const VALID_TASK_TYPES: TaskType[] = ['coding', 'debugging', 'planning', 'documentation'];
+// 'intent' and 'review' are pipeline-internal stages, not detectable from user prompts
+const VALID_TASK_TYPES: TaskType[] = ['execution', 'bugfix', 'planning'];
 
 const SYSTEM_PROMPT = `You are a task classifier. Given a user prompt, output exactly one word — the task type.
 
 Task types:
-- coding: writing new features, components, UI, or any new code
-- debugging: fixing bugs, errors, broken behaviour, or unexpected output
+- execution: writing new features, components, UI, or any new code
+- bugfix: fixing bugs, errors, broken behaviour, or unexpected output
 - planning: high-level analysis, architecture decisions, or planning what to build
-- documentation: writing comments, README files, or explaining existing code
 
 Rules:
-- Output ONLY the single word (coding, debugging, planning, or documentation)
+- Output ONLY the single word (execution, bugfix, or planning)
 - No punctuation, no explanation, no extra words
-- When in doubt, output: coding`;
+- When in doubt, output: execution`;
 
 export class IntentDetector {
   constructor(private readonly agentRouter: AgentRouter) { }
@@ -64,7 +64,7 @@ export class IntentDetector {
       });
 
       if (!response.success || !response.content) {
-        contextLogger.warn('Intent detection failed, defaulting to coding', {
+        contextLogger.warn('Intent detection failed, defaulting to execution', {
           error: response.error,
         });
         timer.complete(false, { error: response.error });
@@ -87,7 +87,7 @@ export class IntentDetector {
       const metrics = timer.complete(false, {
         error: error instanceof Error ? error.message : String(error),
       });
-      contextLogger.warn('Intent detection threw, defaulting to coding', formatMetrics(metrics));
+      contextLogger.warn('Intent detection threw, defaulting to execution', formatMetrics(metrics));
       return FALLBACK_TASK;
     }
   }

@@ -359,23 +359,3 @@ export class ModalClient implements AIProvider {
   }
 
 }
-
-/**
- * Creates a ModalClient instance from environment variables.
- */
-export function createModalClient(model?: string): ModalClient {
-  const apiUrl = process.env.MODAL_API_URL;
-  if (!apiUrl) {
-    throw new Error(envVarError('MODAL_API_URL', 'required for Modal provider'));
-  }
-
-  return new ModalClient({
-    apiUrl,
-    streamApiUrl: process.env.MODAL_STREAM_API_URL,
-    apiKey: process.env.MODAL_API_KEY,
-    timeout: process.env.MODAL_TIMEOUT
-      ? parseInt(process.env.MODAL_TIMEOUT, 10)
-      : undefined,
-    model,
-  });
-}

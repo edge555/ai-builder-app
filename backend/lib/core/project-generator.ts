@@ -1,25 +1,23 @@
 /**
  * Project Generator Service
  * Generates complete project structures from natural language descriptions.
- * Implements Requirements 1.1, 1.2, 1.3
  */
 
 import { v4 as uuidv4 } from 'uuid';
 import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared';
 import type { AIProvider } from '../ai';
 import { createAIProvider } from '../ai';
-import type { BuildError } from './build-validator';
-import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
-import { buildFixPrompt } from './prompts/build-fix-prompt';
+import type { IPromptProvider } from './prompts/prompt-provider';
+import { createPromptProvider } from './prompts/prompt-provider-factory';
+import { getEffectiveProvider } from '../ai/provider-config-store';
+import { PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt-utils';
 import { createLogger } from '../logger';
-import { getMaxOutputTokens } from '../config';
 import { processFiles } from './file-processor';
 import { ProjectOutputSchema } from './schemas';
 import { isSafePath } from '../utils';
 import { BaseProjectGenerator } from './base-project-generator';
 
 const logger = createLogger('ProjectGenerator');
-
 
 /**
  * Result of project generation.
@@ -32,8 +30,11 @@ export type GenerationResult = OperationResult;
  * Includes build validation with auto-retry for fixing build errors.
  */
 export class ProjectGenerator extends BaseProjectGenerator {
-  constructor(aiProvider: AIProvider) {
-    super(aiProvider);
+  private readonly executionProvider: AIProvider;
+
+  constructor(executionProvider: AIProvider, bugfixProvider: AIProvider, promptProvider: IPromptProvider) {
+    super(bugfixProvider, promptProvider);
+    this.executionProvider = executionProvider;
   }
 
   /**
@@ -52,51 +53,37 @@ export class ProjectGenerator extends BaseProjectGenerator {
       descriptionPreview: description.substring(0, 100),
     });
 
-    // Build prompt with proper injection defense
-    const systemInstruction = getGenerationPrompt(description);
+    const systemInstruction = this.promptProvider.getExecutionGenerationSystemPrompt(description, null, null);
 
-    // Log what we're sending to Gemini
-    logger.info('Sending request to Gemini', {
+    logger.info('Sending request to AI provider', {
       systemInstructionLength: systemInstruction.length,
       temperature: 0.7,
-      maxOutputTokens: getMaxOutputTokens('generation'),
-    });
-    logger.debug('Gemini request details', {
-      systemInstruction: systemInstruction,
-      responseSchema: PROJECT_OUTPUT_SCHEMA,
+      maxOutputTokens: this.promptProvider.tokenBudgets.executionGeneration,
     });
 
-    // Call AI provider with structured output
-    const response = await this.aiProvider.generate({
+    const response = await this.executionProvider.generate({
       prompt: 'Generate the project based on the user request in the system instruction.',
-      systemInstruction: systemInstruction,
+      systemInstruction,
       temperature: 0.7,
-      maxOutputTokens: getMaxOutputTokens('generation'),
+      maxOutputTokens: this.promptProvider.tokenBudgets.executionGeneration,
       responseSchema: PROJECT_OUTPUT_SCHEMA,
     });
 
-    // Log what we received from Gemini
-    logger.info('Received response from Gemini', {
+    logger.info('Received response from AI provider', {
       success: response.success,
       contentLength: response.content?.length ?? 0,
       hasError: !!response.error,
       retryCount: response.retryCount,
     });
-    logger.debug('Gemini response content', {
-      content: response.content,
-      error: response.error,
-    });
 
     if (!response.success || !response.content) {
-      logger.error('Gemini API error', { error: response.error });
+      logger.error('AI provider error', { error: response.error });
       return {
         success: false,
         error: response.error ?? 'Failed to generate project from AI',
       };
     }
 
-    // Step 6: Parse and validate the structured output
-    // With responseSchema, Gemini returns guaranteed valid JSON
     let parsedData: unknown;
     try {
       parsedData = JSON.parse(response.content);
@@ -127,7 +114,6 @@ export class ProjectGenerator extends BaseProjectGenerator {
     const parsedOutput = zodResult.data;
     const files = parsedOutput.files;
 
-    // Validate all file paths for security
     for (const file of files) {
       if (!isSafePath(file.path)) {
         logger.error('Unsafe file path detected', { path: file.path });
@@ -138,11 +124,9 @@ export class ProjectGenerator extends BaseProjectGenerator {
       }
     }
 
-    // Process files: sanitize paths, normalize newlines, format with Prettier
     const processResult = await processFiles(files, { addFrontendPrefix: false });
     const prefixedFiles = processResult.files;
 
-    // Log warnings if any
     if (processResult.warnings.length > 0) {
       logger.warn('File processing warnings', {
         count: processResult.warnings.length,
@@ -150,10 +134,8 @@ export class ProjectGenerator extends BaseProjectGenerator {
       });
     }
 
-    // Validate the output (syntax validation)
     logger.debug('Validating files', { files: Object.keys(prefixedFiles) });
     const validationResult = this.validationPipeline.validate(prefixedFiles);
-    logger.debug('Validation result', { valid: validationResult.valid });
     if (!validationResult.valid) {
       logger.error('Validation errors', { errors: validationResult.errors });
       return {
@@ -163,16 +145,11 @@ export class ProjectGenerator extends BaseProjectGenerator {
       };
     }
 
-
-    // Build validation with auto-retry using universal retry loop
     const finalFiles = await this.runBuildFixLoop(
       validationResult.sanitizedOutput!,
-      'generation',
       description
     );
 
-
-    // Create project state
     const now = new Date();
     const projectId = uuidv4();
     const versionId = uuidv4();
@@ -187,7 +164,6 @@ export class ProjectGenerator extends BaseProjectGenerator {
       currentVersionId: versionId,
     };
 
-    // Create initial version
     const version: Version = {
       id: versionId,
       projectId: projectId,
@@ -204,13 +180,17 @@ export class ProjectGenerator extends BaseProjectGenerator {
       version,
     };
   }
-
 }
 
 /**
- * Creates a ProjectGenerator instance with the default AI provider for coding tasks.
+ * Creates a ProjectGenerator with execution + bugfix providers and the appropriate prompt provider.
  */
 export async function createProjectGenerator(): Promise<ProjectGenerator> {
-  const aiProvider = await createAIProvider('coding');
-  return new ProjectGenerator(aiProvider);
+  const [executionProvider, bugfixProvider, providerName] = await Promise.all([
+    createAIProvider('execution'),
+    createAIProvider('bugfix'),
+    getEffectiveProvider(),
+  ]);
+  const promptProvider = createPromptProvider(providerName);
+  return new ProjectGenerator(executionProvider, bugfixProvider, promptProvider);
 }

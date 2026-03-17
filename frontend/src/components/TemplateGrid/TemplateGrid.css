@@ -28,6 +28,20 @@
   flex: 1;
   min-width: 0;
   /* Allow shrinking */
+  position: relative;
+}
+
+/* Gradient fade on right edge indicates scrollable content */
+.template-filters::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 48px;
+  background: linear-gradient(to right, transparent, hsl(var(--background)));
+  pointer-events: none;
+  z-index: 1;
 }
 
 .template-filters-scroll {
@@ -113,7 +127,8 @@
 }
 
 .filter-pill {
-  padding: 8px 16px;
+  padding: 10px 16px;
+  min-height: 44px;
   border-radius: 20px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -124,6 +139,8 @@
   background: var(--muted);
   color: var(--muted-foreground);
   scroll-snap-align: start;
+  display: inline-flex;
+  align-items: center;
 }
 
 .filter-pill:hover {
@@ -265,8 +282,18 @@
 }
 
 .template-card-icon {
-  font-size: 32px;
+  /* icon color inherits from category-specific stroke color below */
 }
+
+/* Category-based icon colors to match the card backgrounds */
+.template-card-icon-container[data-category="Dashboard"] .template-card-icon { color: hsl(210 80% 50%); }
+.template-card-icon-container[data-category="Marketing"] .template-card-icon { color: hsl(340 80% 55%); }
+.template-card-icon-container[data-category="Productivity"] .template-card-icon { color: hsl(160 70% 40%); }
+.template-card-icon-container[data-category="E-Commerce"] .template-card-icon { color: hsl(45 90% 45%); }
+.template-card-icon-container[data-category="Social"] .template-card-icon { color: hsl(280 70% 55%); }
+.template-card-icon-container[data-category="Utility"] .template-card-icon { color: hsl(200 70% 50%); }
+.template-card-icon-container[data-category="Content"] .template-card-icon { color: hsl(30 80% 50%); }
+.template-card-icon-container[data-category="My Templates"] .template-card-icon { color: hsl(260 70% 55%); }
 
 /* Card Content */
 .template-card-content {

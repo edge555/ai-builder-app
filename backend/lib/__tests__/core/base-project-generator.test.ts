@@ -23,6 +23,7 @@ describe('BaseProjectGenerator', () => {
     let mockAIProvider: any;
     let mockBuildValidator: any;
     let mockValidationPipeline: any;
+    let mockPromptProvider: any;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -41,13 +42,30 @@ describe('BaseProjectGenerator', () => {
             validate: vi.fn(),
         };
 
+        mockPromptProvider = {
+            getIntentSystemPrompt: vi.fn().mockReturnValue('intent prompt'),
+            getPlanningSystemPrompt: vi.fn().mockReturnValue('planning prompt'),
+            getExecutionGenerationSystemPrompt: vi.fn().mockReturnValue('generation prompt'),
+            getExecutionModificationSystemPrompt: vi.fn().mockReturnValue('modification prompt'),
+            getReviewSystemPrompt: vi.fn().mockReturnValue('review prompt'),
+            getBugfixSystemPrompt: vi.fn().mockReturnValue('fix errors'),
+            tokenBudgets: {
+                intent: 512,
+                planning: 4096,
+                executionGeneration: 32768,
+                executionModification: 16384,
+                review: 32768,
+                bugfix: 16384,
+            },
+        };
+
         vi.mocked(createBuildValidator).mockReturnValue(mockBuildValidator);
         // ValidationPipeline is constructed in the constructor, so we need to mock its prototype if we want to control it per-instance easily,
         // or just let the constructor create a real one that we then mock methods on if possible.
         // Actually, let's just use the real mock instance.
         vi.mocked(ValidationPipeline).mockImplementation(function() { return mockValidationPipeline; });
 
-        generator = new TestProjectGenerator(mockAIProvider);
+        generator = new TestProjectGenerator(mockAIProvider, mockPromptProvider);
     });
 
     describe('runBuildFixLoop', () => {

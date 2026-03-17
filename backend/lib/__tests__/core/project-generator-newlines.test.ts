@@ -19,9 +19,31 @@ const mockAIProvider: AIProvider = {
     generateStreaming: vi.fn(),
 };
 
+const mockBugfixProvider: AIProvider = {
+    generate: vi.fn(),
+    generateStreaming: vi.fn(),
+};
+
+const mockPromptProvider = {
+    getIntentSystemPrompt: vi.fn().mockReturnValue('intent prompt'),
+    getPlanningSystemPrompt: vi.fn().mockReturnValue('planning prompt'),
+    getExecutionGenerationSystemPrompt: vi.fn().mockReturnValue('generation prompt'),
+    getExecutionModificationSystemPrompt: vi.fn().mockReturnValue('modification prompt'),
+    getReviewSystemPrompt: vi.fn().mockReturnValue('review prompt'),
+    getBugfixSystemPrompt: vi.fn().mockReturnValue('bugfix prompt'),
+    tokenBudgets: {
+        intent: 512,
+        planning: 4096,
+        executionGeneration: 32768,
+        executionModification: 16384,
+        review: 32768,
+        bugfix: 16384,
+    },
+};
+
 describe('ProjectGenerator Newline Normalization', () => {
     it('should unescape literal \\n even if real newlines exist', async () => {
-        const generator = new ProjectGenerator(mockAIProvider);
+        const generator = new ProjectGenerator(mockAIProvider, mockBugfixProvider, mockPromptProvider);
 
         // Mock response with mixed newlines:
         // "import React from 'react';\n" (literal \n)
@@ -59,7 +81,7 @@ describe('ProjectGenerator Newline Normalization', () => {
     });
 
     it('should handle content with only literal \\n', async () => {
-        const generator = new ProjectGenerator(mockAIProvider);
+        const generator = new ProjectGenerator(mockAIProvider, mockBugfixProvider, mockPromptProvider);
 
         const jsonContent = JSON.stringify({
             files: [

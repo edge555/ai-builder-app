@@ -25,6 +25,32 @@ import type { AgentConfig, TaskType } from './agent-config-types';
 const logger = createLogger('agent-router');
 
 /**
+ * Returns the OPENROUTER_<TASK>_MODEL env override for a task type, or null if not set.
+ * When set, this value is used as the sole model for the task, bypassing agent-config.json.
+ */
+function getEnvModelOverride(taskType: TaskType): string | null {
+  const overrides: Record<TaskType, string> = {
+    intent: config.provider.openrouterIntentModel,
+    planning: config.provider.openrouterPlanningModel,
+    execution: config.provider.openrouterExecutionModel,
+    bugfix: config.provider.openrouterBugfixModel,
+    review: config.provider.openrouterReviewModel,
+  };
+  // The config has defaults, so we check if the env var was explicitly set
+  // by comparing against the default values. An override is "active" when
+  // the env var is explicitly set in the environment (not just the schema default).
+  const envVarNames: Record<TaskType, string> = {
+    intent: 'OPENROUTER_INTENT_MODEL',
+    planning: 'OPENROUTER_PLANNING_MODEL',
+    execution: 'OPENROUTER_EXECUTION_MODEL',
+    bugfix: 'OPENROUTER_BUGFIX_MODEL',
+    review: 'OPENROUTER_REVIEW_MODEL',
+  };
+  const isExplicitlySet = !!process.env[envVarNames[taskType]];
+  return isExplicitlySet ? overrides[taskType] : null;
+}
+
+/**
  * AgentRouter loads the persisted agent config and creates
  * FallbackAIProvider instances for each task type.
  */
@@ -46,15 +72,28 @@ export class AgentRouter {
       throw new Error(stateError('AgentRouter', 'not initialized — call init() first'));
     }
 
+    const apiKey = config.provider.openrouterApiKey;
+    if (!apiKey) {
+      throw new Error(envVarError('OPENROUTER_API_KEY', 'required for OpenRouter provider'));
+    }
+
+    // Env var override takes full precedence over agent-config.json
+    const envOverride = getEnvModelOverride(taskType);
+    if (envOverride) {
+      logger.debug('Using env var model override for task', { taskType, model: envOverride });
+      const client = new OpenRouterClient(envOverride, {
+        apiKey,
+        timeout: config.provider.openrouterTimeout,
+        maxRetries: config.api.maxRetries,
+        retryBaseDelay: config.api.retryBaseDelay,
+      });
+      return new FallbackAIProvider(taskType, [envOverride], [client]);
+    }
+
     const models = getActiveModelsForTask(this.agentConfig, taskType);
 
     if (models.length === 0) {
       throw new Error(notFoundError('Active models', `task type ${taskType}`));
-    }
-
-    const apiKey = config.provider.openrouterApiKey;
-    if (!apiKey) {
-      throw new Error(envVarError('OPENROUTER_API_KEY', 'required for OpenRouter provider'));
     }
 
     const clients = models.map(

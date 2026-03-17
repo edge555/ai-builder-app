@@ -1,66 +1,46 @@
 /**
- * Generation Prompt Module
- * Contains the system prompt and output schema for project generation.
- * Requirements: 8.2, 8.3
+ * @module core/prompts/generation-prompt-utils
+ * @description Utility functions for prompt assembly — complexity detection,
+ * file requirements, design-system detection, and quality bar references.
+ * These are provider-agnostic; both ApiPromptProvider and ModalPromptProvider
+ * import from here.
+ *
+ * @requires ./shared-prompt-fragments - Reusable prompt text blocks
  */
 
-import {
-  LAYOUT_FUNDAMENTALS,
-  BASELINE_VISUAL_POLISH,
-  REALISTIC_DATA_GUIDANCE,
-  DESIGN_SYSTEM_CONSTANTS,
-  ACCESSIBILITY_GUIDANCE,
-  DEPENDENCY_GUIDANCE,
-  getOutputBudgetGuidance,
-  SYNTAX_INTEGRITY_RULES,
-  COMMON_REACT_PATTERNS,
-  DETAILED_REACT_GUIDANCE,
-  DETAILED_CSS_GUIDANCE,
-  DETAILED_JSON_OUTPUT_GUIDANCE,
-  wrapUserInput
-} from './shared-prompt-fragments';
-import { getProviderPromptConfig } from './provider-prompt-config';
+type ComplexityLevel = 'simple' | 'medium' | 'complex';
 
 /**
- * Builds the system prompt for project generation.
- * Instructs the AI to output structured JSON with complete file contents.
+ * Returns true if the user prompt requests design-quality UI.
+ * Uses negation detection to avoid false positives ("no design system").
  */
-function shouldIncludeDesignSystem(userPrompt: string): boolean {
+export function shouldIncludeDesignSystem(userPrompt: string): boolean {
   if (!userPrompt) return false;
 
   const prompt = userPrompt.toLowerCase();
 
-  // Negation words that suppress a match when appearing within 3 words before the keyword
   const NEGATION_RE = /\b(?:no|not|don't|dont|without|avoid|skip)\b/;
 
   function isNegated(kw: string): boolean {
     const idx = prompt.indexOf(kw);
     if (idx === -1) return false;
-    // Grab up to 30 chars before the keyword and check for negation
     const before = prompt.slice(Math.max(0, idx - 30), idx);
-    // Only consider the last 3 words before the keyword
     const words = before.trimEnd().split(/\s+/).slice(-3).join(' ');
     return NEGATION_RE.test(words);
   }
 
-  // Multi-word phrases — word-boundary regex match
   const phraseKeywords = [
-    // Explicit design requests
     'beautiful ui', 'beautiful design', 'premium design', 'modern ui', 'modern design',
     'clean ui', 'clean design', 'professional ui', 'professional design', 'professional look',
     'good looking', 'good-looking', 'nice looking', 'nice-looking',
     'visually appealing', 'eye-catching', 'eye catching',
     'pixel-perfect', 'pixel perfect', 'ui/ux', 'ui design', 'ux design',
-    // Design systems & frameworks
     'design system', 'tailwind', 'chakra ui', 'material ui', 'mantine', 'shadcn',
     'ant design', 'bootstrap',
-    // Page types that need strong design
     'landing page', 'marketing site', 'marketing page', 'portfolio site', 'portfolio page',
     'hero section', 'call to action',
-    // Layout & interaction patterns
     'responsive layout', 'dark mode', 'light mode', 'dark theme', 'light theme',
     'card layout', 'card-based',
-    // Design references
     'dribbble', 'behance', 'figma',
   ];
 
@@ -70,8 +50,6 @@ function shouldIncludeDesignSystem(userPrompt: string): boolean {
     if (re.test(prompt) && !isNegated(kw)) return true;
   }
 
-  // Single-word signals — matched with word boundaries to reduce false positives
-  // Removed 'theme'/'dashboard' — these are feature signals, not design signals
   const wordKeywords = [
     'sleek', 'polished', 'elegant', 'stylish', 'aesthetic', 'aesthetics',
     'minimalist', 'minimalistic', 'sophisticated', 'refined',
@@ -84,8 +62,6 @@ function shouldIncludeDesignSystem(userPrompt: string): boolean {
   });
 }
 
-type ComplexityLevel = 'simple' | 'medium' | 'complex';
-
 /**
  * Detect project complexity from the user prompt.
  * Counts distinct feature/scope signals to classify as simple, medium, or complex.
@@ -93,7 +69,6 @@ type ComplexityLevel = 'simple' | 'medium' | 'complex';
 export function detectComplexity(userPrompt: string): ComplexityLevel {
   const prompt = userPrompt.toLowerCase();
 
-  // Feature signals — each match adds 1 point
   const featureSignals = [
     /\bauth(?:entication|orization)?\b/, /\blogin\b/, /\bsign[\s-]?up\b/, /\bregist(?:er|ration)\b/,
     /\bdashboard\b/, /\badmin\s*panel\b/, /\banalytics\b/,
@@ -158,8 +133,17 @@ STRUCTURAL PATTERNS (medium):
   }
 }
 
+import { ProjectOutputSchema } from '../schemas';
+import { toSimpleJsonSchema } from '../zod-to-json-schema';
+
+/**
+ * JSON Schema for project generation output.
+ * Forces the AI to return properly structured JSON.
+ */
+export const PROJECT_OUTPUT_SCHEMA = toSimpleJsonSchema(ProjectOutputSchema);
+
 /** Return a complexity-appropriate quality bar reference for the prompt. */
-function getQualityBarReference(complexity: ComplexityLevel): string {
+export function getQualityBarReference(complexity: ComplexityLevel): string {
   if (complexity === 'simple') {
     return `=== QUALITY BAR REFERENCE (adapt to whatever the user requests — do NOT copy this verbatim) ===
 Example: if the user asks "build a counter app", a production-quality result looks like:
@@ -223,91 +207,3 @@ DATA SHAPE:
 
 This is the quality bar — every generated app should have this level of structure, separation, and completeness. Adapt the file names, data shapes, and features to match the user's actual request.`;
 }
-
-function buildGenerationPrompt(userPrompt: string): string {
-  const config = getProviderPromptConfig();
-  const complexity = detectComplexity(userPrompt);
-  return `You are a SENIOR React architect generating production-quality, modular React applications.
-CRITICAL: NEVER put everything in App.tsx — use proper component separation.
-
-=== PROJECT STRUCTURE ===
-- package.json (all dependencies)
-- src/main.tsx (entry point only — ReactDOM.render)
-- src/App.tsx (layout/routing only, max 50 lines)
-- src/index.css (global styles, CSS variables, resets)
-- src/components/ui/*.tsx + *.css (reusable: Button, Input, Card, Modal)
-- src/components/layout/*.tsx + *.css (Header, Footer, Sidebar)
-- src/components/features/*.tsx + *.css (domain-specific components)
-- src/hooks/*.ts (custom hooks: useLocalStorage, useForm)
-- src/types/index.ts (TypeScript interfaces)
-
-=== COMPONENT RULES ===
-- Single responsibility, under 80 lines each. Split if larger.
-- UI components = pure presentation via props. Containers = state + data flow. Hooks = reusable logic.
-- Create generic reusable UI components (Button, Input, Card). Co-locate CSS per component.
-
-${getFileRequirements(complexity)}
-
-${LAYOUT_FUNDAMENTALS}
-
-${BASELINE_VISUAL_POLISH}
-
-${REALISTIC_DATA_GUIDANCE}
-
-${shouldIncludeDesignSystem(userPrompt) ? `${DESIGN_SYSTEM_CONSTANTS}
-` : ''}
-${ACCESSIBILITY_GUIDANCE}
-
-=== CSS BEST PRACTICES ===
-- BEM-like naming per component. No inline styles. Use modern CSS (aspect-ratio, clamp()).
-- Components MUST reference these variables instead of hardcoded values.
-- Define all tokens in :root in index.css using this starter set:
-  --color-primary: #3b82f6;    --color-primary-hover: #2563eb;
-  --color-bg: #ffffff;         --color-surface: #f8fafc;
-  --color-text: #1e293b;       --color-text-secondary: #64748b;
-  --color-border: #e2e8f0;     --color-error: #ef4444;
-  --color-success: #22c55e;
-  --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 32px;
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --text-sm: 0.875rem; --text-base: 1rem; --text-lg: 1.125rem; --text-xl: 1.25rem;
-  --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
-
-${DEPENDENCY_GUIDANCE}
-
-${SYNTAX_INTEGRITY_RULES}
-
-${COMMON_REACT_PATTERNS}
-
-${config.includeDetailedGuidance ? `${DETAILED_REACT_GUIDANCE}
-
-${DETAILED_CSS_GUIDANCE}
-
-${DETAILED_JSON_OUTPUT_GUIDANCE}
-
-` : ''}${getOutputBudgetGuidance(config.outputBudgetTokens)}
-
-${getQualityBarReference(complexity)}
-
-${wrapUserInput(userPrompt)}
-
-Generate a complete React application with perfect syntax and proper component separation.`;
-}
-
-
-/**
- * Builds a generation prompt with user input properly wrapped for injection defense.
- */
-export function getGenerationPrompt(userPrompt: string): string {
-  return buildGenerationPrompt(userPrompt);
-}
-
-import { ProjectOutputSchema } from '../schemas';
-import { toSimpleJsonSchema } from '../zod-to-json-schema';
-
-/**
- * JSON Schema for project generation output.
- * Forces the AI to return properly structured JSON.
- * Note: Some providers don't support additionalProperties, so we use an array structure instead.
- */
-export const PROJECT_OUTPUT_SCHEMA = toSimpleJsonSchema(ProjectOutputSchema);

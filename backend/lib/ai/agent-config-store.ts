@@ -19,7 +19,7 @@ const logger = createLogger('agent-config-store');
 
 const CONFIG_PATH = join(process.cwd(), 'data/agent-config.json');
 
-const TASK_TYPES: TaskType[] = ['intent', 'planning', 'coding', 'debugging', 'documentation'];
+const TASK_TYPES: TaskType[] = ['intent', 'planning', 'execution', 'bugfix', 'review'];
 
 function createDefaultConfig(): AgentConfig {
   const tasks = {} as AgentConfig['tasks'];
@@ -33,7 +33,22 @@ export async function load(): Promise<AgentConfig> {
   try {
     const raw = await readFile(CONFIG_PATH, 'utf-8');
     const parsed = JSON.parse(raw) as AgentConfig;
-    // Ensure all task types exist (forward-compat if new types added)
+
+    // Schema migration guard: if the persisted config has unknown task types
+    // (e.g. old schema with 'coding'/'debugging'/'documentation'), replace with
+    // the new default config rather than returning partial/broken state.
+    const knownTaskTypes = new Set<string>(TASK_TYPES);
+    const persistedTaskTypes = Object.keys(parsed.tasks ?? {});
+    const hasUnknownTypes = persistedTaskTypes.some((t) => !knownTaskTypes.has(t));
+    if (hasUnknownTypes) {
+      logger.warn('Agent config has unknown task types (old schema) — resetting to defaults', {
+        found: persistedTaskTypes,
+        expected: TASK_TYPES,
+      });
+      return createDefaultConfig();
+    }
+
+    // Ensure all current task types exist (forward-compat if new types added later)
     for (const taskType of TASK_TYPES) {
       if (!parsed.tasks[taskType]) {
         parsed.tasks[taskType] = { taskType, models: [] };

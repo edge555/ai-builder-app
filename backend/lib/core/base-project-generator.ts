@@ -5,13 +5,12 @@
 
 import type { FileDiff, RepairAttempt } from '@ai-app-builder/shared';
 import type { AIProvider } from '../ai';
+import type { IPromptProvider } from './prompts/prompt-provider';
 import { ValidationPipeline } from './validation-pipeline';
 import { BuildValidator, createBuildValidator } from './build-validator';
-import { buildFixPrompt, type BuildFixMode } from './prompts/build-fix-prompt';
-import { getGenerationPrompt, PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt';
+import { PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt-utils';
 import { ProjectOutputSchema } from './schemas';
 import { processFiles } from './file-processor';
-import { getMaxOutputTokens } from '../config';
 import { createLogger } from '../logger';
 
 const logger = createLogger('BaseProjectGenerator');
@@ -21,13 +20,15 @@ const logger = createLogger('BaseProjectGenerator');
  * Contains shared logic for both streaming and non-streaming generation.
  */
 export abstract class BaseProjectGenerator {
-    protected readonly aiProvider: AIProvider;
+    protected readonly bugfixProvider: AIProvider;
+    protected readonly promptProvider: IPromptProvider;
     protected readonly validationPipeline: ValidationPipeline;
     protected readonly buildValidator: BuildValidator;
     protected readonly maxBuildRetries = 3;
 
-    constructor(aiProvider: AIProvider) {
-        this.aiProvider = aiProvider;
+    constructor(bugfixProvider: AIProvider, promptProvider: IPromptProvider) {
+        this.bugfixProvider = bugfixProvider;
+        this.promptProvider = promptProvider;
         this.validationPipeline = new ValidationPipeline();
         this.buildValidator = createBuildValidator();
     }
@@ -36,7 +37,6 @@ export abstract class BaseProjectGenerator {
      * Extracts a project name from the description.
      */
     protected extractProjectName(description: string): string {
-        // Take first few words, clean up, and use as name
         const words = description
             .replace(/[^a-zA-Z0-9\s]/g, '')
             .split(/\s+/)
@@ -75,18 +75,17 @@ export abstract class BaseProjectGenerator {
     }
 
     /**
-     * Universal build-fix retry loop with failure history accumulation.
+     * Universal build-fix retry loop using the injected bugfix provider and prompt provider.
      * Runs build validation and retries with the AI if errors are found,
      * accumulating previous failure context to help the AI avoid repeating mistakes.
-     * 
+     *
      * @param files - The files to validate and potentially fix
-     * @param mode - Whether this is for 'generation' or 'modification'
      * @param originalPrompt - The original user prompt/description
+     * @param requestId - Optional request ID for log correlation
      * @returns The fixed files, or the original files if all retries fail
      */
     protected async runBuildFixLoop(
         files: Record<string, string>,
-        mode: BuildFixMode,
         originalPrompt: string,
         requestId?: string
     ): Promise<Record<string, string>> {
@@ -97,7 +96,6 @@ export abstract class BaseProjectGenerator {
         const failureHistory: RepairAttempt[] = [];
 
         while (!buildResult.valid && buildRetryCount < this.maxBuildRetries) {
-            // Early termination: skip retries if all errors are unfixable (e.g. Node.js built-ins)
             const fixableErrors = buildResult.errors.filter(e => e.severity === 'fixable');
             const unfixableErrors = buildResult.errors.filter(e => e.severity === 'unfixable');
 
@@ -121,53 +119,42 @@ export abstract class BaseProjectGenerator {
                 errors: buildResult.errors.map(e => e.message),
             });
 
-            // Format errors for AI
             const errorContext = this.buildValidator.formatErrorsForAI(buildResult.errors);
 
-            // Build fix prompt with failure history
-            const fixPromptContent = buildFixPrompt({
-                mode,
+            // Convert RepairAttempt[] to string[] for getBugfixSystemPrompt
+            const failureHistoryStrings = failureHistory.map(a =>
+                a.strategy ? `${a.error}: ${a.strategy}` : a.error
+            );
+
+            const fixSystemInstruction = this.promptProvider.getBugfixSystemPrompt(
                 errorContext,
-                originalPrompt,
-                failureHistory: failureHistory.length > 0 ? failureHistory : undefined,
-            });
+                failureHistoryStrings
+            );
 
-            const fixSystemInstruction = getGenerationPrompt(fixPromptContent) +
-                '\n\nIMPORTANT: You must fix ALL the build errors listed above. Make sure to either add missing dependencies to package.json OR use native alternatives.';
-
-            contextLogger.info('Sending build fix request to AI provider', {
+            contextLogger.info('Sending build fix request to bugfix provider', {
                 attempt: buildRetryCount,
                 systemInstructionLength: fixSystemInstruction.length,
                 errorCount: buildResult.errors.length,
                 hasFailureHistory: failureHistory.length > 0,
             });
-            contextLogger.debug('AI provider fix request details', {
-                systemInstruction: fixSystemInstruction,
-            });
 
-            // Request AI to fix the errors
-            const fixResponse = await this.aiProvider.generate({
-                prompt: 'Generate the fixed project based on the error context in the system instruction.',
+            const fixResponse = await this.bugfixProvider.generate({
+                prompt: `Fix the build errors. Original project description: "${originalPrompt}"`,
                 systemInstruction: fixSystemInstruction,
                 temperature: 0.5,
-                maxOutputTokens: getMaxOutputTokens(mode),
+                maxOutputTokens: this.promptProvider.tokenBudgets.bugfix,
                 responseSchema: PROJECT_OUTPUT_SCHEMA,
                 requestId,
             });
 
-            contextLogger.info('Received fix response from AI provider', {
+            contextLogger.info('Received fix response from bugfix provider', {
                 success: fixResponse.success,
                 contentLength: fixResponse.content?.length ?? 0,
                 hasError: !!fixResponse.error,
             });
-            contextLogger.debug('AI provider fix response content', {
-                content: fixResponse.content,
-                error: fixResponse.error,
-            });
 
             if (!fixResponse.success || !fixResponse.content) {
-                contextLogger.error('Failed to get fix response from AI');
-                // Record this failure
+                contextLogger.error('Failed to get fix response from bugfix provider');
                 failureHistory.push({
                     attempt: buildRetryCount,
                     error: fixResponse.error || 'AI failed to generate fix',
@@ -177,9 +164,7 @@ export abstract class BaseProjectGenerator {
                 break;
             }
 
-            // Parse and process the fixed output
             try {
-                // With responseSchema, Gemini returns guaranteed valid JSON
                 const parsedData = JSON.parse(fixResponse.content);
                 const zodResult = ProjectOutputSchema.safeParse(parsedData);
 
@@ -187,7 +172,6 @@ export abstract class BaseProjectGenerator {
                     contextLogger.error('Zod validation failed on fix response', {
                         errors: zodResult.error.issues,
                     });
-                    // Record this failure
                     failureHistory.push({
                         attempt: buildRetryCount,
                         error: `Schema validation failed: ${zodResult.error.message}`,
@@ -198,15 +182,12 @@ export abstract class BaseProjectGenerator {
                 }
 
                 const fixedOutput = zodResult.data;
-                // Process fixed files
                 const processResult = await processFiles(fixedOutput.files || [], { addFrontendPrefix: false });
                 const fixedFiles = processResult.files;
 
-                // Re-validate syntax
                 const revalidation = this.validationPipeline.validate(fixedFiles);
                 if (!revalidation.valid) {
                     contextLogger.error('Fixed code failed syntax validation');
-                    // Record this failure
                     failureHistory.push({
                         attempt: buildRetryCount,
                         error: `Syntax validation failed: ${revalidation.errors.map(e => e.message).join(', ')}`,
@@ -216,7 +197,6 @@ export abstract class BaseProjectGenerator {
                     break;
                 }
 
-                // Re-run build validation
                 currentFiles = revalidation.sanitizedOutput!;
                 const previousErrors = buildResult.errors.map(e => e.message).join('; ');
                 buildResult = this.buildValidator.validate(currentFiles);
@@ -224,7 +204,6 @@ export abstract class BaseProjectGenerator {
                 if (buildResult.valid) {
                     contextLogger.info('Build errors fixed successfully');
                 } else {
-                    // Record this failure for next iteration
                     failureHistory.push({
                         attempt: buildRetryCount,
                         error: buildResult.errors.map(e => e.message).join('; '),
@@ -234,7 +213,6 @@ export abstract class BaseProjectGenerator {
                 }
             } catch (e) {
                 contextLogger.error('Failed to parse fix response', { error: e instanceof Error ? e.message : 'Unknown error' });
-                // Record this failure
                 failureHistory.push({
                     attempt: buildRetryCount,
                     error: e instanceof Error ? e.message : 'Unknown parsing error',
@@ -245,7 +223,6 @@ export abstract class BaseProjectGenerator {
             }
         }
 
-        // Log if there are still build errors after retries
         if (!buildResult.valid) {
             contextLogger.warn('Build warnings after retries', {
                 errors: buildResult.errors.map(e => ({ message: e.message, file: e.file })),
@@ -256,4 +233,3 @@ export abstract class BaseProjectGenerator {
         return currentFiles;
     }
 }
-

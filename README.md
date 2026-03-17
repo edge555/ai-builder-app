@@ -69,8 +69,9 @@ Backend: http://localhost:4000
 |---|---|---|---|
 | `OPENROUTER_API_KEY` | Yes* | — | OpenRouter API key |
 | `AI_PROVIDER` | No | `openrouter` | `openrouter` or `modal` |
-| `MODAL_API_URL` | Yes* | — | Modal endpoint URL (modal only) |
-| `MODAL_STREAM_API_URL` | Yes* | — | Modal streaming URL (modal only) |
+| `MODAL_DEFAULT_URL` | Yes* | — | Default Modal endpoint (modal only) |
+| `MODAL_DEFAULT_STREAM_URL` | No | — | Default Modal streaming URL (modal only) |
+| `MODAL_<TASK>_URL` | No | — | Per-task Modal URL; `TASK` = `INTENT`, `PLANNING`, `EXECUTION`, `BUGFIX`, `REVIEW` |
 | `MAX_OUTPUT_TOKENS` | No | `16384` | Token limit per generation |
 | `ALLOWED_ORIGINS` | No | `http://localhost:8080` | CORS origins (comma-separated) |
 | `LOG_LEVEL` | No | `info` | `debug` / `info` / `warn` / `error` |

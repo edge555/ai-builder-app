@@ -26,9 +26,15 @@ import {
   MAX_OUTPUT_TOKENS_GENERATION,
   MAX_OUTPUT_TOKENS_MODIFICATION,
   MAX_OUTPUT_TOKENS_PLANNING,
+  MAX_OUTPUT_TOKENS_INTENT,
+  MAX_OUTPUT_TOKENS_PLANNING_STAGE,
+  MAX_OUTPUT_TOKENS_REVIEW,
   MODAL_MAX_OUTPUT_TOKENS_GENERATION,
   MODAL_MAX_OUTPUT_TOKENS_MODIFICATION,
   MODAL_MAX_OUTPUT_TOKENS_PLANNING,
+  MODAL_MAX_OUTPUT_TOKENS_INTENT,
+  MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE,
+  MODAL_MAX_OUTPUT_TOKENS_REVIEW,
   RATE_LIMIT_HIGH_COST_MAX,
   RATE_LIMIT_MEDIUM_COST_MAX,
   RATE_LIMIT_LOW_COST_MAX,
@@ -44,8 +50,26 @@ const logger = createLogger('config');
 const envSchema = z.object({
   AI_PROVIDER: z.enum(['modal', 'openrouter']).default('openrouter'),
   OPENROUTER_API_KEY: z.string().optional(),
-  MODAL_API_URL: z.string().url().optional(),
-  MODAL_STREAM_API_URL: z.string().url().optional(),
+  // OpenRouter per-task model overrides (take precedence over agent-config.json)
+  OPENROUTER_INTENT_MODEL: z.string().default('thudm/glm-4.5-air'),
+  OPENROUTER_PLANNING_MODEL: z.string().default('google/gemini-2.5-flash'),
+  OPENROUTER_EXECUTION_MODEL: z.string().default('google/gemini-2.5-flash'),
+  OPENROUTER_BUGFIX_MODEL: z.string().default('thudm/glm-5'),
+  OPENROUTER_REVIEW_MODEL: z.string().default('thudm/glm-5'),
+  // Modal endpoints — default URL required when AI_PROVIDER=modal
+  MODAL_DEFAULT_URL: z.string().url().optional(),
+  MODAL_DEFAULT_STREAM_URL: z.string().url().optional(),
+  // Per-task Modal endpoints (optional — falls back to MODAL_DEFAULT_URL)
+  MODAL_INTENT_URL: z.string().url().optional(),
+  MODAL_INTENT_STREAM_URL: z.string().url().optional(),
+  MODAL_PLANNING_URL: z.string().url().optional(),
+  MODAL_PLANNING_STREAM_URL: z.string().url().optional(),
+  MODAL_EXECUTION_URL: z.string().url().optional(),
+  MODAL_EXECUTION_STREAM_URL: z.string().url().optional(),
+  MODAL_BUGFIX_URL: z.string().url().optional(),
+  MODAL_BUGFIX_STREAM_URL: z.string().url().optional(),
+  MODAL_REVIEW_URL: z.string().url().optional(),
+  MODAL_REVIEW_STREAM_URL: z.string().url().optional(),
   MODAL_API_KEY: z.string().optional(),
   MAX_OUTPUT_TOKENS: z.coerce.number().default(16384),
   ALLOWED_ORIGINS: z.string().default('http://localhost:8080'),
@@ -80,8 +104,8 @@ function validateEnv() {
   if (data.AI_PROVIDER === 'openrouter' && !data.OPENROUTER_API_KEY) {
     throw new Error(envVarError('OPENROUTER_API_KEY', 'required when AI_PROVIDER=openrouter'));
   }
-  if (data.AI_PROVIDER === 'modal' && !data.MODAL_API_URL) {
-    throw new Error(envVarError('MODAL_API_URL', 'required when AI_PROVIDER=modal'));
+  if (data.AI_PROVIDER === 'modal' && !data.MODAL_DEFAULT_URL) {
+    throw new Error(envVarError('MODAL_DEFAULT_URL', 'required when AI_PROVIDER=modal (task-specific URLs are optional and fall back to this)'));
   }
 
   return data;
@@ -105,9 +129,26 @@ export interface BackendConfig {
     name: 'modal' | 'openrouter';
     openrouterApiKey?: string;
     openrouterTimeout: number;
-    modalApiUrl?: string;
-    modalStreamApiUrl?: string;
+    // OpenRouter per-task model overrides
+    openrouterIntentModel: string;
+    openrouterPlanningModel: string;
+    openrouterExecutionModel: string;
+    openrouterBugfixModel: string;
+    openrouterReviewModel: string;
+    // Modal endpoints
     modalApiKey?: string;
+    modalDefaultUrl?: string;
+    modalDefaultStreamUrl?: string;
+    modalIntentUrl?: string;
+    modalIntentStreamUrl?: string;
+    modalPlanningUrl?: string;
+    modalPlanningStreamUrl?: string;
+    modalExecutionUrl?: string;
+    modalExecutionStreamUrl?: string;
+    modalBugfixUrl?: string;
+    modalBugfixStreamUrl?: string;
+    modalReviewUrl?: string;
+    modalReviewStreamUrl?: string;
   };
   validation: {
     maxComponentLines: number;
@@ -157,9 +198,24 @@ export const config: BackendConfig = {
     name: env.AI_PROVIDER,
     openrouterApiKey: env.OPENROUTER_API_KEY,
     openrouterTimeout: OPENROUTER_TIMEOUT,
-    modalApiUrl: env.MODAL_API_URL,
-    modalStreamApiUrl: env.MODAL_STREAM_API_URL,
+    openrouterIntentModel: env.OPENROUTER_INTENT_MODEL,
+    openrouterPlanningModel: env.OPENROUTER_PLANNING_MODEL,
+    openrouterExecutionModel: env.OPENROUTER_EXECUTION_MODEL,
+    openrouterBugfixModel: env.OPENROUTER_BUGFIX_MODEL,
+    openrouterReviewModel: env.OPENROUTER_REVIEW_MODEL,
     modalApiKey: env.MODAL_API_KEY,
+    modalDefaultUrl: env.MODAL_DEFAULT_URL,
+    modalDefaultStreamUrl: env.MODAL_DEFAULT_STREAM_URL,
+    modalIntentUrl: env.MODAL_INTENT_URL,
+    modalIntentStreamUrl: env.MODAL_INTENT_STREAM_URL,
+    modalPlanningUrl: env.MODAL_PLANNING_URL,
+    modalPlanningStreamUrl: env.MODAL_PLANNING_STREAM_URL,
+    modalExecutionUrl: env.MODAL_EXECUTION_URL,
+    modalExecutionStreamUrl: env.MODAL_EXECUTION_STREAM_URL,
+    modalBugfixUrl: env.MODAL_BUGFIX_URL,
+    modalBugfixStreamUrl: env.MODAL_BUGFIX_STREAM_URL,
+    modalReviewUrl: env.MODAL_REVIEW_URL,
+    modalReviewStreamUrl: env.MODAL_REVIEW_STREAM_URL,
   },
   validation: {
     maxComponentLines: MAX_COMPONENT_LINES,
@@ -187,10 +243,14 @@ logger.info('Backend configuration loaded', {
   aiProvider: config.provider.name,
   ...(config.provider.name === 'openrouter' && {
     hasOpenrouterApiKey: !!config.provider.openrouterApiKey,
+    intentModel: config.provider.openrouterIntentModel,
+    planningModel: config.provider.openrouterPlanningModel,
+    executionModel: config.provider.openrouterExecutionModel,
+    bugfixModel: config.provider.openrouterBugfixModel,
+    reviewModel: config.provider.openrouterReviewModel,
   }),
   ...(config.provider.name === 'modal' && {
-    modalApiUrl: config.provider.modalApiUrl,
-    modalStreamApiUrl: config.provider.modalStreamApiUrl,
+    modalDefaultUrl: config.provider.modalDefaultUrl,
     hasModalApiKey: !!config.provider.modalApiKey,
   }),
 });
@@ -200,19 +260,25 @@ logger.info('Backend configuration loaded', {
  * selecting provider-specific limits based on the active AI provider.
  */
 export function getMaxOutputTokens(
-  operationType: 'generation' | 'modification' | 'planning'
+  operationType: 'generation' | 'modification' | 'planning' | 'intent' | 'planning_stage' | 'review'
 ): number {
   if (config.provider.name === 'modal') {
     return {
       generation: MODAL_MAX_OUTPUT_TOKENS_GENERATION,
       modification: MODAL_MAX_OUTPUT_TOKENS_MODIFICATION,
       planning: MODAL_MAX_OUTPUT_TOKENS_PLANNING,
+      intent: MODAL_MAX_OUTPUT_TOKENS_INTENT,
+      planning_stage: MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE,
+      review: MODAL_MAX_OUTPUT_TOKENS_REVIEW,
     }[operationType];
   }
   return {
     generation: MAX_OUTPUT_TOKENS_GENERATION,
     modification: MAX_OUTPUT_TOKENS_MODIFICATION,
     planning: MAX_OUTPUT_TOKENS_PLANNING,
+    intent: MAX_OUTPUT_TOKENS_INTENT,
+    planning_stage: MAX_OUTPUT_TOKENS_PLANNING_STAGE,
+    review: MAX_OUTPUT_TOKENS_REVIEW,
   }[operationType];
 }
 
