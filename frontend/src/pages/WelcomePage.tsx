@@ -317,7 +317,10 @@ export function WelcomePage({
 
       {/* Onboarding Overlay */}
       {showOnboarding && (
-        <OnboardingOverlay onDismiss={() => setShowOnboarding(false)} />
+        <OnboardingOverlay
+          onDismiss={() => setShowOnboarding(false)}
+          onGeneratePrompt={(prompt) => onEnterApp(prompt)}
+        />
       )}
 
       {/* Delete Confirmation Dialog */}
