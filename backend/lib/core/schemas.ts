@@ -77,6 +77,7 @@ export const IntentOutputSchema = z.object({
   complexity: z.enum(['simple', 'medium', 'complex']).describe('Estimated project complexity'),
   features: z.array(z.string()).describe('Key features to implement'),
   technicalApproach: z.string().describe('Recommended technical approach'),
+  projectType: z.enum(['spa', 'fullstack', 'fullstack-auth']).optional().describe('Project type: spa for client-only React, fullstack for Next.js+DB, fullstack-auth for Next.js+DB+Auth'),
 });
 
 export type IntentOutput = z.infer<typeof IntentOutputSchema>;
@@ -90,6 +91,16 @@ export const PlanOutputSchema = z.object({
   components: z.array(z.string()).describe('React components to implement'),
   dependencies: z.array(z.string()).describe('npm packages to include'),
   routing: z.array(z.string()).describe('Routes to define'),
+  apiRoutes: z.array(z.object({
+    path: z.string().describe('API route path (e.g. /api/users)'),
+    method: z.string().describe('HTTP method (GET, POST, PUT, DELETE)'),
+    purpose: z.string().describe('What this endpoint does'),
+  })).optional().describe('API routes for full-stack projects'),
+  databaseModels: z.array(z.object({
+    name: z.string().describe('Model name (e.g. User, Post)'),
+    fields: z.array(z.string()).describe('Field definitions (e.g. "id String @id @default(uuid())")'),
+  })).optional().describe('Database models for Prisma schema'),
+  authStrategy: z.enum(['supabase', 'nextauth', 'none']).optional().describe('Authentication strategy'),
 });
 
 export type PlanOutput = z.infer<typeof PlanOutputSchema>;

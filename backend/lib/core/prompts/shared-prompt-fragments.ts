@@ -72,11 +72,12 @@ Apply modern, premium design to ALL UI code.
 
 1. COLOR & DEPTH:
    - Vibrant, harmonious palettes via CSS variables — never default/basic colors.
-   - Gradients and multi-layered shadows for depth; glassmorphism (blurred semi-transparent panels) where appropriate.
-   - Large border-radius (12–24px), 8px spacing scale, generous whitespace.
+   - Multi-layered shadows for depth and visual hierarchy; subtle background-color differences between page, surface, and card layers.
+   - Border-radius: 8px for buttons/inputs, 12px for cards/panels (NOT uniform 9999px pills on everything).
+   - 4px base spacing scale (4/8/16/24/32px), generous whitespace.
 
 2. TYPOGRAPHY:
-   - Premium font stacks (Inter, Outfit, system-ui). Clear hierarchy: large bold headings, line-height 1.6–1.8.
+   - Use Geist Sans ('Geist', system-ui, sans-serif) for all UI text. Clear hierarchy: large bold headings, line-height 1.6–1.8.
    - Slight negative letter-spacing on headings (~-0.02em).
 
 3. MICRO-ANIMATIONS:
@@ -113,7 +114,8 @@ NEVER use generic placeholder content. Generated apps must feel real and lived-i
    - Descriptions should be 1-2 real sentences, not "This is a description"
 
 3. IMAGES:
-   - Use https://picsum.photos/WIDTH/HEIGHT for placeholder images (e.g., https://picsum.photos/400/300)
+   - If the user provides image attachments, use those exact URLs in the generated code (e.g., for logos, hero images, or product photos)
+   - For additional placeholder images, use https://picsum.photos/WIDTH/HEIGHT (e.g., https://picsum.photos/400/300)
    - Add ?random=N query param to get different images: https://picsum.photos/400/300?random=1
    - For avatars: https://picsum.photos/80/80?random=N
 
