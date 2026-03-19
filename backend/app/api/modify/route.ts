@@ -38,7 +38,7 @@ export async function OPTIONS() {
 export async function POST(
   request: NextRequest
 ): Promise<Response> {
-  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.MEDIUM_COST);
+  const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.MEDIUM_COST);
   if (blocked) return blocked;
 
   // Generate request ID for correlation

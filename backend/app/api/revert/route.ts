@@ -23,7 +23,7 @@ export async function OPTIONS() {
 
 export const POST = withRouteContext('api/revert', async (ctx, request: NextRequest) => {
   const { contextLogger } = ctx;
-  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.LOW_COST);
+  const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.LOW_COST);
   ctx.setRateLimitHeaders(rlHeaders);
   if (blocked) return blocked as NextResponse<RevertVersionResponse | ErrorResponse>;
 

@@ -11,7 +11,7 @@ export async function OPTIONS() {
 
 export const GET = withRouteContext('api/provider-config', async (ctx, request: NextRequest) => {
   const { contextLogger } = ctx;
-  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.CONFIG);
+  const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.CONFIG);
   ctx.setRateLimitHeaders(rlHeaders);
   if (blocked) return blocked as NextResponse;
 
@@ -30,7 +30,7 @@ const ProviderConfigSchema = z.object({
 
 export const PUT = withRouteContext('api/provider-config', async (ctx, request: NextRequest) => {
   const { contextLogger } = ctx;
-  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.CONFIG);
+  const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.CONFIG);
   ctx.setRateLimitHeaders(rlHeaders);
   if (blocked) return blocked as NextResponse;
 

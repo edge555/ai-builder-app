@@ -19,7 +19,7 @@ const TASK_ENV_VARS: Record<string, string> = {
 
 export const GET = withRouteContext('api/agent-config', async (ctx, request: NextRequest) => {
   const { contextLogger } = ctx;
-  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.CONFIG);
+  const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.CONFIG);
   ctx.setRateLimitHeaders(rlHeaders);
   if (blocked) return blocked as NextResponse;
 
@@ -70,7 +70,7 @@ const AgentConfigSchema = z.object({
 
 export const PUT = withRouteContext('api/agent-config', async (ctx, request: NextRequest) => {
   const { contextLogger } = ctx;
-  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.CONFIG);
+  const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.CONFIG);
   ctx.setRateLimitHeaders(rlHeaders);
   if (blocked) return blocked as NextResponse;
 

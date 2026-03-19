@@ -48,7 +48,7 @@ async function checkProviderReachability(): Promise<{
 }
 
 export async function GET(request: NextRequest) {
-  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.LOW_COST);
+  const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.LOW_COST);
   if (blocked) return blocked;
 
   const url = new URL(request.url);
