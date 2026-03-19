@@ -72,10 +72,10 @@ export interface RateLimitGuardResult {
  *
  * @returns Rate limit headers (always) and a blocked Response (when rejected).
  */
-export function applyRateLimit(
+export async function applyRateLimit(
   request: NextRequest,
   tier: RateLimitTier
-): RateLimitGuardResult {
+): Promise<RateLimitGuardResult> {
   // Skip entirely when rate limiting is disabled
   if (!config.rateLimit.enabled) {
     return { blocked: null, headers: {} };
@@ -126,7 +126,7 @@ export function applyRateLimit(
   const ip = getClientIp(request);
   const key = `${tier}:${ip}`;
   const limiter = getRateLimiter();
-  const result = limiter.check(key, tierCfg.maxRequests, tierCfg.windowMs);
+  const result = await limiter.check(key, tierCfg.maxRequests, tierCfg.windowMs);
 
   const rateLimitHeaders: Record<string, string> = {
     'X-RateLimit-Limit': String(tierCfg.maxRequests),

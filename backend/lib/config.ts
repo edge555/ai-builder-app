@@ -81,6 +81,14 @@ const envSchema = z.object({
     .default('true'),
   SUPABASE_JWT_SECRET: z.string().optional(),
   TRUSTED_PROXY_DEPTH: z.coerce.number().int().min(0).default(1),
+  REDIS_URL: z.string().url().optional(),
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  SUPABASE_STORAGE_BUCKET: z.string().default('uploads'),
+  ENABLE_FULLSTACK_RECIPES: z
+    .string()
+    .transform((v) => v === 'true' || v === '1')
+    .default('false'),
 });
 
 /**
@@ -166,8 +174,19 @@ export interface BackendConfig {
   security: {
     trustedProxyDepth: number;
   };
+  redis: {
+    url?: string;
+  };
+  storage: {
+    supabaseUrl?: string;
+    supabaseServiceRoleKey?: string;
+    storageBucket: string;
+  };
   auth: {
     supabaseJwtSecret?: string;
+  };
+  recipes: {
+    fullstackEnabled: boolean;
   };
 }
 
@@ -233,8 +252,19 @@ export const config: BackendConfig = {
   security: {
     trustedProxyDepth: env.TRUSTED_PROXY_DEPTH,
   },
+  redis: {
+    url: env.REDIS_URL,
+  },
+  storage: {
+    supabaseUrl: env.SUPABASE_URL,
+    supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
+    storageBucket: env.SUPABASE_STORAGE_BUCKET,
+  },
   auth: {
     supabaseJwtSecret: env.SUPABASE_JWT_SECRET,
+  },
+  recipes: {
+    fullstackEnabled: env.ENABLE_FULLSTACK_RECIPES,
   },
 };
 

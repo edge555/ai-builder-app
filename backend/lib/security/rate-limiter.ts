@@ -1,14 +1,14 @@
 /**
  * @module rate-limiter
- * @description In-memory sliding window rate limiter.
+ * @description Sliding window rate limiter with in-memory and Redis backends.
  *
  * Tracks request counts per key (e.g. IP address) within a rolling time window.
- * Designed with a simple interface so it can later be swapped for a Redis-backed
- * implementation without touching call sites.
+ * When REDIS_URL is configured, uses Redis for multi-process safe rate limiting.
+ * Falls back to in-memory when Redis is unavailable.
  *
  * Usage:
  *   const limiter = getRateLimiter();
- *   const result = limiter.check('192.168.1.1', 5, 60_000);
+ *   const result = await limiter.check('192.168.1.1', 5, 60_000);
  *   if (!result.allowed) { // return 429 }
  */
 
@@ -21,6 +21,14 @@ export interface RateLimitResult {
   remaining: number;
   /** Unix timestamp (ms) when the window resets */
   resetAt: number;
+}
+
+/** Common interface for both in-memory and Redis rate limiters. */
+export interface IRateLimiter {
+  check(key: string, limit: number, windowMs: number): RateLimitResult | Promise<RateLimitResult>;
+  cleanup(maxWindowMs?: number): void;
+  destroy(): void;
+  readonly size: number;
 }
 
 interface WindowEntry {
@@ -98,16 +106,40 @@ export class RateLimiter {
 }
 
 // Singleton — shared across all route handlers in the same Node.js process.
-let instance: RateLimiter | null = null;
+let instance: IRateLimiter | null = null;
 
-export function getRateLimiter(): RateLimiter {
+/**
+ * Returns the rate limiter singleton.
+ * When REDIS_URL is set, creates a Redis-backed limiter on first call.
+ * Falls back to in-memory if Redis is unavailable or not configured.
+ */
+export function getRateLimiter(): IRateLimiter {
   if (!instance) {
-    instance = new RateLimiter();
+    // Lazy import config to avoid circular dependency at module load time
+    const { config } = require('../config');
+
+    if (config.redis?.url) {
+      try {
+        const { RedisRateLimiter } = require('./redis-rate-limiter');
+        instance = new RedisRateLimiter(config.redis.url);
+        const { createLogger } = require('../logger');
+        createLogger('security/rate-limiter').info('Using Redis-backed rate limiter');
+      } catch (err) {
+        const { createLogger } = require('../logger');
+        createLogger('security/rate-limiter').warn(
+          'Failed to initialize Redis rate limiter — falling back to in-memory',
+          { error: err instanceof Error ? err.message : String(err) }
+        );
+        instance = new RateLimiter();
+      }
+    } else {
+      instance = new RateLimiter();
+    }
   }
   return instance;
 }
 
 /** Replace the singleton (for testing). */
-export function setRateLimiter(limiter: RateLimiter | null): void {
+export function setRateLimiter(limiter: IRateLimiter | null): void {
   instance = limiter;
 }
