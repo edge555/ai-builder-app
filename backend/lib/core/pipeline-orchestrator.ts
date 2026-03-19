@@ -24,10 +24,32 @@ import { toSimpleJsonSchema } from './zod-to-json-schema';
 import { createLogger } from '../logger';
 import type { CodeSlice } from '../analysis/file-planner/types';
 import { MAX_REVIEW_CONTENT_CHARS } from '../constants';
+import { selectRecipe } from './recipes/recipe-engine';
+import { config } from '../config';
 
 const logger = createLogger('PipelineOrchestrator');
 
 // JSON schemas passed to the AI as responseSchema (for structured output)
+// ─── Helpers for enriched stage labels ──────────────────────────────────────
+
+function buildPlanSummary(plan: PlanOutput): string | null {
+  const parts: string[] = [];
+  if (plan.files.length > 0) parts.push(`${plan.files.length} files`);
+  if (plan.components.length > 0) parts.push(`${plan.components.length} components`);
+  if (plan.apiRoutes && plan.apiRoutes.length > 0) parts.push(`${plan.apiRoutes.length} API routes`);
+  if (plan.databaseModels && plan.databaseModels.length > 0) parts.push(`${plan.databaseModels.length} models`);
+  return parts.length > 0 ? `Planning ${parts.join(' and ')}…` : null;
+}
+
+function buildExecutionLabel(plan: PlanOutput | null): string {
+  if (!plan || plan.components.length === 0) return 'Generating application…';
+  const first = plan.components[0];
+  const rest = plan.components.length - 1;
+  return rest > 0
+    ? `Writing ${first} and ${rest} more component${rest > 1 ? 's' : ''}…`
+    : `Writing ${first}…`;
+}
+
 const INTENT_JSON_SCHEMA = toSimpleJsonSchema(IntentOutputSchema);
 const PLAN_JSON_SCHEMA = toSimpleJsonSchema(PlanOutputSchema);
 const REVIEW_JSON_SCHEMA = toSimpleJsonSchema(ReviewOutputSchema);
@@ -96,6 +118,16 @@ export class PipelineOrchestrator {
 
     // ── Stage 1: Intent ──────────────────────────────────────────────────────
     const intentOutput = await this.runIntentStage(userPrompt, callbacks, contextLogger);
+
+    // ── Recipe Selection (after intent, before execution) ────────────────────
+    const recipe = selectRecipe(intentOutput, {
+      fullstackEnabled: config.recipes.fullstackEnabled,
+    });
+    contextLogger.info('Recipe selected', { recipeId: recipe.id });
+    // Update prompt provider if it supports recipes (ApiPromptProvider does)
+    if (typeof (this.promptProvider as { setRecipe?: unknown }).setRecipe === 'function') {
+      (this.promptProvider as { setRecipe: (r: typeof recipe) => void }).setRecipe(recipe);
+    }
 
     if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
 
@@ -264,7 +296,10 @@ export class PipelineOrchestrator {
     callbacks: PipelineCallbacks,
     contextLogger: ReturnType<typeof logger.withRequestId>
   ): Promise<PlanOutput | null> {
-    callbacks.onStageStart?.('planning', 'Planning architecture…');
+    const planLabel = intentOutput?.features?.length
+      ? `Planning ${intentOutput.features.length} features…`
+      : 'Planning architecture…';
+    callbacks.onStageStart?.('planning', planLabel);
     contextLogger.debug('Planning stage start');
 
     try {
@@ -287,12 +322,13 @@ export class PipelineOrchestrator {
         throw new Error(`Plan schema mismatch: ${zodResult.error.message}`);
       }
 
+      const plan = zodResult.data;
       contextLogger.info('Planning stage complete', {
-        fileCount: zodResult.data.files.length,
-        depCount: zodResult.data.dependencies.length,
+        fileCount: plan.files.length,
+        depCount: plan.dependencies.length,
       });
       callbacks.onStageComplete?.('planning');
-      return zodResult.data;
+      return plan;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       contextLogger.warn('Planning stage failed (degraded)', { error: message });
@@ -308,7 +344,8 @@ export class PipelineOrchestrator {
     callbacks: PipelineCallbacks,
     contextLogger: ReturnType<typeof logger.withRequestId>
   ): Promise<GeneratedFile[]> {
-    callbacks.onStageStart?.('execution', 'Generating application…');
+    const execLabel = buildExecutionLabel(planOutput);
+    callbacks.onStageStart?.('execution', execLabel);
     contextLogger.debug('Execution (generation) stage start');
 
     const response = await this.executionProvider.generateStreaming({
