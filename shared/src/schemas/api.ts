@@ -77,10 +77,20 @@ export const RuntimeErrorSchema = z.object({
 // ============================================================================
 
 /**
+ * Schema for an image attachment.
+ */
+export const ImageAttachmentSchema = z.object({
+    url: z.string().url('Attachment URL must be valid'),
+    type: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
+    alt: z.string().max(200, 'Alt text too long (max 200 characters)').optional(),
+});
+
+/**
  * Schema for /api/generate
  */
 export const GenerateProjectRequestSchema = z.object({
     description: z.string().min(1, 'Project description is required').max(50000, 'Project description is too long (max 50,000 characters)'),
+    attachments: z.array(ImageAttachmentSchema).max(5, 'Maximum 5 image attachments').optional(),
 });
 
 /**
@@ -117,6 +127,7 @@ export const ModifyProjectRequestSchema = z.object({
         errorType: z.enum(RUNTIME_ERROR_TYPES),
     }).optional(),
     conversationHistory: z.array(ConversationTurnSchema).max(10).optional(),
+    attachments: z.array(ImageAttachmentSchema).max(5, 'Maximum 5 image attachments').optional(),
 });
 
 /**
