@@ -23,6 +23,8 @@ vi.mock('lucide-react', () => ({
     History: () => <div data-testid="icon-history" />,
     ChevronLeft: () => <div data-testid="icon-chevron-left" />,
     ChevronRight: () => <div data-testid="icon-chevron-right" />,
+    Terminal: () => <div data-testid="icon-terminal" />,
+    Download: () => <div data-testid="icon-download" />,
 }));
 
 vi.mock('../../CodeEditor', () => ({

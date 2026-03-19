@@ -596,3 +596,47 @@
     padding: 18px;
   }
 }
+
+/* ── Console toggle button ── */
+.preview-console-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  margin-left: auto;
+  margin-right: 8px;
+  background: transparent;
+  border: 1px solid hsl(var(--pv-border));
+  border-radius: 4px;
+  color: hsl(var(--pv-text-muted));
+  font-size: 0.6875rem;
+  cursor: pointer;
+  transition: all 150ms ease;
+  flex-shrink: 0;
+}
+
+.preview-console-toggle:hover {
+  color: hsl(var(--pv-text));
+  border-color: hsl(var(--pv-text-muted));
+}
+
+.preview-console-toggle.active {
+  color: hsl(var(--pv-accent));
+  border-color: hsl(var(--pv-accent));
+  background: hsl(var(--pv-accent) / 0.08);
+}
+
+/* ── Console panel ── */
+.preview-console-panel {
+  height: 180px;
+  border-top: 1px solid hsl(var(--pv-border));
+  overflow: auto;
+  flex-shrink: 0;
+}
+
+.preview-console-panel .sp-console {
+  height: 100%;
+  background: hsl(var(--pv-bg)) !important;
+  font-family: 'Geist Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+}

@@ -73,3 +73,18 @@ export function getEntryFile(files: Record<string, string>): string {
   const appFile = paths.find(p => p.includes('App.tsx') || p.includes('App.jsx'));
   return appFile || '/App.tsx';
 }
+
+/**
+ * Detect whether a project is fullstack by checking for server-side files.
+ * Returns indicators for Prisma (database) and API routes.
+ */
+export function detectFullstackProject(files: Record<string, string>): {
+  isFullstack: boolean;
+  hasPrisma: boolean;
+  hasApiRoutes: boolean;
+} {
+  const paths = Object.keys(files);
+  const hasPrisma = paths.some(p => p.includes('schema.prisma') || p.includes('prisma.ts'));
+  const hasApiRoutes = paths.some(p => p.includes('/api/') && p.includes('route.ts'));
+  return { isFullstack: hasPrisma || hasApiRoutes, hasPrisma, hasApiRoutes };
+}

@@ -274,7 +274,7 @@ describe('ChatInterface', () => {
         fireEvent.click(screen.getByTestId('submit-button'));
 
         await waitFor(() => {
-            expect(onSubmitPrompt).toHaveBeenCalledWith('test prompt');
+            expect(onSubmitPrompt).toHaveBeenCalledWith('test prompt', undefined);
         });
     });
 
@@ -287,7 +287,7 @@ describe('ChatInterface', () => {
         fireEvent.click(screen.getByTestId('suggestion-Build a todo app'));
 
         await waitFor(() => {
-            expect(onSubmitPrompt).toHaveBeenCalledWith('Build a todo app');
+            expect(onSubmitPrompt).toHaveBeenCalledWith('Build a todo app', undefined);
         });
     });
 

@@ -1,5 +1,5 @@
 import type { SerializedProjectState } from '@ai-app-builder/shared/types';
-import { Code, Monitor } from 'lucide-react';
+import { Code, Monitor, Terminal } from 'lucide-react';
 
 import { TabBar } from '../TabBar/TabBar';
 
@@ -11,6 +11,10 @@ export interface PreviewHeaderProps {
   showCode: boolean;
   /** Callback when view changes */
   onViewChange: (showCode: boolean) => void;
+  /** Whether console panel is visible */
+  showConsole?: boolean;
+  /** Toggle console panel */
+  onToggleConsole?: () => void;
   /** Props forwarded verbatim to PreviewToolbar */
   toolbarProps: PreviewToolbarProps;
   /** Whether content is loading */
@@ -29,6 +33,8 @@ export interface PreviewHeaderProps {
 export function PreviewHeader({
   showCode,
   onViewChange,
+  showConsole = false,
+  onToggleConsole,
   toolbarProps,
   isLoading,
   projectState,
@@ -102,6 +108,21 @@ export function PreviewHeader({
             <PreviewToolbar {...toolbarProps} />
           </div>
         </>
+      )}
+
+      {/* Console toggle — visible in preview mode when project exists */}
+      {!showCode && projectState && onToggleConsole && (
+        <button
+          className={`preview-console-toggle${showConsole ? ' active' : ''}`}
+          onClick={onToggleConsole}
+          title={showConsole ? 'Hide console' : 'Show console'}
+          aria-label={showConsole ? 'Hide console' : 'Show console'}
+          aria-pressed={showConsole}
+          type="button"
+        >
+          <Terminal size={14} />
+          <span>Console</span>
+        </button>
       )}
     </div>
   );

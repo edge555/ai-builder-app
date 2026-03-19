@@ -1,0 +1,110 @@
+.gen-summary-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: 8px 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.gen-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.gen-summary-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+}
+
+.gen-summary-badge {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+}
+
+/* Stats row */
+.gen-summary-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.gen-summary-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: hsl(var(--muted-foreground));
+}
+
+.gen-summary-stat svg {
+  color: hsl(var(--primary));
+}
+
+.gen-summary-stat-value {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.gen-summary-stat-label {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Mini file tree */
+.gen-summary-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.gen-summary-tree-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.gen-summary-tree-dir {
+  font-family: 'Geist Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  color: hsl(var(--foreground));
+}
+
+.gen-summary-tree-count {
+  font-size: 0.6875rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Dependencies */
+.gen-summary-deps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.gen-summary-dep-tag {
+  font-family: 'Geist Mono', 'Fira Code', monospace;
+  font-size: 0.6875rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+
+.gen-summary-dep-more {
+  font-size: 0.6875rem;
+  color: hsl(var(--muted-foreground));
+  padding: 1px 4px;
+}
