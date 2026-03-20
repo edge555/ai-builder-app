@@ -17,7 +17,7 @@ import { BaseProjectGenerator } from './base-project-generator';
 import type { PipelineCallbacks, PipelineStage } from './pipeline-orchestrator';
 import { createGenerationPipeline } from './pipeline-factory';
 import { GenerationPipeline, GenerationResult } from './generation-pipeline';
-import type { PipelineCallbacks as GenerationCallbacks } from './generation-pipeline';
+import type { PipelineCallbacks as GenerationCallbacks, PhaseProgressData, PhaseCompleteData } from './generation-pipeline';
 
 const logger = createLogger('StreamingGenerator');
 
@@ -35,6 +35,10 @@ export interface StreamingCallbacks {
   onHeartbeat?: () => void;
   /** Emitted at each pipeline stage transition (start/complete/degraded) */
   onPipelineStage?: (data: { stage: PipelineStage; label: string; status: 'start' | 'complete' | 'degraded' }) => void;
+  /** Emitted when a generation phase starts (richer data than pipeline-stage) */
+  onPhaseStart?: (data: PhaseProgressData) => void;
+  /** Emitted when a generation phase completes (richer data than pipeline-stage) */
+  onPhaseComplete?: (data: PhaseCompleteData) => void;
   /** Optional abort signal to cancel generation on client disconnect */
   signal?: AbortSignal;
 }
@@ -107,6 +111,12 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       },
       onProgress: (accumulatedLength) => {
         callbacks.onProgress?.(accumulatedLength);
+      },
+      onPhaseStart: (data) => {
+        callbacks.onPhaseStart?.(data);
+      },
+      onPhaseComplete: (data) => {
+        callbacks.onPhaseComplete?.(data);
       },
       onFileStream: (file, isComplete) => {
         if (!emittedFiles.has(file.path) || isComplete) {
