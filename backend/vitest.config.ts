@@ -8,6 +8,7 @@ export default defineConfig({
       '**/dist/**',
     ],
     environment: 'node',
+    pool: 'threads',
     setupFiles: ['./lib/__tests__/setup.ts'],
     globals: false,
     testTimeout: 10000,
