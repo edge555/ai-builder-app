@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-03-21
+
+### Added
+- **Multi-phase generation pipeline** (`generation-pipeline.ts`): New orchestrator for new project generation with a complexity gate (≤10 files → one-shot, >10 files → multi-phase batched execution)
+- **`ArchitecturePlanSchema`**: Extended planning schema with `typeContracts`, `cssVariables`, `stateShape`, `layer` assignments (`scaffold` | `logic` | `ui` | `integration`), and per-file `exports`/`imports` contracts
+- **Plan review phase**: AI validates the architecture plan for internal consistency (dangling imports, missing type references) before execution begins
+- **Heuristic fallback plan builder** (`heuristic-plan-builder.ts`): Deterministic plan construction from complexity level when AI planning fails
+- **Batch context builder** (`batch-context-builder.ts`): Data-driven cross-phase context passing — provides type definitions, direct dependency content, file summaries, CSS variables, and relevant contracts to each generation phase
+- **Phase executor** (`phase-executor.ts`): Single-phase execution engine with 2-attempt retry, truncation detection (continuation calls for missing files), and per-phase post-validation
+- **Phase prompts** (`prompts/phase-prompts.ts`): Distinct system prompts for scaffold, logic, UI, and integration phases with contract injection
+- **Phase fragments in recipes** (`recipe-types.ts`): `GenerationRecipe.phaseFragments` lets recipes inject per-phase prompt fragments for stack-specific guidance
+- **Phase progress SSE events**: `phase-start` and `phase-complete` events emitted from `/api/generate-stream` and consumed by the frontend SSE parser for live phase progress display
+- **3 generation eval cases** (`eval.test.ts`): Offline snapshot-based eval suite for simple (counter app), medium (todo app with search), and complex (project management with kanban + dashboard) prompts — scored with `scoreOutput()` (passing ≥70)
+- **Named constants**: `COMPLEXITY_GATE_FILE_THRESHOLD`, `UI_BATCH_SPLIT_THRESHOLD`, `INPUT_TOKEN_SAFETY_THRESHOLD`, and per-phase token budget constants in `constants.ts`
+- **`GenerationPipeline`** in `pipeline-factory.ts`: Dedicated factory for new-project generation, separate from `PipelineOrchestrator` (modification-only)
+
+### Changed
+- **`PipelineOrchestrator`**: Stripped of all generation logic — now handles modification pipeline only (clean separation per decision 4B)
+- **`StreamingGenerator`**: Routes new-project requests through `GenerationPipeline` instead of `PipelineOrchestrator`
+- **`IPromptProvider`**: Extended with `getArchitecturePlanningPrompt()`, `getPlanReviewPrompt()`, `getPhasePrompt()`, and multi-phase `tokenBudgets` fields
+- **`ApiPromptProvider`** and **`ModalPromptProvider`**: Implement new multi-phase prompt methods with per-phase context injection
+
+### Fixed
+- Magic number duplication: `UI_BATCH_SPLIT_THRESHOLD` and `COMPLEXITY_GATE_FILE_THRESHOLD` now imported from `constants.ts` rather than defined inline
+
 ## [1.1.0] - 2026-03-20
 
 ### Added
