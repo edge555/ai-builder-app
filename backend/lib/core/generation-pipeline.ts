@@ -16,6 +16,7 @@ import { buildHeuristicPlan } from './heuristic-plan-builder';
 import { PhaseExecutor, type PhaseDefinition, type PhaseCallbacks } from './phase-executor';
 import { BuildValidator } from './build-validator';
 import { buildPhaseContext } from './batch-context-builder';
+import { COMPLEXITY_GATE_FILE_THRESHOLD, UI_BATCH_SPLIT_THRESHOLD } from '../constants';
 
 const logger = createLogger('GenerationPipeline');
 
@@ -23,12 +24,29 @@ const INTENT_JSON_SCHEMA = toSimpleJsonSchema(IntentOutputSchema);
 const ARCHITECTURE_PLAN_JSON_SCHEMA = toSimpleJsonSchema(ArchitecturePlanSchema);
 const PLAN_REVIEW_JSON_SCHEMA = toSimpleJsonSchema(PlanReviewSchema);
 
+export interface PhaseProgressData {
+  phase: string;
+  phaseIndex: number;
+  totalPhases: number;
+  filesInPhase: number;
+}
+
+export interface PhaseCompleteData {
+  phase: string;
+  phaseIndex: number;
+  filesGenerated: number;
+  totalGenerated: number;
+  totalPlanned: number;
+}
+
 export interface PipelineCallbacks {
   onStageStart?: (stage: string, label: string) => void;
   onStageComplete?: (stage: string) => void;
   onStageFailed?: (stage: string, error: string) => void;
   onProgress?: (accumulatedLength: number) => void;
   onFileStream?: (file: GeneratedFile, isComplete: boolean) => void;
+  onPhaseStart?: (data: PhaseProgressData) => void;
+  onPhaseComplete?: (data: PhaseCompleteData) => void;
   signal?: AbortSignal;
 }
 
@@ -368,20 +386,26 @@ export class GenerationPipeline {
     const allWarnings: string[] = [];
     // Accumulated map of path -> content for inter-phase context
     const generatedFilesMap = new Map<string, string>();
+    const totalPlanned = mergedPhases.reduce((sum, p) => sum + p.files.length, 0);
 
-    const UI_SUB_BATCH_SIZE = 12;
-
-    for (const phase of mergedPhases) {
+    for (let phaseIndex = 0; phaseIndex < mergedPhases.length; phaseIndex++) {
+      const phase = mergedPhases[phaseIndex];
       if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
 
       callbacks.onStageStart?.(phase.layer, `Generating ${phase.layer} layer…`);
+      callbacks.onPhaseStart?.({
+        phase: phase.layer,
+        phaseIndex,
+        totalPhases: mergedPhases.length,
+        filesInPhase: phase.files.length,
+      });
       contextLogger.info(`Starting phase execution`, { layer: phase.layer, fileCount: phase.files.length });
 
       // Split UI phase into sub-batches if needed
       const batches: PlannedFile[][] = [];
-      if (phase.layer === 'ui' && phase.files.length > UI_SUB_BATCH_SIZE) {
-        for (let i = 0; i < phase.files.length; i += UI_SUB_BATCH_SIZE) {
-          batches.push(phase.files.slice(i, i + UI_SUB_BATCH_SIZE));
+      if (phase.layer === 'ui' && phase.files.length > UI_BATCH_SPLIT_THRESHOLD) {
+        for (let i = 0; i < phase.files.length; i += UI_BATCH_SPLIT_THRESHOLD) {
+          batches.push(phase.files.slice(i, i + UI_BATCH_SPLIT_THRESHOLD));
         }
         contextLogger.info(`UI phase split into ${batches.length} sub-batches`);
       } else {
@@ -449,6 +473,13 @@ export class GenerationPipeline {
       }
 
       callbacks.onStageComplete?.(phase.layer);
+      callbacks.onPhaseComplete?.({
+        phase: phase.layer,
+        phaseIndex,
+        filesGenerated: allFiles.filter(f => phase.files.some(pf => pf.path === f.path)).length,
+        totalGenerated: allFiles.length,
+        totalPlanned,
+      });
     }
 
     return { files: allFiles, warnings: allWarnings };
@@ -458,11 +489,12 @@ export class GenerationPipeline {
    * Complexity gate determining if the application should be built one-shot or multi-phase.
    */
   private shouldUseMultiPhase(plan: ArchitecturePlan): boolean {
-    if (plan.files.length > 10) {
+    if (plan.files.length > COMPLEXITY_GATE_FILE_THRESHOLD) {
       return true;
     }
     const estimatedInputTokens = this.estimateOneShotInputTokens(plan);
-    const TOKEN_THRESHOLD = 80000;
+    // 80k tokens ≈ 80% of a 100k context window
+    const TOKEN_THRESHOLD = 80_000;
     return estimatedInputTokens > TOKEN_THRESHOLD;
   }
 

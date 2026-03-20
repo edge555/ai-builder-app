@@ -97,6 +97,12 @@ function makePromptProvider(): IPromptProvider {
       executionModification: 16384,
       review:              32768,
       bugfix:               8192,
+      architecturePlanning: 8192,
+      planReview:           4096,
+      scaffold:             6000,
+      logic:               10000,
+      ui:                  20000,
+      integration:          8000,
     },
   };
 }
@@ -441,7 +447,7 @@ describe('mergeReviewCorrections', () => {
     expect(result.find(f => f.path === 'src/index.css')!.content).toBe('corrected-css');
   });
 
-  it('integration: review corrections are applied via runGenerationPipeline', async () => {
+  it('integration: review corrections are applied via runModificationPipeline', async () => {
     vi.mocked(mockReview.generate).mockResolvedValue(
       reviewFixed([
         { path: 'src/App.tsx', content: 'review-corrected', reason: 'fixed import error' },

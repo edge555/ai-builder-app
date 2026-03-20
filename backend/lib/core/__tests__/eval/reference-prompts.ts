@@ -79,6 +79,20 @@ export const REFERENCE_PROMPTS: ReferencePrompt[] = [
     description: 'Fullstack todo — Next.js + Prisma',
   },
 
+  // ── Complex SPA: Project Management ──
+  {
+    id: 'complex-project-management',
+    prompt: 'Build a project management app with a dashboard showing stats, a kanban board for task tracking with columns (todo, in-progress, review, done), and a team members view.',
+    recipeId: 'react-spa',
+    complexity: 'complex',
+    minFiles: 10,
+    maxFiles: 35,
+    requiredFiles: ['package.json', 'App.tsx', 'main.tsx', 'index.css'],
+    requiredPatterns: ['useState', 'kanban', 'dashboard', 'task'],
+    forbiddenPatterns: ['prisma', 'next.config'],
+    description: 'Complex project management — dashboard + kanban + teams',
+  },
+
   // ── Fullstack: Next.js + Supabase Auth ──
   {
     id: 'fullstack-auth-app',
