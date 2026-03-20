@@ -5,8 +5,8 @@
       "taskType": "intent",
       "models": [
         {
-          "id": "thudm/glm-4.5-air",
-          "label": "GLM-4.5-Air",
+          "id": "google/gemini-2.0-flash-001",
+          "label": "Gemini 2.0 Flash",
           "active": true,
           "priority": 0
         },
@@ -56,8 +56,8 @@
       "taskType": "bugfix",
       "models": [
         {
-          "id": "thudm/glm-5",
-          "label": "GLM-5",
+          "id": "google/gemini-2.0-flash-001",
+          "label": "Gemini 2.0 Flash",
           "active": true,
           "priority": 0
         },
@@ -73,8 +73,8 @@
       "taskType": "review",
       "models": [
         {
-          "id": "thudm/glm-5",
-          "label": "GLM-5",
+          "id": "google/gemini-2.0-flash-001",
+          "label": "Gemini 2.0 Flash",
           "active": true,
           "priority": 0
         },
