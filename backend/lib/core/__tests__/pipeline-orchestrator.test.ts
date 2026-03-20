@@ -131,7 +131,7 @@ describe('intent stage graceful degradation', () => {
   it('sets intentOutput to null when provider returns failure', async () => {
     vi.mocked(mockIntent.generate).mockResolvedValue(fail('Network timeout'));
 
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.intentOutput).toBeNull();
   });
@@ -139,7 +139,7 @@ describe('intent stage graceful degradation', () => {
   it('sets intentOutput to null when provider throws', async () => {
     vi.mocked(mockIntent.generate).mockRejectedValue(new Error('Connection refused'));
 
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.intentOutput).toBeNull();
   });
@@ -147,7 +147,7 @@ describe('intent stage graceful degradation', () => {
   it('sets intentOutput to null when provider returns invalid JSON', async () => {
     vi.mocked(mockIntent.generate).mockResolvedValue({ success: true, content: 'not-json' });
 
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.intentOutput).toBeNull();
   });
@@ -155,7 +155,7 @@ describe('intent stage graceful degradation', () => {
   it('continues to planning stage after intent failure', async () => {
     vi.mocked(mockIntent.generate).mockResolvedValue(fail());
 
-    await orchestrator.runGenerationPipeline('build a counter', {});
+    await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(mockPlanning.generate).toHaveBeenCalled();
   });
@@ -163,7 +163,7 @@ describe('intent stage graceful degradation', () => {
   it('still produces executorFiles after intent failure', async () => {
     vi.mocked(mockIntent.generate).mockResolvedValue(fail());
 
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.executorFiles).toEqual(DEFAULT_FILES);
   });
@@ -172,7 +172,7 @@ describe('intent stage graceful degradation', () => {
     vi.mocked(mockIntent.generate).mockResolvedValue(fail('API error'));
     const onStageFailed = vi.fn();
 
-    await orchestrator.runGenerationPipeline('build a counter', { onStageFailed });
+    await orchestrator.runModificationPipeline('build a counter', {}, [], { onStageFailed });
 
     expect(onStageFailed).toHaveBeenCalledWith('intent', expect.any(String));
   });
@@ -181,7 +181,7 @@ describe('intent stage graceful degradation', () => {
     vi.mocked(mockIntent.generate).mockResolvedValue(fail());
     const onStageComplete = vi.fn();
 
-    await orchestrator.runGenerationPipeline('build a counter', { onStageComplete });
+    await orchestrator.runModificationPipeline('build a counter', {}, [], { onStageComplete });
 
     expect(onStageComplete).not.toHaveBeenCalledWith('intent');
   });
@@ -193,7 +193,7 @@ describe('planning stage graceful degradation', () => {
   it('sets planOutput to null when provider returns failure', async () => {
     vi.mocked(mockPlanning.generate).mockResolvedValue(fail());
 
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.planOutput).toBeNull();
   });
@@ -201,7 +201,7 @@ describe('planning stage graceful degradation', () => {
   it('sets planOutput to null when provider throws', async () => {
     vi.mocked(mockPlanning.generate).mockRejectedValue(new Error('Timeout'));
 
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.planOutput).toBeNull();
   });
@@ -209,7 +209,7 @@ describe('planning stage graceful degradation', () => {
   it('continues to execution stage after planning failure', async () => {
     vi.mocked(mockPlanning.generate).mockRejectedValue(new Error('Timeout'));
 
-    await orchestrator.runGenerationPipeline('build a counter', {});
+    await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(mockExecution.generateStreaming).toHaveBeenCalled();
   });
@@ -217,7 +217,7 @@ describe('planning stage graceful degradation', () => {
   it('still produces executorFiles after planning failure', async () => {
     vi.mocked(mockPlanning.generate).mockResolvedValue(fail());
 
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.executorFiles).toEqual(DEFAULT_FILES);
   });
@@ -226,7 +226,7 @@ describe('planning stage graceful degradation', () => {
     vi.mocked(mockPlanning.generate).mockResolvedValue(fail('Rate limited'));
     const onStageFailed = vi.fn();
 
-    await orchestrator.runGenerationPipeline('build a counter', { onStageFailed });
+    await orchestrator.runModificationPipeline('build a counter', {}, [], { onStageFailed });
 
     expect(onStageFailed).toHaveBeenCalledWith('planning', expect.any(String));
   });
@@ -239,7 +239,7 @@ describe('execution stage hard-fail', () => {
     vi.mocked(mockExecution.generateStreaming).mockResolvedValue(fail('Out of memory'));
 
     await expect(
-      orchestrator.runGenerationPipeline('build a counter', {})
+      orchestrator.runModificationPipeline('build a counter', {}, [], {})
     ).rejects.toThrow();
   });
 
@@ -247,7 +247,7 @@ describe('execution stage hard-fail', () => {
     vi.mocked(mockExecution.generateStreaming).mockRejectedValue(new Error('Fatal error'));
 
     await expect(
-      orchestrator.runGenerationPipeline('build a counter', {})
+      orchestrator.runModificationPipeline('build a counter', {}, [], {})
     ).rejects.toThrow();
   });
 
@@ -255,7 +255,7 @@ describe('execution stage hard-fail', () => {
     vi.mocked(mockExecution.generateStreaming).mockResolvedValue(fail());
 
     await expect(
-      orchestrator.runGenerationPipeline('build a counter', {})
+      orchestrator.runModificationPipeline('build a counter', {}, [], {})
     ).rejects.toThrow();
 
     expect(mockReview.generate).not.toHaveBeenCalled();
@@ -268,7 +268,7 @@ describe('review stage graceful degradation', () => {
   it('sets reviewOutput to null when provider returns failure', async () => {
     vi.mocked(mockReview.generate).mockResolvedValue(fail());
 
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.reviewOutput).toBeNull();
   });
@@ -276,7 +276,7 @@ describe('review stage graceful degradation', () => {
   it('sets reviewOutput to null when provider throws', async () => {
     vi.mocked(mockReview.generate).mockRejectedValue(new Error('Context window exceeded'));
 
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.reviewOutput).toBeNull();
   });
@@ -284,7 +284,7 @@ describe('review stage graceful degradation', () => {
   it('finalFiles equals executorFiles when review returns failure', async () => {
     vi.mocked(mockReview.generate).mockResolvedValue(fail());
 
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.finalFiles).toEqual(result.executorFiles);
   });
@@ -292,7 +292,7 @@ describe('review stage graceful degradation', () => {
   it('finalFiles equals executorFiles when review throws', async () => {
     vi.mocked(mockReview.generate).mockRejectedValue(new Error('Review failed'));
 
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.finalFiles).toEqual(result.executorFiles);
   });
@@ -301,7 +301,7 @@ describe('review stage graceful degradation', () => {
     vi.mocked(mockReview.generate).mockResolvedValue(fail('Upstream error'));
     const onStageFailed = vi.fn();
 
-    await orchestrator.runGenerationPipeline('build a counter', { onStageFailed });
+    await orchestrator.runModificationPipeline('build a counter', {}, [], { onStageFailed });
 
     expect(onStageFailed).toHaveBeenCalledWith('review', expect.any(String));
   });
@@ -309,16 +309,16 @@ describe('review stage graceful degradation', () => {
 
 // ─── Happy-path pipeline result ───────────────────────────────────────────────
 
-describe('successful generation pipeline', () => {
+describe('successful modification pipeline', () => {
   it('returns correct intentOutput on success', async () => {
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.intentOutput).not.toBeNull();
     expect(result.intentOutput?.complexity).toBe('simple');
   });
 
   it('returns correct planOutput on success', async () => {
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.planOutput).not.toBeNull();
     expect(result.planOutput?.files).toHaveLength(1);
@@ -330,7 +330,7 @@ describe('successful generation pipeline', () => {
       onStageStart: (stage) => { stagesStarted.push(stage); },
     };
 
-    await orchestrator.runGenerationPipeline('build a counter', callbacks);
+    await orchestrator.runModificationPipeline('build a counter', {}, [], callbacks);
 
     expect(stagesStarted).toEqual(['intent', 'planning', 'execution', 'review']);
   });
@@ -341,13 +341,13 @@ describe('successful generation pipeline', () => {
       onStageComplete: (stage) => { stagesCompleted.push(stage); },
     };
 
-    await orchestrator.runGenerationPipeline('build a counter', callbacks);
+    await orchestrator.runModificationPipeline('build a counter', {}, [], callbacks);
 
     expect(stagesCompleted).toEqual(['intent', 'planning', 'execution', 'review']);
   });
 
   it('returns reviewPass with finalFiles equal to executorFiles', async () => {
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.reviewOutput?.verdict).toBe('pass');
     expect(result.finalFiles).toEqual(result.executorFiles);
@@ -448,7 +448,7 @@ describe('mergeReviewCorrections', () => {
       ])
     );
 
-    const result = await orchestrator.runGenerationPipeline('build a counter', {});
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
     expect(result.reviewOutput?.verdict).toBe('fixed');
     expect(result.finalFiles.find(f => f.path === 'src/App.tsx')!.content).toBe('review-corrected');
@@ -470,7 +470,7 @@ describe('abort signal', () => {
     vi.mocked(mockIntent.generate).mockResolvedValue(intentOk());
 
     await expect(
-      orchestrator.runGenerationPipeline('build a counter', { signal: controller.signal })
+      orchestrator.runModificationPipeline('build a counter', {}, [], { signal: controller.signal })
     ).rejects.toThrow(/cancelled/i);
   });
 });

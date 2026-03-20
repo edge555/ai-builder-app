@@ -1,12 +1,13 @@
 /**
  * @module core/pipeline-orchestrator
- * @description 4-stage AI pipeline: Intent → Planning → Execution → Review.
+ * @description Modification AI pipeline: Intent → Planning → Execution → Review.
  *
  * Graceful degradation model:
  * - Intent, Planning, Review: non-fatal — null output on failure, pipeline continues
  * - Execution: hard-fail — throws so the route handler can return 500
  *
- * PipelineOrchestrator is stateless; create a new instance per request via
+ * PipelineOrchestrator is now strictly for Modification. For Generation, use the
+ * new GenerationPipeline from `generation-pipeline.ts`. Create instances via
  * `pipeline-factory.ts`.
  *
  * @requires ../ai/ai-provider - AIProvider interface
@@ -30,25 +31,6 @@ import { config } from '../config';
 const logger = createLogger('PipelineOrchestrator');
 
 // JSON schemas passed to the AI as responseSchema (for structured output)
-// ─── Helpers for enriched stage labels ──────────────────────────────────────
-
-function buildPlanSummary(plan: PlanOutput): string | null {
-  const parts: string[] = [];
-  if (plan.files.length > 0) parts.push(`${plan.files.length} files`);
-  if (plan.components.length > 0) parts.push(`${plan.components.length} components`);
-  if (plan.apiRoutes && plan.apiRoutes.length > 0) parts.push(`${plan.apiRoutes.length} API routes`);
-  if (plan.databaseModels && plan.databaseModels.length > 0) parts.push(`${plan.databaseModels.length} models`);
-  return parts.length > 0 ? `Planning ${parts.join(' and ')}…` : null;
-}
-
-function buildExecutionLabel(plan: PlanOutput | null): string {
-  if (!plan || plan.components.length === 0) return 'Generating application…';
-  const first = plan.components[0];
-  const rest = plan.components.length - 1;
-  return rest > 0
-    ? `Writing ${first} and ${rest} more component${rest > 1 ? 's' : ''}…`
-    : `Writing ${first}…`;
-}
 
 const INTENT_JSON_SCHEMA = toSimpleJsonSchema(IntentOutputSchema);
 const PLAN_JSON_SCHEMA = toSimpleJsonSchema(PlanOutputSchema);
@@ -98,62 +80,7 @@ export class PipelineOrchestrator {
     private readonly promptProvider: IPromptProvider
   ) {}
 
-  // ─── Generation Pipeline ──────────────────────────────────────────────────
 
-  /**
-   * Runs the full 4-stage generation pipeline for a new project.
-   *
-   * @param userPrompt - The user's project description
-   * @param callbacks - Stage lifecycle + streaming callbacks
-   * @param options - Optional request metadata
-   */
-  async runGenerationPipeline(
-    userPrompt: string,
-    callbacks: PipelineCallbacks,
-    options?: { requestId?: string }
-  ): Promise<PipelineResult> {
-    const contextLogger = options?.requestId
-      ? logger.withRequestId(options.requestId)
-      : logger;
-
-    // ── Stage 1: Intent ──────────────────────────────────────────────────────
-    const intentOutput = await this.runIntentStage(userPrompt, callbacks, contextLogger);
-
-    // ── Recipe Selection (after intent, before execution) ────────────────────
-    const recipe = selectRecipe(intentOutput, {
-      fullstackEnabled: config.recipes.fullstackEnabled,
-    });
-    contextLogger.info('Recipe selected', { recipeId: recipe.id });
-    // Update prompt provider if it supports recipes (ApiPromptProvider does)
-    if (typeof (this.promptProvider as { setRecipe?: unknown }).setRecipe === 'function') {
-      (this.promptProvider as { setRecipe: (r: typeof recipe) => void }).setRecipe(recipe);
-    }
-
-    if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
-
-    // ── Stage 2: Planning ────────────────────────────────────────────────────
-    const planOutput = await this.runPlanningStage(userPrompt, intentOutput, callbacks, contextLogger);
-
-    if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
-
-    // ── Stage 3: Execution (hard-fail) ───────────────────────────────────────
-    const executorContent = await this.runExecutionGenerationStage(
-      userPrompt,
-      intentOutput,
-      planOutput,
-      callbacks,
-      contextLogger
-    );
-
-    if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
-
-    // ── Stage 4: Review ──────────────────────────────────────────────────────
-    const reviewOutput = await this.runReviewStage(executorContent, callbacks, contextLogger);
-
-    const finalFiles = this.mergeReviewCorrections(executorContent, reviewOutput);
-
-    return { intentOutput, planOutput, executorFiles: executorContent, reviewOutput, finalFiles };
-  }
 
   // ─── Modification Pipeline ────────────────────────────────────────────────
 
@@ -337,40 +264,7 @@ export class PipelineOrchestrator {
     }
   }
 
-  private async runExecutionGenerationStage(
-    userPrompt: string,
-    intentOutput: IntentOutput | null,
-    planOutput: PlanOutput | null,
-    callbacks: PipelineCallbacks,
-    contextLogger: ReturnType<typeof logger.withRequestId>
-  ): Promise<GeneratedFile[]> {
-    const execLabel = buildExecutionLabel(planOutput);
-    callbacks.onStageStart?.('execution', execLabel);
-    contextLogger.debug('Execution (generation) stage start');
 
-    const response = await this.executionProvider.generateStreaming({
-      prompt: 'Generate the project based on the user request in the system instruction.',
-      systemInstruction: this.promptProvider.getExecutionGenerationSystemPrompt(
-        userPrompt,
-        intentOutput,
-        planOutput
-      ),
-      maxOutputTokens: this.promptProvider.tokenBudgets.executionGeneration,
-      signal: callbacks.signal,
-      onChunk: callbacks.onExecutionChunk,
-    });
-
-    if (!response.success || !response.content) {
-      throw new Error(response.error ?? 'Execution stage failed to generate project');
-    }
-
-    callbacks.onStageComplete?.('execution');
-    contextLogger.info('Execution (generation) stage complete', {
-      contentLength: response.content.length,
-    });
-
-    return this.parseProjectOutput(response.content);
-  }
 
   private async runExecutionModificationStage(
     userPrompt: string,
@@ -456,28 +350,7 @@ export class PipelineOrchestrator {
     }
   }
 
-  // ─── Output Parsers ───────────────────────────────────────────────────────
 
-  /**
-   * Parses raw AI content into GeneratedFile[].
-   * Expects JSON in the shape { files: [{ path, content }] }.
-   * Returns an empty array on parse failure (caller handles validation).
-   */
-  private parseProjectOutput(content: string): GeneratedFile[] {
-    try {
-      const parsed = JSON.parse(content);
-      const files = parsed?.files;
-      if (!Array.isArray(files)) return [];
-      return files
-        .filter((f: unknown) => typeof (f as { path?: unknown }).path === 'string')
-        .map((f: { path: string; content?: string }) => ({
-          path: f.path,
-          content: typeof f.content === 'string' ? f.content : '',
-        }));
-    } catch {
-      return [];
-    }
-  }
 
   /**
    * Parses modification output { files: [{ path, operation, ... }] }

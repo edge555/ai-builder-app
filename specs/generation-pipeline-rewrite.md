@@ -195,7 +195,7 @@ User Prompt
 
 > The engine that runs a single generation phase: prompt assembly -> AI call -> streaming -> parsing -> validation.
 
-- [ ] **Task 4.1**: Create `backend/lib/core/phase-executor.ts`
+- [x] **Task 4.1**: Create `backend/lib/core/phase-executor.ts`
   - `PhaseExecutor` class with `executePhase(phaseDef, context, callbacks, signal?)` method
   - Assembles prompt using `getPhasePrompt()` + batch context
   - Calls `provider.generateStreaming()` with phase-specific token budget
@@ -203,27 +203,27 @@ User Prompt
   - Emits files via callbacks as they stream
   - Returns `PhaseResult { files: GeneratedFile[], warnings: string[] }`
 
-- [ ] **Task 4.2**: Implement simple retry logic (decision 7A)
+- [x] **Task 4.2**: Implement simple retry logic (decision 7A)
   - Max 2 attempts per phase
   - On first failure: retry with error feedback appended to prompt
   - On second failure: return partial results (or throw for scaffold phase)
   - Scaffold phase failure is HARD FAIL (throws, route returns 500)
   - Other phase failures: return whatever files were successfully parsed
 
-- [ ] **Task 4.3**: Implement truncation detection (decision 12A)
+- [x] **Task 4.3**: Implement truncation detection (decision 12A)
   - After phase execution, compare generated file paths against planned files for that layer
   - If missing files detected: run continuation call with only missing file paths
   - Continuation prompt includes: plan contracts + all already-generated files as context
   - Max 2 continuation rounds per phase
   - Use existing `parseIncrementalFiles()` for recovery from truncated JSON
 
-- [ ] **Task 4.4**: Implement post-phase validation
+- [x] **Task 4.4**: Implement post-phase validation
   - After each phase: run `BuildValidator.validate()` on accumulated files so far
   - For scaffold phase: verify package.json valid, types file exports all planned types, CSS has all planned vars
   - Collect validation errors for next phase's prompt context
   - Errors are NOT blocking — pipeline continues, review stage fixes
 
-- [ ] **Task 4.5**: Write tests for phase executor
+- [x] **Task 4.5**: Write tests for phase executor
   - Successful phase execution with mock AI provider
   - Retry: first attempt fails, second succeeds with error feedback
   - Scaffold failure -> thrown error (hard fail)
@@ -241,37 +241,37 @@ User Prompt
 
 > The main orchestrator that replaces the generation path. Ties everything together.
 
-- [ ] **Task 5.1**: Create `backend/lib/core/generation-pipeline.ts`
+- [x] **Task 5.1**: Create `backend/lib/core/generation-pipeline.ts`
   - `GenerationPipeline` class
   - Constructor takes: AI providers (intent, planning, execution, review, bugfix), prompt provider
   - Main method: `runGeneration(userPrompt, callbacks, signal?)` -> `GenerationResult`
   - Orchestrates: Intent -> Planning -> Plan Review -> Complexity Gate -> Execute -> Validate -> Review -> BugFix
 
-- [ ] **Task 5.2**: Implement enhanced planning stage
+- [x] **Task 5.2**: Implement enhanced planning stage
   - Call AI with `getArchitecturePlanningPrompt()`, token budget 8,192
   - Parse response with `ArchitecturePlanSchema`
   - On failure: fall back to heuristic plan builder
   - Select recipe from intent output (reuse existing `selectRecipe()`)
 
-- [ ] **Task 5.3**: Implement plan review stage (decision 1C)
+- [x] **Task 5.3**: Implement plan review stage (decision 1C)
   - Call AI with `getPlanReviewPrompt(plan)`, token budget 4,096
   - AI checks: import refs valid, type names consistent, layer assignments valid, no circular imports
   - On issues found: attempt auto-correction (remove dangling imports, add missing types)
   - Non-fatal: if review call fails, proceed with unreviewed plan
 
-- [ ] **Task 5.4**: Implement complexity gate (decision 3B)
+- [x] **Task 5.4**: Implement complexity gate (decision 3B)
   - `shouldUseMultiPhase(plan)`: returns true if plan.files.length > 10 OR estimated input tokens > 80% threshold
   - `estimateOneShotInputTokens(plan)`: estimate system prompt + contracts + user prompt size
   - One-shot path: use enhanced execution prompt with plan contracts injected (improved version of current behavior)
   - Multi-phase path: proceed to phase execution
 
-- [ ] **Task 5.5**: Implement phase merge logic (decision 8A)
+- [x] **Task 5.5**: Implement phase merge logic (decision 8A)
   - Before multi-phase execution, check file count per layer
   - If logic layer has <=1 file: merge into UI phase
   - If integration layer has <=1 file: merge into UI phase
   - Return merged phase definitions with file lists
 
-- [ ] **Task 5.6**: Implement multi-phase execution loop
+- [x] **Task 5.6**: Implement multi-phase execution loop
   - For each phase (scaffold -> logic -> ui -> integration):
     - Build context via `batch-context-builder.ts`
     - Execute via `PhaseExecutor`
@@ -281,7 +281,7 @@ User Prompt
   - UI phase: split into sub-batches if >12 files
   - Emit `phase-start`/`phase-complete` events via callbacks
 
-- [ ] **Task 5.7**: Create `backend/lib/core/heuristic-plan-builder.ts`
+- [x] **Task 5.7**: Create `backend/lib/core/heuristic-plan-builder.ts`
   - `buildHeuristicPlan(intent, userPrompt)` -> `ArchitecturePlan`
   - Maps complexity -> file count and structure
   - Creates generic type stubs based on detected features (e.g., "todo" -> Todo interface)
@@ -289,23 +289,23 @@ User Prompt
   - Generates basic CSS variable set (colors, spacing, radii)
   - Used as fallback when AI planning fails
 
-- [ ] **Task 5.8**: Remove generation path from `PipelineOrchestrator` (decision 4B)
+- [x] **Task 5.8**: Remove generation path from `PipelineOrchestrator` (decision 4B)
   - Remove `runGenerationPipeline()` method from `backend/lib/core/pipeline-orchestrator.ts`
   - Keep `runModificationPipeline()` and all modification-related code
   - Update class documentation to reflect modification-only role
 
-- [ ] **Task 5.9**: Update `backend/lib/core/pipeline-factory.ts`
+- [x] **Task 5.9**: Update `backend/lib/core/pipeline-factory.ts`
   - Add `createGenerationPipeline()` factory method
   - Resolves AI providers for all stages (intent, planning, execution, review, bugfix)
   - Creates `GenerationPipeline` instance
   - Keep `createPipelineOrchestrator()` for modification path
 
-- [ ] **Task 5.10**: Update `backend/lib/core/streaming-generator.ts`
+- [x] **Task 5.10**: Update `backend/lib/core/streaming-generator.ts`
   - Replace `PipelineOrchestrator` usage with `GenerationPipeline` for generation
   - Map `GenerationPipeline` callbacks to existing SSE streaming callbacks
   - Keep `BaseProjectGenerator` inheritance for `runBuildFixLoop()`
 
-- [ ] **Task 5.11**: Write integration tests
+- [x] **Task 5.11**: Write integration tests
   - Full pipeline with mock AI: simple prompt -> one-shot path
   - Full pipeline with mock AI: complex prompt -> multi-phase path
   - Planning failure -> heuristic fallback -> generation succeeds

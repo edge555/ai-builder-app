@@ -182,3 +182,24 @@ export type PlannedFile = z.infer<typeof PlannedFileSchema>;
 export type TypeContract = z.infer<typeof TypeContractSchema>;
 export type CSSVariable = z.infer<typeof CSSVariableSchema>;
 export type StateShape = z.infer<typeof StateShapeSchema>;
+
+// Plan Review Output Schema
+export const PlanReviewSchema = z.object({
+  valid: z.boolean().describe('Whether the architecture plan is internally consistent'),
+  issues: z.array(z.object({
+    type: z.enum(['dangling_import', 'missing_type', 'wrong_layer', 'circular_dep', 'missing_export']).describe('Type of issue found'),
+    file: z.string().describe('Path of the file with the issue'),
+    detail: z.string().describe('Description of the problem'),
+  })).describe('List of issues found'),
+  corrections: z.object({
+    filesToAdd: z.array(PlannedFileSchema).describe('New files to inject into the plan'),
+    filesToRemove: z.array(z.string()).describe('Paths to remove from the plan'),
+    importsToFix: z.array(z.object({
+      file: z.string().describe('File containing the broken import'),
+      removeImport: z.string().describe('The invalid import path (e.g. "../utils")'),
+      addImport: z.string().describe('The corrected import path (e.g. "../shared/utils")'),
+    })).describe('Imports to replace across the plan'),
+  }).describe('Suggested automatic corrections to the plan'),
+});
+
+export type PlanReviewOutput = z.infer<typeof PlanReviewSchema>;

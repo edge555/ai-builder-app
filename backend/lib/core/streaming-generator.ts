@@ -15,8 +15,9 @@ import { createLogger } from '../logger';
 import { parseIncrementalFiles, estimateTotalFiles } from '../utils/incremental-json-parser';
 import { BaseProjectGenerator } from './base-project-generator';
 import type { PipelineCallbacks, PipelineStage } from './pipeline-orchestrator';
-import { PipelineOrchestrator } from './pipeline-orchestrator';
-import { createPipelineOrchestrator } from './pipeline-factory';
+import { createGenerationPipeline } from './pipeline-factory';
+import { GenerationPipeline, GenerationResult } from './generation-pipeline';
+import type { PipelineCallbacks as GenerationCallbacks } from './generation-pipeline';
 
 const logger = createLogger('StreamingGenerator');
 
@@ -50,7 +51,7 @@ export type StreamingGenerationResult = OperationResult;
  */
 export class StreamingProjectGenerator extends BaseProjectGenerator {
   constructor(
-    private readonly pipeline: PipelineOrchestrator,
+    private readonly pipeline: GenerationPipeline,
     bugfixProvider: AIProvider,
     promptProvider: IPromptProvider
   ) {
@@ -91,52 +92,42 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     let warningCount = 0;
 
     // Map pipeline callbacks to StreamingCallbacks
-    const pipelineCallbacks: PipelineCallbacks = {
+    const pipelineCallbacks: GenerationCallbacks = {
       onStageStart: (stage, label) => {
         contextLogger.debug('Pipeline stage start', { stage, label });
-        callbacks.onPipelineStage?.({ stage, label, status: 'start' });
+        callbacks.onPipelineStage?.({ stage: stage as PipelineStage, label, status: 'start' });
       },
       onStageComplete: (stage) => {
         contextLogger.debug('Pipeline stage complete', { stage });
-        callbacks.onPipelineStage?.({ stage, label: '', status: 'complete' });
+        callbacks.onPipelineStage?.({ stage: stage as PipelineStage, label: '', status: 'complete' });
       },
       onStageFailed: (stage, error) => {
         contextLogger.warn('Pipeline stage failed (degraded)', { stage, error });
-        callbacks.onPipelineStage?.({ stage, label: error, status: 'degraded' });
+        callbacks.onPipelineStage?.({ stage: stage as PipelineStage, label: error, status: 'degraded' });
       },
-      onExecutionChunk: (chunk, accumulatedLength) => {
-        accumulatedText += chunk;
+      onProgress: (accumulatedLength) => {
         callbacks.onProgress?.(accumulatedLength);
-
-        // Incremental parse for partial file emission during streaming
-        const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
-
-        if (parseResult.files.length > 0) {
-          const totalEstimate = estimateTotalFiles(accumulatedText);
-
-          for (const file of parseResult.files) {
-            if (!emittedFiles.has(file.path)) {
-              emittedFiles.add(file.path);
-              callbacks.onFile?.({
-                path: file.path,
-                content: file.content,
-                index: emittedFiles.size - 1,
-                total: totalEstimate,
-                status: 'partial',
-              });
-            }
-          }
-
-          lastParsedIndex = parseResult.lastParsedIndex;
+      },
+      onFileStream: (file, isComplete) => {
+        if (!emittedFiles.has(file.path) || isComplete) {
+          emittedFiles.add(file.path);
+          // Just use the set size, or wait for finalization.
+          callbacks.onFile?.({
+            path: file.path,
+            content: file.content,
+            index: emittedFiles.size - 1,
+            total: Math.max(emittedFiles.size, 10), // Total isn't cleanly known during multi-phase easily without passing ArchitecturePlan through, so passing an estimate
+            status: isComplete ? 'complete' : 'partial',
+          });
         }
       },
       signal: callbacks.signal,
     };
 
-    // Run the 4-stage generation pipeline
-    let pipelineResult;
+    // Run the generation pipeline
+    let pipelineResult: GenerationResult;
     try {
-      pipelineResult = await this.pipeline.runGenerationPipeline(
+      pipelineResult = await this.pipeline.runGeneration(
         description,
         pipelineCallbacks,
         { requestId: options?.requestId }
@@ -154,14 +145,13 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     }
 
     contextLogger.info('Pipeline complete, processing files', {
-      fileCount: pipelineResult.finalFiles.length,
+      fileCount: pipelineResult.generatedFiles.length,
       intentCompleted: !!pipelineResult.intentOutput,
-      planCompleted: !!pipelineResult.planOutput,
-      reviewCompleted: !!pipelineResult.reviewOutput,
+      planCompleted: !!pipelineResult.architecturePlan,
     });
 
     // Process files: sanitize paths, normalize newlines, format with Prettier
-    const processResult = await processFiles(pipelineResult.finalFiles, { addFrontendPrefix: false });
+    const processResult = await processFiles(pipelineResult.generatedFiles, { addFrontendPrefix: false });
     const prefixedFiles = processResult.files;
 
     for (const warning of processResult.warnings) {
@@ -283,7 +273,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
  */
 export async function createStreamingProjectGenerator(): Promise<StreamingProjectGenerator> {
   const [pipeline, bugfixProvider, providerName] = await Promise.all([
-    createPipelineOrchestrator(),
+    createGenerationPipeline(),
     createAIProvider('bugfix'),
     getEffectiveProvider(),
   ]);
