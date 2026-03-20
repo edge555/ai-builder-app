@@ -1,3 +1,4 @@
+import type { ImageAttachment } from '@ai-app-builder/shared/types';
 import { useState, useCallback, useMemo } from 'react';
 
 import { useChatMessages, useGenerationState, useGenerationActions, useProjectState } from '@/context';
@@ -30,9 +31,9 @@ export function ChatPanel({ onFileClick }: ChatPanelProps) {
     return analyzeProjectForSuggestions(projectState.files);
   }, [projectState]);
 
-  const handleSubmit = useCallback(async (prompt: string) => {
+  const handleSubmit = useCallback(async (prompt: string, attachments?: ImageAttachment[]) => {
     setLastPrompt(prompt);
-    await submitPrompt(prompt);
+    await submitPrompt(prompt, attachments);
   }, [submitPrompt]);
 
   const handleRetry = useCallback(() => {
@@ -64,6 +65,7 @@ export function ChatPanel({ onFileClick }: ChatPanelProps) {
         onAbort={abortCurrentRequest}
         onFileClick={onFileClick}
         inputPlaceholder={inputPlaceholder}
+        projectFiles={projectState?.files}
       />
       {hasGeneratedOnce && !isLoading && (
         <div style={{ padding: '0 12px 8px' }}>

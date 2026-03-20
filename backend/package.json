@@ -8,14 +8,18 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "eval": "vitest run lib/core/__tests__/eval/"
   },
   "dependencies": {
     "@ai-app-builder/shared": "*",
     "jszip": "^3.10.1",
     "next": "^14.0.4",
     "uuid": "^9.0.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "ioredis": "^5.4.1",
+    "sharp": "^0.33.2",
+    "@supabase/supabase-js": "^2.39.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

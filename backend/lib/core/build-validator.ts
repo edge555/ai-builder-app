@@ -13,7 +13,7 @@ import { createLogger } from '../logger';
 const logger = createLogger('core/build-validator');
 
 export interface BuildError {
-    type: 'missing_dependency' | 'broken_import' | 'syntax_error' | 'missing_file' | 'import_export_mismatch';
+    type: 'missing_dependency' | 'broken_import' | 'syntax_error' | 'missing_file' | 'import_export_mismatch' | 'directive_error' | 'server_client_boundary' | 'prisma_error' | 'naming_convention';
     message: string;
     file: string;
     line?: number;
@@ -368,16 +368,20 @@ export class BuildValidator {
                     const rawImport = importPath.startsWith('node:') ? importPath.slice(5) : importPath;
                     const packageName = getPackageName(rawImport);
 
-                    // Check if it's a Node.js built-in (not usable in browser)
+                    // Check if it's a Node.js built-in (not usable in browser code)
+                    // Allowed in API routes (app/api/) and server-side files
                     if (NODE_BUILT_INS.has(packageName)) {
-                        errors.push({
-                            type: 'missing_dependency',
-                            message: `Node.js module '${packageName}' cannot be used in browser code`,
-                            file: filePath,
-                            line,
-                            suggestion: `Use a browser-compatible alternative`,
-                            severity: 'unfixable',
-                        });
+                        const isServerFile = filePath.includes('/api/') || filePath.endsWith('route.ts') || filePath.endsWith('route.js');
+                        if (!isServerFile) {
+                            errors.push({
+                                type: 'missing_dependency',
+                                message: `Node.js module '${packageName}' cannot be used in browser code`,
+                                file: filePath,
+                                line,
+                                suggestion: `Use a browser-compatible alternative`,
+                                severity: 'unfixable',
+                            });
+                        }
                         continue;
                     }
 
@@ -469,6 +473,216 @@ export class BuildValidator {
         formatted += '3. Replaced with native browser APIs\n';
 
         return formatted;
+    }
+
+    /**
+     * Validate server/client boundary rules for Next.js App Router projects.
+     * Checks "use client"/"use server" directives and import boundaries.
+     */
+    validateServerClientBoundaries(files: Record<string, string>): BuildError[] {
+        const errors: BuildError[] = [];
+        const isNextProject = Object.keys(files).some(p => p.startsWith('app/') || p === 'next.config.js');
+        if (!isNextProject) return errors;
+
+        // Client-only hooks that cannot be used in Server Components
+        const CLIENT_HOOKS = /\b(useState|useEffect|useRef|useCallback|useMemo|useReducer|useContext|useLayoutEffect|useImperativeHandle|useDebugValue|useSyncExternalStore|useTransition|useDeferredValue|useOptimistic|useFormStatus|useFormState)\b/;
+
+        // Browser-only APIs
+        const BROWSER_APIS = /\b(window\.|document\.|localStorage|sessionStorage|navigator\.|addEventListener)\b/;
+
+        for (const [filePath, content] of Object.entries(files)) {
+            const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
+            if (!['.ts', '.tsx', '.js', '.jsx'].includes(ext)) continue;
+            if (!filePath.startsWith('app/') && !filePath.startsWith('components/')) continue;
+
+            const isApiRoute = filePath.includes('/api/') && filePath.includes('route.');
+            const hasUseClient = /^['"]use client['"];?\s*$/m.test(content);
+            const hasUseServer = /^['"]use server['"];?\s*$/m.test(content);
+
+            // API routes should never have "use client"
+            if (isApiRoute && hasUseClient) {
+                errors.push({
+                    type: 'directive_error',
+                    message: `API route "${filePath}" should not have "use client" directive`,
+                    file: filePath,
+                    suggestion: 'Remove "use client" — API routes always run on the server',
+                    severity: 'fixable',
+                });
+            }
+
+            // Server Components (no "use client" directive) shouldn't use hooks/browser APIs
+            if (!hasUseClient && !isApiRoute) {
+                const lines = content.split('\n');
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    if (line.trimStart().startsWith('//') || line.trimStart().startsWith('*')) continue;
+
+                    const hookMatch = line.match(CLIENT_HOOKS);
+                    if (hookMatch) {
+                        errors.push({
+                            type: 'server_client_boundary',
+                            message: `"${hookMatch[1]}" used in Server Component "${filePath}" — add "use client" directive or move to a client component`,
+                            file: filePath,
+                            line: i + 1,
+                            suggestion: `Add "use client" at the top of the file, or extract the interactive parts into a separate client component`,
+                            severity: 'fixable',
+                        });
+                        break; // One error per file is enough
+                    }
+
+                    const browserMatch = line.match(BROWSER_APIS);
+                    if (browserMatch) {
+                        errors.push({
+                            type: 'server_client_boundary',
+                            message: `Browser API "${browserMatch[1]}" used in Server Component "${filePath}"`,
+                            file: filePath,
+                            line: i + 1,
+                            suggestion: `Add "use client" directive or move browser API usage to a client component`,
+                            severity: 'fixable',
+                        });
+                        break;
+                    }
+                }
+            }
+
+            // "use client" and "use server" in the same file
+            if (hasUseClient && hasUseServer) {
+                errors.push({
+                    type: 'directive_error',
+                    message: `"${filePath}" has both "use client" and "use server" directives`,
+                    file: filePath,
+                    suggestion: 'A file can only be client OR server — split into separate files',
+                    severity: 'fixable',
+                });
+            }
+        }
+
+        return errors;
+    }
+
+    /**
+     * Validate Prisma schema syntax for basic correctness.
+     */
+    validatePrismaSchema(files: Record<string, string>): BuildError[] {
+        const errors: BuildError[] = [];
+        const schemaPath = Object.keys(files).find(p => p.endsWith('schema.prisma'));
+        if (!schemaPath) return errors;
+
+        const content = files[schemaPath];
+        const lines = content.split('\n');
+
+        // Check for datasource block
+        if (!content.includes('datasource')) {
+            errors.push({
+                type: 'prisma_error',
+                message: 'Prisma schema missing "datasource" block',
+                file: schemaPath,
+                suggestion: 'Add: datasource db { provider = "postgresql" url = env("DATABASE_URL") }',
+                severity: 'fixable',
+            });
+        }
+
+        // Check for generator block
+        if (!content.includes('generator')) {
+            errors.push({
+                type: 'prisma_error',
+                message: 'Prisma schema missing "generator" block',
+                file: schemaPath,
+                suggestion: 'Add: generator client { provider = "prisma-client-js" }',
+                severity: 'fixable',
+            });
+        }
+
+        // Check each model has an id field
+        const modelRegex = /^model\s+(\w+)\s*\{/gm;
+        let match;
+        while ((match = modelRegex.exec(content)) !== null) {
+            const modelName = match[1];
+            const modelStart = match.index + match[0].length;
+            const modelEnd = content.indexOf('}', modelStart);
+            if (modelEnd === -1) continue;
+
+            const modelBody = content.slice(modelStart, modelEnd);
+            if (!/@id\b/.test(modelBody)) {
+                // Find the line number
+                const lineNum = content.slice(0, match.index).split('\n').length;
+                errors.push({
+                    type: 'prisma_error',
+                    message: `Model "${modelName}" has no @id field`,
+                    file: schemaPath,
+                    line: lineNum,
+                    suggestion: `Add an id field, e.g.: id String @id @default(uuid())`,
+                    severity: 'fixable',
+                });
+            }
+        }
+
+        // Check for unbalanced braces
+        const openBraces = (content.match(/\{/g) || []).length;
+        const closeBraces = (content.match(/\}/g) || []).length;
+        if (openBraces !== closeBraces) {
+            errors.push({
+                type: 'prisma_error',
+                message: `Unbalanced braces in Prisma schema (${openBraces} open, ${closeBraces} close)`,
+                file: schemaPath,
+                suggestion: 'Check for missing closing braces in model/enum definitions',
+                severity: 'fixable',
+            });
+        }
+
+        return errors;
+    }
+
+    /**
+     * Validate Next.js App Router naming conventions.
+     */
+    validateAppRouterConventions(files: Record<string, string>): BuildError[] {
+        const errors: BuildError[] = [];
+        const isNextProject = Object.keys(files).some(p => p.startsWith('app/') || p === 'next.config.js');
+        if (!isNextProject) return errors;
+
+        for (const filePath of Object.keys(files)) {
+            if (!filePath.startsWith('app/')) continue;
+
+            // Check API routes use route.ts not handler.ts or index.ts
+            if (filePath.includes('/api/')) {
+                const fileName = filePath.split('/').pop() || '';
+                if (/^(handler|index)\.(ts|js)$/.test(fileName)) {
+                    errors.push({
+                        type: 'naming_convention',
+                        message: `API route "${filePath}" should be named "route.ts" (App Router convention)`,
+                        file: filePath,
+                        suggestion: 'Rename to route.ts — App Router requires this exact filename',
+                        severity: 'fixable',
+                    });
+                }
+            }
+        }
+
+        return errors;
+    }
+
+    /**
+     * Run all validations including server-side checks.
+     * Automatically detects project type and runs relevant validators.
+     */
+    validateAll(files: Record<string, string>): BuildValidationResult {
+        const baseResult = this.validate(files);
+        const serverClientErrors = this.validateServerClientBoundaries(files);
+        const prismaErrors = this.validatePrismaSchema(files);
+        const conventionErrors = this.validateAppRouterConventions(files);
+
+        const allErrors = [
+            ...baseResult.errors,
+            ...serverClientErrors,
+            ...prismaErrors,
+            ...conventionErrors,
+        ];
+
+        return {
+            valid: allErrors.length === 0,
+            errors: allErrors,
+        };
     }
 }
 

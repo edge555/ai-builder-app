@@ -40,7 +40,7 @@ export class ProjectGenerator extends BaseProjectGenerator {
   /**
    * Generates a complete project from a natural language description.
    */
-  async generateProject(description: string): Promise<GenerationResult> {
+  async generateProject(description: string, options?: { requestId?: string }): Promise<GenerationResult> {
     if (!description || description.trim() === '') {
       return {
         success: false,

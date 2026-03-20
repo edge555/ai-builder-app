@@ -25,7 +25,7 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
-  const { blocked, headers: rlHeaders } = applyRateLimit(request, RateLimitTier.MEDIUM_COST);
+  const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.MEDIUM_COST);
   if (blocked) return blocked;
 
   // Generate request ID for correlation
@@ -47,8 +47,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     // Generate project
     const generator = await createProjectGenerator();
-    // TODO: Pass requestId to generator when it supports it
-    const result = await generator.generateProject(validatedRequest.description);
+    const result = await generator.generateProject(validatedRequest.description, { requestId });
 
     if (!result.success) {
       if (result.validationErrors) {

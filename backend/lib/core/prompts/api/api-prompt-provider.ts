@@ -37,11 +37,23 @@ import {
   MAX_OUTPUT_TOKENS_MODIFICATION,
   MAX_OUTPUT_TOKENS_REVIEW,
 } from '../../../constants';
+import type { GenerationRecipe } from '../../recipes/recipe-types';
+import { composeExecutionPrompt } from '../../recipes/recipe-engine';
 
 /** Token budget for bugfix = same as modification (full file set may need rewriting) */
 const BUGFIX_BUDGET = MAX_OUTPUT_TOKENS_MODIFICATION;
 
 export class ApiPromptProvider implements IPromptProvider {
+  private recipe: GenerationRecipe | null;
+
+  constructor(recipe?: GenerationRecipe) {
+    this.recipe = recipe ?? null;
+  }
+
+  /** Update the recipe after intent analysis (for recipe-aware execution prompts). */
+  setRecipe(recipe: GenerationRecipe): void {
+    this.recipe = recipe;
+  }
   readonly tokenBudgets = {
     intent: MAX_OUTPUT_TOKENS_INTENT,
     planning: MAX_OUTPUT_TOKENS_PLANNING_STAGE,
@@ -52,12 +64,13 @@ export class ApiPromptProvider implements IPromptProvider {
   };
 
   getIntentSystemPrompt(): string {
-    return `You are an AI intent classifier for a React app builder.
+    return `You are an AI intent classifier for a web app builder.
 Analyze the user's request and return a JSON object with exactly these fields:
 - clarifiedGoal: string — refined, unambiguous statement of what to build
 - complexity: "simple" | "medium" | "complex" — estimated scope
 - features: string[] — 3–7 key features to implement
 - technicalApproach: string — recommended React architecture (routing, state, libs)
+- projectType: "spa" | "fullstack" | "fullstack-auth" — "spa" for client-only React apps, "fullstack" if the app needs a database or API routes, "fullstack-auth" if it also needs user authentication
 
 Respond with valid JSON only. No markdown, no explanation.`;
   }
@@ -84,6 +97,11 @@ Respond with valid JSON only.`;
     intent: IntentOutput | null,
     plan: PlanOutput | null
   ): string {
+    // If a recipe is set, delegate to the data-driven prompt composer
+    if (this.recipe) {
+      return composeExecutionPrompt(this.recipe, userPrompt, intent, plan);
+    }
+
     const complexity = intent?.complexity ?? detectComplexity(userPrompt);
     const useDesignSystem = shouldIncludeDesignSystem(userPrompt);
 
@@ -134,7 +152,7 @@ ${useDesignSystem ? `${DESIGN_SYSTEM_CONSTANTS}\n` : ''}${ACCESSIBILITY_GUIDANCE
   --color-border: #e2e8f0;     --color-error: #ef4444;
   --color-success: #22c55e;
   --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 32px;
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
   --text-sm: 0.875rem; --text-base: 1rem; --text-lg: 1.125rem; --text-xl: 1.25rem;
   --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);

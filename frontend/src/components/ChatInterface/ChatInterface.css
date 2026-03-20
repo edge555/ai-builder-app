@@ -472,8 +472,8 @@
 /* Input form - floating style */
 .chat-input-form {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0;
   padding: 0.75rem 0.75rem 0.75rem 1.25rem;
   margin: 0.75rem;
   background: hsl(var(--card));
@@ -590,4 +590,147 @@
 .chat-error-container {
   padding: 0 0.5rem;
   animation: messageSlide 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================================================
+   Image attachment styles
+   ============================================================================ */
+
+/* Input row wraps the attach button, textarea, and submit button */
+.chat-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+/* Attach button */
+.chat-input-attach-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: color 200ms ease, background 200ms ease;
+  flex-shrink: 0;
+}
+
+.chat-input-attach-button:hover:not(:disabled) {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.08);
+}
+
+.chat-input-attach-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Thumbnail strip above the input row */
+.chat-input-thumbnails {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.25rem 0 0.5rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.chat-input-thumbnail {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  flex-shrink: 0;
+}
+
+.chat-input-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chat-input-thumbnail--uploading {
+  opacity: 0.7;
+}
+
+.chat-input-thumbnail--error {
+  border-color: hsl(var(--destructive) / 0.5);
+}
+
+.chat-input-thumbnail-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(0 0% 0% / 0.4);
+}
+
+.chat-input-thumbnail-overlay--error {
+  background: hsl(var(--destructive) / 0.3);
+  color: white;
+}
+
+.chat-input-thumbnail-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid hsl(0 0% 100% / 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.chat-input-thumbnail-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: hsl(0 0% 0% / 0.6);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.chat-input-thumbnail:hover .chat-input-thumbnail-remove {
+  opacity: 1;
+}
+
+/* Drag-over state */
+.chat-input-form--drag-over {
+  border-color: hsl(var(--primary));
+  box-shadow: var(--shadow-md), 0 0 0 3px hsl(var(--primary) / 0.15);
+}
+
+.chat-input-drag-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--primary) / 0.06);
+  border-radius: var(--radius-xl);
+  pointer-events: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: hsl(var(--primary));
+}
+
+/* Make the form position relative for the drag overlay */
+.chat-input-form {
+  position: relative;
 }

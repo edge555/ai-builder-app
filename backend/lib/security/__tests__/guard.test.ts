@@ -159,22 +159,22 @@ describe('applyRateLimit()', () => {
   });
 
   describe('allowed requests', () => {
-    it('returns blocked=null when request is within limit', () => {
-      const { blocked } = applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
+    it('returns blocked=null when request is within limit', async () => {
+      const { blocked } = await applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
       expect(blocked).toBeNull();
     });
 
-    it('returns rate limit headers on allowed requests', () => {
-      const { blocked, headers } = applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
+    it('returns rate limit headers on allowed requests', async () => {
+      const { blocked, headers } = await applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
       expect(blocked).toBeNull();
       expect(headers['X-RateLimit-Limit']).toBe('5');
       expect(headers['X-RateLimit-Remaining']).toBe('4');
       expect(headers['X-RateLimit-Reset']).toBeTruthy();
     });
 
-    it('returns blocked=null for GET requests regardless of content-length', () => {
+    it('returns blocked=null for GET requests regardless of content-length', async () => {
       const req = makeRequest({ method: 'GET' });
-      const { blocked } = applyRateLimit(req, RateLimitTier.LOW_COST);
+      const { blocked } = await applyRateLimit(req, RateLimitTier.LOW_COST);
       expect(blocked).toBeNull();
     });
   });
@@ -184,10 +184,10 @@ describe('applyRateLimit()', () => {
       const limit = 5;
 
       for (let i = 0; i < limit; i++) {
-        applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
+        await applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
       }
 
-      const { blocked } = applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
+      const { blocked } = await applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
       expect(blocked).not.toBeNull();
       expect(blocked!.status).toBe(429);
     });
@@ -196,10 +196,10 @@ describe('applyRateLimit()', () => {
       const limit = 5;
 
       for (let i = 0; i < limit; i++) {
-        applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
+        await applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
       }
 
-      const { blocked } = applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
+      const { blocked } = await applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
       expect(blocked!.headers.get('Retry-After')).toBeTruthy();
     });
 
@@ -207,10 +207,10 @@ describe('applyRateLimit()', () => {
       const limit = 5;
 
       for (let i = 0; i < limit; i++) {
-        applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
+        await applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
       }
 
-      const { blocked } = applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
+      const { blocked } = await applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
       expect(blocked!.headers.get('X-RateLimit-Limit')).toBe(String(limit));
       expect(blocked!.headers.get('X-RateLimit-Remaining')).toBe('0');
       expect(blocked!.headers.get('X-RateLimit-Reset')).toBeTruthy();
@@ -219,41 +219,41 @@ describe('applyRateLimit()', () => {
     it('returns error body with rate_limit type', async () => {
       const limit = 5;
       for (let i = 0; i < limit; i++) {
-        applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
+        await applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
       }
 
-      const { blocked } = applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
+      const { blocked } = await applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);
       const body = await parseBody(blocked!);
       expect(body.success).toBe(false);
       expect(body.error.type).toBe('rate_limit');
       expect(body.error.code).toBe('RATE_LIMIT_EXCEEDED');
     });
 
-    it('tracks different IPs independently', () => {
+    it('tracks different IPs independently', async () => {
       const limit = 5;
       for (let i = 0; i < limit; i++) {
-        applyRateLimit(makeRequest({ ip: '1.1.1.1' }), RateLimitTier.HIGH_COST);
+        await applyRateLimit(makeRequest({ ip: '1.1.1.1' }), RateLimitTier.HIGH_COST);
       }
 
-      const { blocked } = applyRateLimit(makeRequest({ ip: '2.2.2.2' }), RateLimitTier.HIGH_COST);
+      const { blocked } = await applyRateLimit(makeRequest({ ip: '2.2.2.2' }), RateLimitTier.HIGH_COST);
       expect(blocked).toBeNull();
     });
 
-    it('uses rightmost X-Forwarded-For IP for rate limiting', () => {
+    it('uses rightmost X-Forwarded-For IP for rate limiting', async () => {
       const limit = 5;
       // With depth=1, the last IP (192.168.1.1) is used as the trusted IP
       const headers = { 'x-forwarded-for': '10.0.0.1, 192.168.1.1' };
 
       for (let i = 0; i < limit; i++) {
-        applyRateLimit(makeRequest({ ip: undefined, headers }), RateLimitTier.HIGH_COST);
+        await applyRateLimit(makeRequest({ ip: undefined, headers }), RateLimitTier.HIGH_COST);
       }
 
       // Same rightmost IP should be blocked
-      const { blocked } = applyRateLimit(makeRequest({ ip: undefined, headers }), RateLimitTier.HIGH_COST);
+      const { blocked } = await applyRateLimit(makeRequest({ ip: undefined, headers }), RateLimitTier.HIGH_COST);
       expect(blocked?.status).toBe(429);
 
       // Different rightmost IP should be allowed
-      const { blocked: blocked2 } = applyRateLimit(
+      const { blocked: blocked2 } = await applyRateLimit(
         makeRequest({ ip: undefined, headers: { 'x-forwarded-for': '99.0.0.1' } }),
         RateLimitTier.HIGH_COST
       );
@@ -268,24 +268,24 @@ describe('applyRateLimit()', () => {
         headers: { 'content-length': String(3 * 1024 * 1024) },
       });
 
-      const { blocked } = applyRateLimit(req, RateLimitTier.HIGH_COST);
+      const { blocked } = await applyRateLimit(req, RateLimitTier.HIGH_COST);
       expect(blocked).not.toBeNull();
       expect(blocked!.status).toBe(413);
     });
 
-    it('returns blocked=null when Content-Length is within tier limit', () => {
+    it('returns blocked=null when Content-Length is within tier limit', async () => {
       const req = makeRequest({
         method: 'POST',
         headers: { 'content-length': String(1 * 1024 * 1024) },
       });
 
-      const { blocked } = applyRateLimit(req, RateLimitTier.HIGH_COST);
+      const { blocked } = await applyRateLimit(req, RateLimitTier.HIGH_COST);
       expect(blocked).toBeNull();
     });
 
-    it('returns blocked=null when Content-Length header is absent', () => {
+    it('returns blocked=null when Content-Length header is absent', async () => {
       const req = makeRequest({ method: 'POST' });
-      const { blocked } = applyRateLimit(req, RateLimitTier.HIGH_COST);
+      const { blocked } = await applyRateLimit(req, RateLimitTier.HIGH_COST);
       expect(blocked).toBeNull();
     });
 
@@ -295,7 +295,7 @@ describe('applyRateLimit()', () => {
         headers: { 'content-length': String(3 * 1024 * 1024) },
       });
 
-      const { blocked } = applyRateLimit(req, RateLimitTier.HIGH_COST);
+      const { blocked } = await applyRateLimit(req, RateLimitTier.HIGH_COST);
       const body = await parseBody(blocked!);
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('PAYLOAD_TOO_LARGE');
@@ -307,7 +307,7 @@ describe('applyRateLimit()', () => {
         headers: { 'content-length': String(128 * 1024) },
       });
 
-      const { blocked } = applyRateLimit(req, RateLimitTier.CONFIG);
+      const { blocked } = await applyRateLimit(req, RateLimitTier.CONFIG);
       expect(blocked?.status).toBe(413);
     });
   });

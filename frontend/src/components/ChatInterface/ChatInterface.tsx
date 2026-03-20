@@ -1,4 +1,4 @@
-import type { ChangeSummary, FileDiff } from '@ai-app-builder/shared/types';
+import type { ChangeSummary, FileDiff, ImageAttachment } from '@ai-app-builder/shared/types';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useState, useRef, useEffect, memo } from 'react';
 
@@ -51,8 +51,8 @@ const ESTIMATED_MESSAGE_HEIGHT = 150;
  * Props for the ChatInterface component.
  */
 export interface ChatInterfaceProps {
-  /** Callback when user submits a prompt */
-  onSubmitPrompt: (prompt: string) => Promise<void>;
+  /** Callback when user submits a prompt (with optional image attachments) */
+  onSubmitPrompt: (prompt: string, attachments?: ImageAttachment[]) => Promise<void>;
   /** Array of chat messages to display */
   messages: ChatMessage[];
   /** Whether an API call is in progress */
@@ -77,6 +77,8 @@ export interface ChatInterfaceProps {
   onFileClick?: (filePath: string) => void;
   /** Placeholder text for the chat input */
   inputPlaceholder?: string;
+  /** Current project files for generation summary cards */
+  projectFiles?: Record<string, string>;
 }
 
 /**
@@ -99,6 +101,7 @@ const ChatInterfaceComponent = function ChatInterface({
   onAbort,
   onFileClick,
   inputPlaceholder,
+  projectFiles,
 }: ChatInterfaceProps) {
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -144,9 +147,9 @@ const ChatInterfaceComponent = function ChatInterface({
     }
   }, [messages, shouldVirtualize, virtualizer]);
 
-  const handleSubmit = async (prompt: string) => {
+  const handleSubmit = async (prompt: string, attachments?: ImageAttachment[]) => {
     setLastPrompt(prompt);
-    await onSubmitPrompt(prompt);
+    await onSubmitPrompt(prompt, attachments);
   };
 
   const handleRetry = () => {
@@ -231,7 +234,7 @@ const ChatInterfaceComponent = function ChatInterface({
                     canCollapse={canCollapse(message.id)}
                     onToggle={toggle}
                   >
-                    <MessageItemWithRef message={message} onFileClick={onFileClick} onRetryPrompt={onSubmitPrompt} />
+                    <MessageItemWithRef message={message} projectFiles={projectFiles} onFileClick={onFileClick} onRetryPrompt={onSubmitPrompt} />
                   </CollapsibleMessage>
                 </div>
               );

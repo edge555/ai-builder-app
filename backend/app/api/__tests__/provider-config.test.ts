@@ -74,7 +74,7 @@ describe('Provider Config API Endpoint', () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { getProviderConfigWithSource } = await import('../../../lib/ai/provider-config-store');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(getProviderConfigWithSource).mockResolvedValue(mockConfig);
 
             const request = new NextRequest('http://localhost/api/provider-config', {
@@ -92,7 +92,7 @@ describe('Provider Config API Endpoint', () => {
             const { applyRateLimit, RateLimitTier } = await import('../../../lib/security');
             const { getProviderConfigWithSource } = await import('../../../lib/ai/provider-config-store');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(getProviderConfigWithSource).mockResolvedValue(mockConfig);
 
             const request = new NextRequest('http://localhost/api/provider-config', {
@@ -107,7 +107,7 @@ describe('Provider Config API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            vi.mocked(applyRateLimit).mockReturnValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockResolvedValue(rateLimitResponse);
 
             const request = new NextRequest('http://localhost/api/provider-config', {
                 method: 'GET',
@@ -123,7 +123,7 @@ describe('Provider Config API Endpoint', () => {
             const { getProviderConfigWithSource } = await import('../../../lib/ai/provider-config-store');
             const { handleError: apiHandleError } = await import('../../../lib/api');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(getProviderConfigWithSource).mockRejectedValue(new Error('Failed to load config'));
 
             const request = new NextRequest('http://localhost/api/provider-config', {
@@ -144,7 +144,7 @@ describe('Provider Config API Endpoint', () => {
             const { getProviderConfigWithSource } = await import('../../../lib/ai/provider-config-store');
             const { getCorsHeaders } = await import('../../../lib/api');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(getProviderConfigWithSource).mockResolvedValue(mockConfig);
             
             const mockCorsHeaders = {
@@ -170,7 +170,7 @@ describe('Provider Config API Endpoint', () => {
             const { getProviderConfigWithSource, saveProvider } = await import('../../../lib/ai/provider-config-store');
             const { resetProviderSingletons } = await import('../../../lib/ai/ai-provider-factory');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(saveProvider).mockResolvedValue(undefined);
             vi.mocked(resetProviderSingletons).mockReturnValue(undefined);
             vi.mocked(getProviderConfigWithSource).mockResolvedValue(mockConfig);
@@ -195,7 +195,7 @@ describe('Provider Config API Endpoint', () => {
             const { saveProvider, getProviderConfigWithSource } = await import('../../../lib/ai/provider-config-store');
             const { resetProviderSingletons } = await import('../../../lib/ai/ai-provider-factory');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(saveProvider).mockResolvedValue(undefined);
             vi.mocked(resetProviderSingletons).mockReturnValue(undefined);
             vi.mocked(getProviderConfigWithSource).mockResolvedValue(mockConfig);
@@ -215,7 +215,7 @@ describe('Provider Config API Endpoint', () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { saveProvider } = await import('../../../lib/ai/provider-config-store');
 
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
 
             const invalidRequestBody = { aiProvider: 'invalid-provider' };
             const request = new NextRequest('http://localhost/api/provider-config', {
@@ -234,7 +234,7 @@ describe('Provider Config API Endpoint', () => {
             const { getProviderConfigWithSource, saveProvider } = await import('../../../lib/ai/provider-config-store');
             const { resetProviderSingletons } = await import('../../../lib/ai/ai-provider-factory');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(saveProvider).mockResolvedValue(undefined);
             vi.mocked(resetProviderSingletons).mockReturnValue(undefined);
             vi.mocked(getProviderConfigWithSource).mockResolvedValue(mockConfig);
@@ -257,7 +257,7 @@ describe('Provider Config API Endpoint', () => {
             const { saveProvider } = await import('../../../lib/ai/provider-config-store');
             const { handleError: apiHandleError } = await import('../../../lib/api');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(saveProvider).mockRejectedValue(new Error('Failed to save config'));
 
             const requestBody = { aiProvider: 'openrouter' };
@@ -278,7 +278,7 @@ describe('Provider Config API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            vi.mocked(applyRateLimit).mockReturnValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockResolvedValue(rateLimitResponse);
 
             const requestBody = { aiProvider: 'openrouter' };
             const request = new NextRequest('http://localhost/api/provider-config', {
@@ -294,7 +294,7 @@ describe('Provider Config API Endpoint', () => {
         it('should handle invalid JSON in request body', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
 
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
 
             const request = new NextRequest('http://localhost/api/provider-config', {
                 method: 'PUT',

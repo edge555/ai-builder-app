@@ -9,11 +9,25 @@ import type { RuntimeError } from './runtime-error';
 // ============================================================================
 
 /**
+ * An image attachment uploaded by the user (e.g., a logo or screenshot).
+ */
+export interface ImageAttachment {
+  /** Public URL of the uploaded image (from Supabase Storage) */
+  url: string;
+  /** MIME type of the image */
+  type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+  /** Alt text for the image (sanitized, max 200 chars) */
+  alt?: string;
+}
+
+/**
  * Request body for generating a new project.
  */
 export interface GenerateProjectRequest {
   /** Natural language description of the project to generate */
   description: string;
+  /** Optional image attachments (uploaded via /api/upload) */
+  attachments?: ImageAttachment[];
 }
 
 /**
@@ -46,6 +60,8 @@ export interface ModifyProjectRequest {
   shouldSkipPlanning?: boolean;
   /** Runtime error context for auto-repair (if applicable) */
   runtimeError?: RuntimeError;
+  /** Optional image attachments (uploaded via /api/upload) */
+  attachments?: ImageAttachment[];
 }
 
 /**

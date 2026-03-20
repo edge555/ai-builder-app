@@ -1,4 +1,4 @@
-import type { RepairAttempt } from '@ai-app-builder/shared/types';
+import type { RepairAttempt, ImageAttachment } from '@ai-app-builder/shared/types';
 import type { ConversationTurn } from '@ai-app-builder/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -134,7 +134,7 @@ export function useSubmitPrompt() {
      * Submits a prompt to the AI, either generating a new project or modifying an existing one.
      * Includes API-level retry logic with failure history accumulation.
      */
-    const submitPrompt = useCallback(async (prompt: string): Promise<void> => {
+    const submitPrompt = useCallback(async (prompt: string, attachments?: ImageAttachment[]): Promise<void> => {
         // Abort any in-flight request to prevent duplicate generation
         if (isSubmittingRef.current && submitAbortRef.current) {
             submitAbortRef.current.abort();
@@ -171,7 +171,7 @@ export function useSubmitPrompt() {
                         );
                     }
 
-                    const result = await generation.generateProjectStreaming(prompt);
+                    const result = await generation.generateProjectStreaming(prompt, attachments);
                     if (abortController.signal.aborted) break;
 
                     generation.setLoadingPhase('validating');
@@ -251,7 +251,7 @@ export function useSubmitPrompt() {
                     }
 
                     const conversationHistory = buildConversationHistory(chatMessages.messages);
-                    const result = await generation.modifyProject(projectState, prompt, undefined, { conversationHistory });
+                    const result = await generation.modifyProject(projectState, prompt, undefined, { conversationHistory, attachments });
                     if (abortController.signal.aborted) break;
 
                     generation.setLoadingPhase('validating');

@@ -1,4 +1,4 @@
-import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState, RepairAttempt } from '@ai-app-builder/shared/types';
+import type { RuntimeError, GenerateProjectResponse, ModifyProjectResponse, SerializedProjectState, RepairAttempt, ImageAttachment } from '@ai-app-builder/shared/types';
 import type { ConversationTurn } from '@ai-app-builder/shared';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { useState, useCallback, useMemo, useRef, useEffect, type ReactNode } from 'react';
@@ -103,7 +103,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
   /**
    * Calls the streaming generate project API with timeout.
    */
-  const generateProjectStreaming = useCallback(async (description: string): Promise<GenerateProjectResponse> => {
+  const generateProjectStreaming = useCallback(async (description: string, attachments?: ImageAttachment[]): Promise<GenerateProjectResponse> => {
     streamAbortRef.current?.abort();
     const controller = new AbortController();
     streamAbortRef.current = controller;
@@ -147,7 +147,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'apikey': SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ description }),
+        body: JSON.stringify({ description, attachments }),
         signal: controller.signal,
       });
 
@@ -266,7 +266,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
   /**
    * Calls the generate project API with configurable timeout (non-streaming fallback).
    */
-  const generateProject = useCallback(async (description: string): Promise<GenerateProjectResponse> => {
+  const generateProject = useCallback(async (description: string, attachments?: ImageAttachment[]): Promise<GenerateProjectResponse> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), appConfig.api.timeout);
     activeRequestRef.current = { controller, timeoutId };
@@ -279,7 +279,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'apikey': SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ description }),
+        body: JSON.stringify({ description, attachments }),
         signal: controller.signal,
       });
 
@@ -310,7 +310,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     currentState: SerializedProjectState,
     prompt: string,
     runtimeError?: RuntimeError,
-    options?: { shouldSkipPlanning?: boolean; conversationHistory?: ConversationTurn[] }
+    options?: { shouldSkipPlanning?: boolean; conversationHistory?: ConversationTurn[]; attachments?: ImageAttachment[] }
   ): Promise<ModifyProjectResponse> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), appConfig.api.timeout);
@@ -324,7 +324,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'apikey': SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ projectState: currentState, prompt, runtimeError, shouldSkipPlanning: options?.shouldSkipPlanning, conversationHistory: options?.conversationHistory }),
+        body: JSON.stringify({ projectState: currentState, prompt, runtimeError, shouldSkipPlanning: options?.shouldSkipPlanning, conversationHistory: options?.conversationHistory, attachments: options?.attachments }),
         signal: controller.signal,
       });
 
@@ -356,7 +356,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     currentState: SerializedProjectState,
     prompt: string,
     runtimeError?: RuntimeError,
-    options?: { shouldSkipPlanning?: boolean; conversationHistory?: ConversationTurn[]; errorContext?: { affectedFiles: string[]; errorType: string } }
+    options?: { shouldSkipPlanning?: boolean; conversationHistory?: ConversationTurn[]; errorContext?: { affectedFiles: string[]; errorType: string }; attachments?: ImageAttachment[] }
   ): Promise<ModifyProjectResponse> => {
     streamAbortRef.current?.abort();
     const controller = new AbortController();
@@ -409,6 +409,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           shouldSkipPlanning: options?.shouldSkipPlanning,
           errorContext: options?.errorContext,
           conversationHistory: options?.conversationHistory,
+          attachments: options?.attachments,
         }),
         signal: controller.signal,
       });

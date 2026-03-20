@@ -135,6 +135,16 @@ export async function parseSSEStream(
                             handlers.onComplete?.(data, files);
                             break;
 
+                        case 'pipeline-stage':
+                            // Map pipeline stage events to progress updates
+                            if (data.status === 'start' && data.label) {
+                                handlers.onProgress?.({
+                                    phase: data.stage,
+                                    label: data.label,
+                                });
+                            }
+                            break;
+
                         case 'error':
                             const errorData: StreamErrorData = {
                                 error: data.error,

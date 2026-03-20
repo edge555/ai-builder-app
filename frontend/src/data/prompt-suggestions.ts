@@ -152,6 +152,29 @@ const contextualSuggestions: Record<string, PromptSuggestion[]> = {
       icon: '🔎',
     },
   ],
+  // Next-step suggestions based on what was just built
+  nextSteps: {
+    auth: [
+      { id: 'next-profile', label: 'User Profile', prompt: 'Add a user profile page with avatar upload, name editing, and password change', category: 'feature' as const, icon: '👤' },
+      { id: 'next-roles', label: 'User Roles', prompt: 'Add admin and regular user roles with different permissions and a role-based dashboard', category: 'feature' as const, icon: '🛡️' },
+    ],
+    dashboard: [
+      { id: 'next-export', label: 'Export Data', prompt: 'Add CSV and PDF export buttons for the dashboard data and charts', category: 'feature' as const, icon: '📤' },
+      { id: 'next-realtime', label: 'Real-time Updates', prompt: 'Add auto-refresh and real-time data updates to the dashboard with a refresh interval selector', category: 'feature' as const, icon: '🔄' },
+    ],
+    ecommerce: [
+      { id: 'next-wishlist', label: 'Wishlist', prompt: 'Add a wishlist feature where users can save products for later', category: 'feature' as const, icon: '❤️' },
+      { id: 'next-reviews', label: 'Product Reviews', prompt: 'Add a product review and rating system with star ratings and written reviews', category: 'feature' as const, icon: '⭐' },
+    ],
+    taskApp: [
+      { id: 'next-drag', label: 'Drag & Drop', prompt: 'Add drag-and-drop reordering to the task list with smooth animations', category: 'feature' as const, icon: '↕️' },
+      { id: 'next-subtasks', label: 'Subtasks', prompt: 'Add subtask support with nested checklists under each main task', category: 'feature' as const, icon: '📋' },
+    ],
+    generic: [
+      { id: 'next-notifications', label: 'Notifications', prompt: 'Add a toast notification system for success, error, and info messages', category: 'feature' as const, icon: '🔔' },
+      { id: 'next-keyboard', label: 'Keyboard Shortcuts', prompt: 'Add keyboard shortcuts for common actions with a help modal showing all shortcuts', category: 'feature' as const, icon: '⌨️' },
+    ],
+  },
   // General improvement suggestions
   improvements: [
     {
@@ -233,17 +256,26 @@ export function analyzeProjectForSuggestions(files: Record<string, string>): Pro
     allContent.includes('onsubmit') ||
     allContent.includes('handlesubmit');
 
-  // Add type-specific suggestions first (most relevant)
+  // Add next-step suggestions first (complementary features for what was built)
   if (isDashboard) {
+    suggestions.push(...contextualSuggestions.nextSteps.dashboard);
+  } else if (isEcommerce) {
+    suggestions.push(...contextualSuggestions.nextSteps.ecommerce);
+  } else if (isTaskApp) {
+    suggestions.push(...contextualSuggestions.nextSteps.taskApp);
+  }
+
+  // Add type-specific suggestions
+  if (isDashboard && suggestions.length < 4) {
     suggestions.push(...contextualSuggestions.dashboard);
   }
-  if (isEcommerce) {
+  if (isEcommerce && suggestions.length < 4) {
     suggestions.push(...contextualSuggestions.ecommerce);
   }
-  if (isTaskApp) {
+  if (isTaskApp && suggestions.length < 4) {
     suggestions.push(...contextualSuggestions.taskApp);
   }
-  if (hasForms) {
+  if (hasForms && suggestions.length < 4) {
     suggestions.push(...contextualSuggestions.forms.slice(0, 1));
   }
 
@@ -252,7 +284,9 @@ export function analyzeProjectForSuggestions(files: Record<string, string>): Pro
     allContent.includes('signin') ||
     allContent.includes('authentication') ||
     fileNames.some(f => f.includes('auth') || f.includes('login'));
-  if (!hasAuth && suggestions.length < 4) {
+  if (hasAuth && suggestions.length < 4) {
+    suggestions.push(...contextualSuggestions.nextSteps.auth);
+  } else if (!hasAuth && suggestions.length < 4) {
     suggestions.push(...contextualSuggestions.noAuth);
   }
 
@@ -270,6 +304,11 @@ export function analyzeProjectForSuggestions(files: Record<string, string>): Pro
     allContent.includes('prefers-color-scheme');
   if (!hasDarkMode && suggestions.length < 4) {
     suggestions.push(...contextualSuggestions.noDarkMode);
+  }
+
+  // Add generic next-steps if we still have room
+  if (suggestions.length < 4) {
+    suggestions.push(...contextualSuggestions.nextSteps.generic.slice(0, 4 - suggestions.length));
   }
 
   // Fill remaining slots with improvement suggestions

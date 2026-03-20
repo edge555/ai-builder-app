@@ -109,7 +109,7 @@ describe('Export API Endpoint', () => {
             const { exportAsZipBuffer } = await import('../../../lib/core');
             const { withTimeout } = await import('../../../lib/api');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
@@ -135,7 +135,7 @@ describe('Export API Endpoint', () => {
             const { ExportProjectRequestSchema } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
@@ -155,7 +155,7 @@ describe('Export API Endpoint', () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { ExportProjectRequestSchema } = await import('@ai-app-builder/shared');
 
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(ExportProjectRequestSchema.parse).mockImplementation(() => {
                 throw new Error('Invalid project state');
             });
@@ -175,7 +175,7 @@ describe('Export API Endpoint', () => {
             const { ExportProjectRequestSchema, deserializeProjectState } = await import('@ai-app-builder/shared');
             const { withTimeout } = await import('../../../lib/api');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
@@ -198,7 +198,7 @@ describe('Export API Endpoint', () => {
             const { exportAsZipBuffer } = await import('../../../lib/core');
             const { withTimeout } = await import('../../../lib/api');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
@@ -228,7 +228,7 @@ describe('Export API Endpoint', () => {
             const { exportAsZipBuffer } = await import('../../../lib/core');
             const { withTimeout } = await import('../../../lib/api');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
@@ -258,7 +258,7 @@ describe('Export API Endpoint', () => {
                 name: 'My Test Project!!!',
             };
 
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: specialNameProject,
             });
@@ -280,7 +280,7 @@ describe('Export API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            vi.mocked(applyRateLimit).mockReturnValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockResolvedValue(rateLimitResponse);
 
             const request = new NextRequest('http://localhost/api/export', {
                 method: 'POST',
@@ -297,7 +297,7 @@ describe('Export API Endpoint', () => {
             const { ExportProjectRequestSchema, deserializeProjectState } = await import('@ai-app-builder/shared');
             const { withTimeout, TimeoutError, AppError, handleError: apiHandleError } = await import('../../../lib/api');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });
@@ -328,7 +328,7 @@ describe('Export API Endpoint', () => {
             const { exportAsZipBuffer } = await import('../../../lib/core');
             const { withTimeout, getCorsHeaders } = await import('../../../lib/api');
             
-            vi.mocked(applyRateLimit).mockReturnValue({ blocked: null, headers: {} });
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
             vi.mocked(ExportProjectRequestSchema.parse).mockReturnValue({
                 projectState: mockProjectState,
             });

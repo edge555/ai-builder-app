@@ -1,37 +1,124 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageSquare, Layout, FolderOpen, ArrowRight, ArrowLeft } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Globe, LayoutDashboard, ShoppingCart, ClipboardList, Sparkles } from 'lucide-react';
 import './OnboardingOverlay.css';
 
 const ONBOARDING_SEEN_KEY = 'onboarding-overlay-seen';
 
-const steps = [
-  {
-    icon: MessageSquare,
-    title: 'Describe Your App',
-    description: 'Type a prompt describing the app you want to build. Our AI will generate a complete working application for you.',
-    accentColor: 'hsl(262 83% 58%)',
-  },
-  {
-    icon: Layout,
-    title: 'Pick a Template',
-    description: 'Not sure where to start? Choose from ready-made templates like dashboards, landing pages, or task managers.',
-    accentColor: 'hsl(200 80% 60%)',
-  },
-  {
-    icon: FolderOpen,
-    title: 'Open a Saved Project',
-    description: 'Your projects are saved automatically. Come back anytime to continue building or refine your app.',
-    accentColor: 'hsl(150 60% 50%)',
-  },
+// ─── Step 1: Project type ──────────────────────────────────────────────────
+
+interface ProjectType {
+  id: string;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+}
+
+const PROJECT_TYPES: ProjectType[] = [
+  { id: 'spa', label: 'Single Page App', description: 'Client-side React application', icon: <Globe size={20} /> },
+  { id: 'dashboard', label: 'Dashboard', description: 'Data visualization & analytics', icon: <LayoutDashboard size={20} /> },
+  { id: 'ecommerce', label: 'E-Commerce', description: 'Product catalog & shopping cart', icon: <ShoppingCart size={20} /> },
+  { id: 'task-app', label: 'Task Manager', description: 'Todo lists & project tracking', icon: <ClipboardList size={20} /> },
+  { id: 'landing', label: 'Landing Page', description: 'Marketing page with sections', icon: <Sparkles size={20} /> },
 ];
+
+// ─── Step 2: Features ──────────────────────────────────────────────────────
+
+interface Feature {
+  id: string;
+  label: string;
+}
+
+const FEATURES: Feature[] = [
+  { id: 'auth', label: 'User login' },
+  { id: 'dark-mode', label: 'Dark mode' },
+  { id: 'search', label: 'Search & filter' },
+  { id: 'responsive', label: 'Mobile responsive' },
+  { id: 'animations', label: 'Animations' },
+  { id: 'charts', label: 'Charts & graphs' },
+  { id: 'forms', label: 'Form validation' },
+  { id: 'notifications', label: 'Notifications' },
+];
+
+// ─── Step 3: Design preference ─────────────────────────────────────────────
+
+interface DesignStyle {
+  id: string;
+  label: string;
+  description: string;
+}
+
+const DESIGN_STYLES: DesignStyle[] = [
+  { id: 'minimal', label: 'Minimal', description: 'Clean lines, lots of whitespace' },
+  { id: 'colorful', label: 'Colorful', description: 'Bold colors, vibrant accents' },
+  { id: 'corporate', label: 'Professional', description: 'Business-ready, polished look' },
+];
+
+// ─── Prompt builder ────────────────────────────────────────────────────────
+
+function buildPromptFromChoices(
+  projectType: string | null,
+  features: Set<string>,
+  designStyle: string | null
+): string {
+  const typeLabels: Record<string, string> = {
+    spa: 'a React application',
+    dashboard: 'an analytics dashboard with charts and data tables',
+    ecommerce: 'an e-commerce product catalog with shopping cart',
+    'task-app': 'a task management app with lists and completion tracking',
+    landing: 'a landing page with hero section, features, and call-to-action',
+  };
+
+  const featureLabels: Record<string, string> = {
+    auth: 'user authentication with login and signup',
+    'dark-mode': 'dark mode toggle',
+    search: 'search and filter functionality',
+    responsive: 'fully responsive mobile layout',
+    animations: 'smooth transitions and micro-interactions',
+    charts: 'interactive charts and data visualization',
+    forms: 'form validation with error messages',
+    notifications: 'toast notifications for feedback',
+  };
+
+  const styleLabels: Record<string, string> = {
+    minimal: 'Use a minimal, clean design with plenty of whitespace.',
+    colorful: 'Use a vibrant, colorful design with bold accent colors.',
+    corporate: 'Use a professional, polished design suitable for business.',
+  };
+
+  let prompt = `Build ${typeLabels[projectType ?? 'spa'] ?? 'a React application'}`;
+
+  const featureList = Array.from(features)
+    .map(f => featureLabels[f])
+    .filter(Boolean);
+  if (featureList.length > 0) {
+    prompt += ` with ${featureList.join(', ')}`;
+  }
+
+  prompt += '.';
+
+  if (designStyle && styleLabels[designStyle]) {
+    prompt += ` ${styleLabels[designStyle]}`;
+  }
+
+  return prompt;
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────
 
 interface OnboardingOverlayProps {
   onDismiss: () => void;
+  /** Called with generated prompt when user completes the wizard */
+  onGeneratePrompt?: (prompt: string) => void;
 }
 
-export function OnboardingOverlay({ onDismiss }: OnboardingOverlayProps) {
+export function OnboardingOverlay({ onDismiss, onGeneratePrompt }: OnboardingOverlayProps) {
   const [currentStep, setCurrentStep] = useState(0);
+  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [selectedFeatures, setSelectedFeatures] = useState<Set<string>>(new Set());
+  const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+
+  const totalSteps = 3;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -49,11 +136,22 @@ export function OnboardingOverlay({ onDismiss }: OnboardingOverlayProps) {
     onDismiss();
   }, [onDismiss]);
 
+  const handleComplete = useCallback(() => {
+    localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+    const dialog = dialogRef.current;
+    if (dialog?.open) {
+      dialog.close();
+    }
+    const prompt = buildPromptFromChoices(selectedType, selectedFeatures, selectedStyle);
+    onGeneratePrompt?.(prompt);
+    onDismiss();
+  }, [onDismiss, onGeneratePrompt, selectedType, selectedFeatures, selectedStyle]);
+
   const handleNext = () => {
-    if (currentStep < steps.length - 1) {
+    if (currentStep < totalSteps - 1) {
       setCurrentStep(currentStep + 1);
     } else {
-      handleDismiss();
+      handleComplete();
     }
   };
 
@@ -63,14 +161,21 @@ export function OnboardingOverlay({ onDismiss }: OnboardingOverlayProps) {
     }
   };
 
+  const toggleFeature = (id: string) => {
+    setSelectedFeatures(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowRight') handleNext();
     else if (e.key === 'ArrowLeft') handlePrev();
   };
 
-  const step = steps[currentStep];
-  const Icon = step.icon;
-  const isLast = currentStep === steps.length - 1;
+  const isLast = currentStep === totalSteps - 1;
 
   return (
     <dialog
@@ -81,26 +186,81 @@ export function OnboardingOverlay({ onDismiss }: OnboardingOverlayProps) {
     >
       <div className="onboarding-content">
         <div className="onboarding-step-indicator">
-          {steps.map((_, i) => (
+          {Array.from({ length: totalSteps }, (_, i) => (
             <button
               key={i}
-              className={`onboarding-dot${i === currentStep ? ' onboarding-dot--active' : ''}`}
-              onClick={() => setCurrentStep(i)}
+              className={`onboarding-dot${i === currentStep ? ' onboarding-dot--active' : ''}${i < currentStep ? ' onboarding-dot--done' : ''}`}
+              onClick={() => i <= currentStep && setCurrentStep(i)}
               aria-label={`Step ${i + 1}`}
               type="button"
             />
           ))}
         </div>
 
-        <div
-          className="onboarding-icon"
-          style={{ '--accent-color': step.accentColor } as React.CSSProperties}
-        >
-          <Icon size={32} strokeWidth={1.5} />
-        </div>
+        {/* Step 1: Project Type */}
+        {currentStep === 0 && (
+          <>
+            <h2 id="onboarding-title" className="onboarding-title">What are you building?</h2>
+            <p className="onboarding-description">Pick a starting point — you can always change direction later.</p>
+            <div className="onboarding-choices">
+              {PROJECT_TYPES.map(pt => (
+                <button
+                  key={pt.id}
+                  type="button"
+                  className={`onboarding-choice${selectedType === pt.id ? ' onboarding-choice--selected' : ''}`}
+                  onClick={() => setSelectedType(pt.id)}
+                >
+                  <span className="onboarding-choice-icon">{pt.icon}</span>
+                  <span className="onboarding-choice-text">
+                    <span className="onboarding-choice-label">{pt.label}</span>
+                    <span className="onboarding-choice-desc">{pt.description}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
-        <h2 id="onboarding-title" className="onboarding-title">{step.title}</h2>
-        <p className="onboarding-description">{step.description}</p>
+        {/* Step 2: Features */}
+        {currentStep === 1 && (
+          <>
+            <h2 id="onboarding-title" className="onboarding-title">Add features</h2>
+            <p className="onboarding-description">Select any features you want included. All are optional.</p>
+            <div className="onboarding-features">
+              {FEATURES.map(f => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={`onboarding-feature-chip${selectedFeatures.has(f.id) ? ' onboarding-feature-chip--selected' : ''}`}
+                  onClick={() => toggleFeature(f.id)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Step 3: Design */}
+        {currentStep === 2 && (
+          <>
+            <h2 id="onboarding-title" className="onboarding-title">Design style</h2>
+            <p className="onboarding-description">Choose the overall look and feel.</p>
+            <div className="onboarding-styles">
+              {DESIGN_STYLES.map(ds => (
+                <button
+                  key={ds.id}
+                  type="button"
+                  className={`onboarding-style${selectedStyle === ds.id ? ' onboarding-style--selected' : ''}`}
+                  onClick={() => setSelectedStyle(ds.id)}
+                >
+                  <span className="onboarding-style-label">{ds.label}</span>
+                  <span className="onboarding-style-desc">{ds.description}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         <div className="onboarding-actions">
           {currentStep > 0 && (
@@ -119,7 +279,7 @@ export function OnboardingOverlay({ onDismiss }: OnboardingOverlayProps) {
             onClick={handleNext}
             autoFocus
           >
-            {isLast ? 'Get Started' : 'Next'}
+            {isLast ? 'Generate App' : 'Next'}
             <ArrowRight size={16} />
           </button>
         </div>
@@ -129,7 +289,7 @@ export function OnboardingOverlay({ onDismiss }: OnboardingOverlayProps) {
           className="onboarding-skip"
           onClick={handleDismiss}
         >
-          Skip
+          Skip — I'll write my own prompt
         </button>
       </div>
     </dialog>

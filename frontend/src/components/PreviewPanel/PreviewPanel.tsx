@@ -3,6 +3,7 @@ import {
   SandpackProvider,
   SandpackLayout,
   SandpackPreview,
+  SandpackConsole,
 } from '@codesandbox/sandpack-react';
 import { type ReactNode, useState, useCallback, useMemo, memo, useRef } from 'react';
 
@@ -20,7 +21,9 @@ import {
   hasRequiredFiles,
   DEFAULT_FILES,
   getEntryFile,
+  detectFullstackProject,
 } from './previewUtils';
+import { FullstackBanner } from './FullstackBanner';
 import { SandpackErrorListener } from './SandpackErrorListener';
 import { SandpackRefresher } from './SandpackRefresher';
 import './PreviewPanel.css';
@@ -117,6 +120,7 @@ const PreviewPanelComponent = function PreviewPanel({
   const [zoom, setZoom] = useState(100);
   const [compareMode, setCompareMode] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showConsole, setShowConsole] = useState(false);
 
   // Use forceCodeView when provided (for mobile three-tab layout)
   const effectiveShowCode = forceCodeView || showCode;
@@ -174,11 +178,19 @@ const PreviewPanelComponent = function PreviewPanel({
   // Determine the entry file
   const entryFile = useMemo(() => getEntryFile(sandpackFiles), [sandpackFiles]);
 
+  // Detect fullstack project for banner display
+  const fullstackInfo = useMemo(
+    () => detectFullstackProject(projectState?.files ?? {}),
+    [projectState?.files]
+  );
+
   return (
     <div className="preview-panel" role="region" aria-label="Application preview">
       <PreviewHeader
         showCode={effectiveShowCode}
         onViewChange={setShowCode}
+        showConsole={showConsole}
+        onToggleConsole={() => setShowConsole(prev => !prev)}
         toolbarProps={{
           presetId,
           customWidth,
@@ -209,6 +221,12 @@ const PreviewPanelComponent = function PreviewPanel({
         </div>
       ) : (
         <div className="preview-content" role="tabpanel" id="tabpanel-preview" aria-label="Live preview">
+          {fullstackInfo.isFullstack && (
+            <FullstackBanner
+              hasPrisma={fullstackInfo.hasPrisma}
+              hasApiRoutes={fullstackInfo.hasApiRoutes}
+            />
+          )}
           {compareMode ? (
             /* ── Compare mode: three fixed-size frames side by side ── */
             <div className="device-compare-container">
@@ -282,6 +300,17 @@ const PreviewPanelComponent = function PreviewPanel({
                   </div>
                 )}
               </SandpackLayout>
+              {showConsole && (
+                <div className="preview-console-panel">
+                  <SandpackConsole
+                    showHeader={false}
+                    showSyntaxError
+                    maxMessageCount={100}
+                    resetOnPreviewRestart
+                    style={{ height: '100%' }}
+                  />
+                </div>
+              )}
             </SandpackProvider>
           )}
         </div>

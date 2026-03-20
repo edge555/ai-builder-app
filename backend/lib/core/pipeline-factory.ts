@@ -18,6 +18,9 @@ import { getEffectiveProvider } from '../ai/provider-config-store';
 import { createPromptProvider } from './prompts/prompt-provider-factory';
 import { PipelineOrchestrator } from './pipeline-orchestrator';
 
+// Side-effect import: registers all prompt fragments so recipes can reference them
+import './recipes/fragment-registry';
+
 /**
  * Creates a fully-wired PipelineOrchestrator.
  *
