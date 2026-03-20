@@ -32,6 +32,7 @@ All notable changes to this project will be documented in this file.
 - **Plan review boolean coercion** — PlanReview `valid` field now correctly coerced from string to boolean
 - **Modification validation scope** — modification pipeline no longer fails with "Missing package.json" for partial file updates
 - **Agent config model** — updated default model to `google/gemini-2.5-flash` (gemini-2.0-flash-001 was discontinued)
+- **Upload route error headers** — 500 error responses from `/api/upload` now include CORS and rate-limit headers (previously missing, causing browser CORS failures on internal errors)
 
 ## [1.1.0] - 2026-03-20
 
