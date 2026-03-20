@@ -10,6 +10,19 @@
  * elsewhere in the pipeline.
  */
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+import type { PhaseLayer } from '../schemas';
+
+/**
+ * Per-phase fragment assignments for multi-phase generation.
+ * Each key maps to a list of prompt fragment keys injected
+ * into that phase's system prompt. Phases without explicit
+ * fragment lists fall back to the recipe's top-level
+ * `promptFragments`.
+ */
+export type PhaseFragments = Partial<Record<PhaseLayer, string[]>>;
+
 // ─── Interface ───────────────────────────────────────────────────────────────
 
 export interface GenerationRecipe {
@@ -30,6 +43,12 @@ export interface GenerationRecipe {
   previewStrategy: 'sandpack' | 'export-only';
   /** npm packages always included in generated package.json. */
   defaultDependencies: string[];
+  /**
+   * Optional per-phase prompt fragment assignments for multi-phase generation.
+   * When present, the phase executor injects only the listed fragments
+   * for each layer instead of the full `promptFragments` list.
+   */
+  phaseFragments?: PhaseFragments;
 }
 
 // ─── Fragment Registry (validated at registration time) ──────────────────────
@@ -82,6 +101,19 @@ const REACT_SPA: GenerationRecipe = {
   validationRules: ['imports', 'syntax', 'dependencies'],
   previewStrategy: 'sandpack',
   defaultDependencies: ['react', 'react-dom', 'lucide-react'],
+  phaseFragments: {
+    scaffold: ['DEPENDENCY_GUIDANCE', 'SYNTAX_INTEGRITY_RULES'],
+    logic: ['COMMON_REACT_PATTERNS', 'SYNTAX_INTEGRITY_RULES'],
+    ui: [
+      'LAYOUT_FUNDAMENTALS',
+      'BASELINE_VISUAL_POLISH',
+      'REALISTIC_DATA_GUIDANCE',
+      'ACCESSIBILITY_GUIDANCE',
+      'COMMON_REACT_PATTERNS',
+      'SYNTAX_INTEGRITY_RULES',
+    ],
+    integration: ['COMMON_REACT_PATTERNS', 'SYNTAX_INTEGRITY_RULES'],
+  },
 };
 
 /**
@@ -118,6 +150,19 @@ const NEXTJS_PRISMA: GenerationRecipe = {
   validationRules: ['imports', 'syntax', 'dependencies', 'prisma', 'server-client-boundary'],
   previewStrategy: 'export-only',
   defaultDependencies: ['next', 'react', 'react-dom', 'prisma', '@prisma/client', 'lucide-react'],
+  phaseFragments: {
+    scaffold: ['DEPENDENCY_GUIDANCE', 'SYNTAX_INTEGRITY_RULES', 'DATABASE_SCHEMA_GUIDANCE'],
+    logic: ['COMMON_REACT_PATTERNS', 'SYNTAX_INTEGRITY_RULES', 'NEXTJS_API_PATTERNS'],
+    ui: [
+      'LAYOUT_FUNDAMENTALS',
+      'BASELINE_VISUAL_POLISH',
+      'REALISTIC_DATA_GUIDANCE',
+      'ACCESSIBILITY_GUIDANCE',
+      'COMMON_REACT_PATTERNS',
+      'SYNTAX_INTEGRITY_RULES',
+    ],
+    integration: ['COMMON_REACT_PATTERNS', 'SYNTAX_INTEGRITY_RULES', 'FULLSTACK_STRUCTURE'],
+  },
 };
 
 /**
@@ -159,6 +204,19 @@ const NEXTJS_SUPABASE_AUTH: GenerationRecipe = {
   validationRules: ['imports', 'syntax', 'dependencies', 'server-client-boundary'],
   previewStrategy: 'export-only',
   defaultDependencies: ['next', 'react', 'react-dom', '@supabase/supabase-js', '@supabase/ssr', 'lucide-react'],
+  phaseFragments: {
+    scaffold: ['DEPENDENCY_GUIDANCE', 'SYNTAX_INTEGRITY_RULES', 'AUTH_SCAFFOLDING_GUIDANCE'],
+    logic: ['COMMON_REACT_PATTERNS', 'SYNTAX_INTEGRITY_RULES', 'NEXTJS_API_PATTERNS', 'AUTH_SCAFFOLDING_GUIDANCE'],
+    ui: [
+      'LAYOUT_FUNDAMENTALS',
+      'BASELINE_VISUAL_POLISH',
+      'REALISTIC_DATA_GUIDANCE',
+      'ACCESSIBILITY_GUIDANCE',
+      'COMMON_REACT_PATTERNS',
+      'SYNTAX_INTEGRITY_RULES',
+    ],
+    integration: ['COMMON_REACT_PATTERNS', 'SYNTAX_INTEGRITY_RULES', 'FULLSTACK_STRUCTURE', 'AUTH_SCAFFOLDING_GUIDANCE'],
+  },
 };
 
 // ─── Registration ────────────────────────────────────────────────────────────
@@ -196,6 +254,16 @@ export function validateRecipeFragments(): string[] {
     for (const frag of recipe.promptFragments) {
       if (!isKnownFragment(frag)) {
         errors.push(`Recipe "${recipe.id}" references unknown fragment "${frag}"`);
+      }
+    }
+    // Also validate per-phase fragments if present
+    if (recipe.phaseFragments) {
+      for (const [phase, frags] of Object.entries(recipe.phaseFragments)) {
+        for (const frag of frags) {
+          if (!isKnownFragment(frag)) {
+            errors.push(`Recipe "${recipe.id}" phase "${phase}" references unknown fragment "${frag}"`);
+          }
+        }
       }
     }
   }

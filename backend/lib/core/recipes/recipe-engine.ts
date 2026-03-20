@@ -151,6 +151,48 @@ export function composeExecutionPrompt(
   return parts.filter(Boolean).join('\n\n');
 }
 
+/**
+ * Compose a prompt fragment block for a specific pipeline phase.
+ * 
+ * Looks up `recipe.phaseFragments[phase]` and concatenates the fragments.
+ * If the recipe lacks specific fragments for the phase, it falls back to a default set
+ * of SPA fragments.
+ */
+export function composePhasePrompt(
+  recipe: GenerationRecipe | undefined | null,
+  phase: string
+): string {
+  // If recipe provides specific fragments for this phase, use them
+  if (recipe?.phaseFragments) {
+    const keys = recipe.phaseFragments[phase as keyof typeof recipe.phaseFragments];
+    if (keys && keys.length > 0) {
+      const parts: string[] = [];
+      for (const key of keys) {
+        const text = getFragment(key);
+        if (text) parts.push(text);
+        else logger.warn('Missing phase prompt fragment, skipping', { fragment: key, recipe: recipe.id, phase });
+      }
+      return parts.join('\n\n');
+    }
+  }
+
+  // Fallback to default SPA fragments based on the phase.
+  // Generally, UI and Integration phases need full visual/patterns guidance,
+  // while logic and scaffold prompts are heavily structured and don't need all visual patterns.
+  // For safety and fallback context, we'll provide the comprehensive regular set 
+  // similar to what was originally in getUIPrompt.
+  const DEFAULT_SPA_PHASE_FRAGMENTS = [
+    'LAYOUT_FUNDAMENTALS',
+    'BASELINE_VISUAL_POLISH',
+    'REALISTIC_DATA_GUIDANCE',
+    'ACCESSIBILITY_GUIDANCE',
+    'COMMON_REACT_PATTERNS',
+    'SYNTAX_INTEGRITY_RULES'
+  ];
+  
+  return DEFAULT_SPA_PHASE_FRAGMENTS.map(key => getFragment(key)).filter(Boolean).join('\n\n');
+}
+
 const CSS_BEST_PRACTICES = `=== CSS BEST PRACTICES ===
 - BEM-like naming per component. No inline styles. Use modern CSS (aspect-ratio, clamp()).
 - Components MUST reference these variables instead of hardcoded values.

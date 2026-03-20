@@ -7,9 +7,12 @@
  * @requires ./schemas - IntentOutput, PlanOutput types (via ../../core/schemas)
  */
 
-import type { IntentOutput, PlanOutput } from '../schemas';
+import type { IntentOutput, PlanOutput, ArchitecturePlan } from '../schemas';
+import type { PhaseContext } from '../batch-context-builder';
+import type { PhaseLayer } from '../schemas';
+import type { GenerationRecipe } from '../recipes/recipe-types';
 
-export type { IntentOutput, PlanOutput };
+export type { IntentOutput, PlanOutput, ArchitecturePlan, PhaseLayer };
 
 /**
  * Unified prompt interface for the 4-stage pipeline.
@@ -59,6 +62,33 @@ export interface IPromptProvider {
    */
   getBugfixSystemPrompt(errorContext: string, failureHistory: string[]): string;
 
+  // ─── Multi-Phase Pipeline (Phase 3+) ─────────────────────────────────────
+
+  /**
+   * System prompt for the architecture planning stage.
+   * Returns a full ArchitecturePlan JSON with files, typeContracts,
+   * cssVariables, stateShape, and layer assignments.
+   */
+  getArchitecturePlanningPrompt(userPrompt: string, intent: IntentOutput | null): string;
+
+  /**
+   * System prompt for the plan review stage.
+   * AI validates the plan for internal consistency and returns corrections.
+   */
+  getPlanReviewPrompt(plan: ArchitecturePlan): string;
+
+  /**
+   * System prompt for a specific generation phase.
+   * Delegates to the appropriate function in phase-prompts.ts.
+   */
+  getPhasePrompt(
+    phase: PhaseLayer,
+    plan: ArchitecturePlan,
+    context: PhaseContext,
+    userPrompt: string,
+    recipe?: GenerationRecipe,
+  ): string;
+
   /**
    * Per-stage output token budgets.
    * The orchestrator passes these as `maxOutputTokens` in each AI request.
@@ -70,5 +100,12 @@ export interface IPromptProvider {
     executionModification: number;
     review: number;
     bugfix: number;
+    /** Multi-phase pipeline budgets */
+    architecturePlanning: number;
+    planReview: number;
+    scaffold: number;
+    logic: number;
+    ui: number;
+    integration: number;
   };
 }

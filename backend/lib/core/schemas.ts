@@ -116,3 +116,69 @@ export const ReviewOutputSchema = z.object({
 });
 
 export type ReviewOutput = z.infer<typeof ReviewOutputSchema>;
+
+// ─── Architecture Plan Schema (Multi-Phase Generation Pipeline) ────────────
+
+/** Valid layer assignments for files in an architecture plan. */
+export const PhaseLayerEnum = z.enum(['scaffold', 'logic', 'ui', 'integration']);
+export type PhaseLayer = z.infer<typeof PhaseLayerEnum>;
+
+/** Schema for type contract definitions shared across phases. */
+export const TypeContractSchema = z.object({
+  name: z.string().min(1).describe('Type/interface name (e.g. "Todo", "User")'),
+  definition: z.string().min(1).describe('Full TypeScript interface/type text'),
+});
+
+/** Schema for CSS variable definitions planned across the project. */
+export const CSSVariableSchema = z.object({
+  name: z.string().min(1).describe('CSS variable name (e.g. "--color-primary")'),
+  value: z.string().min(1).describe('CSS variable value (e.g. "#6366f1")'),
+  purpose: z.string().min(1).describe('What this variable is used for'),
+});
+
+/** Schema for a planned file in the architecture. */
+export const PlannedFileSchema = z.object({
+  path: z.string().min(1).regex(PATH_REGEX, 'Path contains invalid characters').describe('File path relative to project root'),
+  purpose: z.string().min(1).describe('What this file does'),
+  layer: PhaseLayerEnum.describe('Which generation phase produces this file'),
+  exports: z.array(z.string()).describe('Named exports this file provides'),
+  imports: z.array(z.string()).describe('File paths this file imports from'),
+});
+
+/** Schema for the state shape: contexts and hooks planned for the project. */
+export const StateShapeSchema = z.object({
+  contexts: z.array(z.object({
+    name: z.string().min(1).describe('Context name (e.g. "ThemeContext")'),
+    stateFields: z.array(z.string()).describe('State field names/types'),
+    actions: z.array(z.string()).describe('Action/dispatch function names'),
+  })).optional().describe('React contexts to implement'),
+  hooks: z.array(z.object({
+    name: z.string().min(1).describe('Hook name (e.g. "useTodos")'),
+    signature: z.string().min(1).describe('TypeScript signature (e.g. "() => { todos: Todo[]; addTodo: (t: Todo) => void }")'),
+    purpose: z.string().min(1).describe('What this hook provides'),
+  })).optional().describe('Custom hooks to implement'),
+});
+
+/**
+ * Full architecture plan produced by the planning phase.
+ * Defines the file structure, type contracts, CSS variables,
+ * and state shape that all subsequent generation phases must follow.
+ */
+export const ArchitecturePlanSchema = z.object({
+  files: z.array(PlannedFileSchema).min(1).describe('All files to generate with layer assignments'),
+  components: z.array(z.string()).describe('React components to implement'),
+  dependencies: z.array(z.string()).describe('npm packages to include'),
+  routing: z.array(z.string()).describe('Routes to define'),
+
+  typeContracts: z.array(TypeContractSchema).describe('Shared type/interface definitions used across files'),
+
+  cssVariables: z.array(CSSVariableSchema).describe('CSS custom properties for design consistency'),
+
+  stateShape: StateShapeSchema.optional().describe('Planned contexts and hooks for state management'),
+});
+
+export type ArchitecturePlan = z.infer<typeof ArchitecturePlanSchema>;
+export type PlannedFile = z.infer<typeof PlannedFileSchema>;
+export type TypeContract = z.infer<typeof TypeContractSchema>;
+export type CSSVariable = z.infer<typeof CSSVariableSchema>;
+export type StateShape = z.infer<typeof StateShapeSchema>;

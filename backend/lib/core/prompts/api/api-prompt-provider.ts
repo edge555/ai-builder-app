@@ -11,6 +11,9 @@
  */
 
 import type { IPromptProvider, IntentOutput, PlanOutput } from '../prompt-provider';
+import type { ArchitecturePlan, PhaseLayer } from '../prompt-provider';
+import type { PhaseContext } from '../../batch-context-builder';
+import type { GenerationRecipe } from '../../recipes/recipe-types';
 import {
   detectComplexity,
   getFileRequirements,
@@ -36,9 +39,21 @@ import {
   MAX_OUTPUT_TOKENS_GENERATION,
   MAX_OUTPUT_TOKENS_MODIFICATION,
   MAX_OUTPUT_TOKENS_REVIEW,
+  MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING,
+  MAX_OUTPUT_TOKENS_PLAN_REVIEW,
+  MAX_OUTPUT_TOKENS_SCAFFOLD,
+  MAX_OUTPUT_TOKENS_LOGIC,
+  MAX_OUTPUT_TOKENS_UI,
+  MAX_OUTPUT_TOKENS_INTEGRATION,
 } from '../../../constants';
-import type { GenerationRecipe } from '../../recipes/recipe-types';
 import { composeExecutionPrompt } from '../../recipes/recipe-engine';
+import {
+  getScaffoldPrompt,
+  getLogicPrompt,
+  getUIPrompt,
+  getIntegrationPrompt,
+  getPlanReviewPrompt as buildPlanReviewPrompt,
+} from '../phase-prompts';
 
 /** Token budget for bugfix = same as modification (full file set may need rewriting) */
 const BUGFIX_BUDGET = MAX_OUTPUT_TOKENS_MODIFICATION;
@@ -61,6 +76,13 @@ export class ApiPromptProvider implements IPromptProvider {
     executionModification: MAX_OUTPUT_TOKENS_MODIFICATION,
     review: MAX_OUTPUT_TOKENS_REVIEW,
     bugfix: BUGFIX_BUDGET,
+    // Multi-phase pipeline
+    architecturePlanning: MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING,
+    planReview: MAX_OUTPUT_TOKENS_PLAN_REVIEW,
+    scaffold: MAX_OUTPUT_TOKENS_SCAFFOLD,
+    logic: MAX_OUTPUT_TOKENS_LOGIC,
+    ui: MAX_OUTPUT_TOKENS_UI,
+    integration: MAX_OUTPUT_TOKENS_INTEGRATION,
   };
 
   getIntentSystemPrompt(): string {
@@ -249,5 +271,113 @@ ${errorContext}
 Fix ALL errors. Return the complete modified project as JSON with all files.
 Common fixes: add missing dependencies to package.json, fix broken imports, correct TypeScript errors.
 ${SYNTAX_INTEGRITY_RULES}`;
+  }
+
+  // ─── Multi-Phase Pipeline Methods ──────────────────────────────────────
+
+  /**
+   * Architecture planning: request a full ArchitecturePlan JSON.
+   * The AI must produce files with layer assignments, typeContracts,
+   * cssVariables, stateShape, and dependency lists.
+   */
+  getArchitecturePlanningPrompt(userPrompt: string, intent: IntentOutput | null): string {
+    const intentBlock = intent
+      ? `=== INTENT ANALYSIS ===\nGoal: ${intent.clarifiedGoal}\nComplexity: ${intent.complexity}\nFeatures: ${intent.features.join(', ')}\nApproach: ${intent.technicalApproach}\n`
+      : '';
+
+    return `You are a SENIOR React software architect creating a detailed architecture plan for a multi-phase code generator.
+
+${intentBlock}
+=== OUTPUT: ArchitecturePlan JSON ===
+Return a single valid JSON object matching this schema exactly:
+
+{
+  "files": [
+    {
+      "path": "src/types/index.ts",
+      "purpose": "TypeScript interfaces",
+      "layer": "scaffold" | "logic" | "ui" | "integration",
+      "exports": ["SymbolName"],
+      "imports": ["src/other/file.ts"]
+    }
+  ],
+  "components": ["ComponentName"],
+  "dependencies": ["react", "react-dom"],
+  "routing": ["/", "/dashboard"],
+  "typeContracts": [
+    { "name": "TypeName", "definition": "interface TypeName { ... }" }
+  ],
+  "cssVariables": [
+    { "name": "--color-primary", "value": "#6366f1", "purpose": "Brand color" }
+  ],
+  "stateShape": {
+    "contexts": [{ "name": "CtxName", "stateFields": ["field: Type"], "actions": ["actionName"] }],
+    "hooks": [{ "name": "useHookName", "signature": "() => { ... }", "purpose": "..." }]
+  }
+}
+
+=== PLANNING RULES ===
+1. LAYERS (assign every file to exactly one):
+   - "scaffold": types, interfaces, CSS tokens, package.json, main.tsx, index.css
+   - "logic": hooks, contexts, utilities, API clients
+   - "ui": React components (.tsx), co-located CSS files (.css)
+   - "integration": pages, App.tsx, routing, top-level providers
+
+2. FILES: Include every file the app needs. Use paths like "src/types/index.ts", "src/hooks/useFoo.ts", "src/components/ui/Button.tsx".
+
+3. EXPORTS: List the TypeScript symbols each file exports (function names, interface names, component names).
+
+4. IMPORTS: List other files in this plan that this file imports from (by path). Only list plan-internal paths.
+
+5. TYPE CONTRACTS: Define the full TypeScript interface/type text for key shared types. These will be enforced exactly by scaffold generation.
+
+6. CSS VARIABLES: Define ALL design tokens (colors, spacing, radii, shadows, fonts). These will be placed exactly in :root.
+
+7. STATE SHAPE: Define the signature for every hook and context that will be shared across components.
+
+8. DEPENDENCIES: Include only what is needed. Prefer: react, react-dom, lucide-react, react-router-dom.
+
+Base file count on complexity:
+- simple: 6–9 files
+- medium: 10–14 files
+- complex: 15–22 files
+
+Respond with valid JSON only. No markdown, no explanation.
+
+${getOutputBudgetGuidance(MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING)}
+
+${wrapUserInput(userPrompt)}`;
+  }
+
+  /**
+   * Plan review: validates the ArchitecturePlan for internal consistency.
+   * Delegates to getPlanReviewPrompt from phase-prompts.ts.
+   */
+  getPlanReviewPrompt(plan: ArchitecturePlan): string {
+    return buildPlanReviewPrompt(plan);
+  }
+
+  /**
+   * Phase prompt dispatcher.
+   * Delegates to the appropriate function in phase-prompts.ts based on phase.
+   * Recipe phaseFragments are injected into getUIPrompt when available.
+   */
+  getPhasePrompt(
+    phase: PhaseLayer,
+    plan: ArchitecturePlan,
+    context: PhaseContext,
+    userPrompt: string,
+    recipe?: GenerationRecipe,
+  ): string {
+    switch (phase) {
+      case 'scaffold':
+        return getScaffoldPrompt(plan, userPrompt);
+      case 'logic':
+        return getLogicPrompt(plan, context, userPrompt);
+      case 'ui':
+        return getUIPrompt(plan, context, userPrompt, recipe);
+      case 'integration':
+        return getIntegrationPrompt(plan, context, userPrompt);
+    }
   }
 }
