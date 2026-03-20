@@ -8,7 +8,13 @@ export default defineConfig({
       '**/dist/**',
     ],
     environment: 'node',
-    pool: 'threads',
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        maxForks: 2,
+        minForks: 1,
+      },
+    },
     setupFiles: ['./lib/__tests__/setup.ts'],
     globals: false,
     testTimeout: 10000,
