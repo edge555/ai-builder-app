@@ -185,7 +185,10 @@ export type StateShape = z.infer<typeof StateShapeSchema>;
 
 // Plan Review Output Schema
 export const PlanReviewSchema = z.object({
-  valid: z.boolean().describe('Whether the architecture plan is internally consistent'),
+  valid: z.preprocess(
+    (v) => (typeof v === 'string' ? v === 'true' : v),
+    z.boolean()
+  ).describe('Whether the architecture plan is internally consistent'),
   issues: z.array(z.object({
     type: z.enum(['dangling_import', 'missing_type', 'wrong_layer', 'circular_dep', 'missing_export']).describe('Type of issue found'),
     file: z.string().describe('Path of the file with the issue'),
