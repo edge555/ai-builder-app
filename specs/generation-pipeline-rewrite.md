@@ -482,6 +482,83 @@ User Prompt
 
 ---
 
+## Frontend Design Decisions (Design Review — 2026-03-21)
+
+> Decisions made during `/plan-design-review` to ensure UI components ship with intentional design.
+
+### First-Time User Flow
+
+```
+Welcome Page (templates grid)
+    │
+    ├── New user (onboarding not seen)
+    │   └── OnboardingOverlay (3-step wizard)
+    │       ├── Step 1: Project type (5 options)
+    │       ├── Step 2: Features (8 toggle chips)
+    │       └── Step 3: Design style (3 options)
+    │           └── "Generate App" → builds prompt → Builder Page
+    │
+    └── Returning user
+        └── Template click or text prompt → Builder Page
+
+Builder Page
+    ├── ChatPanel (prompt input + messages)
+    │   ├── ChatInput (text + image attachments)
+    │   ├── Phase progress labels (during generation)
+    │   └── GenerationSummaryCard (after generation)
+    ├── PreviewPanel (Sandpack + FullstackBanner if applicable)
+    └── CodeEditor
+```
+
+### Interaction State Table
+
+| Feature | Loading | Empty | Error | Success | Partial |
+|---------|---------|-------|-------|---------|---------|
+| OnboardingOverlay | N/A | N/A | localStorage fail → still works (in-memory) | Generates prompt → dismisses | User skips selections → generic prompt generated |
+| GenerationSummaryCard | N/A | Returns null (no card shown) | Malformed package.json → skip deps section | Full stats + tree + deps | 0 components/routes → only show file count + tree, skip empty stat chips |
+| ChatInput image attach | Spinner overlay on thumbnail | No images = no preview strip | Red border + retry icon on failed thumbnail + error tooltip on hover | Thumbnail with upload complete state | Mixed: uploaded thumbnails shown, pending ones show spinner |
+| FullstackBanner | N/A | N/A | N/A | Shows "API routes and database available after export" | N/A |
+| Phase progress (SSE) | "Generating scaffold (phase 1/4)..." | N/A | Warning-colored text (#B45309) for degraded phases | "Phase complete" text | Shows progress for completed + current phase |
+
+### Design System Alignment
+
+| Decision | Detail |
+|----------|--------|
+| Wizard titles | 24px Fraunces italic (`2xl` token) — brand moment for first interaction |
+| Token usage | **Strict** — all components must use DESIGN.md tokens exclusively |
+| `--gradient-primary` | Add to DESIGN.md as sanctioned token: `linear-gradient(135deg, var(--orange-500), var(--orange-700))` for CTA buttons |
+| FullstackBanner colors | Replace hardcoded `hsl(25 80% 50%)` with `var(--orange-50)` bg / `var(--orange-100)` border |
+| Feature chips `border-radius: 9999px` | Correct — chips are pills per DESIGN.md |
+| Summary badge `border-radius: 9999px` | Correct — status badge per DESIGN.md |
+
+### Responsive Behavior
+
+| Component | Mobile (<768px) | Tablet (768-1023px) | Desktop (≥1024px) |
+|-----------|----------------|--------------------|--------------------|
+| OnboardingOverlay | Full-width dialog, design styles stack vertically, title 20px | Same as desktop (dialog is max 480px) | Centered 480px dialog |
+| GenerationSummaryCard | Stats wrap if needed, tree truncated to 4 dirs | Same as desktop (within chat panel) | Full stats row + 6 dirs + 8 dep tags |
+| ChatInput image strip | Horizontal scroll with fade edge hint (max 5 images) | Same as desktop | Inline thumbnails, all visible |
+| FullstackBanner | Text wraps, icon stays left-aligned | Same as desktop | Single-line banner |
+
+### Accessibility
+
+| Component | Requirement |
+|-----------|-------------|
+| OnboardingOverlay | `<dialog>` with `showModal()` for focus trap. `aria-labelledby` on title. Arrow keys for step navigation. |
+| Project type buttons | `aria-selected="true/false"` on selected/unselected |
+| Feature chips | `aria-pressed="true/false"` for toggle state |
+| Design style buttons | `aria-selected="true/false"` on selected/unselected |
+| All interactive elements | `prefers-reduced-motion` disables transitions (already implemented) |
+| Phase progress | Use `role="status"` + `aria-live="polite"` for progress text updates |
+
+### Phase Progress Error Visual
+
+Degraded pipeline phases use DESIGN.md Warning color (`#B45309`) for progress label text:
+- Normal: "Generating scaffold (phase 1/4)..." in default foreground
+- Degraded: "Planning skipped — using fallback" in `#B45309`
+
+---
+
 ## NOT in Scope (Deferred)
 
 | Item | Rationale |

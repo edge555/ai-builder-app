@@ -117,6 +117,7 @@ Warm whites and near-blacks (2° warm hue shift vs. cold grays). Avoids the clin
 --fg-muted:     #787268;
 --border:       #E8E5DF;
 --primary:      #D4622A;   /* orange-600 */
+--gradient-primary: linear-gradient(135deg, #E8612A, #B54C1A);  /* orange-500 → orange-700, for CTA buttons only */
 
 /* Dark mode */
 --bg:           #111110;   /* warm near-black */
@@ -127,7 +128,10 @@ Warm whites and near-blacks (2° warm hue shift vs. cold grays). Avoids the clin
 --fg-muted:     #A8A39A;
 --border:       #403C36;
 --primary:      #E8612A;   /* orange-500 — slightly brighter in dark */
+--gradient-primary: linear-gradient(135deg, #F7844A, #D4622A);  /* orange-400 → orange-600, brighter in dark */
 ```
+
+**`--gradient-primary` usage:** CTA/primary action buttons only (e.g., "Generate App", "Create Project"). Secondary and utility buttons use solid `--primary`. Do not use gradients on cards, backgrounds, or decorative elements.
 
 ---
 
@@ -238,3 +242,5 @@ These are the deliberate departures from the category baseline:
 | 2026-03-18 | Geist Sans for all UI text                | Technical credibility, legible at small sizes, pairs naturally with Geist Mono. Avoids overused Inter. |
 | 2026-03-18 | 4px spacing base, comfortable density     | Right balance between marketing moments (welcome page) and dense builder UI. |
 | 2026-03-18 | 8–16px border radius (not uniform pills)  | Warm but not bubbly. Avoids the uniform 9999px pill pattern that reads as generic AI slop. |
+| 2026-03-21 | `--gradient-primary` for CTA buttons        | Sanctioned gradient token for primary CTAs. Solid `--primary` for all other buttons. |
+| 2026-03-21 | Fraunces for brand-moment UI titles         | Onboarding wizard titles at 24px use Fraunces italic — first interaction = brand moment. |

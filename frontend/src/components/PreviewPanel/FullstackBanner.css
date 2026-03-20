@@ -3,8 +3,8 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: hsl(25 80% 50% / 0.12);
-  border: 1px solid hsl(25 80% 50% / 0.25);
+  background: hsl(var(--primary) / 0.1);
+  border: 1px solid hsl(var(--primary) / 0.2);
   border-radius: 6px;
   margin: 8px 10px 0;
   font-size: 0.8125rem;
@@ -14,5 +14,5 @@
 
 .fullstack-banner svg {
   flex-shrink: 0;
-  color: hsl(25 80% 55%);
+  color: hsl(var(--primary));
 }
