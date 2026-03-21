@@ -80,6 +80,10 @@ export interface ModifyProjectResponse {
   changeSummary?: ChangeSummary;
   /** Error message (if unsuccessful) */
   error?: string;
+  /** True when some files were modified but others had to be rolled back */
+  partialSuccess?: boolean;
+  /** Files that were rolled back to their pre-modification state */
+  rolledBackFiles?: string[];
 }
 
 // ============================================================================

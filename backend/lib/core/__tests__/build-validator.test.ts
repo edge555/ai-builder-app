@@ -479,4 +479,172 @@ describe('BuildValidator', () => {
         const result = validator.validate(files);
         expect(result.valid).toBe(false);
     });
+
+    // ─── Cross-file reference validation ─────────────────────────────────────
+
+    describe('validateCrossFileReferences', () => {
+        it('should detect missing named export', () => {
+            const files = {
+                'src/App.tsx': "import { Helper } from './utils';\nexport default function App() { return null; }",
+                'src/utils.ts': 'export const NotHelper = () => {};',
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            expect(errors.length).toBe(1);
+            expect(errors[0].type).toBe('import_export_mismatch');
+            expect(errors[0].message).toContain('Helper');
+            expect(errors[0].message).toContain('not exported');
+        });
+
+        it('should not false-positive on barrel file (export *)', () => {
+            const files = {
+                'src/App.tsx': "import { Widget } from './components';\nexport default function App() { return null; }",
+                'src/components/index.ts': "export * from './Widget';",
+                'src/components/Widget.ts': 'export const Widget = () => {};',
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            expect(errors.length).toBe(0);
+        });
+
+        it('should not false-positive on re-export', () => {
+            const files = {
+                'src/App.tsx': "import { format } from './utils';\nexport default function App() { return null; }",
+                'src/utils.ts': "export { format } from './helpers';",
+                'src/helpers.ts': 'export const format = (x: string) => x;',
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            expect(errors.length).toBe(0);
+        });
+
+        it('should not false-positive on type-only import', () => {
+            const files = {
+                'src/App.tsx': "import type { User } from './types';\nexport default function App() { return null; }",
+                'src/types.ts': 'export interface User { id: string; }',
+            };
+
+            // type-only imports are skipped entirely
+            const errors = validator.validateCrossFileReferences(files);
+            expect(errors.length).toBe(0);
+        });
+
+        it('should handle import { X as Y } alias correctly', () => {
+            const files = {
+                'src/App.tsx': "import { helper as myHelper } from './utils';\nexport default function App() { return null; }",
+                'src/utils.ts': 'export const helper = () => {};',
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            expect(errors.length).toBe(0);
+        });
+
+        it('should detect error when aliased import source does not exist', () => {
+            const files = {
+                'src/App.tsx': "import { missing as alias } from './utils';\nexport default function App() { return null; }",
+                'src/utils.ts': 'export const something = () => {};',
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            expect(errors.length).toBe(1);
+            expect(errors[0].message).toContain('missing');
+        });
+
+        it('should handle combo default + named imports', () => {
+            const files = {
+                'src/App.tsx': "import App, { helper } from './utils';\nexport default function Main() { return null; }",
+                'src/utils.ts': 'export default function App() {}\nexport const helper = () => {};',
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            expect(errors.length).toBe(0);
+        });
+
+        // ─── New package import → verify in package.json ─────────────────
+
+        it('should detect package import not in package.json', () => {
+            const files = {
+                'src/App.tsx': "import { motion } from 'framer-motion';\nexport default function App() { return null; }",
+                'package.json': JSON.stringify({ name: 'test', dependencies: { react: '^18.2.0' } }),
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            const depErrors = errors.filter(e => e.type === 'missing_dependency');
+            expect(depErrors.length).toBe(1);
+            expect(depErrors[0].message).toContain('framer-motion');
+            expect(depErrors[0].message).toContain('not declared in package.json');
+        });
+
+        it('should not flag package that is in package.json', () => {
+            const files = {
+                'src/App.tsx': "import { motion } from 'framer-motion';\nexport default function App() { return null; }",
+                'package.json': JSON.stringify({ name: 'test', dependencies: { 'framer-motion': 'latest' } }),
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            const depErrors = errors.filter(e => e.type === 'missing_dependency');
+            expect(depErrors.length).toBe(0);
+        });
+
+        it('should not flag react (built-in module)', () => {
+            const files = {
+                'src/App.tsx': "import { useState } from 'react';\nexport default function App() { return null; }",
+                'package.json': JSON.stringify({ name: 'test', dependencies: {} }),
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            const depErrors = errors.filter(e => e.type === 'missing_dependency');
+            expect(depErrors.length).toBe(0);
+        });
+
+        it('should not flag path alias imports (@/)', () => {
+            const files = {
+                'src/App.tsx': "import { helper } from '@/utils';\nexport default function App() { return null; }",
+                'package.json': JSON.stringify({ name: 'test', dependencies: {} }),
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            const depErrors = errors.filter(e => e.type === 'missing_dependency');
+            expect(depErrors.length).toBe(0);
+        });
+
+        // ─── Removed export → verify no other file imports it ────────────
+
+        it('should detect removed export still imported by another file', () => {
+            const files = {
+                'src/App.tsx': "import { formatDate } from './utils';\nexport default function App() { return null; }",
+                'src/utils.ts': 'export const formatName = (n: string) => n;',  // formatDate was removed
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            expect(errors.some(e =>
+                e.type === 'import_export_mismatch' &&
+                e.message.includes('formatDate')
+            )).toBe(true);
+        });
+
+        it('should not flag when export still exists', () => {
+            const files = {
+                'src/App.tsx': "import { formatDate } from './utils';\nexport default function App() { return null; }",
+                'src/utils.ts': 'export const formatDate = (d: Date) => d.toISOString();',
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            expect(errors.filter(e => e.message.includes('formatDate')).length).toBe(0);
+        });
+
+        it('should detect removed export through barrel file', () => {
+            const files = {
+                'src/App.tsx': "import { Widget } from './components';\nexport default function App() { return null; }",
+                'src/components/index.ts': "export * from './Widget';",
+                'src/components/Widget.ts': 'export const OtherThing = () => {};',  // Widget was renamed
+            };
+
+            const errors = validator.validateCrossFileReferences(files);
+            expect(errors.some(e =>
+                e.type === 'import_export_mismatch' &&
+                e.message.includes('Widget')
+            )).toBe(true);
+        });
+    });
 });

@@ -161,7 +161,7 @@ export abstract class BaseProjectGenerator {
                     strategy: `AI generation failed when asked to fix: ${buildResult.errors.map(e => e.message).join('; ')}`,
                     timestamp: new Date().toISOString(),
                 });
-                break;
+                continue;
             }
 
             try {
@@ -178,7 +178,7 @@ export abstract class BaseProjectGenerator {
                         strategy: 'Attempted to fix build errors but returned invalid schema',
                         timestamp: new Date().toISOString(),
                     });
-                    break;
+                    continue;
                 }
 
                 const fixedOutput = zodResult.data;
@@ -194,7 +194,7 @@ export abstract class BaseProjectGenerator {
                         strategy: 'Attempted to fix build errors but introduced syntax errors',
                         timestamp: new Date().toISOString(),
                     });
-                    break;
+                    continue;
                 }
 
                 currentFiles = revalidation.sanitizedOutput!;
@@ -211,15 +211,15 @@ export abstract class BaseProjectGenerator {
                         timestamp: new Date().toISOString(),
                     });
                 }
-            } catch (e) {
-                contextLogger.error('Failed to parse fix response', { error: e instanceof Error ? e.message : 'Unknown error' });
+            } catch (parseError) {
+                contextLogger.error('Failed to parse fix response', { error: parseError instanceof Error ? parseError.message : 'Unknown error' });
                 failureHistory.push({
                     attempt: buildRetryCount,
-                    error: e instanceof Error ? e.message : 'Unknown parsing error',
+                    error: parseError instanceof Error ? parseError.message : 'Unknown parsing error',
                     strategy: `AI returned unparseable response when asked to fix: ${buildResult.errors.map(e => e.message).join('; ')}`,
                     timestamp: new Date().toISOString(),
                 });
-                break;
+                continue;
             }
         }
 

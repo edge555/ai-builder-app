@@ -135,6 +135,15 @@ function formatPhaseContext(context: PhaseContext): string {
     sections.push(formatTypeContracts(context.relevantContracts.typeContracts));
   }
 
+  // Missing planned imports — warn AI not to import files that were never generated
+  if (context.missingPlannedImports?.length > 0) {
+    sections.push(
+      `=== WARNING: MISSING FILES (planned but NOT generated — do NOT import these) ===\n` +
+      context.missingPlannedImports.map(p => `  - ${p}`).join('\n') +
+      `\nThese files were planned but never generated. Inline the needed logic or remove the dependency.`
+    );
+  }
+
   return sections.join('\n\n');
 }
 

@@ -65,7 +65,15 @@ describe('GenerationPipeline (Phase 5)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.executePhase.mockResolvedValue({ files: [], warnings: [] });
+    // Return a realistic result: at least the files expected by the phase plan.
+    // The implementation uses the plan's files list to determine batch contents,
+    // so the mock must return matching file paths to pass the zero-file guard.
+    mocks.executePhase.mockImplementation(async (phaseDef: any) => {
+      const files = (phaseDef.plan?.files ?? [])
+        .filter((f: any) => f.layer === phaseDef.layer)
+        .map((f: any) => ({ path: f.path, content: `// ${f.path}` }));
+      return { files, warnings: [] };
+    });
 
     mockIntentProvider = { generate: vi.fn(), generateStreaming: vi.fn() };
     mockPlanningProvider = { generate: vi.fn(), generateStreaming: vi.fn() };

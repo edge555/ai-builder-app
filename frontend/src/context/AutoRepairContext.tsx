@@ -62,7 +62,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
       // Show repair attempt number
       const attemptNumber = generationState.autoRepairAttempt + 1;
       chatMessages.addAssistantMessage(
-        `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
+        `🔧 Auto-repair attempt ${attemptNumber}/${previewErrorState.maxRepairAttempts}: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
       );
 
       generationActions.autoRepair(errorToRepair, projectState, previewErrorState.aggregatedErrors)
@@ -148,7 +148,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
       // Show repair attempt number
       const attemptNumber = generationState.autoRepairAttempt + 1;
       chatMessages.addAssistantMessage(
-        `🔧 Auto-repair attempt ${attemptNumber}/3: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
+        `🔧 Auto-repair attempt ${attemptNumber}/${previewErrorState.maxRepairAttempts}: Analyzing ${errorToRepair.type.toLowerCase().replace('_', ' ')}...`
       );
 
       const success = await generationActions.autoRepair(errorToRepair, projectState, previewErrorState.aggregatedErrors);

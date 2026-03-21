@@ -25,7 +25,9 @@ import { toSimpleJsonSchema } from './zod-to-json-schema';
 import { createLogger } from '../logger';
 import type { CodeSlice } from '../analysis/file-planner/types';
 import { MAX_REVIEW_CONTENT_CHARS } from '../constants';
+import { getFileOutline } from '../analysis/slice-selector';
 import { selectRecipe } from './recipes/recipe-engine';
+import { extractJsonFromResponse } from '../ai/modal-response-parser';
 import { config } from '../config';
 
 const logger = createLogger('PipelineOrchestrator');
@@ -104,6 +106,14 @@ export class PipelineOrchestrator {
       ? logger.withRequestId(options.requestId)
       : logger;
 
+    const pipelineStartMs = Date.now();
+    contextLogger.info('[MOD-PIPELINE] start', {
+      promptPreview: userPrompt.slice(0, 150),
+      currentFileCount: Object.keys(currentFiles).length,
+      sliceCount: fileSlices.length,
+      primaryFiles: fileSlices.filter(s => s.relevance === 'primary').map(s => s.filePath),
+    });
+
     // ── Stage 1: Intent ──────────────────────────────────────────────────────
     const intentOutput = await this.runIntentStage(userPrompt, callbacks, contextLogger);
 
@@ -134,7 +144,170 @@ export class PipelineOrchestrator {
 
     const finalFiles = this.mergeReviewCorrections(mergedForReview, reviewOutput);
 
+    contextLogger.info('[MOD-PIPELINE] complete', {
+      durationMs: Date.now() - pipelineStartMs,
+      executorFileCount: executorContent.length,
+      executorFilePaths: executorContent.filter(f => f.path !== '__pipeline_raw__').map(f => f.path),
+      finalFileCount: finalFiles.length,
+      reviewVerdict: reviewOutput?.verdict ?? 'skipped',
+    });
+
     return { intentOutput, planOutput, executorFiles: executorContent, reviewOutput, finalFiles };
+  }
+
+  // ─── Ordered Execution Pipeline (Phase 3) ─────────────────────────────────
+
+  /**
+   * Runs the ordered modification pipeline for changes involving >3 files.
+   * Executes per tier (topological parallelization) with per-file validation.
+   */
+  async runOrderedModificationPipeline(
+    userPrompt: string,
+    currentFiles: Record<string, string>,
+    tiers: string[][],
+    validateFile: (path: string, content: string) => Promise<{ valid: boolean; errorText?: string }>,
+    callbacks: PipelineCallbacks,
+    options?: { requestId?: string; designSystem?: boolean }
+  ): Promise<PipelineResult> {
+    const contextLogger = options?.requestId
+      ? logger.withRequestId(options.requestId)
+      : logger;
+
+    // ── Stage 1: Intent ──────────────────────────────────────────────────────
+    const intentOutput = await this.runIntentStage(userPrompt, callbacks, contextLogger);
+    if (callbacks.signal?.aborted) throw new Error('Modification cancelled by client');
+
+    // ── Stage 2: Planning ────────────────────────────────────────────────────
+    const planOutput = await this.runPlanningStage(userPrompt, intentOutput, callbacks, contextLogger);
+    if (callbacks.signal?.aborted) throw new Error('Modification cancelled by client');
+
+    callbacks.onStageStart?.('execution', `Applying ordered modifications (${tiers.length} tiers)…`);
+    contextLogger.debug('Ordered execution stage start', { tiers: tiers.length });
+
+    const accumulatedChanges = new Map<string, string>();
+
+    let tierIndex = 1;
+    for (const tierFiles of tiers) {
+      contextLogger.debug(`Executing tier ${tierIndex}/${tiers.length}`, { fileCount: tierFiles.length });
+      
+      const promises = tierFiles.map(async (filePath) => {
+        return this.processFileWithRetry(
+          filePath,
+          userPrompt,
+          currentFiles,
+          accumulatedChanges,
+          validateFile,
+          callbacks,
+          options?.designSystem ?? false
+        );
+      });
+
+      const results = await Promise.all(promises);
+      
+      for (const result of results) {
+        if (result && result.content) {
+          accumulatedChanges.set(result.filePath, result.content);
+        }
+      }
+      tierIndex++;
+    }
+
+    callbacks.onStageComplete?.('execution');
+    contextLogger.info('Ordered execution stage complete');
+
+    const executorContent = Array.from(accumulatedChanges.entries()).map(([path, content]) => ({ path, content }));
+
+    // ── Stage 4: Review ──────────────────────────────────────────────────────
+    const mergedForReview = this.applyModificationsToFiles(currentFiles, executorContent);
+    const reviewOutput = await this.runReviewStage(mergedForReview, callbacks, contextLogger);
+    const finalFiles = this.mergeReviewCorrections(mergedForReview, reviewOutput);
+
+    return { intentOutput, planOutput, executorFiles: executorContent, reviewOutput, finalFiles };
+  }
+
+  private async processFileWithRetry(
+    targetFilePath: string,
+    userPrompt: string,
+    currentFiles: Record<string, string>,
+    accumulatedChanges: Map<string, string>,
+    validateFile: (path: string, content: string) => Promise<{ valid: boolean; errorText?: string }>,
+    callbacks: PipelineCallbacks,
+    designSystem: boolean,
+    attempt: number = 1
+  ): Promise<{ filePath: string; content: string } | null> {
+    if (callbacks.signal?.aborted) return null;
+
+    // Build focused prompt for this file
+    const prompt = this.buildFocusedPrompt(targetFilePath, userPrompt, currentFiles, accumulatedChanges);
+    const systemInstruction = this.promptProvider.getExecutionModificationSystemPrompt(
+      userPrompt,
+      null, // Intent and plan can be null for focused single-file generation
+      null,
+      designSystem
+    );
+
+    const response = await this.executionProvider.generateStreaming({
+      prompt,
+      systemInstruction,
+      maxOutputTokens: this.promptProvider.tokenBudgets.executionModification,
+      signal: callbacks.signal,
+      onChunk: callbacks.onExecutionChunk,
+    });
+
+    if (!response.success || !response.content) {
+      if (attempt === 1) {
+        logger.warn(`Execution failed for ${targetFilePath}, retrying...`);
+        return this.processFileWithRetry(targetFilePath, userPrompt, currentFiles, accumulatedChanges, validateFile, callbacks, designSystem, 2);
+      }
+      return null;
+    }
+
+    const generatedFiles = this.parseModificationOutput(response.content);
+    // Find the targeted file generated content
+    const targetFileGen = generatedFiles.find((f: GeneratedFile) => f.path === targetFilePath);
+    
+    if (!targetFileGen) {
+      if (attempt === 1) {
+         return this.processFileWithRetry(targetFilePath, userPrompt, currentFiles, accumulatedChanges, validateFile, callbacks, designSystem, 2);
+      }
+      return null;
+    }
+
+    const validation = await validateFile(targetFilePath, targetFileGen.content);
+    
+    if (!validation.valid) {
+      if (attempt === 1) {
+        logger.warn(`Validation failed for ${targetFilePath}, retrying...`, { error: validation.errorText });
+        return this.processFileWithRetry(targetFilePath, userPrompt, currentFiles, accumulatedChanges, validateFile, callbacks, designSystem, 2);
+      }
+    }
+
+    return { filePath: targetFilePath, content: targetFileGen.content };
+  }
+
+  private buildFocusedPrompt(
+    targetFilePath: string,
+    userPrompt: string,
+    currentFiles: Record<string, string>,
+    accumulatedChanges: Map<string, string>
+  ): string {
+    const lines: string[] = [`User Request: ${userPrompt}\n`];
+    lines.push('=== TARGET FILE (modify this full file) ===\n');
+    const targetContent = accumulatedChanges.get(targetFilePath) ?? currentFiles[targetFilePath] ?? '';
+    lines.push(`--- ${targetFilePath} ---\n${targetContent}\n`);
+
+    lines.push('=== MODIFIED CONTEXT FILES (outlines of other changed files) ===\n');
+    let hasContext = false;
+    for (const [path, content] of accumulatedChanges.entries()) {
+      if (path !== targetFilePath) {
+        hasContext = true;
+        lines.push(`--- ${path} ---\n${getFileOutline(content, path)}\n`);
+      }
+    }
+    if (!hasContext) lines.push('(No other modified files yet)\n');
+
+    lines.push('Based on the user request and context, output ONLY the JSON object { "files": [...] } for the TARGET FILE. No markdown fences.');
+    return lines.join('\n');
   }
 
   // ─── Correction Merger ────────────────────────────────────────────────────
@@ -184,6 +357,7 @@ export class PipelineOrchestrator {
     contextLogger: ReturnType<typeof logger.withRequestId>
   ): Promise<IntentOutput | null> {
     callbacks.onStageStart?.('intent', 'Analyzing your request…');
+    const stageStartMs = Date.now();
     contextLogger.debug('Intent stage start');
 
     try {
@@ -206,7 +380,11 @@ export class PipelineOrchestrator {
         throw new Error(`Intent schema mismatch: ${zodResult.error.message}`);
       }
 
-      contextLogger.info('Intent stage complete', { complexity: zodResult.data.complexity });
+      contextLogger.info('Intent stage complete', {
+        complexity: zodResult.data.complexity,
+        features: zodResult.data.features ?? [],
+        durationMs: Date.now() - stageStartMs,
+      });
       callbacks.onStageComplete?.('intent');
       return zodResult.data;
     } catch (err) {
@@ -227,6 +405,7 @@ export class PipelineOrchestrator {
       ? `Planning ${intentOutput.features.length} features…`
       : 'Planning architecture…';
     callbacks.onStageStart?.('planning', planLabel);
+    const stageStartMs = Date.now();
     contextLogger.debug('Planning stage start');
 
     try {
@@ -253,6 +432,8 @@ export class PipelineOrchestrator {
       contextLogger.info('Planning stage complete', {
         fileCount: plan.files.length,
         depCount: plan.dependencies.length,
+        filePaths: plan.files.map(f => f.path),
+        durationMs: Date.now() - stageStartMs,
       });
       callbacks.onStageComplete?.('planning');
       return plan;
@@ -276,7 +457,12 @@ export class PipelineOrchestrator {
     designSystem: boolean
   ): Promise<GeneratedFile[]> {
     callbacks.onStageStart?.('execution', 'Applying modifications…');
-    contextLogger.debug('Execution (modification) stage start');
+    const stageStartMs = Date.now();
+    contextLogger.info('Execution (modification) stage start', {
+      primaryFiles: fileSlices.filter(s => s.relevance === 'primary').map(s => s.filePath),
+      contextFiles: fileSlices.filter(s => s.relevance === 'context').map(s => s.filePath),
+      designSystem,
+    });
 
     // Build the modification user prompt with code context
     const modificationUserPrompt = this.buildModificationUserPrompt(userPrompt, fileSlices);
@@ -299,11 +485,15 @@ export class PipelineOrchestrator {
     }
 
     callbacks.onStageComplete?.('execution');
+    const parsedFiles = this.parseModificationOutput(response.content);
     contextLogger.info('Execution (modification) stage complete', {
       contentLength: response.content.length,
+      parsedFileCount: parsedFiles.length,
+      parsedFilePaths: parsedFiles.filter(f => f.path !== '__pipeline_raw__').map(f => f.path),
+      durationMs: Date.now() - stageStartMs,
     });
 
-    return this.parseModificationOutput(response.content);
+    return parsedFiles;
   }
 
   private async runReviewStage(
@@ -312,6 +502,7 @@ export class PipelineOrchestrator {
     contextLogger: ReturnType<typeof logger.withRequestId>
   ): Promise<ReviewOutput | null> {
     callbacks.onStageStart?.('review', 'Reviewing for errors…');
+    const stageStartMs = Date.now();
     contextLogger.debug('Review stage start', { fileCount: files.length });
 
     try {
@@ -339,6 +530,8 @@ export class PipelineOrchestrator {
       contextLogger.info('Review stage complete', {
         verdict: zodResult.data.verdict,
         corrections: zodResult.data.corrections.length,
+        correctedFiles: zodResult.data.corrections.map(c => c.path),
+        durationMs: Date.now() - stageStartMs,
       });
       callbacks.onStageComplete?.('review');
       return zodResult.data;
@@ -358,22 +551,61 @@ export class PipelineOrchestrator {
    * (create / replace_file operations). modify/delete operations are
    * returned as-is for the ModificationEngine to apply via its diff engine.
    *
-   * Returns raw JSON string wrapped in an array entry so ModificationEngine
-   * can consume it unchanged.
+   * Uses extractJsonFromResponse to handle markdown-fenced output, extra
+   * surrounding text, and other common LLM output quirks.
    */
   private parseModificationOutput(content: string): GeneratedFile[] {
+    const jsonStr = extractJsonFromResponse(content);
+
+    if (!jsonStr) {
+      logger.error('Failed to extract JSON from modification output', {
+        contentLength: content.length,
+        preview: content.slice(0, 300),
+      });
+      return [{ path: '__pipeline_raw__', content }];
+    }
+
     try {
-      const parsed = JSON.parse(content);
-      const files = parsed?.files;
-      if (!Array.isArray(files)) return [];
-      return files
+      const parsed = JSON.parse(jsonStr);
+
+      // Normalize to an array of file objects:
+      // 1. { "files": [...] }  — standard format
+      // 2. [ {...}, {...} ]    — bare array (model omitted wrapper)
+      // 3. { "path": "..." }  — single file object
+      let files: unknown[];
+      if (Array.isArray(parsed?.files)) {
+        files = parsed.files;
+      } else if (Array.isArray(parsed)) {
+        files = parsed;
+      } else if (typeof parsed?.path === 'string') {
+        files = [parsed];
+      } else {
+        logger.warn('Modification output has unrecognized structure', {
+          keys: Object.keys(parsed ?? {}),
+          preview: jsonStr.slice(0, 200),
+        });
+        return [];
+      }
+
+      const result = files
         .filter((f: unknown) => typeof (f as { path?: unknown }).path === 'string')
         .map((f: { path: string; content?: string; operation?: string }) => ({
           path: f.path,
           content: typeof f.content === 'string' ? f.content : JSON.stringify(f),
         }));
-    } catch {
-      // Return raw content wrapped as a single file for ModificationEngine to parse
+
+      const formatDetected = Array.isArray(parsed?.files) ? 'wrapped' : Array.isArray(parsed) ? 'bare-array' : 'single-object';
+      logger.info('Modification output parsed', {
+        formatDetected,
+        fileCount: result.length,
+        filePaths: result.map(f => f.path),
+      });
+      return result;
+    } catch (err) {
+      logger.error('Failed to parse extracted JSON from modification output', {
+        error: err instanceof Error ? err.message : String(err),
+        jsonLength: jsonStr.length,
+      });
       return [{ path: '__pipeline_raw__', content }];
     }
   }
@@ -424,7 +656,7 @@ export class PipelineOrchestrator {
       }
     }
 
-    lines.push('Based on the user request, output ONLY the JSON with modified/new files.');
+    lines.push('Based on the user request, output ONLY the JSON object { "files": [...] } with modified/new files. No markdown fences.');
     return lines.join('\n');
   }
 
@@ -443,7 +675,12 @@ export class PipelineOrchestrator {
     const result: Record<string, string> = { ...currentFiles };
 
     for (const mod of modifications) {
-      if (mod.path === '__pipeline_raw__') continue;
+      if (mod.path === '__pipeline_raw__') {
+        logger.warn('Skipping unparsed raw pipeline output in applyModificationsToFiles', {
+          contentLength: mod.content.length,
+        });
+        continue;
+      }
 
       // Detect JSON-encoded operation (modify/delete have no file content)
       let encodedOp: { operation?: string } | null = null;

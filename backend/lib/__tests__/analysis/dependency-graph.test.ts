@@ -243,6 +243,151 @@ export default function App() { return <div>{helper()}</div>; }`,
     });
   });
 
+  describe('getTopologicalOrder', () => {
+    it('should return linear chain in dependency-first order (A->B->C)', () => {
+      // C depends on B, B depends on A
+      const projectState = createProjectState({
+        'src/a.ts': 'export const a = 1;',
+        'src/b.ts': `import { a } from './a';\nexport const b = a;`,
+        'src/c.ts': `import { b } from './b';\nexport const c = b;`,
+      });
+
+      fileIndex.index(projectState);
+      dependencyGraph.build(fileIndex);
+
+      const order = dependencyGraph.getTopologicalOrder(['src/a.ts', 'src/b.ts', 'src/c.ts']);
+
+      // a should come before b, b should come before c
+      const idxA = order.indexOf('src/a.ts');
+      const idxB = order.indexOf('src/b.ts');
+      const idxC = order.indexOf('src/c.ts');
+      expect(idxA).toBeLessThan(idxB);
+      expect(idxB).toBeLessThan(idxC);
+    });
+
+    it('should handle diamond dependency', () => {
+      // D depends on B and C, B depends on A, C depends on A
+      const projectState = createProjectState({
+        'src/a.ts': 'export const a = 1;',
+        'src/b.ts': `import { a } from './a';\nexport const b = a;`,
+        'src/c.ts': `import { a } from './a';\nexport const c = a;`,
+        'src/d.ts': `import { b } from './b';\nimport { c } from './c';\nexport const d = b + c;`,
+      });
+
+      fileIndex.index(projectState);
+      dependencyGraph.build(fileIndex);
+
+      const order = dependencyGraph.getTopologicalOrder(['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts']);
+
+      const idxA = order.indexOf('src/a.ts');
+      const idxB = order.indexOf('src/b.ts');
+      const idxC = order.indexOf('src/c.ts');
+      const idxD = order.indexOf('src/d.ts');
+      // A before B and C, B and C before D
+      expect(idxA).toBeLessThan(idxB);
+      expect(idxA).toBeLessThan(idxC);
+      expect(idxB).toBeLessThan(idxD);
+      expect(idxC).toBeLessThan(idxD);
+    });
+
+    it('should break cycles with warning (not infinite loop)', () => {
+      const projectState = createProjectState({
+        'src/a.ts': `import { b } from './b';\nexport const a = 1;`,
+        'src/b.ts': `import { a } from './a';\nexport const b = 2;`,
+      });
+
+      fileIndex.index(projectState);
+      dependencyGraph.build(fileIndex);
+
+      const order = dependencyGraph.getTopologicalOrder(['src/a.ts', 'src/b.ts']);
+
+      // Both files should appear exactly once
+      expect(order).toHaveLength(2);
+      expect(order).toContain('src/a.ts');
+      expect(order).toContain('src/b.ts');
+    });
+
+    it('should only include requested files in output', () => {
+      const projectState = createProjectState({
+        'src/a.ts': 'export const a = 1;',
+        'src/b.ts': `import { a } from './a';\nexport const b = a;`,
+        'src/c.ts': `import { b } from './b';\nexport const c = b;`,
+      });
+
+      fileIndex.index(projectState);
+      dependencyGraph.build(fileIndex);
+
+      // Only request b and c, not a
+      const order = dependencyGraph.getTopologicalOrder(['src/b.ts', 'src/c.ts']);
+
+      expect(order).toHaveLength(2);
+      expect(order).toContain('src/b.ts');
+      expect(order).toContain('src/c.ts');
+      expect(order).not.toContain('src/a.ts');
+      // b before c (b is a dependency of c within the set)
+      expect(order.indexOf('src/b.ts')).toBeLessThan(order.indexOf('src/c.ts'));
+    });
+  });
+
+  describe('getTransitivelyAffected', () => {
+    it('should return direct dependents (not the seeds)', () => {
+      const projectState = createProjectState({
+        'src/App.tsx': `import { helper } from './utils';\nexport default function App() { return <div>{helper()}</div>; }`,
+        'src/utils.ts': 'export function helper() { return "hello"; }',
+      });
+
+      fileIndex.index(projectState);
+      dependencyGraph.build(fileIndex);
+
+      const affected = dependencyGraph.getTransitivelyAffected(['src/utils.ts']);
+      expect(affected.has('src/App.tsx')).toBe(true);
+      expect(affected.has('src/utils.ts')).toBe(false);
+    });
+
+    it('should return transitive dependents', () => {
+      const projectState = createProjectState({
+        'src/main.tsx': `import App from './App';\nexport default function Main() { return <App />; }`,
+        'src/App.tsx': `import { helper } from './utils';\nexport default function App() { return <div>{helper()}</div>; }`,
+        'src/utils.ts': 'export function helper() { return "hello"; }',
+      });
+
+      fileIndex.index(projectState);
+      dependencyGraph.build(fileIndex);
+
+      const affected = dependencyGraph.getTransitivelyAffected(['src/utils.ts']);
+      expect(affected.has('src/App.tsx')).toBe(true);
+      expect(affected.has('src/main.tsx')).toBe(true);
+    });
+
+    it('should return empty set when no dependents', () => {
+      const projectState = createProjectState({
+        'src/standalone.ts': 'export const x = 1;',
+      });
+
+      fileIndex.index(projectState);
+      dependencyGraph.build(fileIndex);
+
+      const affected = dependencyGraph.getTransitivelyAffected(['src/standalone.ts']);
+      expect(affected.size).toBe(0);
+    });
+
+    it('should handle cycles without infinite loop', () => {
+      const projectState = createProjectState({
+        'src/a.ts': `import { b } from './b';\nexport const a = 1;`,
+        'src/b.ts': `import { a } from './a';\nexport const b = 2;`,
+        'src/c.ts': `import { a } from './a';\nexport const c = 3;`,
+      });
+
+      fileIndex.index(projectState);
+      dependencyGraph.build(fileIndex);
+
+      const affected = dependencyGraph.getTransitivelyAffected(['src/a.ts']);
+      // b depends on a, c depends on a
+      expect(affected.has('src/b.ts')).toBe(true);
+      expect(affected.has('src/c.ts')).toBe(true);
+    });
+  });
+
   describe('getAllFiles', () => {
     it('should return all files in the graph', () => {
       const projectState = createProjectState({

@@ -33,6 +33,8 @@ export interface ChatMessage {
   isError?: boolean;
   /** Prompt to re-submit when the user retries an error message */
   retryPrompt?: string;
+  /** How long the generation/modification took in milliseconds */
+  durationMs?: number;
 }
 
 /**

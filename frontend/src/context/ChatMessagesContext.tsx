@@ -42,7 +42,7 @@ export function ChatMessagesProvider({ children, initialMessages }: ChatMessages
   /**
    * Adds an assistant message to the chat history.
    */
-  const addAssistantMessage = useCallback((content: string, changeSummary?: ChangeSummary, diffs?: FileDiff[]): ChatMessage => {
+  const addAssistantMessage = useCallback((content: string, changeSummary?: ChangeSummary, diffs?: FileDiff[], durationMs?: number): ChatMessage => {
     const message: ChatMessage = {
       id: generateId(),
       role: 'assistant',
@@ -50,6 +50,7 @@ export function ChatMessagesProvider({ children, initialMessages }: ChatMessages
       timestamp: new Date(),
       changeSummary,
       diffs,
+      durationMs,
     };
     setMessages((prev) => [...prev, message]);
     return message;

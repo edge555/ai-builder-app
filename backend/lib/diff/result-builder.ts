@@ -7,7 +7,8 @@ export async function createModificationResult(
   projectState: ProjectState,
   updatedFiles: Record<string, string | null>,
   deletedFiles: string[],
-  prompt: string
+  prompt: string,
+  options?: { partialSuccess?: boolean; rolledBackFiles?: string[] }
 ): Promise<ModificationResult> {
   const now = new Date();
   const versionId = uuidv4();
@@ -48,5 +49,7 @@ export async function createModificationResult(
     version,
     diffs,
     changeSummary,
+    ...(options?.partialSuccess && { partialSuccess: true }),
+    ...(options?.rolledBackFiles?.length && { rolledBackFiles: options.rolledBackFiles }),
   };
 }

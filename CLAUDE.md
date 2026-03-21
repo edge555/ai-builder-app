@@ -137,8 +137,10 @@ backend/
 │   │   │   ├── fragment-registry.ts        # Central fragment key → prompt text registry
 │   │   │   └── fullstack-fragments.ts      # Next.js, Prisma, Supabase Auth fragments
 │   │   └── version-manager.ts      # FIFO/LRU version eviction
-│   ├── analysis/      # Dependency graph, file indexing, AI-powered file planner
-│   ├── diff/          # Modification engine (with progress callbacks), multi-tier matcher, prompt builder
+│   ├── analysis/      # Dependency graph, impact analyzer, file indexing, AI-powered file planner
+│   ├── diff/          # Modification engine (with progress callbacks), diagnostic repair engine,
+│   │                  #   deterministic fixes, root-cause analyzer, checkpoint manager,
+│   │                  #   diff size guard, multi-tier matcher, prompt builder
 │   ├── streaming/     # SSE backpressure controller, SSEEncoder, stream-lifecycle
 │   │   └── stream-lifecycle.ts     # Heartbeat, timeout, abort, cleanup management
 │   ├── utils/         # Incremental JSON parser (O(n)), path security
@@ -209,7 +211,7 @@ npm run lint                   # All workspaces
 6. Files validated, formatted (Prettier), version-pinned (package.json deps), streamed back to frontend
 7. Progress events emitted during modification phases (planning → generating → validating → applying)
 8. Frontend updates ProjectContext → PreviewPanel (Sandpack) re-renders
-9. Auto-save to IndexedDB; auto-repair triggers if preview errors detected (max 3 attempts)
+9. Auto-save to IndexedDB; auto-repair triggers if preview errors detected (max 5 attempts, escalating: deterministic fixes → targeted AI → broad AI → per-file rollback)
 10. `beforeunload` warning prevents accidental tab close during active generation
 
 ### AI Provider System
@@ -231,9 +233,14 @@ Multi-provider architecture with runtime switching:
 ### Auto-Repair Flow
 
 1. `SandpackErrorListener` catches runtime errors → `ErrorAggregatorProvider` deduplicates
-2. `AutoRepairProvider` evaluates: error count > 0, not generating, attempts < 3
-3. Sends error details + current files to `/api/modify-stream`
+2. `AutoRepairProvider` evaluates: error count > 0, not generating, attempts < 5
+3. `DiagnosticRepairEngine` escalates through repair tiers:
+   - **Deterministic fixes**: Missing deps, broken imports, export mismatches, unclosed syntax (zero AI cost)
+   - **Targeted AI repair**: Root-cause analysis focuses repair on the causal file (temp 0.2)
+   - **Broad AI repair**: Full error context sent to AI (temp 0.4)
+   - **Per-file rollback**: `CheckpointManager` restores pre-modification state for unfixable files
 4. Modified files streamed back; `RepairStatus` + `ErrorOverlay` show progress
+5. Modifications with >3 files execute in dependency order via `ImpactAnalyzer` topological ordering
 
 ### State Management
 
@@ -315,11 +322,11 @@ Multi-provider architecture with runtime switching:
 
 ## Testing
 
-- **Backend**: Vitest + Node env, 99 test files in `lib/**/*.test.ts` and `app/api/__tests__/` (unit, perf, integration, eval)
+- **Backend**: Vitest + Node env, 105 test files in `lib/**/*.test.ts` and `app/api/__tests__/` (unit, perf, integration, eval)
 - **Frontend**: Vitest + jsdom + React Testing Library, 26 test files in `src/**/__tests__/*.{test,spec}.{ts,tsx}`
 - **Shared**: Vitest + Node env, 5 test files
 
-See [testing_guide.md](testing_guide.md) for file naming conventions, mock patterns, and per-framework examples.
+See [TESTING_GUIDE.md](TESTING_GUIDE.md) for file naming conventions, mock patterns, and per-framework examples.
 
 ## Key Design Patterns
 

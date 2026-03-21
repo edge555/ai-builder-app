@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-03-21
+
+### Added
+- **Diagnostic repair engine** — smarter error recovery that escalates through four tiers: deterministic fixes → targeted AI (temp 0.2) → broad AI (temp 0.4) → per-file rollback. Batches all errors into single AI calls, cutting worst-case repair cost from ~48K to ~18K output tokens
+- **Deterministic fixes** — zero-cost fixes for missing dependencies, broken imports, export mismatches, and unclosed syntax errors before any AI call
+- **Root cause analyzer** — hybrid dependency-graph + AI analysis traces build errors back to the file that actually caused them, focusing repair on the right target
+- **Diff size guard** — auto-converts modify operations to full replacements when >90% of a file changed, preventing misleading diffs at zero token cost
+- **Cross-file validation** — validates import/export consistency across all project files, catching broken references before they reach the preview
+- **Impact analyzer** — computes topological modification order, parallelizable tiers, and affected-but-unmodified files for dependency-aware execution
+- **Ordered execution mode** — files with >3 modifications execute in dependency order with per-file validation and retry, using outlines for already-modified context
+- **Checkpoint manager** — captures pre-modification file state for per-file rollback during repair escalation
+- **Partial success support** — modifications that fix some files but roll back others now report `partialSuccess` with the list of rolled-back files through the full API stack
+- **Richer auto-repair context** — repair prompts now include 5 lines of surrounding source code and the current attempt number, helping the AI pinpoint errors faster
+
+### Changed
+- Auto-repair now tries up to 5 attempts (was 3), giving the escalation ladder room to work through all tiers
+- Modification engine routes execution: ≤3 files → single-shot, >3 files → ordered (dependency-aware)
+- `ModifyProjectResponse` extended with `partialSuccess` and `rolledBackFiles` fields (shared types + both backend routes)
+- Dependency graph extended with `getTopologicalOrder()` and `getTransitivelyAffected()` methods
+
+### Removed
+- `build-fixer.ts` and its tests — replaced by `DiagnosticRepairEngine`
+
 ## [1.2.0] - 2026-03-21
 
 ### Added

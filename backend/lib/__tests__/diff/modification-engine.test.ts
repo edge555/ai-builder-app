@@ -9,7 +9,11 @@ import type { ProjectState } from '@ai-app-builder/shared';
 vi.mock('../../core/validation-pipeline');
 vi.mock('../../core/build-validator');
 vi.mock('../../analysis');
-vi.mock('../../diff/build-fixer');
+vi.mock('../../diff/diagnostic-repair-engine');
+vi.mock('../../diff/checkpoint-manager');
+vi.mock('../../config', () => ({
+  getMaxOutputTokens: vi.fn(() => 16384),
+}));
 vi.mock('../../core/validators', async (importOriginal) => {
   const actual = await importOriginal<any>();
   return {
@@ -20,7 +24,8 @@ vi.mock('../../core/validators', async (importOriginal) => {
 
 import { ValidationPipeline } from '../../core/validation-pipeline';
 import * as buildValidatorModule from '../../core/build-validator';
-import * as buildFixerModule from '../../diff/build-fixer';
+import { DiagnosticRepairEngine } from '../../diff/diagnostic-repair-engine';
+import { CheckpointManager } from '../../diff/checkpoint-manager';
 import { createFilePlanner, TokenBudgetManager } from '../../analysis';
 
 const makePipelineResult = (finalFiles: Array<{ path: string; content: string }>, executorFiles = finalFiles) => ({
@@ -38,6 +43,8 @@ describe('ModificationEngine', () => {
   let mockValidationPipeline: any;
   let mockBuildValidator: any;
   let mockFilePlanner: any;
+  let mockRepairEngine: any;
+  let mockCheckpointManager: any;
   let engine: ModificationEngine;
 
   const createProjectState = (files: Record<string, string>): ProjectState => ({
@@ -75,16 +82,34 @@ describe('ModificationEngine', () => {
     mockBuildValidator = {
       validate: vi.fn().mockReturnValue({ valid: true, errors: [] }),
       formatErrorsForAI: vi.fn(),
+      validateCrossFileReferences: vi.fn().mockReturnValue([]),
     };
     mockFilePlanner = {
       planWithCategory: vi.fn().mockResolvedValue({ slices: [], category: 'mixed' }),
+    };
+    mockRepairEngine = {
+      repair: vi.fn().mockResolvedValue({
+        updatedFiles: {},
+        success: true,
+        partialSuccess: false,
+        rolledBackFiles: [],
+        repairLevel: 'deterministic',
+        totalAICalls: 0,
+      }),
+    };
+    mockCheckpointManager = {
+      capture: vi.fn(),
+      rollback: vi.fn().mockReturnValue(null),
+      rollbackAll: vi.fn().mockReturnValue({}),
+      has: vi.fn().mockReturnValue(false),
     };
 
     vi.mocked(ValidationPipeline).mockImplementation(function () { return mockValidationPipeline; });
     vi.mocked(buildValidatorModule.createBuildValidator).mockReturnValue(mockBuildValidator);
     vi.mocked(buildValidatorModule.BuildValidator).mockImplementation(function () { return mockBuildValidator; });
     vi.mocked(createFilePlanner).mockReturnValue(mockFilePlanner);
-    vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({ updatedFiles: {} });
+    vi.mocked(DiagnosticRepairEngine).mockImplementation(function () { return mockRepairEngine; });
+    vi.mocked(CheckpointManager).mockImplementation(function () { return mockCheckpointManager; });
     // TokenBudgetManager.trimToFit must return an array (not undefined) to avoid slices.length TypeError
     vi.mocked(TokenBudgetManager).mockImplementation(function () {
       return { trimToFit: vi.fn((slices: any[]) => slices) };
@@ -135,8 +160,9 @@ describe('ModificationEngine', () => {
         valid: true,
         sanitizedOutput: { 'src/App.tsx': originalContent },
       });
-      vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({
+      mockRepairEngine.repair.mockResolvedValue({
         updatedFiles: { 'src/App.tsx': originalContent.replace('Hello', 'Hello World') },
+        success: true, partialSuccess: false, rolledBackFiles: [], repairLevel: 'deterministic', totalAICalls: 0,
       });
 
       const result = await engine.modifyProject(projectState, 'Change Hello to Hello World');
@@ -163,8 +189,9 @@ describe('ModificationEngine', () => {
           'src/components/Button.tsx': buttonContent,
         },
       });
-      vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({
+      mockRepairEngine.repair.mockResolvedValue({
         updatedFiles: { 'src/components/Button.tsx': buttonContent },
+        success: true, partialSuccess: false, rolledBackFiles: [], repairLevel: 'deterministic', totalAICalls: 0,
       });
 
       const result = await engine.modifyProject(projectState, 'Add a Button component');
@@ -191,8 +218,9 @@ describe('ModificationEngine', () => {
         valid: true,
         sanitizedOutput: { 'src/App.tsx': appContent },
       });
-      vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({
-        updatedFiles: { 'src/OldComponent.tsx': null as any },
+      mockRepairEngine.repair.mockResolvedValue({
+        updatedFiles: { 'src/OldComponent.tsx': null },
+        success: true, partialSuccess: false, rolledBackFiles: [], repairLevel: 'deterministic', totalAICalls: 0,
       });
 
       const result = await engine.modifyProject(projectState, 'Delete the OldComponent');
@@ -244,8 +272,9 @@ describe('ModificationEngine', () => {
         valid: true,
         sanitizedOutput: { 'src/App.tsx': modifiedContent },
       });
-      vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({
+      mockRepairEngine.repair.mockResolvedValue({
         updatedFiles: { 'src/App.tsx': modifiedContent },
+        success: true, partialSuccess: false, rolledBackFiles: [], repairLevel: 'deterministic', totalAICalls: 0,
       });
 
       const result = await engine.modifyProject(projectState, 'Modify App');
@@ -271,7 +300,10 @@ describe('ModificationEngine', () => {
         valid: true,
         sanitizedOutput: { 'src/App.tsx': appContent },
       });
-      vi.mocked(buildFixerModule.validateAndFixBuild).mockResolvedValue({ updatedFiles: {} });
+      mockRepairEngine.repair.mockResolvedValue({
+        updatedFiles: {},
+        success: true, partialSuccess: false, rolledBackFiles: [], repairLevel: 'deterministic', totalAICalls: 0,
+      });
 
       const onPipelineStage = vi.fn();
       await engine.modifyProject(projectState, 'test', { onPipelineStage });

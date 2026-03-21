@@ -5,3 +5,4 @@
  */
 
 export { FilePlanner, createFilePlanner, TokenBudgetManager } from './file-planner';
+export { analyzeImpact, type ImpactReport } from './impact-analyzer';

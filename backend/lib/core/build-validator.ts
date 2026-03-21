@@ -476,6 +476,313 @@ export class BuildValidator {
     }
 
     /**
+     * Validate cross-file references: named imports match actual exports,
+     * new packages exist in package.json, removed exports aren't still imported.
+     *
+     * Handles barrel files (export *), re-exports, and type-only imports
+     * without false positives.
+     */
+    validateCrossFileReferences(files: Record<string, string>): BuildError[] {
+        const errors: BuildError[] = [];
+        const allFilePaths = Object.keys(files);
+        const normalizedFilesSet = new Set(allFilePaths.map(f => normalizePath(f)));
+
+        // Build export maps for all TS/JS files
+        const exportsByFile = new Map<string, { named: Set<string>; hasDefault: boolean; hasExportAll: Set<string> }>();
+
+        for (const [filePath, content] of Object.entries(files)) {
+            const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
+            if (!['.ts', '.tsx', '.js', '.jsx'].includes(ext)) continue;
+
+            const named = new Set<string>();
+            const hasExportAll = new Set<string>();
+            const lines = content.split('\n');
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) continue;
+
+                // export function/const/let/var/class/type/interface/enum Name
+                const declMatch = trimmed.match(
+                    /^export\s+(?:async\s+)?(?:function|const|let|var|class|type|interface|enum)\s+(\w+)/
+                );
+                if (declMatch) {
+                    named.add(declMatch[1]);
+                    continue;
+                }
+
+                // export { X, Y } or export { X as Alias }
+                const braceMatch = trimmed.match(/^export\s*\{([^}]+)\}/);
+                if (braceMatch && !trimmed.includes('from')) {
+                    const names = braceMatch[1].split(',').map(s => {
+                        const asMatch = s.trim().match(/^(\w+)\s+as\s+(\w+)$/);
+                        return asMatch ? asMatch[2] : s.trim();
+                    }).filter(s => s && s !== 'default');
+                    names.forEach(n => named.add(n));
+                    continue;
+                }
+
+                // export { X, Y } from './module' (re-exports — treat as named exports of this file)
+                const reExportMatch = trimmed.match(/^export\s*\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/);
+                if (reExportMatch) {
+                    const names = reExportMatch[1].split(',').map(s => {
+                        const asMatch = s.trim().match(/^(\w+)\s+as\s+(\w+)$/);
+                        return asMatch ? asMatch[2] : s.trim();
+                    }).filter(s => s && s !== 'default');
+                    names.forEach(n => named.add(n));
+                    continue;
+                }
+
+                // export * from './module' (barrel file)
+                const exportAllMatch = trimmed.match(/^export\s+\*\s+from\s+['"]([^'"]+)['"]/);
+                if (exportAllMatch) {
+                    hasExportAll.add(exportAllMatch[1]);
+                }
+            }
+
+            exportsByFile.set(normalizePath(filePath), {
+                named,
+                hasDefault: hasDefaultExport(content),
+                hasExportAll,
+            });
+        }
+
+        // Resolve barrel files: transitively collect exports from `export *` targets
+        const resolveExportsWithBarrels = (normalizedPath: string, visited: Set<string> = new Set()): Set<string> => {
+            if (visited.has(normalizedPath)) return new Set(); // cycle guard
+            visited.add(normalizedPath);
+
+            const info = exportsByFile.get(normalizedPath);
+            if (!info) return new Set();
+
+            const allExports = new Set(info.named);
+
+            for (const barrelSource of info.hasExportAll) {
+                // Resolve the barrel source relative to this file
+                const fileDir = normalizedPath.substring(0, normalizedPath.lastIndexOf('/'));
+                let resolvedBarrel: string | null = null;
+
+                // Try resolving the barrel source
+                if (barrelSource.startsWith('./') || barrelSource.startsWith('../')) {
+                    resolvedBarrel = resolveRelativeImport(
+                        // Need the original-case path for resolveRelativeImport
+                        allFilePaths.find(p => normalizePath(p) === normalizedPath) ?? normalizedPath,
+                        barrelSource,
+                        normalizedFilesSet
+                    );
+                }
+
+                if (resolvedBarrel) {
+                    const barrelExports = resolveExportsWithBarrels(resolvedBarrel, visited);
+                    barrelExports.forEach(e => allExports.add(e));
+                }
+            }
+
+            return allExports;
+        };
+
+        // Now check each file's named imports against target exports
+        for (const [filePath, content] of Object.entries(files)) {
+            const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
+            if (!['.ts', '.tsx', '.js', '.jsx'].includes(ext)) continue;
+
+            const lines = content.split('\n');
+            const hasQuotedString = (s: string) => /['"][^'"]+['"]/.test(s);
+
+            let i = 0;
+            while (i < lines.length) {
+                let line = lines[i];
+                const startLine = i + 1;
+
+                // Join multi-line imports
+                if (/^\s*import\s/.test(line) && !hasQuotedString(line)) {
+                    while (i + 1 < lines.length && !hasQuotedString(line)) {
+                        i++;
+                        line = line.trimEnd() + ' ' + lines[i].trimStart();
+                    }
+                }
+
+                // Skip type-only imports — they don't cause runtime errors
+                if (/^\s*import\s+type\s/.test(line)) {
+                    i++;
+                    continue;
+                }
+
+                // Extract named imports: import { X, Y } from './module'
+                const namedImportMatch = line.match(
+                    /^\s*import\s+(?:\w+\s*,\s*)?\{([^}]+)\}\s+from\s+['"](\.[^'"]+)['"]/
+                );
+
+                if (namedImportMatch) {
+                    const importedNames = namedImportMatch[1]
+                        .split(',')
+                        .map(s => {
+                            // Handle `X as Y` — we check if X is exported
+                            const asMatch = s.trim().match(/^(\w+)\s+as\s+\w+$/);
+                            return asMatch ? asMatch[1] : s.trim();
+                        })
+                        .filter(s => s.length > 0);
+
+                    const modulePath = namedImportMatch[2];
+
+                    // Resolve the import target
+                    const resolved = resolveRelativeImport(filePath, modulePath, normalizedFilesSet);
+                    if (!resolved) {
+                        i++;
+                        continue; // Already caught by broken_import check
+                    }
+
+                    // Get exports from target (including barrel re-exports)
+                    const targetExports = resolveExportsWithBarrels(resolved);
+
+                    for (const name of importedNames) {
+                        // Skip if it looks like a type import within the braces: `import { type Foo }`
+                        // (inline type imports in the destructure)
+                        if (name === 'type') continue;
+
+                        if (!targetExports.has(name)) {
+                            errors.push({
+                                type: 'import_export_mismatch',
+                                message: `'${name}' is not exported from '${modulePath}' (imported in '${filePath}')`,
+                                file: filePath,
+                                line: startLine,
+                                suggestion: `Check that '${name}' is exported from the target module, or fix the import name`,
+                                severity: 'fixable',
+                            });
+                        }
+                    }
+                }
+
+                i++;
+            }
+        }
+
+        // Check: new package imports are declared in package.json
+        const packageJsonPath = allFilePaths.find(p => p.endsWith('package.json'));
+        const declaredDeps = packageJsonPath
+            ? parseDependencies(files[packageJsonPath])
+            : new Set<string>();
+        BUILT_IN_MODULES.forEach(m => declaredDeps.add(m));
+
+        for (const [filePath, content] of Object.entries(files)) {
+            const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
+            if (!['.ts', '.tsx', '.js', '.jsx'].includes(ext)) continue;
+
+            const imports = extractImports(content);
+            for (const { module: importPath, line } of imports) {
+                // Only check non-relative, non-alias, non-asset imports
+                if (isRelativeImport(importPath)) continue;
+                if (importPath.startsWith('@/') || importPath.startsWith('~/')) continue;
+                if (ASSET_EXTENSIONS.some(ext => importPath.endsWith(ext))) continue;
+
+                const rawImport = importPath.startsWith('node:') ? importPath.slice(5) : importPath;
+                const packageName = getPackageName(rawImport);
+
+                // Skip Node.js built-ins (caught separately by validate())
+                if (NODE_BUILT_INS.has(packageName)) continue;
+
+                if (!declaredDeps.has(packageName)) {
+                    errors.push({
+                        type: 'missing_dependency',
+                        message: `Package '${packageName}' is imported in '${filePath}' but not declared in package.json`,
+                        file: filePath,
+                        line,
+                        suggestion: `Add '${packageName}' to package.json dependencies`,
+                        severity: 'fixable',
+                    });
+                }
+            }
+        }
+
+        // Check: removed exports — verify no other file still imports them
+        // Build a map of what each file imports (named) from each relative target
+        for (const [filePath, content] of Object.entries(files)) {
+            const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase();
+            if (!['.ts', '.tsx', '.js', '.jsx'].includes(ext)) continue;
+
+            const fileExports = exportsByFile.get(normalizePath(filePath));
+            if (!fileExports) continue;
+
+            // Collect all named symbols that other files import from this file
+            const allResolvedExports = resolveExportsWithBarrels(normalizePath(filePath));
+
+            for (const [otherFile, otherContent] of Object.entries(files)) {
+                if (otherFile === filePath) continue;
+                const otherExt = otherFile.slice(otherFile.lastIndexOf('.')).toLowerCase();
+                if (!['.ts', '.tsx', '.js', '.jsx'].includes(otherExt)) continue;
+
+                // Skip type-only imports at file level
+                const otherLines = otherContent.split('\n');
+                const hasQuotedStr = (s: string) => /['"][^'"]+['"]/.test(s);
+
+                let j = 0;
+                while (j < otherLines.length) {
+                    let line = otherLines[j];
+                    const startLine = j + 1;
+
+                    if (/^\s*import\s/.test(line) && !hasQuotedStr(line)) {
+                        while (j + 1 < otherLines.length && !hasQuotedStr(line)) {
+                            j++;
+                            line = line.trimEnd() + ' ' + otherLines[j].trimStart();
+                        }
+                    }
+
+                    // Skip type-only imports
+                    if (/^\s*import\s+type\s/.test(line)) {
+                        j++;
+                        continue;
+                    }
+
+                    // Check named imports from relative paths that resolve to this file
+                    const namedMatch = line.match(
+                        /^\s*import\s+(?:\w+\s*,\s*)?\{([^}]+)\}\s+from\s+['"](\.[^'"]+)['"]/
+                    );
+                    if (namedMatch) {
+                        const modulePath = namedMatch[2];
+                        const resolved = resolveRelativeImport(otherFile, modulePath, normalizedFilesSet);
+
+                        if (resolved === normalizePath(filePath)) {
+                            const importedNames = namedMatch[1]
+                                .split(',')
+                                .map(s => {
+                                    const asMatch = s.trim().match(/^(\w+)\s+as\s+\w+$/);
+                                    return asMatch ? asMatch[1] : s.trim();
+                                })
+                                .filter(s => s.length > 0 && s !== 'type');
+
+                            for (const name of importedNames) {
+                                if (!allResolvedExports.has(name)) {
+                                    // Only report if this is a "removed export" scenario
+                                    // (i.e., the name is not found in the target's exports at all)
+                                    // Skip if already reported by the named-import check above
+                                    const alreadyReported = errors.some(
+                                        e => e.message.includes(`'${name}' is not exported from '${modulePath}'`)
+                                            && e.file === otherFile
+                                    );
+                                    if (!alreadyReported) {
+                                        errors.push({
+                                            type: 'import_export_mismatch',
+                                            message: `'${filePath}' no longer exports '${name}', but '${otherFile}' still imports it`,
+                                            file: otherFile,
+                                            line: startLine,
+                                            suggestion: `Re-add 'export' for '${name}' in '${filePath}', or remove the import from '${otherFile}'`,
+                                            severity: 'fixable',
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    j++;
+                }
+            }
+        }
+
+        return errors;
+    }
+
+    /**
      * Validate server/client boundary rules for Next.js App Router projects.
      * Checks "use client"/"use server" directives and import boundaries.
      */

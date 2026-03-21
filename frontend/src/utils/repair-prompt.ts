@@ -37,6 +37,23 @@ export function buildRepairPrompt(
     if (runtimeError.line) {
         parts.push(`Line: ${runtimeError.line}`);
     }
+    // Include 5 lines of context around the error location
+    if (runtimeError.filePath && runtimeError.line && projectFiles) {
+        const fileContent = projectFiles[runtimeError.filePath];
+        if (fileContent) {
+            const lines = fileContent.split('\n');
+            const errorLine = runtimeError.line;
+            const startLine = Math.max(1, errorLine - 2);
+            const endLine = Math.min(lines.length, errorLine + 2);
+            const contextLines = lines.slice(startLine - 1, endLine).map((line, i) => {
+                const lineNum = startLine + i;
+                const marker = lineNum === errorLine ? '>>>' : '   ';
+                return `${marker} ${lineNum}: ${line}`;
+            });
+            parts.push(``, `Code context:`, ...contextLines);
+        }
+    }
+
     if (runtimeError.componentStack) {
         parts.push(``, `Component Stack:`, runtimeError.componentStack.slice(0, 500));
     }

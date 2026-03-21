@@ -257,11 +257,13 @@ ${intentBlock}
 ${LAYOUT_FUNDAMENTALS}
 ${designSystemSection}
 === OUTPUT FORMAT ===
-For each file, output JSON with "path", "operation" ("modify"|"create"|"replace_file"|"delete").
+Return a JSON object: { "files": [ ... ] }
+Each element has "path", "operation" ("modify"|"create"|"replace_file"|"delete").
 - "create": include "content" with full file content (new files only).
 - "delete": just path and operation.
 - "modify": include "edits" array with search/replace pairs.
 - "replace_file": include "content" with the complete new file content. Use ONLY when the file needs such extensive changes that search/replace would be unreliable (e.g. >60% of lines changing). Prefer "modify" for smaller changes.
+Respond with valid JSON only. Do NOT wrap in markdown code fences.
 
 === EDIT RULES ===
 - "search" must exactly match existing code (whitespace, newlines included). Include 3–5 lines of context.

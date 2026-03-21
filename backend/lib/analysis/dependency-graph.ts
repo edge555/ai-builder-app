@@ -13,6 +13,9 @@
 import type { FileIndex } from './file-index';
 import path from 'path';
 import { createHash } from 'crypto';
+import { createLogger } from '../logger';
+
+const logger = createLogger('DependencyGraph');
 
 /**
  * DependencyGraph service for tracking file relationships.
@@ -125,6 +128,76 @@ export class DependencyGraph {
     }
 
     return Array.from(affected);
+  }
+
+  /**
+   * Return the given files in topological order (leaves/dependencies first).
+   * Breaks cycles by removing back-edges and logging a warning.
+   * Files not in `filePaths` are excluded from the result but still
+   * used for ordering (e.g. shared dependency edges are respected).
+   */
+  getTopologicalOrder(filePaths: string[]): string[] {
+    const fileSet = new Set(filePaths);
+    const order: string[] = [];
+    const visited = new Set<string>();
+    const inStack = new Set<string>(); // cycle detection
+
+    const visit = (file: string): void => {
+      if (visited.has(file)) return;
+      if (inStack.has(file)) {
+        // Back-edge detected — break the cycle
+        logger.warn('Cycle detected during topological sort, breaking back-edge', { file });
+        return;
+      }
+
+      inStack.add(file);
+
+      // Visit dependencies first (leaves first order)
+      const deps = this.dependencies.get(file);
+      if (deps) {
+        for (const dep of deps) {
+          if (fileSet.has(dep)) {
+            visit(dep);
+          }
+        }
+      }
+
+      inStack.delete(file);
+      visited.add(file);
+      order.push(file);
+    };
+
+    for (const file of filePaths) {
+      visit(file);
+    }
+
+    return order;
+  }
+
+  /**
+   * Get all files transitively affected by changes to the given files.
+   * Returns a Set (not including the input files themselves unless they
+   * are also dependents of other input files).
+   */
+  getTransitivelyAffected(filePaths: string[]): Set<string> {
+    const seeds = new Set(filePaths);
+    const affected = new Set<string>();
+    const queue = [...filePaths];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const dependents = this.dependents.get(current);
+      if (!dependents) continue;
+
+      for (const dep of dependents) {
+        if (!affected.has(dep) && !seeds.has(dep)) {
+          affected.add(dep);
+          queue.push(dep);
+        }
+      }
+    }
+
+    return affected;
   }
 
   /**

@@ -94,8 +94,15 @@ export class GenerationPipeline {
   ): Promise<GenerationResult> {
     const contextLogger = options?.requestId ? logger.withRequestId(options.requestId) : logger;
 
+    const pipelineStartMs = Date.now();
+    contextLogger.info('[GEN-PIPELINE] start', {
+      promptPreview: userPrompt.slice(0, 150),
+      promptLength: userPrompt.length,
+    });
+
     // ── Task 5.1: Intent Stage ────────────────────────────────────────────────
     callbacks.onStageStart?.('intent', 'Analyzing your request…');
+    const intentStageStartMs = Date.now();
     contextLogger.debug('Intent stage start');
 
     let intentOutput: IntentOutput | null = null;
@@ -123,7 +130,10 @@ export class GenerationPipeline {
       }
 
       intentOutput = zodResult.data;
-      contextLogger.info('Intent stage complete', { complexity: intentOutput.complexity });
+      contextLogger.info('Intent stage complete', {
+        complexity: intentOutput.complexity,
+        durationMs: Date.now() - intentStageStartMs,
+      });
       callbacks.onStageComplete?.('intent');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -149,6 +159,7 @@ export class GenerationPipeline {
 
     // ── Task 5.2: Enhanced Planning Stage ─────────────────────────────────────
     callbacks.onStageStart?.('planning', 'Drafting architecture plan…');
+    const planningStageStartMs = Date.now();
     contextLogger.debug('Enhanced Planning stage start');
 
     let architecturePlan: ArchitecturePlan | null = null;
@@ -181,6 +192,9 @@ export class GenerationPipeline {
       contextLogger.info('Enhanced Planning stage complete', {
         fileCount: architecturePlan.files.length,
         layers: [...new Set(architecturePlan.files.map(f => f.layer))],
+        filePaths: architecturePlan.files.map(f => f.path),
+        dependencies: architecturePlan.dependencies,
+        durationMs: Date.now() - planningStageStartMs,
       });
       callbacks.onStageComplete?.('planning');
 
@@ -202,6 +216,7 @@ export class GenerationPipeline {
 
     // ── Task 5.3: Plan Review Stage ───────────────────────────────────────────
     callbacks.onStageStart?.('review', 'Reviewing architecture plan…');
+    const reviewStageStartMs = Date.now();
     contextLogger.debug('Plan Review stage start');
 
     let _reviewRawContent: string | undefined;
@@ -232,10 +247,13 @@ export class GenerationPipeline {
       const reviewOutput = zodResult.data;
 
       if (!reviewOutput.valid || reviewOutput.issues.length > 0) {
-        contextLogger.warn('Plan Review found issues', { issues: reviewOutput.issues.length });
+        contextLogger.warn('Plan Review found issues', {
+          issues: reviewOutput.issues.length,
+          durationMs: Date.now() - reviewStageStartMs,
+        });
         architecturePlan = this.applyPlanCorrections(architecturePlan, reviewOutput);
       } else {
-        contextLogger.info('Plan Review found no issues');
+        contextLogger.info('Plan Review found no issues', { durationMs: Date.now() - reviewStageStartMs });
       }
       callbacks.onStageComplete?.('review');
 
@@ -291,6 +309,15 @@ export class GenerationPipeline {
       allGeneratedFiles = result.files;
       allWarnings.push(...result.warnings);
     }
+
+    contextLogger.info('[GEN-PIPELINE] complete', {
+      durationMs: Date.now() - pipelineStartMs,
+      complexityRoute,
+      fileCount: allGeneratedFiles.length,
+      filePaths: allGeneratedFiles.map(f => f.path),
+      warningCount: allWarnings.length,
+      intentComplexity: intentOutput?.complexity ?? 'unknown',
+    });
 
     return {
       intentOutput,
@@ -488,12 +515,26 @@ export class GenerationPipeline {
             filesGenerated: result.files.length,
             warnings: result.warnings.length,
           });
+
+          // Hard-fail if a non-scaffold phase generated 0 out of N expected files.
+          // A project missing its entire UI or integration layer is worse than a
+          // clear error the user can retry.
+          if (result.files.length === 0 && batchFiles.length > 0) {
+            const msg = `Phase ${phase.layer} generated 0/${batchFiles.length} expected files`;
+            contextLogger.error(msg, { expectedFiles: batchFiles.map(f => f.path) });
+            throw new Error(msg);
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           contextLogger.error(`Phase execution failed`, { layer: phase.layer, error: message });
 
           // Scaffold failure is fatal
           if (phase.layer === 'scaffold') {
+            throw err;
+          }
+
+          // Client cancellation should propagate immediately
+          if (callbacks.signal?.aborted) {
             throw err;
           }
 
