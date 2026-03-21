@@ -30,4 +30,8 @@ export interface ModificationResult extends OperationResult {
   diffs?: FileDiff[];
   /** Human-readable summary of changes */
   changeSummary?: ChangeSummary;
+  /** True when some files were modified but others had to be rolled back */
+  partialSuccess?: boolean;
+  /** Files that were rolled back to their pre-modification state */
+  rolledBackFiles?: string[];
 }

@@ -122,3 +122,38 @@ export const MAX_BODY_CONFIG_BYTES = 64 * 1024;             // 64 KB
 
 // Pipeline review stage
 export const MAX_REVIEW_CONTENT_CHARS = 128_000; // ~128k chars ≈ ~32k tokens; keeps within review budget
+
+// ─── Known Packages (deterministic fix + validation) ────────────────────────
+// Single source of truth for packages the builder commonly generates.
+// Used by deterministic-fixes.ts (to add missing deps) and build-validator.ts (to detect them).
+// Value is the version to pin; unknown packages default to "latest".
+export const KNOWN_PACKAGES: Record<string, string> = {
+  'react': '^18.2.0',
+  'react-dom': '^18.2.0',
+  'react-router-dom': '^7.0.0',
+  'lucide-react': 'latest',
+  'zod': 'latest',
+  'zustand': 'latest',
+  'framer-motion': 'latest',
+  '@tanstack/react-query': 'latest',
+  'date-fns': 'latest',
+  'clsx': 'latest',
+  'tailwindcss': 'latest',
+  'axios': 'latest',
+  'recharts': 'latest',
+  'react-hook-form': 'latest',
+  '@headlessui/react': 'latest',
+  '@radix-ui/react-dialog': 'latest',
+  '@radix-ui/react-dropdown-menu': 'latest',
+  '@radix-ui/react-popover': 'latest',
+  '@radix-ui/react-select': 'latest',
+  '@radix-ui/react-tooltip': 'latest',
+  'react-hot-toast': 'latest',
+  'uuid': 'latest',
+  'lodash': 'latest',
+  'react-icons': 'latest',
+};
+
+// Diff size guard thresholds
+export const DIFF_SUSPICIOUS_RATIO = 0.6;
+export const DIFF_CONVERT_RATIO = 0.9;
