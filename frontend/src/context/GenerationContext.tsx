@@ -115,7 +115,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
 
     // Inactivity timeout — reset on every SSE event (heartbeat, progress, file, etc.)
     // If the server goes completely silent for 120s, abort the connection
-    let inactivityTimeoutId: ReturnType<typeof setTimeout>;
+    let inactivityTimeoutId: ReturnType<typeof setTimeout> | undefined;
     const resetInactivityTimeout = () => {
       clearTimeout(inactivityTimeoutId);
       inactivityTimeoutId = setTimeout(() => {
@@ -366,7 +366,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       controller.abort();
     }, STREAMING_MAX_TIMEOUT_MS);
 
-    let inactivityTimeoutId: ReturnType<typeof setTimeout>;
+    let inactivityTimeoutId: ReturnType<typeof setTimeout> | undefined;
     const resetInactivityTimeout = () => {
       clearTimeout(inactivityTimeoutId);
       inactivityTimeoutId = setTimeout(() => {
