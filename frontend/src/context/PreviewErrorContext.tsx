@@ -17,7 +17,7 @@ import {
 
 const previewErrorLogger = createLogger('PreviewError');
 
-const MAX_REPAIR_ATTEMPTS = 3;
+const MAX_REPAIR_ATTEMPTS = 5;
 const AUTO_REPAIR_DEBOUNCE_MS = 800;
 const MAX_ERROR_QUEUE_SIZE = 50;
 

@@ -27,7 +27,7 @@ import {
 
 const genLogger = createLogger('Generation');
 
-const MAX_AUTO_REPAIR_ATTEMPTS = 3;
+const MAX_AUTO_REPAIR_ATTEMPTS = 5;
 const STREAMING_INACTIVITY_TIMEOUT_MS = 120_000; // 120s of silence = dead connection
 const STREAMING_MAX_TIMEOUT_MS = 900_000; // 15 min absolute cap (safety net)
 
@@ -356,7 +356,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     currentState: SerializedProjectState,
     prompt: string,
     runtimeError?: RuntimeError,
-    options?: { shouldSkipPlanning?: boolean; conversationHistory?: ConversationTurn[]; errorContext?: { affectedFiles: string[]; errorType: string }; attachments?: ImageAttachment[] }
+    options?: { shouldSkipPlanning?: boolean; conversationHistory?: ConversationTurn[]; errorContext?: { affectedFiles: string[]; errorType: string }; attachments?: ImageAttachment[]; repairAttempt?: number }
   ): Promise<ModifyProjectResponse> => {
     streamAbortRef.current?.abort();
     const controller = new AbortController();
@@ -393,6 +393,8 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     // Capture modify-specific fields from the complete event
     let modifyDiffs: ModifyProjectResponse['diffs'];
     let modifyChangeSummary: ModifyProjectResponse['changeSummary'];
+    let modifyPartialSuccess: ModifyProjectResponse['partialSuccess'];
+    let modifyRolledBackFiles: ModifyProjectResponse['rolledBackFiles'];
 
     try {
       const response = await fetch(`${FUNCTIONS_BASE_URL}/modify-stream`, {
@@ -410,6 +412,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           errorContext: options?.errorContext,
           conversationHistory: options?.conversationHistory,
           attachments: options?.attachments,
+          ...(options?.repairAttempt && { repairAttempt: options.repairAttempt }),
         }),
         signal: controller.signal,
       });
@@ -467,9 +470,11 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
         },
         onComplete: (data: StreamCompleteData, files: Record<string, string>) => {
           resetInactivityTimeout();
-          // Capture diffs and changeSummary from the modify-stream complete payload
+          // Capture diffs, changeSummary, and repair fields from the modify-stream complete payload
           modifyDiffs = (data as any).diffs;
           modifyChangeSummary = (data as any).changeSummary;
+          modifyPartialSuccess = (data as any).partialSuccess;
+          modifyRolledBackFiles = (data as any).rolledBackFiles;
           setStreamingState(prev => prev ? {
             ...prev,
             phase: 'complete',
@@ -509,6 +514,8 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
         ...result,
         diffs: modifyDiffs,
         changeSummary: modifyChangeSummary,
+        ...(modifyPartialSuccess && { partialSuccess: modifyPartialSuccess }),
+        ...(modifyRolledBackFiles?.length && { rolledBackFiles: modifyRolledBackFiles }),
       } as ModifyProjectResponse;
     } catch (e) {
       clearTimeout(inactivityTimeoutId);
@@ -586,6 +593,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       const result = await modifyProjectStreaming(projectState, repairPrompt, runtimeError, {
         shouldSkipPlanning: true,
         errorContext,
+        repairAttempt: autoRepairAttemptRef.current,
       });
 
       setIsAutoRepairing(false);
@@ -593,6 +601,13 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
 
       if (result.success && result.projectState) {
         // Success - clear history for next error
+        repairHistoryRef.current = [];
+        return true;
+      } else if (result.partialSuccess && result.projectState) {
+        // Partial success - some files modified, others rolled back
+        genLogger.warn('Partial repair success', {
+          rolledBackFiles: result.rolledBackFiles,
+        });
         repairHistoryRef.current = [];
         return true;
       } else {
