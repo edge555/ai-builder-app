@@ -209,6 +209,7 @@ export function OnboardingOverlay({ onDismiss, onGeneratePrompt }: OnboardingOve
                   type="button"
                   className={`onboarding-choice${selectedType === pt.id ? ' onboarding-choice--selected' : ''}`}
                   onClick={() => setSelectedType(pt.id)}
+                  aria-selected={selectedType === pt.id}
                 >
                   <span className="onboarding-choice-icon">{pt.icon}</span>
                   <span className="onboarding-choice-text">
@@ -233,6 +234,7 @@ export function OnboardingOverlay({ onDismiss, onGeneratePrompt }: OnboardingOve
                   type="button"
                   className={`onboarding-feature-chip${selectedFeatures.has(f.id) ? ' onboarding-feature-chip--selected' : ''}`}
                   onClick={() => toggleFeature(f.id)}
+                  aria-pressed={selectedFeatures.has(f.id)}
                 >
                   {f.label}
                 </button>
@@ -253,6 +255,7 @@ export function OnboardingOverlay({ onDismiss, onGeneratePrompt }: OnboardingOve
                   type="button"
                   className={`onboarding-style${selectedStyle === ds.id ? ' onboarding-style--selected' : ''}`}
                   onClick={() => setSelectedStyle(ds.id)}
+                  aria-selected={selectedStyle === ds.id}
                 >
                   <span className="onboarding-style-label">{ds.label}</span>
                   <span className="onboarding-style-desc">{ds.description}</span>

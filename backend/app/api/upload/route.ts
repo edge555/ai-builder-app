@@ -246,7 +246,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     });
     return new Response(
       JSON.stringify({ success: false, error: { type: 'api', code: 'INTERNAL_ERROR', message: 'Internal server error', recoverable: false } }),
-      { status: 500, headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId } }
+      { status: 500, headers: { ...getCorsHeaders(request), ...rlHeaders, 'Content-Type': 'application/json', 'X-Request-Id': requestId } }
     );
   }
 }

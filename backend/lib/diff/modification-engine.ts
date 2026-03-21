@@ -163,9 +163,15 @@ export class ModificationEngine {
         pipelineResult
       );
 
-      // Step 6: Validate AI output
+      // Step 6: Validate AI output against the full merged project (not just changed files)
+      // Validating only updatedFiles causes false failures: structure validators always require
+      // package.json and an entry point, which won't be present in a single-file patch.
       onProgress?.('validating', 'Validating generated code...');
-      const validationResult = await this.validateModifiedFiles(updatedFiles);
+      const mergedForValidation: Record<string, string | null> = {
+        ...projectState.files,
+        ...updatedFiles,
+      };
+      const validationResult = await this.validateModifiedFiles(mergedForValidation);
       if (!validationResult.valid) {
         return {
           success: false,
