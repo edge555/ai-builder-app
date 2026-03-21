@@ -89,6 +89,9 @@ export interface IPromptProvider {
     recipe?: GenerationRecipe,
   ): string;
 
+  /** Optional: inject the selected recipe so prompt composition can use it. */
+  setRecipe?(recipe: GenerationRecipe): void;
+
   /**
    * Per-stage output token budgets.
    * The orchestrator passes these as `maxOutputTokens` in each AI request.

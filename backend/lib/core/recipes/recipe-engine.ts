@@ -56,17 +56,62 @@ export interface RecipeSelectorOptions {
  *   2. Map intent.projectType → recipe ID
  *   3. If recipe not found → react-spa + log warning
  */
+/**
+ * Explicit keywords that indicate the user actually wants a fullstack/backend setup.
+ * Without these, even if the LLM classifies as "fullstack", we fall back to SPA.
+ */
+const FULLSTACK_SIGNALS = [
+  'database', 'backend', 'server', 'api route', 'api endpoint',
+  'next.js', 'nextjs', 'prisma', 'postgresql', 'postgres', 'mysql', 'mongodb', 'sqlite',
+  'supabase', 'firebase', 'server-side', 'ssr', 'server side rendering',
+  'rest api', 'graphql', 'drizzle', 'orm',
+];
+
+const AUTH_SIGNALS = [
+  'login', 'sign in', 'signin', 'sign up', 'signup', 'register', 'registration',
+  'authentication', 'auth', 'oauth', 'jwt', 'session', 'supabase auth',
+  'user account', 'user accounts', 'protected route',
+];
+
+/**
+ * Returns true only if the user prompt contains explicit fullstack/auth signals.
+ * This prevents the LLM from over-classifying simple apps as fullstack.
+ */
+function hasExplicitSignals(userPrompt: string, signals: string[]): boolean {
+  const lower = userPrompt.toLowerCase();
+  return signals.some(s => {
+    // Multi-word signals (e.g. "api route") — substring match is safe
+    if (s.includes(' ') || s.includes('.') || s.includes('-')) return lower.includes(s);
+    // Single-word signals — use word boundary to avoid "auth" matching "author"
+    return new RegExp(`\\b${s}\\b`).test(lower);
+  });
+}
+
 export function selectRecipe(
   intent: IntentOutput | null,
-  options: RecipeSelectorOptions
+  options: RecipeSelectorOptions,
+  userPrompt?: string
 ): GenerationRecipe {
   if (!options.fullstackEnabled || !intent) {
     return getDefaultRecipe();
   }
 
   const projectType = intent.projectType;
-  if (!projectType) {
+  if (!projectType || projectType === 'spa') {
     return getDefaultRecipe();
+  }
+
+  // Guard: require explicit signals in the user's prompt before using a fullstack recipe.
+  // The LLM frequently over-classifies simple apps (blog, task tracker, todo) as fullstack.
+  if (userPrompt) {
+    if (projectType === 'fullstack-auth' && !hasExplicitSignals(userPrompt, AUTH_SIGNALS)) {
+      logger.info('Overriding fullstack-auth → spa: no explicit auth signals in prompt', { userPrompt });
+      return getDefaultRecipe();
+    }
+    if ((projectType === 'fullstack' || projectType === 'fullstack-auth') && !hasExplicitSignals(userPrompt, FULLSTACK_SIGNALS)) {
+      logger.info('Overriding fullstack → spa: no explicit fullstack signals in prompt', { projectType, userPrompt });
+      return getDefaultRecipe();
+    }
   }
 
   const recipeId = PROJECT_TYPE_TO_RECIPE[projectType];

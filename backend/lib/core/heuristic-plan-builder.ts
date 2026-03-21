@@ -16,12 +16,33 @@ export function buildHeuristicPlan(intent: IntentOutput | null, userPrompt: stri
     return {
         files: [
             {
+                path: 'package.json',
+                purpose: 'npm package manifest',
+                layer: 'scaffold',
+                exports: [],
+                imports: [],
+            },
+            {
+                path: 'src/main.tsx',
+                purpose: 'React entry point',
+                layer: 'scaffold',
+                exports: [],
+                imports: [],
+            },
+            {
+                path: 'src/index.css',
+                purpose: 'Global styles',
+                layer: 'scaffold',
+                exports: [],
+                imports: [],
+            },
+            {
                 path: 'src/App.tsx',
-                purpose: 'Main entry point and UI component',
+                purpose: 'Main UI component',
                 layer: 'ui',
                 exports: ['default App'],
-                imports: []
-            }
+                imports: [],
+            },
         ],
         components: ['App'],
         dependencies: ['react', 'react-dom'],

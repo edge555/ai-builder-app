@@ -6,7 +6,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared';
 import type { AIProvider } from '../ai';
-import { createAIProvider } from '../ai';
 import type { IPromptProvider } from './prompts/prompt-provider';
 import { createPromptProvider } from './prompts/prompt-provider-factory';
 import { getEffectiveProvider } from '../ai/provider-config-store';
@@ -144,6 +143,12 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       );
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Pipeline execution failed';
+      contextLogger.error('Pipeline threw during generation', {
+        errorMessage: error,
+        stack: err instanceof Error ? err.stack : undefined,
+        descriptionLength: description.length,
+        emittedFilesSoFar: Array.from(emittedFiles),
+      });
       callbacks.onError?.(error);
       callbacks.onStreamEnd?.({
         totalFiles: emittedFiles.size,
@@ -159,6 +164,58 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       intentCompleted: !!pipelineResult.intentOutput,
       planCompleted: !!pipelineResult.architecturePlan,
     });
+
+    // Safety net: if package.json was not generated, inject a minimal default.
+    // The scaffold prompt already mandates it, but AI can still omit it.
+    const hasPkgJson = pipelineResult.generatedFiles.some(f => f.path === 'package.json');
+    if (!hasPkgJson) {
+      const plannedDeps = pipelineResult.architecturePlan?.dependencies ?? ['react', 'react-dom'];
+      const dependencies: Record<string, string> = {};
+      for (const dep of plannedDeps) {
+        dependencies[dep] = 'latest'; // file-processor will pin to known versions
+      }
+      pipelineResult.generatedFiles.push({
+        path: 'package.json',
+        content: JSON.stringify({
+          name: 'generated-app',
+          version: '0.1.0',
+          private: true,
+          type: 'module',
+          dependencies,
+        }, null, 2),
+      });
+      contextLogger.warn('Injected fallback package.json — scaffold phase did not generate one', {
+        plannedDeps,
+      });
+    }
+
+    // Safety net: if main.tsx is missing or is a scaffold placeholder, inject the canonical entry point.
+    // The scaffold prompt mandates the correct content, but AI may still generate a placeholder.
+    const mainTsxPath = pipelineResult.generatedFiles.find(
+      f => f.path === 'src/main.tsx' || f.path === 'main.tsx'
+    );
+    const mainTsxContent = mainTsxPath?.content ?? '';
+    const isPlaceholder = !mainTsxContent.includes('import App') || mainTsxContent.includes('Subsequent phases');
+    if (isPlaceholder) {
+      const canonicalMain = `import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+`;
+      if (mainTsxPath) {
+        mainTsxPath.content = canonicalMain;
+        contextLogger.warn('Replaced placeholder main.tsx with canonical App entry point');
+      } else {
+        pipelineResult.generatedFiles.unshift({ path: 'src/main.tsx', content: canonicalMain });
+        contextLogger.warn('Injected missing main.tsx with canonical App entry point');
+      }
+    }
 
     // Process files: sanitize paths, normalize newlines, format with Prettier
     const processResult = await processFiles(pipelineResult.generatedFiles, { addFrontendPrefix: false });
@@ -189,14 +246,61 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     }
 
     if (!validationResult.valid) {
-      contextLogger.error('Validation errors', { errors: validationResult.errors });
-      const error = 'AI output failed validation';
-      callbacks.onError?.(error);
-      return {
-        success: false,
-        error,
-        validationErrors: validationResult.errors,
-      };
+      // Identify files with syntax errors and drop them instead of failing entirely
+      const syntaxErrors = validationResult.errors?.filter(e => e.type === 'syntax_error') ?? [];
+      const brokenFiles = new Set(syntaxErrors.map(e => e.filePath ?? e.file).filter(Boolean));
+      const nonSyntaxErrors = validationResult.errors?.filter(e => e.type !== 'syntax_error') ?? [];
+
+      if (brokenFiles.size > 0 && brokenFiles.size < Object.keys(prefixedFiles).length) {
+        // Drop broken files and continue — partial output is better than total failure
+        contextLogger.warn('Dropping files with syntax errors instead of failing', {
+          droppedFiles: Array.from(brokenFiles),
+          syntaxErrorCount: syntaxErrors.length,
+          remainingFiles: Object.keys(prefixedFiles).filter(p => !brokenFiles.has(p)),
+        });
+
+        for (const brokenPath of brokenFiles) {
+          delete prefixedFiles[brokenPath];
+          callbacks.onWarning?.({
+            path: brokenPath,
+            message: `File dropped due to syntax errors: ${syntaxErrors.filter(e => (e.filePath ?? e.file) === brokenPath).map(e => e.message).join('; ')}`,
+            type: 'validation',
+          });
+          warningCount++;
+        }
+
+        // Re-validate without broken files if there are other errors
+        if (nonSyntaxErrors.length > 0) {
+          contextLogger.error('Non-syntax validation errors remain after dropping broken files', {
+            errorCount: nonSyntaxErrors.length,
+            validationErrors: nonSyntaxErrors,
+          });
+          const error = 'AI output failed validation';
+          callbacks.onError?.(error);
+          return {
+            success: false,
+            error,
+            validationErrors: nonSyntaxErrors,
+          };
+        }
+        // Proceed with remaining valid files
+      } else {
+        // All files broken or non-syntax errors — hard fail
+        contextLogger.error('Validation errors — AI output failed validation', {
+          errorCount: validationResult.errors?.length ?? 0,
+          validationErrors: validationResult.errors,
+          filesThatFailed: validationResult.errors?.map(e => e.filePath ?? e.file ?? 'unknown'),
+          generatedFileCount: Object.keys(prefixedFiles).length,
+          generatedFilePaths: Object.keys(prefixedFiles),
+        });
+        const error = 'AI output failed validation';
+        callbacks.onError?.(error);
+        return {
+          success: false,
+          error,
+          validationErrors: validationResult.errors,
+        };
+      }
     }
 
     // If aborted, skip build-fix and downstream work
@@ -209,8 +313,11 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     }
 
     // Build validation with auto-retry using the injected bugfix provider
+    // Use sanitizedOutput if validation passed cleanly, otherwise use prefixedFiles
+    // (which may have had broken files removed)
+    const filesToBuildFix = validationResult.sanitizedOutput ?? prefixedFiles;
     const finalFiles = await this.runBuildFixLoop(
-      validationResult.sanitizedOutput!,
+      filesToBuildFix,
       description,
       options?.requestId
     );
@@ -282,11 +389,11 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
  * Creates a StreamingProjectGenerator with the full pipeline + bugfix provider.
  */
 export async function createStreamingProjectGenerator(): Promise<StreamingProjectGenerator> {
-  const [pipeline, bugfixProvider, providerName] = await Promise.all([
+  const [pipeline, providerName] = await Promise.all([
     createGenerationPipeline(),
-    createAIProvider('bugfix'),
     getEffectiveProvider(),
   ]);
   const promptProvider = createPromptProvider(providerName);
-  return new StreamingProjectGenerator(pipeline, bugfixProvider, promptProvider);
+  // Reuse the pipeline's bugfix provider — no need to create a second instance
+  return new StreamingProjectGenerator(pipeline, pipeline.bugfixProvider, promptProvider);
 }

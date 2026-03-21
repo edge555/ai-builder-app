@@ -92,7 +92,11 @@ Analyze the user's request and return a JSON object with exactly these fields:
 - complexity: "simple" | "medium" | "complex" — estimated scope
 - features: string[] — 3–7 key features to implement
 - technicalApproach: string — recommended React architecture (routing, state, libs)
-- projectType: "spa" | "fullstack" | "fullstack-auth" — "spa" for client-only React apps, "fullstack" if the app needs a database or API routes, "fullstack-auth" if it also needs user authentication
+- projectType: "spa" | "fullstack" | "fullstack-auth" — IMPORTANT classification rules:
+  * "spa" (DEFAULT) — use for ALL client-only React apps. This includes blogs, task trackers, dashboards, portfolios, calculators, games, landing pages, and any app that can work with mock/local data. When in doubt, choose "spa".
+  * "fullstack" — ONLY when the user explicitly requests a database, backend API, server-side rendering, or specifically mentions Next.js, Prisma, PostgreSQL, MongoDB, etc.
+  * "fullstack-auth" — ONLY when the user explicitly requests user authentication, login/signup, or mentions Supabase Auth, OAuth, etc.
+  Most prompts like "build a blog app", "build a task tracker", "build a todo app" should be "spa" — they work perfectly with local state and mock data.
 
 Respond with valid JSON only. No markdown, no explanation.`;
   }
@@ -190,6 +194,8 @@ ${getOutputBudgetGuidance(MAX_OUTPUT_TOKENS_GENERATION)}
 ${getQualityBarReference(complexity)}
 
 ${wrapUserInput(userPrompt)}
+
+CRITICAL: The app MUST be fully functional on first render. Initialize all state with hardcoded sample data (5-8 realistic items). NEVER use loading states, fetch(), or setTimeout for initial data. Every button, form, and list must be interactive and working.
 
 Generate a complete React application with perfect syntax and proper component separation.`;
   }
@@ -316,6 +322,12 @@ Return a single valid JSON object matching this schema exactly:
   }
 }
 
+=== MANDATORY SCAFFOLD FILES (ALWAYS include these — no exceptions) ===
+The following files MUST appear in the "files" array with layer "scaffold":
+- { "path": "package.json", "purpose": "npm manifest", "layer": "scaffold", "exports": [], "imports": [] }
+- { "path": "src/main.tsx", "purpose": "React entry point", "layer": "scaffold", "exports": [], "imports": [] }
+- { "path": "src/index.css", "purpose": "Global styles and CSS variables", "layer": "scaffold", "exports": [], "imports": [] }
+
 === PLANNING RULES ===
 1. LAYERS (assign every file to exactly one):
    - "scaffold": types, interfaces, CSS tokens, package.json, main.tsx, index.css
@@ -336,6 +348,9 @@ Return a single valid JSON object matching this schema exactly:
 7. STATE SHAPE: Define the signature for every hook and context that will be shared across components.
 
 8. DEPENDENCIES: Include only what is needed. Prefer: react, react-dom, lucide-react, react-router-dom.
+
+9. HOOKS MUST PRE-POPULATE DATA: Every hook in the "logic" layer that manages a collection (useTodos, usePosts, etc.)
+   must initialize with hardcoded sample data. The app renders instantly with content — no loading screens.
 
 Base file count on complexity:
 - simple: 6–9 files

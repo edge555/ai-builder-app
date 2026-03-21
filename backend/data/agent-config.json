@@ -5,8 +5,8 @@
       "taskType": "intent",
       "models": [
         {
-          "id": "thudm/glm-4.5-air",
-          "label": "GLM-4.5-Air",
+          "id": "google/gemini-2.5-flash",
+          "label": "Gemini 2.5 Flash",
           "active": true,
           "priority": 0
         },
@@ -39,16 +39,22 @@
       "taskType": "execution",
       "models": [
         {
-          "id": "google/gemini-2.5-flash",
-          "label": "Gemini 2.5 Flash",
+          "id": "minimax/minimax-m2.5",
+          "label": "MiniMax M2.5",
           "active": true,
           "priority": 0
         },
         {
-          "id": "anthropic/claude-haiku-4-5",
-          "label": "Claude Haiku 4.5",
+          "id": "google/gemini-2.5-pro",
+          "label": "Gemini 2.5 Pro",
           "active": true,
           "priority": 1
+        },
+        {
+          "id": "google/gemini-2.5-flash",
+          "label": "Gemini 2.5 Flash",
+          "active": true,
+          "priority": 2
         }
       ]
     },
@@ -56,8 +62,8 @@
       "taskType": "bugfix",
       "models": [
         {
-          "id": "thudm/glm-5",
-          "label": "GLM-5",
+          "id": "google/gemini-2.5-flash",
+          "label": "Gemini 2.5 Flash",
           "active": true,
           "priority": 0
         },
@@ -73,8 +79,8 @@
       "taskType": "review",
       "models": [
         {
-          "id": "thudm/glm-5",
-          "label": "GLM-5",
+          "id": "google/gemini-2.5-flash",
+          "label": "Gemini 2.5 Flash",
           "active": true,
           "priority": 0
         },

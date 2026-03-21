@@ -103,7 +103,7 @@ const REACT_SPA: GenerationRecipe = {
   defaultDependencies: ['react', 'react-dom', 'lucide-react'],
   phaseFragments: {
     scaffold: ['DEPENDENCY_GUIDANCE', 'SYNTAX_INTEGRITY_RULES'],
-    logic: ['COMMON_REACT_PATTERNS', 'SYNTAX_INTEGRITY_RULES'],
+    logic: ['COMMON_REACT_PATTERNS', 'REALISTIC_DATA_GUIDANCE', 'SYNTAX_INTEGRITY_RULES'],
     ui: [
       'LAYOUT_FUNDAMENTALS',
       'BASELINE_VISUAL_POLISH',
@@ -112,7 +112,7 @@ const REACT_SPA: GenerationRecipe = {
       'COMMON_REACT_PATTERNS',
       'SYNTAX_INTEGRITY_RULES',
     ],
-    integration: ['COMMON_REACT_PATTERNS', 'SYNTAX_INTEGRITY_RULES'],
+    integration: ['COMMON_REACT_PATTERNS', 'REALISTIC_DATA_GUIDANCE', 'SYNTAX_INTEGRITY_RULES'],
   },
 };
 
@@ -152,7 +152,7 @@ const NEXTJS_PRISMA: GenerationRecipe = {
   defaultDependencies: ['next', 'react', 'react-dom', 'prisma', '@prisma/client', 'lucide-react'],
   phaseFragments: {
     scaffold: ['DEPENDENCY_GUIDANCE', 'SYNTAX_INTEGRITY_RULES', 'DATABASE_SCHEMA_GUIDANCE'],
-    logic: ['COMMON_REACT_PATTERNS', 'SYNTAX_INTEGRITY_RULES', 'NEXTJS_API_PATTERNS'],
+    logic: ['COMMON_REACT_PATTERNS', 'REALISTIC_DATA_GUIDANCE', 'SYNTAX_INTEGRITY_RULES', 'NEXTJS_API_PATTERNS'],
     ui: [
       'LAYOUT_FUNDAMENTALS',
       'BASELINE_VISUAL_POLISH',
@@ -161,7 +161,7 @@ const NEXTJS_PRISMA: GenerationRecipe = {
       'COMMON_REACT_PATTERNS',
       'SYNTAX_INTEGRITY_RULES',
     ],
-    integration: ['COMMON_REACT_PATTERNS', 'SYNTAX_INTEGRITY_RULES', 'FULLSTACK_STRUCTURE'],
+    integration: ['COMMON_REACT_PATTERNS', 'REALISTIC_DATA_GUIDANCE', 'SYNTAX_INTEGRITY_RULES', 'FULLSTACK_STRUCTURE'],
   },
 };
 
@@ -206,7 +206,7 @@ const NEXTJS_SUPABASE_AUTH: GenerationRecipe = {
   defaultDependencies: ['next', 'react', 'react-dom', '@supabase/supabase-js', '@supabase/ssr', 'lucide-react'],
   phaseFragments: {
     scaffold: ['DEPENDENCY_GUIDANCE', 'SYNTAX_INTEGRITY_RULES', 'AUTH_SCAFFOLDING_GUIDANCE'],
-    logic: ['COMMON_REACT_PATTERNS', 'SYNTAX_INTEGRITY_RULES', 'NEXTJS_API_PATTERNS', 'AUTH_SCAFFOLDING_GUIDANCE'],
+    logic: ['COMMON_REACT_PATTERNS', 'REALISTIC_DATA_GUIDANCE', 'SYNTAX_INTEGRITY_RULES', 'NEXTJS_API_PATTERNS', 'AUTH_SCAFFOLDING_GUIDANCE'],
     ui: [
       'LAYOUT_FUNDAMENTALS',
       'BASELINE_VISUAL_POLISH',
@@ -215,7 +215,7 @@ const NEXTJS_SUPABASE_AUTH: GenerationRecipe = {
       'COMMON_REACT_PATTERNS',
       'SYNTAX_INTEGRITY_RULES',
     ],
-    integration: ['COMMON_REACT_PATTERNS', 'SYNTAX_INTEGRITY_RULES', 'FULLSTACK_STRUCTURE', 'AUTH_SCAFFOLDING_GUIDANCE'],
+    integration: ['COMMON_REACT_PATTERNS', 'REALISTIC_DATA_GUIDANCE', 'SYNTAX_INTEGRITY_RULES', 'FULLSTACK_STRUCTURE', 'AUTH_SCAFFOLDING_GUIDANCE'],
   },
 };
 

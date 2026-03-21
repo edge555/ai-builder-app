@@ -147,6 +147,17 @@ function formatPhaseContext(context: PhaseContext): string {
 export function getScaffoldPrompt(plan: ArchitecturePlan, userPrompt: string): string {
   const scaffoldFiles = plan.files.filter(f => f.layer === 'scaffold');
 
+  // Guarantee package.json is always in the scaffold file list — the planner sometimes omits it
+  if (!scaffoldFiles.some(f => f.path === 'package.json')) {
+    scaffoldFiles.unshift({
+      path: 'package.json',
+      purpose: 'npm package manifest with all project dependencies',
+      layer: 'scaffold',
+      exports: [],
+      imports: [],
+    });
+  }
+
   return `You are a SENIOR TypeScript architect generating the foundation layer of a React application.
 Your output will be consumed by subsequent AI generation phases — accuracy is critical.
 
@@ -163,7 +174,13 @@ ${formatCSSVariables(plan)}
    Use the exact names and values specified.
 3. package.json: Include ALL dependencies listed in the plan: ${plan.dependencies.join(', ')}
    Use specific semver versions (never "latest").
-4. Entry files: src/main.tsx should be a minimal ReactDOM entry point.
+4. Entry files: src/main.tsx MUST import and render the App component. Use EXACTLY this content:
+   import React from 'react';
+   import ReactDOM from 'react-dom/client';
+   import App from './App';
+   import './index.css';
+   ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+   Do NOT generate a placeholder or add comments about subsequent phases.
 5. Every file must be complete and self-contained.
 
 ${DEPENDENCY_GUIDANCE}
@@ -207,6 +224,12 @@ ${stateShapeBlock}
 4. Each hook/context should be in its own file as listed in FILES TO GENERATE.
 5. Do NOT generate any UI components or JSX — logic only.
 6. Export all items that downstream phases will import.
+7. CRITICAL — INITIAL DATA: Every hook that manages a data collection (useTodos, usePosts, useTasks, etc.)
+   MUST initialize useState with a hardcoded array of 5-8 realistic sample items.
+   NEVER initialize with an empty array []. NEVER use useEffect + fetch/setTimeout for initial data.
+   The app must render with real content on first load — no loading spinners, no blank screens.
+   Example: const [items, setItems] = useState<Item[]>(INITIAL_ITEMS);
+   Define INITIAL_ITEMS as a const above the hook with realistic, domain-appropriate data.
 
 ${COMMON_REACT_PATTERNS}
 
@@ -252,7 +275,10 @@ ${formatPhaseContext(context)}
 5. Every component file MUST use \`export default ComponentName\`.
 6. Use BEM-like naming scoped to component (e.g., .todo-list, .todo-list__item).
 7. Add hover states, transitions, and focus styles to all interactive elements.
-8. Implement loading, error, and empty states where appropriate.
+8. Components MUST render content immediately — no loading spinners on first render.
+   Hooks provide pre-populated data. Show empty states only after user deletes all items.
+9. Every interactive element must be FUNCTIONAL: buttons do actions, forms submit, lists are editable.
+   Never render static text-only UI — every feature must have working CRUD operations.
 
 ${fragmentsBlock}
 
@@ -296,6 +322,8 @@ ${routingBlock}
 5. Do NOT reimplement any component or hook — only import and compose.
 6. Do NOT add new CSS — use existing component styles and CSS variables.
 7. Each page component should be thin: compose existing components, manage page-level state only.
+8. CRITICAL: The app MUST be fully functional on first render — no loading screens, no blank pages.
+   All data hooks provide pre-populated sample data. All UI components render content immediately.
 
 ${COMMON_REACT_PATTERNS}
 

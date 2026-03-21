@@ -77,10 +77,10 @@ export const MODAL_MAX_OUTPUT_TOKENS_REVIEW = 32768;
 // Per-phase output token budgets
 export const MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING = 8192;
 export const MAX_OUTPUT_TOKENS_PLAN_REVIEW = 4096;
-export const MAX_OUTPUT_TOKENS_SCAFFOLD = 6000;
-export const MAX_OUTPUT_TOKENS_LOGIC = 10000;
-export const MAX_OUTPUT_TOKENS_UI = 20000;
-export const MAX_OUTPUT_TOKENS_INTEGRATION = 8000;
+export const MAX_OUTPUT_TOKENS_SCAFFOLD = 10000;
+export const MAX_OUTPUT_TOKENS_LOGIC = 16000;
+export const MAX_OUTPUT_TOKENS_UI = 32000;
+export const MAX_OUTPUT_TOKENS_INTEGRATION = 12000;
 
 // Input safety threshold — 80% of model context window to avoid overflow
 export const INPUT_TOKEN_SAFETY_THRESHOLD = 0.8;

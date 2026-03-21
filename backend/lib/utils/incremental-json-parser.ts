@@ -43,6 +43,15 @@ export function parseIncrementalFiles(text: string, startFrom: number = 0): {
       continue;
     }
 
+    // Detect { "files": [ ... ] } wrapper and skip into the array so we can
+    // parse inner file objects incrementally as they stream in.
+    const lookahead = text.substring(currentIndex, currentIndex + 50);
+    const wrapperMatch = lookahead.match(/^\{\s*"files"\s*:\s*\[/);
+    if (wrapperMatch) {
+      currentIndex += wrapperMatch[0].length;
+      continue;
+    }
+
     // Try to find the matching closing brace for this object
     const startPos = currentIndex;
     let braceCount = 0;

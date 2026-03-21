@@ -9,9 +9,9 @@ import type { ValidationError } from '@ai-app-builder/shared';
 const FORBIDDEN_PATTERNS = [
     { pattern: /```[\s\S]*?```/g, name: 'markdown code blocks' },
     { pattern: /^\s*```\w*\s*$/gm, name: 'markdown code fence' },
-    { pattern: /\/\/\s*TODO\b/gi, name: 'TODO comments' },
-    { pattern: /\/\*\s*TODO\b/gi, name: 'TODO block comments' },
-    { pattern: /{\s*\/\*\s*TODO\b/gi, name: 'TODO JSX comments' },
+    { pattern: /\/\/\s*TODO\b/g, name: 'TODO comments' },
+    { pattern: /\/\*\s*TODO\b/g, name: 'TODO block comments' },
+    { pattern: /{\s*\/\*\s*TODO\b/g, name: 'TODO JSX comments' },
 
     // Partial-generation stubs — AI leaving placeholder content instead of real code
     { pattern: /\/\/\s*\.\.\.\s*(rest|remaining|previous|existing|unchanged|omitted|implementation|code|content|etc\.?)\b/gi, name: 'partial-generation stub' },

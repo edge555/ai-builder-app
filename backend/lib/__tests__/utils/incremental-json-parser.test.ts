@@ -81,6 +81,33 @@ describe('parseIncrementalFiles', () => {
     expect(result.files).toHaveLength(1);
     expect(result.files[0].path).toBe('src/index.tsx');
   });
+
+  it('should extract files from { "files": [...] } wrapper', () => {
+    const json = '{ "files": [{"path":"src/App.tsx","content":"app"},{"path":"src/index.tsx","content":"index"}] }';
+    const result = parseIncrementalFiles(json);
+
+    expect(result.files).toHaveLength(2);
+    expect(result.files[0].path).toBe('src/App.tsx');
+    expect(result.files[1].path).toBe('src/index.tsx');
+  });
+
+  it('should extract files from wrapper with markdown fences', () => {
+    const json = '```json\n{ "files": [{"path":"src/App.tsx","content":"app"}] }\n```';
+    const result = parseIncrementalFiles(json);
+
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0].path).toBe('src/App.tsx');
+  });
+
+  it('should extract files incrementally from incomplete wrapper', () => {
+    // Simulate streaming: first two objects complete, third still arriving
+    const json = '{ "files": [{"path":"a.ts","content":"aaa"},{"path":"b.ts","content":"bbb"},{"path":"c.ts","con';
+    const result = parseIncrementalFiles(json);
+
+    expect(result.files).toHaveLength(2);
+    expect(result.files[0].path).toBe('a.ts');
+    expect(result.files[1].path).toBe('b.ts');
+  });
 });
 
 describe('estimateTotalFiles', () => {

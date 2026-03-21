@@ -119,10 +119,14 @@ NEVER use generic placeholder content. Generated apps must feel real and lived-i
    - Add ?random=N query param to get different images: https://picsum.photos/400/300?random=1
    - For avatars: https://picsum.photos/80/80?random=N
 
-4. INITIAL STATE:
-   - Apps should load with pre-populated sample data — never start empty
+4. INITIAL STATE (CRITICAL — most common failure point):
+   - Apps MUST load with pre-populated sample data — never start empty, never show a loading spinner on first render
+   - Initialize all state with hardcoded data arrays/objects — do NOT use useEffect + fetch/setTimeout for initial data
    - Dashboards should show realistic charts/metrics from day one
-   - Lists should have 5-8 items already present, not "No items yet" on first load`;
+   - Lists should have 5-8 items already present, not "No items yet" on first load
+   - Every hook that returns data (useTodos, usePosts, etc.) must initialize useState with a real data array, not []
+   - WRONG: useState<Todo[]>([]) + useEffect(() => loadData(), [])
+   - CORRECT: useState<Todo[]>(INITIAL_TODOS) where INITIAL_TODOS has 5-8 realistic items`;
 
 /**
  * Prompt injection defense wrapper.
@@ -278,16 +282,21 @@ export const COMMON_REACT_PATTERNS = `=== COMMON UI PATTERNS ===
    - Use semantic elements: <ul>/<ol> for lists, <table>/<thead>/<tbody> for tabular data.
 
 3. DATA FETCHING:
-   - Model three states: loading / error / data using a state machine pattern.
-   - Use mock data with setTimeout to simulate async for demos without a real API.
-   - Example:
-     const [state, setState] = useState<'loading'|'error'|'success'>('loading');
-     useEffect(() => { setTimeout(() => setState('success'), 800); }, []);
+   - CRITICAL: Do NOT use async fetching patterns, loading states, or setTimeout for initial data.
+   - Initialize state directly with hardcoded sample data — the app must render instantly with content.
+   - Example (CORRECT):
+     const [items, setItems] = useState<Item[]>(INITIAL_ITEMS);
+     // where INITIAL_ITEMS is a const array of 5-8 realistic items defined above the component
+   - Example (WRONG — causes loading/blank screen):
+     const [loading, setLoading] = useState(true);
+     useEffect(() => { fetch(...).then(setData); }, []);  // No API exists!
+   - Only use loading states for user-triggered actions (e.g., saving, submitting), never for initial render.
 
 4. ERROR & LOADING STATES:
-   - Show a spinner or skeleton while loading; never leave the UI blank.
+   - Show success/error feedback for user ACTIONS (add, delete, save), not for initial page load.
    - Display a clear error message with a retry button on failure.
    - Use role="status" on loading indicators and role="alert" on errors.
+   - The app MUST render fully functional UI on first load — no spinners, no "loading...", no blank screens.
 
 5. MODALS & DIALOGS:
    - Trap focus inside the modal while open (move focus to first focusable element on open).

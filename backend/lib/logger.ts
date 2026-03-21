@@ -6,8 +6,12 @@
  * category-based filtering (ai/api/core/diff/analysis/streaming), and
  * automatic redaction of sensitive fields (API keys, tokens, secrets).
  *
- * @requires No external runtime dependencies — uses Node.js console only.
+ * File logging: Set LOG_FILE=true to write logs to logs/generation-YYYY-MM-DD.log
+ * (relative to cwd, i.e. backend/logs/ when running the backend server).
  */
+
+import * as fs from 'fs';
+import * as nodePath from 'path';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -60,6 +64,40 @@ const SENSITIVE_PATTERNS = [
   /client[_-]?secret/i,
 ];
 
+
+// ─── File Transport ───────────────────────────────────────────────────────────
+
+let _fileTransportPath: string | null = null;
+let _fileTransportInitialized = false;
+
+function getFileTransportPath(): string | null {
+  if (!_fileTransportInitialized) {
+    _fileTransportInitialized = true;
+    if (process.env.LOG_FILE === 'true') {
+      try {
+        const logDir = nodePath.resolve(process.cwd(), 'logs');
+        fs.mkdirSync(logDir, { recursive: true });
+        const date = new Date().toISOString().split('T')[0];
+        _fileTransportPath = nodePath.join(logDir, `generation-${date}.log`);
+      } catch {
+        // Silently skip file transport if directory creation fails
+      }
+    }
+  }
+  return _fileTransportPath;
+}
+
+function writeToFile(message: string): void {
+  const filePath = getFileTransportPath();
+  if (!filePath) return;
+  try {
+    fs.appendFileSync(filePath, message + '\n');
+  } catch {
+    // Silently ignore file write errors to avoid disrupting the request
+  }
+}
+
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 const CACHED_LOG_FORMAT: LogFormat = (() => {
   const envFormat = process.env.LOG_FORMAT?.toLowerCase();
@@ -278,6 +316,13 @@ export function createLogger(name: string, requestId?: string): Logger {
     } else {
       console.log(formattedMessage);
     }
+
+    // Always write to file transport when enabled
+    writeToFile(
+      CACHED_LOG_FORMAT === 'json'
+        ? formattedMessage
+        : formatJsonMessage(level, name, message, context, requestId, category, stackTrace)
+    );
   };
 
   return {

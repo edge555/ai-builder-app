@@ -125,7 +125,13 @@ export class PhaseExecutor {
             break; // Truncation resolved (or never truncated)
           }
 
-          logger.warn(`Truncation detected in ${layer} phase, requesting remaining files`, { missingPaths, continuationRounds });
+          logger.warn(`Truncation detected in ${layer} phase, requesting remaining files`, {
+            layer,
+            missingPaths,
+            generatedSoFar: Array.from(generatedFiles.keys()),
+            continuationRounds,
+            accumulatedTextLength: accumulatedText.length,
+          });
           
           continuationRounds++;
           accumulatedText = '';
@@ -223,8 +229,20 @@ DO NOT repeat files you have already generated.`;
 
       } catch (err: unknown) {
         lastErrorFeedback = err instanceof Error ? err.message : String(err);
-        
-        logger.error(`Phase execution failed (attempt ${attempt}/${maxAttempts})`, { layer, error: lastErrorFeedback });
+
+        logger.error(`Phase execution failed (attempt ${attempt}/${maxAttempts})`, {
+          layer,
+          attempt,
+          maxAttempts,
+          errorMessage: lastErrorFeedback,
+          stack: err instanceof Error ? err.stack : undefined,
+          expectedFiles: allExpectedFiles,
+          generatedFilesSoFar: Array.from(generatedFiles.keys()),
+          accumulatedTextLength: accumulatedText.length,
+          accumulatedTextTail: accumulatedText.length > 0
+            ? accumulatedText.substring(Math.max(0, accumulatedText.length - 300))
+            : undefined,
+        });
 
         if (attempt === maxAttempts) {
             // Hard fail vs soft fail decision
@@ -232,14 +250,17 @@ DO NOT repeat files you have already generated.`;
                 throw new Error(`Scaffold phase critical failure: ${lastErrorFeedback}`);
             } else {
                 // Soft fail: return whatever we salvaged
-                logger.warn(`Returning partial results for ${layer} phase after max retries`);
+                logger.warn(`Returning partial results for ${layer} phase after max retries`, {
+                  layer,
+                  salvaged: Array.from(generatedFiles.keys()),
+                });
                 return {
                     files: Array.from(generatedFiles.values()),
                     warnings: [`Phase failed but returning partial output: ${lastErrorFeedback}`],
                 };
             }
         }
-        
+
         attempt++;
       }
     }

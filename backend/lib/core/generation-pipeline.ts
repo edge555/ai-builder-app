@@ -7,7 +7,7 @@
 import type { AIProvider } from '../ai/ai-provider';
 import type { IPromptProvider, ArchitecturePlan } from './prompts/prompt-provider';
 import type { IntentOutput, PlanReviewOutput, PlannedFile, GeneratedFile, PhaseLayer } from './schemas';
-import { IntentOutputSchema, ArchitecturePlanSchema, PlanReviewSchema } from './schemas';
+import { IntentOutputSchema, ArchitecturePlanSchema, PlanReviewSchema, PlannedFileSchema } from './schemas';
 import { toSimpleJsonSchema } from './zod-to-json-schema';
 import { createLogger } from '../logger';
 import { selectRecipe } from './recipes/recipe-engine';
@@ -72,7 +72,7 @@ export class GenerationPipeline {
     private readonly planningProvider: AIProvider,
     private readonly executionProvider: AIProvider,
     private readonly reviewProvider: AIProvider,
-    private readonly bugfixProvider: AIProvider,
+    readonly bugfixProvider: AIProvider,
     private readonly promptProvider: IPromptProvider,
     buildValidator?: BuildValidator
   ) {
@@ -99,6 +99,7 @@ export class GenerationPipeline {
     contextLogger.debug('Intent stage start');
 
     let intentOutput: IntentOutput | null = null;
+    let _intentRawContent: string | undefined;
     try {
       const response = await this.intentProvider.generate({
         prompt: userPrompt,
@@ -107,6 +108,8 @@ export class GenerationPipeline {
         responseSchema: INTENT_JSON_SCHEMA,
         signal: callbacks.signal,
       });
+
+      _intentRawContent = response.content ?? undefined;
 
       if (!response.success || !response.content) {
         throw new Error(response.error ?? 'Intent stage returned empty content');
@@ -124,7 +127,12 @@ export class GenerationPipeline {
       callbacks.onStageComplete?.('intent');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      contextLogger.warn('Intent stage failed (degraded)', { error: message });
+      contextLogger.warn('Intent stage failed (degraded)', {
+        error: message,
+        stack: err instanceof Error ? err.stack : undefined,
+        responsePreview: _intentRawContent ? _intentRawContent.substring(0, 800) : undefined,
+        promptLength: userPrompt.length,
+      });
       callbacks.onStageFailed?.('intent', message);
     }
 
@@ -133,22 +141,21 @@ export class GenerationPipeline {
     // ── Recipe Selection ──────────────────────────────────────────────────────
     const recipe = selectRecipe(intentOutput, {
       fullstackEnabled: config.recipes.fullstackEnabled,
-    });
+    }, userPrompt);
     contextLogger.info('Recipe selected', { recipeId: recipe.id });
     
-    // Attempt to inject recipe into prompt provider if supported
-    if (typeof (this.promptProvider as any).setRecipe === 'function') {
-      (this.promptProvider as any).setRecipe(recipe);
-    }
+    // Inject recipe into prompt provider if supported
+    this.promptProvider.setRecipe?.(recipe);
 
     // ── Task 5.2: Enhanced Planning Stage ─────────────────────────────────────
     callbacks.onStageStart?.('planning', 'Drafting architecture plan…');
     contextLogger.debug('Enhanced Planning stage start');
 
     let architecturePlan: ArchitecturePlan | null = null;
+    let _planRawContent: string | undefined;
     try {
       const planSystemPrompt = this.promptProvider.getArchitecturePlanningPrompt(userPrompt, intentOutput);
-      
+
       const response = await this.planningProvider.generate({
         prompt: userPrompt,
         systemInstruction: planSystemPrompt,
@@ -156,6 +163,8 @@ export class GenerationPipeline {
         responseSchema: ARCHITECTURE_PLAN_JSON_SCHEMA,
         signal: callbacks.signal,
       });
+
+      _planRawContent = response.content ?? undefined;
 
       if (!response.success || !response.content) {
         throw new Error(response.error ?? 'Planning stage AI call failed');
@@ -174,12 +183,17 @@ export class GenerationPipeline {
         layers: [...new Set(architecturePlan.files.map(f => f.layer))],
       });
       callbacks.onStageComplete?.('planning');
-      
+
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      contextLogger.warn('Planning stage failed. Falling back to heuristic plan.', { error: message });
+      contextLogger.warn('Planning stage failed. Falling back to heuristic plan.', {
+        error: message,
+        stack: err instanceof Error ? err.stack : undefined,
+        responsePreview: _planRawContent ? _planRawContent.substring(0, 800) : undefined,
+        intentComplexity: intentOutput?.complexity,
+      });
       callbacks.onStageFailed?.('planning', `Using heuristic fallback: ${message}`);
-      
+
       // Fallback
       architecturePlan = buildHeuristicPlan(intentOutput, userPrompt);
     }
@@ -190,9 +204,10 @@ export class GenerationPipeline {
     callbacks.onStageStart?.('review', 'Reviewing architecture plan…');
     contextLogger.debug('Plan Review stage start');
 
+    let _reviewRawContent: string | undefined;
     try {
       const planReviewPrompt = this.promptProvider.getPlanReviewPrompt(architecturePlan);
-      
+
       const response = await this.reviewProvider.generate({
         prompt: 'Review the architecture plan',
         systemInstruction: planReviewPrompt,
@@ -200,6 +215,8 @@ export class GenerationPipeline {
         responseSchema: PLAN_REVIEW_JSON_SCHEMA,
         signal: callbacks.signal,
       });
+
+      _reviewRawContent = response.content ?? undefined;
 
       if (!response.success || !response.content) {
         throw new Error(response.error ?? 'Plan review stage AI call failed');
@@ -213,7 +230,7 @@ export class GenerationPipeline {
       }
 
       const reviewOutput = zodResult.data;
-      
+
       if (!reviewOutput.valid || reviewOutput.issues.length > 0) {
         contextLogger.warn('Plan Review found issues', { issues: reviewOutput.issues.length });
         architecturePlan = this.applyPlanCorrections(architecturePlan, reviewOutput);
@@ -224,7 +241,11 @@ export class GenerationPipeline {
 
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      contextLogger.warn('Plan review stage failed, proceeding with original plan', { error: message });
+      contextLogger.warn('Plan review stage failed, proceeding with original plan', {
+        error: message,
+        stack: err instanceof Error ? err.stack : undefined,
+        responsePreview: _reviewRawContent ? _reviewRawContent.substring(0, 400) : undefined,
+      });
       callbacks.onStageFailed?.('review', message);
     }
 
@@ -258,8 +279,7 @@ export class GenerationPipeline {
       allGeneratedFiles = result.files;
       allWarnings.push(...result.warnings);
     } else {
-      // One-shot: run all phases in a single merged pass
-      // For now, execute them sequentially but skip inter-phase context
+      // One-shot: same execution path — complexity gate reserved for future optimisation
       const result = await this.executeMultiPhase(
         mergedPhases,
         architecturePlan,
@@ -307,7 +327,18 @@ export class GenerationPipeline {
     }
 
     if (review.corrections.filesToAdd.length > 0) {
-      files.push(...review.corrections.filesToAdd);
+      // Validate added files through the same schema used for planned files
+      for (const file of review.corrections.filesToAdd) {
+        const result = PlannedFileSchema.safeParse(file);
+        if (result.success) {
+          files.push(result.data);
+        } else {
+          logger.warn('Rejected invalid filesToAdd from plan review', {
+            file: file.path,
+            errors: result.error.issues.map(i => i.message),
+          });
+        }
+      }
     }
 
     newPlan.files = files;
