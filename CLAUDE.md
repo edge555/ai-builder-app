@@ -127,6 +127,7 @@ backend/
 │   │   │   ├── prompt-provider.ts          # IPromptProvider interface (+ multi-phase methods)
 │   │   │   ├── prompt-provider-factory.ts  # Creates ApiPromptProvider or ModalPromptProvider
 │   │   │   ├── generation-prompt-utils.ts  # Shared prompt building utilities
+│   │   │   ├── shared-prompt-fragments.ts  # Reusable prompt fragments (layout, polish, data, CRUD inference)
 │   │   │   ├── phase-prompts.ts            # Per-phase system prompts (scaffold, logic, UI, integration)
 │   │   │   ├── api/api-prompt-provider.ts  # OpenRouter prompt implementation
 │   │   │   └── modal/modal-prompt-provider.ts # Modal prompt implementation

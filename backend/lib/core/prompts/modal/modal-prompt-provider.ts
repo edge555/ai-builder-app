@@ -24,6 +24,7 @@ import {
   LAYOUT_FUNDAMENTALS,
   BASELINE_VISUAL_POLISH,
   REALISTIC_DATA_GUIDANCE,
+  DATA_MANAGEMENT_INFERENCE,
   DESIGN_SYSTEM_CONSTANTS,
   ACCESSIBILITY_GUIDANCE,
   DEPENDENCY_GUIDANCE,
@@ -101,6 +102,8 @@ technicalApproach should mention:
 - Whether to use react-router-dom (multi-page) or single page
 - State management approach (useState, useReducer, Context, or combination)
 - Key libraries (lucide-react for icons, uuid for IDs, recharts for charts, etc.)
+
+${DATA_MANAGEMENT_INFERENCE}
 
 Respond with valid JSON ONLY. No markdown code fences, no explanation text.`;
   }
@@ -189,6 +192,8 @@ ${LAYOUT_FUNDAMENTALS}
 ${BASELINE_VISUAL_POLISH}
 
 ${REALISTIC_DATA_GUIDANCE}
+
+${DATA_MANAGEMENT_INFERENCE}
 
 ${useDesignSystem ? `${DESIGN_SYSTEM_CONSTANTS}\n` : ''}${ACCESSIBILITY_GUIDANCE}
 

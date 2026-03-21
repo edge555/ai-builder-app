@@ -51,6 +51,25 @@ export const REFERENCE_PROMPTS: ReferencePrompt[] = [
     description: 'Medium todo app — state management + persistence',
   },
 
+  // ── Medium SPA: Blog (CRUD inference test) ──
+  {
+    id: 'medium-blog-crud',
+    prompt: 'Create a simple blog app',
+    recipeId: 'react-spa',
+    complexity: 'medium',
+    minFiles: 6,
+    maxFiles: 22,
+    requiredFiles: ['package.json', 'App.tsx', 'main.tsx', 'index.css'],
+    requiredPatterns: [
+      'useState',
+      'onSubmit',        // add/edit form submission
+      'handleDelete',    // or similar delete handler
+      'confirm',         // deletion confirmation pattern
+    ],
+    forbiddenPatterns: ['fetch(', 'prisma', 'next.config'],
+    description: 'Blog app — CRUD inference: add/edit/delete should be present without explicit user request',
+  },
+
   // ── Complex SPA ──
   {
     id: 'complex-dashboard',

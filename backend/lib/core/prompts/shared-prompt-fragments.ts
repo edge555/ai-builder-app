@@ -129,6 +129,31 @@ NEVER use generic placeholder content. Generated apps must feel real and lived-i
    - CORRECT: useState<Todo[]>(INITIAL_TODOS) where INITIAL_TODOS has 5-8 realistic items`;
 
 /**
+ * Data management inference — auto-include CRUD for entity-based apps.
+ * Prevents generated apps from being read-only when management is implied.
+ */
+export const DATA_MANAGEMENT_INFERENCE = `=== DATA MANAGEMENT INFERENCE (APPLY AUTOMATICALLY) ===
+If the app manages a primary entity that users own
+(posts, tasks, products, contacts, notes, events, items, etc.):
+INCLUDE these operations even if the user did not ask explicitly:
+- ADD:    a form or modal to create new items
+- EDIT:   a form or modal to update existing items
+- DELETE: a button to remove items (ALWAYS with confirmation — never on single click)
+
+These are BASELINE expectations for any app displaying a user-managed collection.
+
+Do NOT infer management for:
+- Pure display apps (weather, news feed, stock ticker, dashboards showing external data)
+- Stateless tools (calculators, converters, color pickers, timers)
+- Games
+
+SCOPE LIMIT: Only basic CRUD for the PRIMARY entity.
+Do not add: auth, admin panels, bulk operations, import/export, or anything not in the prompt.
+
+CRITICAL: All CRUD operates on LOCAL STATE (useState/useReducer).
+Use setItems([...items, newItem]) — NEVER fetch(), async ops, or API calls for mutations.`;
+
+/**
  * Prompt injection defense wrapper.
  */
 export function wrapUserInput(userInput: string): string {

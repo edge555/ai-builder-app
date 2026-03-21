@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [1.2.0] - 2026-03-21
 
 ### Added
+- **Automatic CRUD inference** — entity-based apps (blogs, task managers, contact lists, etc.) now automatically include add/edit/delete operations even when the prompt doesn't ask for them. Delete always requires confirmation. Stateless tools and games are excluded. All mutations use local state — Sandpack-compatible.
 - **Multi-phase generation** — complex projects (>10 files) now generate in batched phases with cross-file context, producing more coherent code with fewer broken imports
 - **Architecture planning** — AI plans the file structure, type contracts, and CSS variables before generating code; a review step catches dangling imports and missing types before execution begins
 - **Live phase progress** — watch your app build phase by phase (scaffold → logic → UI → integration) with real-time SSE progress events in the chat

@@ -24,6 +24,7 @@ import {
   LAYOUT_FUNDAMENTALS,
   BASELINE_VISUAL_POLISH,
   REALISTIC_DATA_GUIDANCE,
+  DATA_MANAGEMENT_INFERENCE,
   DESIGN_SYSTEM_CONSTANTS,
   ACCESSIBILITY_GUIDANCE,
   DEPENDENCY_GUIDANCE,
@@ -98,6 +99,8 @@ Analyze the user's request and return a JSON object with exactly these fields:
   * "fullstack-auth" — ONLY when the user explicitly requests user authentication, login/signup, or mentions Supabase Auth, OAuth, etc.
   Most prompts like "build a blog app", "build a task tracker", "build a todo app" should be "spa" — they work perfectly with local state and mock data.
 
+${DATA_MANAGEMENT_INFERENCE}
+
 Respond with valid JSON only. No markdown, no explanation.`;
   }
 
@@ -165,6 +168,8 @@ ${LAYOUT_FUNDAMENTALS}
 ${BASELINE_VISUAL_POLISH}
 
 ${REALISTIC_DATA_GUIDANCE}
+
+${DATA_MANAGEMENT_INFERENCE}
 
 ${useDesignSystem ? `${DESIGN_SYSTEM_CONSTANTS}\n` : ''}${ACCESSIBILITY_GUIDANCE}
 
@@ -351,6 +356,8 @@ The following files MUST appear in the "files" array with layer "scaffold":
 
 9. HOOKS MUST PRE-POPULATE DATA: Every hook in the "logic" layer that manages a collection (useTodos, usePosts, etc.)
    must initialize with hardcoded sample data. The app renders instantly with content — no loading screens.
+
+${DATA_MANAGEMENT_INFERENCE}
 
 Base file count on complexity:
 - simple: 6–9 files
