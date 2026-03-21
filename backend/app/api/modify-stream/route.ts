@@ -163,6 +163,8 @@ export async function POST(request: NextRequest) {
             version: serializeVersion(result.version!),
             diffs: result.diffs,
             changeSummary: result.changeSummary,
+            ...(result.partialSuccess && { partialSuccess: true }),
+            ...(result.rolledBackFiles?.length && { rolledBackFiles: result.rolledBackFiles }),
           };
 
           encoder.enqueueEvent(

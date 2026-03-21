@@ -35,11 +35,16 @@ import { getTokenBudget } from '../constants';
 import { buildSlicesFromFiles } from './prompt-builder';
 import { selectRepairFiles, type ErrorContext } from './repair-file-selector';
 import { createModificationResult } from './result-builder';
-import { validateAndFixBuild } from './build-fixer';
+import { DiagnosticRepairEngine } from './diagnostic-repair-engine';
+import { CheckpointManager } from './checkpoint-manager';
 import { applyFileEdits } from './file-edit-applicator';
+import { evaluateDiffSize } from './diff-size-guard';
 import type { PipelineCallbacks, GeneratedFile, PipelineResult, PipelineStage } from '../core/pipeline-orchestrator';
 import { PipelineOrchestrator } from '../core/pipeline-orchestrator';
 import { createPipelineOrchestrator } from '../core/pipeline-factory';
+import { indexProject } from '../analysis/file-index';
+import { createDependencyGraph } from '../analysis/dependency-graph';
+import { analyzeImpact } from '../analysis/impact-analyzer';
 
 const logger = createLogger('ModificationEngine');
 
@@ -64,7 +69,7 @@ export class ModificationEngine {
   private readonly validationPipeline: ValidationPipeline;
   private readonly filePlanner: FilePlanner;
   private readonly buildValidator: BuildValidator;
-  private readonly maxBuildRetries = 2;
+  private readonly repairEngine: DiagnosticRepairEngine;
 
   constructor(
     private readonly pipeline: PipelineOrchestrator,
@@ -74,6 +79,7 @@ export class ModificationEngine {
     this.validationPipeline = new ValidationPipeline();
     this.filePlanner = createFilePlanner(this.bugfixProvider);
     this.buildValidator = createBuildValidator();
+    this.repairEngine = new DiagnosticRepairEngine();
   }
 
   /**
@@ -147,14 +153,48 @@ export class ModificationEngine {
       };
 
       // Step 4: Run the 4-stage modification pipeline
-      onProgress?.('generating', 'Generating code modifications...');
-      const pipelineResult = await this.pipeline.runModificationPipeline(
-        prompt,
-        projectState.files,
-        slices,
-        pipelineCallbacks,
-        { requestId, designSystem: shouldIncludeDesignSystem }
-      );
+      const primaryFiles = slices.filter(s => s.relevance === 'primary').map(s => s.filePath);
+      let pipelineResult: PipelineResult;
+
+      if (primaryFiles.length <= 3) {
+        onProgress?.('generating', 'Generating code modifications...');
+        pipelineResult = await this.pipeline.runModificationPipeline(
+          prompt,
+          projectState.files,
+          slices,
+          pipelineCallbacks,
+          { requestId, designSystem: shouldIncludeDesignSystem }
+        );
+      } else {
+        onProgress?.('generating', `Generating code modifications (ordered, ${primaryFiles.length} files)...`);
+        
+        const fileIndex = indexProject(projectState);
+        const depGraph = createDependencyGraph(fileIndex);
+        const impactReport = analyzeImpact(primaryFiles, depGraph);
+
+        const validateFile = async (path: string, content: string) => {
+          const tempFiles = { ...projectState.files, [path]: content };
+          const validationResult = await this.validateModifiedFiles(tempFiles);
+          return {
+            valid: validationResult.valid,
+            errorText: validationResult.errors.map(e => e.message).join(', ')
+          };
+        };
+
+        pipelineResult = await this.pipeline.runOrderedModificationPipeline(
+          prompt,
+          projectState.files,
+          impactReport.tiers,
+          validateFile,
+          pipelineCallbacks,
+          { requestId, designSystem: shouldIncludeDesignSystem }
+        );
+      }
+
+      // Step 4.5: Capture checkpoint before applying modifications (for rollback)
+      const checkpointMgr = new CheckpointManager();
+      const filesToModify = pipelineResult.finalFiles.map(f => f.path);
+      checkpointMgr.capture(projectState.files, filesToModify);
 
       // Step 5: Resolve final files (apply modify ops + build diff vs currentFiles)
       onProgress?.('applying', 'Applying modifications...');
@@ -162,6 +202,22 @@ export class ModificationEngine {
         projectState.files,
         pipelineResult
       );
+
+      // Step 5.5: Diff size guard — auto-convert modify ops that changed >90% of a file
+      for (const [path, content] of Object.entries(updatedFiles)) {
+        if (content === null) continue; // deletion
+        const original = projectState.files[path];
+        if (!original) continue; // new file (create), not a modify
+        const result = evaluateDiffSize(original, content, 'modify');
+        if (result.verdict === 'converted') {
+          contextLogger.info('Diff guard: auto-converted modify to replace_file', {
+            file: path,
+            changeRatio: result.changeRatio.toFixed(2),
+          });
+        }
+        // No action needed on the content — it's already the final content.
+        // The guard is informational + logged for observability.
+      }
 
       // Step 6: Validate AI output against the full merged project (not just changed files)
       // Validating only updatedFiles causes false failures: structure validators always require
@@ -171,6 +227,21 @@ export class ModificationEngine {
         ...projectState.files,
         ...updatedFiles,
       };
+
+      // Step 6.5: Cross-file reference validation
+      const mergedFilesOnly: Record<string, string> = {};
+      for (const [path, content] of Object.entries(mergedForValidation)) {
+        if (content !== null) mergedFilesOnly[path] = content;
+      }
+      const crossFileErrors = this.buildValidator.validateCrossFileReferences(mergedFilesOnly);
+      if (crossFileErrors.length > 0) {
+        contextLogger.warn('Cross-file validation found issues', {
+          errorCount: crossFileErrors.length,
+          errors: crossFileErrors.map(e => ({ message: e.message, file: e.file })),
+        });
+        // Don't fail here — feed these errors into the build-fix loop downstream
+      }
+
       const validationResult = await this.validateModifiedFiles(mergedForValidation);
       if (!validationResult.valid) {
         return {
@@ -180,25 +251,41 @@ export class ModificationEngine {
         };
       }
 
-      // Step 7: Build validation with auto-retry
+      // Step 7: Diagnostic repair engine (replaces build-fixer)
       onProgress?.('validating', 'Running build validation...');
-      const buildValidationResult = await validateAndFixBuild(
+      const repairResult = await this.repairEngine.repair({
         projectState,
         updatedFiles,
         prompt,
         shouldIncludeDesignSystem,
-        this.bugfixProvider,
-        this.buildValidator,
-        this.maxBuildRetries,
+        aiProvider: this.bugfixProvider,
+        buildValidator: this.buildValidator,
+        checkpoint: checkpointMgr.rollbackAll(),
         requestId,
-        onProgress
-      );
+      });
 
-      const finalUpdatedFiles = buildValidationResult.updatedFiles;
+      if (repairResult.repairLevel !== 'deterministic' || !repairResult.success) {
+        contextLogger.info('Repair engine result', {
+          success: repairResult.success,
+          partialSuccess: repairResult.partialSuccess,
+          repairLevel: repairResult.repairLevel,
+          totalAICalls: repairResult.totalAICalls,
+          rolledBackFiles: repairResult.rolledBackFiles,
+        });
+      }
+
+      if (repairResult.repairLevel === 'targeted-ai' || repairResult.repairLevel === 'broad-ai') {
+        onProgress?.('build-fixing', `Fixed build errors (${repairResult.repairLevel}, ${repairResult.totalAICalls} AI calls)`);
+      }
+
+      const finalUpdatedFiles = repairResult.updatedFiles;
 
       // Step 8: Create final result
       onProgress?.('applying', 'Finalizing changes...');
-      return await createModificationResult(projectState, finalUpdatedFiles, deletedFiles, prompt);
+      return await createModificationResult(projectState, finalUpdatedFiles, deletedFiles, prompt, {
+        partialSuccess: repairResult.partialSuccess,
+        rolledBackFiles: repairResult.rolledBackFiles,
+      });
     } catch (error) {
       return {
         success: false,
