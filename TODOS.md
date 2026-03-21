@@ -5,7 +5,7 @@
 ### Image attachment strip: horizontal scroll on mobile
 - **What:** Add `overflow-x: auto` + fade-edge gradient to `.chat-attachment-strip` for mobile viewports (<768px)
 - **Why:** With 5 image thumbnails on a 375px screen, the strip overflows. Horizontal scroll with a fade hint on the right edge is the agreed UX pattern.
-- **Context:** Decided during /plan-design-review on 2026-03-21. See `specs/generation-pipeline-rewrite.md` → Frontend Design Decisions → Responsive Behavior.
+- **Context:** Decided during /plan-design-review on 2026-03-21.
 - **Depends on:** ChatInput image attachment markup (already implemented in this branch)
 
 ### Phase progress: warning color for degraded stages
@@ -32,4 +32,4 @@
 - **What:** Only validate changed files + their direct dependents instead of the full project in `BuildValidator`
 - **Why:** Performance optimization for projects with 20+ files. Currently validation runs on all files even when only 1 changed.
 - **Context:** Deferred from Phase 4 of the modification & repair pipeline plan (2026-03-21). Uses `DependencyGraph` to determine validation scope.
-- **Depends on:** Phase 3 of modification & repair pipeline (dependency graph extensions: `getTopologicalOrder`, `getTransitivelyAffected`)
+- **Depends on:** None (prerequisite `DependencyGraph` extensions shipped in v1.3.0)

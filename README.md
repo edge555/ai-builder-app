@@ -9,7 +9,7 @@ Generate full React web applications from natural language prompts. Describe wha
 - **Live preview** — Sandpack-powered in-browser execution with console panel
 - **Code editor** — Monaco editor with file tree
 - **Version control** — undo/redo through generation history
-- **Auto-repair** — automatic error detection and fix (up to 3 attempts)
+- **Auto-repair** — automatic error detection and fix with escalating repair tiers (deterministic fixes → AI repair → per-file rollback)
 - **Cloud sync** — optional Supabase-backed project storage
 - **Onboarding wizard** — guided 3-step project setup (type → features → design style)
 - **22 starter templates** — across 7 categories for quick project bootstrapping

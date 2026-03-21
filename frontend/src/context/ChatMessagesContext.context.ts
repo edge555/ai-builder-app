@@ -9,7 +9,7 @@ import type { ChatMessage } from '../components/ChatInterface';
 export interface ChatMessagesContextValue {
     messages: ChatMessage[];
     addUserMessage: (content: string) => ChatMessage;
-    addAssistantMessage: (content: string, changeSummary?: ChangeSummary, diffs?: FileDiff[]) => ChatMessage;
+    addAssistantMessage: (content: string, changeSummary?: ChangeSummary, diffs?: FileDiff[], durationMs?: number) => ChatMessage;
     /** Adds an error assistant message with an optional retry prompt. */
     addErrorMessage: (content: string, retryPrompt?: string) => ChatMessage;
     clearMessages: () => void;

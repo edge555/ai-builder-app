@@ -119,6 +119,14 @@ export class ModificationEngine {
     const onProgress = options?.onProgress;
     const onPipelineStage = options?.onPipelineStage;
 
+    const engineStartMs = Date.now();
+    contextLogger.info('[MOD-ENGINE] start', {
+      promptPreview: prompt.slice(0, 150),
+      promptLength: prompt.length,
+      fileCount: Object.keys(projectState.files).length,
+      projectId: projectState.id,
+    });
+
     try {
       // Step 1: Select code slices
       onProgress?.('planning', 'Analyzing project and planning changes...');
@@ -129,7 +137,13 @@ export class ModificationEngine {
 
       // Step 2: Determine design system inclusion
       const shouldIncludeDesignSystem = DESIGN_SYSTEM_CATEGORIES.has(category);
-      contextLogger.debug('Category determined', { category, shouldIncludeDesignSystem });
+      contextLogger.info('Code slices selected', {
+        category,
+        shouldIncludeDesignSystem,
+        totalSlices: slices.length,
+        primaryFiles: slices.filter(s => s.relevance === 'primary').map(s => s.filePath),
+        contextFiles: slices.filter(s => s.relevance === 'context').map(s => s.filePath),
+      });
 
       // Step 3: Build pipeline callbacks
       const pipelineCallbacks: PipelineCallbacks = {
@@ -280,6 +294,20 @@ export class ModificationEngine {
 
       const finalUpdatedFiles = repairResult.updatedFiles;
 
+      const changedFiles = Object.entries(finalUpdatedFiles)
+        .filter(([, v]) => v !== null)
+        .map(([k]) => k);
+
+      contextLogger.info('[MOD-ENGINE] complete', {
+        durationMs: Date.now() - engineStartMs,
+        changedFileCount: changedFiles.length,
+        changedFiles,
+        deletedFileCount: deletedFiles.length,
+        deletedFiles,
+        repairLevel: repairResult.repairLevel,
+        partialSuccess: repairResult.partialSuccess ?? false,
+      });
+
       // Step 8: Create final result
       onProgress?.('applying', 'Finalizing changes...');
       return await createModificationResult(projectState, finalUpdatedFiles, deletedFiles, prompt, {
@@ -287,6 +315,10 @@ export class ModificationEngine {
         rolledBackFiles: repairResult.rolledBackFiles,
       });
     } catch (error) {
+      contextLogger.error('[MOD-ENGINE] failed', {
+        durationMs: Date.now() - engineStartMs,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during modification',
@@ -342,6 +374,18 @@ export class ModificationEngine {
       if (currentFiles[path] !== content) {
         updatedFiles[path] = content;
       }
+    }
+
+    // Warn if pipeline produced files but nothing actually changed
+    const hasExecutorContent = pipelineResult.executorFiles.some(
+      f => f.path !== '__pipeline_raw__'
+    );
+    if (hasExecutorContent && Object.keys(updatedFiles).length === 0) {
+      logger.warn('Pipeline produced files but resolved to 0 changes', {
+        executorFileCount: pipelineResult.executorFiles.length,
+        finalFileCount: pipelineResult.finalFiles.length,
+        modifyOpsCount: modifyOps.length,
+      });
     }
 
     return { updatedFiles, deletedFiles };

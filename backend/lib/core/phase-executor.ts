@@ -13,6 +13,7 @@ import type { GeneratedFile } from './schemas';
 import type { GenerationRecipe } from './recipes/recipe-types';
 import { parseIncrementalFiles, estimateTotalFiles } from '../utils/incremental-json-parser';
 import { createLogger } from '../logger';
+import { PHASE_EXECUTION_TIMEOUT } from '../constants';
 
 const logger = createLogger('PhaseExecutor');
 
@@ -71,7 +72,8 @@ export class PhaseExecutor {
         throw new Error('Phase execution aborted');
       }
 
-      logger.info(`Starting phase execution`, { layer, attempt });
+      const attemptStartMs = Date.now();
+      logger.info(`Starting phase execution`, { layer, attempt, expectedFiles: allExpectedFiles });
 
       // Build the standard base prompt
       let systemPrompt = this.promptProvider.getPhasePrompt(layer, plan, context, userPrompt, recipe);
@@ -87,12 +89,17 @@ export class PhaseExecutor {
       let lastParsedIndex = 0;
 
       try {
+        // Create a per-phase timeout signal so slow models fall through to
+        // the AgentRouter fallback faster than the global 300s HTTP timeout.
+        const phaseSignal = this.createPhaseSignal(callbacks?.signal);
+
         await this.provider.generateStreaming({
           systemInstruction: systemPrompt,
           prompt: '', // We bake the userPrompt into the system prompt structure for phases
           maxOutputTokens,
-          signal: callbacks?.signal,
+          signal: phaseSignal.signal,
           onChunk: (chunk: string, totalLength: number) => {
+            phaseSignal.touch(); // reset inactivity timer on each chunk
             accumulatedText += chunk;
             callbacks?.onProgress?.(totalLength);
 
@@ -111,6 +118,7 @@ export class PhaseExecutor {
             }
           },
         });
+        phaseSignal.clear();
 
         // ─── Truncation Detection & Continuation (Decision 12A) ─────────────────────
         // We allow up to 2 continuation rounds within the current execution attempt
@@ -118,6 +126,12 @@ export class PhaseExecutor {
         const maxContinuations = 2;
 
         while (continuationRounds < maxContinuations) {
+          // Short-circuit if the client disconnected — avoids wasteful 0ms calls
+          if (callbacks?.signal?.aborted) {
+            logger.info('Skipping continuation — client aborted', { layer, continuationRounds });
+            break;
+          }
+
           const generatedPaths = Array.from(generatedFiles.keys());
           const missingPaths = allExpectedFiles.filter((p) => !generatedPaths.includes(p));
 
@@ -132,7 +146,7 @@ export class PhaseExecutor {
             continuationRounds,
             accumulatedTextLength: accumulatedText.length,
           });
-          
+
           continuationRounds++;
           accumulatedText = '';
           lastParsedIndex = 0;
@@ -143,12 +157,14 @@ ${missingPaths.map((p) => `- ${p}`).join('\n')}
 
 DO NOT repeat files you have already generated.`;
 
+          const contSignal = this.createPhaseSignal(callbacks?.signal);
           await this.provider.generateStreaming({
             systemInstruction: systemPrompt, // Keep original context instructions for syntax accuracy
             prompt: continuationPrompt,
             maxOutputTokens, // Give a full fresh budget
-            signal: callbacks?.signal,
+            signal: contSignal.signal,
             onChunk: (chunk: string, totalLength: number) => {
+              contSignal.touch(); // reset inactivity timer on each chunk
               accumulatedText += chunk;
               callbacks?.onProgress?.(totalLength);
 
@@ -165,6 +181,7 @@ DO NOT repeat files you have already generated.`;
               }
             },
           });
+          contSignal.clear();
         }
 
         const finalFiles = Array.from(generatedFiles.values());
@@ -222,6 +239,18 @@ DO NOT repeat files you have already generated.`;
             }
         }
 
+        const missingFiles = allExpectedFiles.filter(p => !finalFiles.some(f => f.path === p));
+        logger.info('Phase execution attempt complete', {
+          layer,
+          attempt,
+          durationMs: Date.now() - attemptStartMs,
+          expectedCount: allExpectedFiles.length,
+          generatedCount: finalFiles.length,
+          generatedFiles: finalFiles.map(f => f.path),
+          missingFiles,
+          warningCount: accumulatedWarnings.length,
+        });
+
         return {
           files: finalFiles,
           warnings: accumulatedWarnings,
@@ -266,5 +295,44 @@ DO NOT repeat files you have already generated.`;
     }
 
     throw new Error('Unreachable code block in PhaseExecutor');
+  }
+
+  /**
+   * Creates a per-phase abort signal that fires after PHASE_EXECUTION_TIMEOUT of
+   * inactivity (no chunks received). Each call to `touch()` resets the timer, so
+   * a slow-but-streaming model won't be killed prematurely. If a parent signal
+   * (client disconnect) is provided, the phase signal also fires when the parent
+   * fires.
+   */
+  private createPhaseSignal(parentSignal?: AbortSignal): {
+    signal: AbortSignal;
+    touch: () => void;
+    clear: () => void;
+  } {
+    const controller = new AbortController();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined = setTimeout(
+      () => controller.abort(),
+      PHASE_EXECUTION_TIMEOUT
+    );
+
+    const touch = () => {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => controller.abort(), PHASE_EXECUTION_TIMEOUT);
+    };
+
+    const clear = () => {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+        timeoutId = undefined;
+      }
+    };
+
+    // Combine with parent signal (client disconnect)
+    if (parentSignal) {
+      const signal = AbortSignal.any([parentSignal, controller.signal]);
+      return { signal, touch, clear };
+    }
+
+    return { signal: controller.signal, touch, clear };
   }
 }

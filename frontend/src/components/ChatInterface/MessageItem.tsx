@@ -6,6 +6,13 @@ import { MarkdownRenderer } from '../MarkdownRenderer/MarkdownRenderer';
 import { GenerationSummaryCard } from './GenerationSummaryCard';
 import type { ChatMessage } from './ChatInterface';
 
+function formatDuration(ms: number): string {
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+  const m = Math.floor(ms / 60_000);
+  const s = Math.round((ms % 60_000) / 1000);
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
+
 interface MessageItemProps {
   message: ChatMessage;
   /** Current project files for the summary card */
@@ -29,6 +36,9 @@ export const MessageItemWithRef = memo(
           <span className="chat-message-time">
             {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
+          {!isUser && message.durationMs !== undefined && (
+            <span className="chat-message-duration">{formatDuration(message.durationMs)}</span>
+          )}
         </div>
         <div className="chat-message-content">
           {isUser ? (

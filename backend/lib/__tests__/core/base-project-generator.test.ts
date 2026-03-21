@@ -146,7 +146,7 @@ describe('BaseProjectGenerator', () => {
             // or just assume it's working if it keeps going.
         });
 
-        it('should stop and return original files if AI returns invalid JSON', async () => {
+        it('should retry all attempts and return original files if AI keeps returning invalid JSON', async () => {
             mockBuildValidator.validate.mockReturnValue({
                 valid: false,
                 errors: [{ message: 'Error', file: 'f.ts' }]
@@ -160,7 +160,7 @@ describe('BaseProjectGenerator', () => {
             const result = await generator.testRunBuildFixLoop(initialFiles, 'generation', prompt);
 
             expect(result).toEqual(initialFiles);
-            expect(mockAIProvider.generate).toHaveBeenCalledTimes(1);
+            expect(mockAIProvider.generate).toHaveBeenCalledTimes(3);
         });
     });
 });

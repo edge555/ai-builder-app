@@ -209,7 +209,7 @@ describe('getDirectDeps', () => {
       ['src/types/index.ts', TYPES_CONTENT],
     ]);
 
-    const deps = getDirectDeps(logicBatch, plan, generated);
+    const { deps } = getDirectDeps(logicBatch, plan, generated);
 
     expect(deps.has('src/types/index.ts')).toBe(true);
     expect(deps.get('src/types/index.ts')).toBe(TYPES_CONTENT);
@@ -221,8 +221,18 @@ describe('getDirectDeps', () => {
     // types/index.ts NOT in generatedFiles
     const generated = new Map<string, string>();
 
-    const deps = getDirectDeps(batch, plan, generated);
+    const { deps } = getDirectDeps(batch, plan, generated);
     expect(deps.size).toBe(0);
+  });
+
+  it('reports planned-but-missing imports', () => {
+    const plan = makePlan();
+    const batch = [plan.files.find(f => f.path === 'src/hooks/useTodos.ts')!];
+    // types/index.ts is in the plan but NOT generated
+    const generated = new Map<string, string>();
+
+    const { missingPlannedImports } = getDirectDeps(batch, plan, generated);
+    expect(missingPlannedImports).toContain('src/types/index.ts');
   });
 
   it('excludes sibling files in the same batch', () => {
@@ -237,7 +247,7 @@ describe('getDirectDeps', () => {
       ['src/types/index.ts', TYPES_CONTENT],
     ]);
 
-    const deps = getDirectDeps(batch, plan, generated);
+    const { deps } = getDirectDeps(batch, plan, generated);
     // hooks file is in batch → excluded; types file is a real dep
     expect(deps.has('src/hooks/useTodos.ts')).toBe(false);
     expect(deps.has('src/types/index.ts')).toBe(true);
@@ -248,14 +258,14 @@ describe('getDirectDeps', () => {
     const scaffoldBatch = [plan.files.find(f => f.path === 'src/types/index.ts')!];
     const generated = new Map<string, string>();
 
-    const deps = getDirectDeps(scaffoldBatch, plan, generated);
+    const { deps } = getDirectDeps(scaffoldBatch, plan, generated);
     expect(deps.size).toBe(0);
   });
 
   it('returns empty map when generated files is empty', () => {
     const plan = makePlan();
     const batch = [plan.files.find(f => f.path === 'src/hooks/useTodos.ts')!];
-    const deps = getDirectDeps(batch, plan, new Map());
+    const { deps } = getDirectDeps(batch, plan, new Map());
     expect(deps.size).toBe(0);
   });
 
@@ -272,7 +282,10 @@ describe('getDirectDeps', () => {
     const generated = new Map<string, string>();
 
     expect(() => getDirectDeps(batch, plan, generated)).not.toThrow();
-    expect(getDirectDeps(batch, plan, generated).size).toBe(0);
+    const { deps, missingPlannedImports } = getDirectDeps(batch, plan, generated);
+    expect(deps.size).toBe(0);
+    // External package not in plan → not reported as missing planned import
+    expect(missingPlannedImports).toHaveLength(0);
   });
 });
 

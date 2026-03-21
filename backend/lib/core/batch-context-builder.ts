@@ -50,6 +50,8 @@ export interface PhaseContext {
     typeContracts: TypeContract[];
     stateShape?: StateShape;
   };
+  /** Planned files that this batch imports but were NOT generated in prior phases. */
+  missingPlannedImports: string[];
 }
 
 // ─── File Summary Adapter (Task 2.2) ────────────────────────────────────────
@@ -140,30 +142,34 @@ export function extractCSSVariableNames(cssContent: string): string[] {
  * Walks the plan's `imports` array for each batch file and looks up the content
  * from the `generatedFiles` map. Only returns files that have already been generated.
  *
- * @returns Map of `path → content` for each resolved dependency.
+ * @returns Object with resolved deps and list of planned-but-missing import paths.
  */
 export function getDirectDeps(
   batchFiles: PlannedFile[],
   plan: ArchitecturePlan,
   generatedFiles: Map<string, string>,
-): Map<string, string> {
+): { deps: Map<string, string>; missingPlannedImports: string[] } {
   const deps = new Map<string, string>();
   const batchPaths = new Set(batchFiles.map(f => f.path));
+  const plannedPaths = new Set(plan.files.map(f => f.path));
+  const missingSet = new Set<string>();
 
   for (const file of batchFiles) {
     for (const importPath of file.imports) {
       // Skip self-references and other files in this batch
       if (batchPaths.has(importPath)) continue;
 
-      // Only include if already generated
       const content = generatedFiles.get(importPath);
       if (content !== undefined) {
         deps.set(importPath, content);
+      } else if (plannedPaths.has(importPath)) {
+        // Was planned but never generated — warn the AI not to import it
+        missingSet.add(importPath);
       }
     }
   }
 
-  return deps;
+  return { deps, missingPlannedImports: [...missingSet] };
 }
 
 // ─── Contract Filtering ──────────────────────────────────────────────────────
@@ -262,7 +268,7 @@ export function buildPhaseContext(
   }
 
   // 2. Direct dependencies — full content of files this batch imports
-  const directDependencies = getDirectDeps(currentBatchFiles, plan, generatedFiles);
+  const { deps: directDependencies, missingPlannedImports } = getDirectDeps(currentBatchFiles, plan, generatedFiles);
 
   // 3. File summaries — lightweight summaries of all already-generated files
   const fileSummaries: FileSummary[] = [];
@@ -289,5 +295,6 @@ export function buildPhaseContext(
     fileSummaries,
     cssVariables: [...new Set(cssVariables)], // deduplicate
     relevantContracts,
+    missingPlannedImports,
   };
 }

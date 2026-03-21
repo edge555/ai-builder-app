@@ -36,6 +36,7 @@ export const MAX_PROJECT_BYTES = 1024 * 1024;    // 1 MB total
 // Timeouts (in milliseconds)
 export const API_REQUEST_TIMEOUT = 300000; // 5 minutes
 export const OPENROUTER_TIMEOUT = 300000; // 5 minutes
+export const PHASE_EXECUTION_TIMEOUT = 120_000; // 2 minutes per model call within a generation phase
 
 // Token budget for AI context
 export const TOKEN_BUDGET = 4000;

@@ -171,6 +171,7 @@ export function useSubmitPrompt() {
                         );
                     }
 
+                    const operationStartMs = Date.now();
                     const result = await generation.generateProjectStreaming(prompt, attachments);
                     if (abortController.signal.aborted) break;
 
@@ -182,7 +183,7 @@ export function useSubmitPrompt() {
                         const successMessage = getGenerationSuccessMessage(result.projectState.name, fileCount);
 
                         // Create assistant message and store reference
-                        const assistantMessage = chatMessages.addAssistantMessage(successMessage);
+                        const assistantMessage = chatMessages.addAssistantMessage(successMessage, undefined, undefined, Date.now() - operationStartMs);
 
                         // Immediately save to storage with complete message history
                         // Build from current state + the two messages we just added (state hasn't updated yet)
@@ -251,6 +252,7 @@ export function useSubmitPrompt() {
                     }
 
                     const conversationHistory = buildConversationHistory(chatMessages.messages);
+                    const operationStartMs = Date.now();
                     const result = await generation.modifyProject(projectState, prompt, undefined, { conversationHistory, attachments });
                     if (abortController.signal.aborted) break;
 
@@ -260,7 +262,8 @@ export function useSubmitPrompt() {
                         chatMessages.addAssistantMessage(
                             getModificationSuccessMessage(result.changeSummary?.description),
                             result.changeSummary,
-                            result.diffs
+                            result.diffs,
+                            Date.now() - operationStartMs
                         );
                         // Success - clear retry history
                         apiRetryHistoryRef.current = [];
