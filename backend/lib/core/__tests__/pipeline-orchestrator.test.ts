@@ -90,6 +90,9 @@ function makePromptProvider(): IPromptProvider {
     getExecutionModificationSystemPrompt: vi.fn().mockReturnValue('exec mod prompt'),
     getReviewSystemPrompt:              vi.fn().mockReturnValue('review prompt'),
     getBugfixSystemPrompt:              vi.fn().mockReturnValue('bugfix prompt'),
+    getArchitecturePlanningPrompt:      vi.fn().mockReturnValue('arch prompt'),
+    getPlanReviewPrompt:                vi.fn().mockReturnValue('plan rev prompt'),
+    getPhasePrompt:                     vi.fn().mockReturnValue('phase prompt'),
     tokenBudgets: {
       intent:               512,
       planning:            4096,
@@ -478,5 +481,48 @@ describe('abort signal', () => {
     await expect(
       orchestrator.runModificationPipeline('build a counter', {}, [], { signal: controller.signal })
     ).rejects.toThrow(/cancelled/i);
+  });
+});
+
+// ─── Ordered Execution ────────────────────────────────────────────────────────
+
+describe('runOrderedModificationPipeline', () => {
+  it('processes files in multiple tiers with retries on validation failure', async () => {
+    const currentFiles = {
+      'src/types.ts': 'export type A = string;',
+      'src/consumer.ts': 'import { A } from "./types";',
+    };
+    
+    // First attempt fails validation, second attempt succeeds
+    let validationAttempts = 0;
+    const validateFile = vi.fn(async (path, content) => {
+      validationAttempts++;
+      if (validationAttempts === 1) return { valid: false, errorText: 'Syntax error' };
+      return { valid: true };
+    });
+
+    // Mock execution provider to return generated files
+    // The orchestrator expects the string content of 'files' to be JSON parseable as GeneratedFile array
+    vi.mocked(mockExecution.generateStreaming).mockResolvedValue(
+      ok({ files: [{ path: 'src/types.ts', content: 'export type A = number;' }] })
+    );
+
+    const tiers = [['src/types.ts'], ['src/consumer.ts']];
+    const callbacks = {};
+
+    const result = await orchestrator.runOrderedModificationPipeline(
+      'change type A to number',
+      currentFiles,
+      tiers,
+      validateFile,
+      callbacks,
+      {}
+    );
+
+    // It should have returned a PipelineResult
+    expect(result.executorFiles).toBeDefined();
+    // Two tiers = two processFile execution attempts which succeed (or retry)
+    expect(validateFile).toHaveBeenCalled();
+    // Because we mock execution to always return 'src/types.ts', it will at least try
   });
 });

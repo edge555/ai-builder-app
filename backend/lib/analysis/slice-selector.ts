@@ -42,7 +42,7 @@ const DEFAULT_CONFIG: Required<SliceSelectorConfig> = {
  * Extracts a file outline containing only signatures and key structural elements.
  * This reduces token usage for context files while preserving important information.
  */
-function getFileOutline(content: string, filePath: string): string {
+export function getFileOutline(content: string, filePath: string): string {
   const lines = content.split('\n');
   const outlineLines: string[] = [];
 

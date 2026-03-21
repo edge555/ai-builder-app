@@ -25,6 +25,7 @@ import { toSimpleJsonSchema } from './zod-to-json-schema';
 import { createLogger } from '../logger';
 import type { CodeSlice } from '../analysis/file-planner/types';
 import { MAX_REVIEW_CONTENT_CHARS } from '../constants';
+import { getFileOutline } from '../analysis/slice-selector';
 import { selectRecipe } from './recipes/recipe-engine';
 import { config } from '../config';
 
@@ -135,6 +136,161 @@ export class PipelineOrchestrator {
     const finalFiles = this.mergeReviewCorrections(mergedForReview, reviewOutput);
 
     return { intentOutput, planOutput, executorFiles: executorContent, reviewOutput, finalFiles };
+  }
+
+  // ─── Ordered Execution Pipeline (Phase 3) ─────────────────────────────────
+
+  /**
+   * Runs the ordered modification pipeline for changes involving >3 files.
+   * Executes per tier (topological parallelization) with per-file validation.
+   */
+  async runOrderedModificationPipeline(
+    userPrompt: string,
+    currentFiles: Record<string, string>,
+    tiers: string[][],
+    validateFile: (path: string, content: string) => Promise<{ valid: boolean; errorText?: string }>,
+    callbacks: PipelineCallbacks,
+    options?: { requestId?: string; designSystem?: boolean }
+  ): Promise<PipelineResult> {
+    const contextLogger = options?.requestId
+      ? logger.withRequestId(options.requestId)
+      : logger;
+
+    // ── Stage 1: Intent ──────────────────────────────────────────────────────
+    const intentOutput = await this.runIntentStage(userPrompt, callbacks, contextLogger);
+    if (callbacks.signal?.aborted) throw new Error('Modification cancelled by client');
+
+    // ── Stage 2: Planning ────────────────────────────────────────────────────
+    const planOutput = await this.runPlanningStage(userPrompt, intentOutput, callbacks, contextLogger);
+    if (callbacks.signal?.aborted) throw new Error('Modification cancelled by client');
+
+    callbacks.onStageStart?.('execution', `Applying ordered modifications (${tiers.length} tiers)…`);
+    contextLogger.debug('Ordered execution stage start', { tiers: tiers.length });
+
+    const accumulatedChanges = new Map<string, string>();
+
+    let tierIndex = 1;
+    for (const tierFiles of tiers) {
+      contextLogger.debug(`Executing tier ${tierIndex}/${tiers.length}`, { fileCount: tierFiles.length });
+      
+      const promises = tierFiles.map(async (filePath) => {
+        return this.processFileWithRetry(
+          filePath,
+          userPrompt,
+          currentFiles,
+          accumulatedChanges,
+          validateFile,
+          callbacks,
+          options?.designSystem ?? false
+        );
+      });
+
+      const results = await Promise.all(promises);
+      
+      for (const result of results) {
+        if (result && result.content) {
+          accumulatedChanges.set(result.filePath, result.content);
+        }
+      }
+      tierIndex++;
+    }
+
+    callbacks.onStageComplete?.('execution');
+    contextLogger.info('Ordered execution stage complete');
+
+    const executorContent = Array.from(accumulatedChanges.entries()).map(([path, content]) => ({ path, content }));
+
+    // ── Stage 4: Review ──────────────────────────────────────────────────────
+    const mergedForReview = this.applyModificationsToFiles(currentFiles, executorContent);
+    const reviewOutput = await this.runReviewStage(mergedForReview, callbacks, contextLogger);
+    const finalFiles = this.mergeReviewCorrections(mergedForReview, reviewOutput);
+
+    return { intentOutput, planOutput, executorFiles: executorContent, reviewOutput, finalFiles };
+  }
+
+  private async processFileWithRetry(
+    targetFilePath: string,
+    userPrompt: string,
+    currentFiles: Record<string, string>,
+    accumulatedChanges: Map<string, string>,
+    validateFile: (path: string, content: string) => Promise<{ valid: boolean; errorText?: string }>,
+    callbacks: PipelineCallbacks,
+    designSystem: boolean,
+    attempt: number = 1
+  ): Promise<{ filePath: string; content: string } | null> {
+    if (callbacks.signal?.aborted) return null;
+
+    // Build focused prompt for this file
+    const prompt = this.buildFocusedPrompt(targetFilePath, userPrompt, currentFiles, accumulatedChanges);
+    const systemInstruction = this.promptProvider.getExecutionModificationSystemPrompt(
+      userPrompt,
+      null, // Intent and plan can be null for focused single-file generation
+      null,
+      designSystem
+    );
+
+    const response = await this.executionProvider.generateStreaming({
+      prompt,
+      systemInstruction,
+      maxOutputTokens: this.promptProvider.tokenBudgets.executionModification,
+      signal: callbacks.signal,
+      onChunk: callbacks.onExecutionChunk,
+    });
+
+    if (!response.success || !response.content) {
+      if (attempt === 1) {
+        logger.warn(`Execution failed for ${targetFilePath}, retrying...`);
+        return this.processFileWithRetry(targetFilePath, userPrompt, currentFiles, accumulatedChanges, validateFile, callbacks, designSystem, 2);
+      }
+      return null;
+    }
+
+    const generatedFiles = this.parseModificationOutput(response.content);
+    // Find the targeted file generated content
+    const targetFileGen = generatedFiles.find((f: GeneratedFile) => f.path === targetFilePath);
+    
+    if (!targetFileGen) {
+      if (attempt === 1) {
+         return this.processFileWithRetry(targetFilePath, userPrompt, currentFiles, accumulatedChanges, validateFile, callbacks, designSystem, 2);
+      }
+      return null;
+    }
+
+    const validation = await validateFile(targetFilePath, targetFileGen.content);
+    
+    if (!validation.valid) {
+      if (attempt === 1) {
+        logger.warn(`Validation failed for ${targetFilePath}, retrying...`, { error: validation.errorText });
+        return this.processFileWithRetry(targetFilePath, userPrompt, currentFiles, accumulatedChanges, validateFile, callbacks, designSystem, 2);
+      }
+    }
+
+    return { filePath: targetFilePath, content: targetFileGen.content };
+  }
+
+  private buildFocusedPrompt(
+    targetFilePath: string,
+    userPrompt: string,
+    currentFiles: Record<string, string>,
+    accumulatedChanges: Map<string, string>
+  ): string {
+    const lines: string[] = [`User Request: ${userPrompt}\n`];
+    lines.push('=== TARGET FILE (modify this full file) ===\n');
+    const targetContent = accumulatedChanges.get(targetFilePath) ?? currentFiles[targetFilePath] ?? '';
+    lines.push(`--- ${targetFilePath} ---\n${targetContent}\n`);
+
+    lines.push('=== MODIFIED CONTEXT FILES (outlines of other changed files) ===\n');
+    let hasContext = false;
+    for (const [path, content] of accumulatedChanges.entries()) {
+      if (path !== targetFilePath) {
+        hasContext = true;
+        lines.push(`--- ${path} ---\n${getFileOutline(content, path)}\n`);
+      }
+    }
+    if (!hasContext) lines.push('(No other modified files yet)\n');
+
+    lines.push('Based on the user request and context, output ONLY the fully modified JSON format for the TARGET FILE.');
+    return lines.join('\n');
   }
 
   // ─── Correction Merger ────────────────────────────────────────────────────
