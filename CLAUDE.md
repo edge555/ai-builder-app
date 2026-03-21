@@ -53,12 +53,12 @@ Additionally: `supabase/` (edge functions + config), `modal-code-ai/` (Python Mo
 ### Frontend Structure
 ```
 frontend/src/
-├── components/         # 39 component directories
+├── components/         # 38 component directories
 │   ├── AppLayout/     # Main layout (ChatPanel, PreviewSection, ResizablePanel, ErrorOverlay)
 │   ├── AuthGuard/     # Route protection for authenticated routes
-│   ├── ChatInterface/ # Chat UI with virtualization + MessageItem + LoadingIndicator
+│   ├── ChatInterface/ # Chat UI with virtualization + MessageItem + GenerationSummaryCard
 │   ├── CodeEditor/    # Monaco editor + file tree sidebar
-│   ├── PreviewPanel/  # Sandpack preview + error handling
+│   ├── PreviewPanel/  # Sandpack preview + error handling + FullstackBanner + console
 │   ├── ProjectGallery/# Saved projects with virtualization
 │   ├── SiteHeader/    # Global header with theme toggle
 │   ├── UserMenu/      # Authenticated user menu
@@ -70,7 +70,7 @@ frontend/src/
 ├── hooks/             # Custom hooks (useSubmitPrompt, useAutoSave, useUndoRedo,
 │                      #   useCountdown, useSidebarResize, useCollapsibleMessages, etc.)
 ├── pages/             # WelcomePage, BuilderPage, LoginPage, AgentSettingsPage (lazy-loaded)
-├── services/          # Storage, cloud, error aggregation, agent config
+├── services/          # Storage, cloud, error aggregation, agent config, image-upload
 │   ├── storage/       # IndexedDB abstraction (StorageService, HybridStorageService,
 │   │                  #   project-store, chat-store, metadata-store, template-store)
 │   └── cloud/         # CloudStorageService (Supabase integration)
@@ -93,6 +93,7 @@ backend/
 │   ├── revert/           # Version revert
 │   ├── versions/         # Version listing
 │   ├── health/           # Health check (?deep=true for provider probe, ?metrics=true for stats)
+│   ├── upload/           # Image upload (POST, sharp re-encoding, Supabase Storage)
 │   ├── agent-config/     # Per-task model config (GET/PUT)
 │   └── provider-config/  # Runtime provider override (GET/PUT)
 ├── lib/
@@ -109,20 +110,31 @@ backend/
 │   │   ├── ai-retry.ts             # Shared retry-with-backoff logic (executeWithRetry)
 │   │   └── sse-stream-processor.ts # Provider-agnostic SSE stream parsing
 │   ├── core/          # Generation, validation, formatting
-│   │   ├── pipeline-orchestrator.ts # 4-stage AI pipeline: Intent → Planning → Execution → Review
-│   │   ├── pipeline-factory.ts     # Wires PipelineOrchestrator + generators/engines per request
-│   │   ├── schemas.ts              # Zod schemas for pipeline stage outputs (IntentOutput, PlanOutput, ReviewOutput)
-│   │   ├── streaming-generator.ts  # SSE streaming orchestrator (uses PipelineOrchestrator)
+│   │   ├── generation-pipeline.ts  # Multi-phase new-project pipeline (complexity gate, batched execution)
+│   │   ├── pipeline-orchestrator.ts # Modification-only pipeline: Intent → Planning → Execution → Review
+│   │   ├── pipeline-factory.ts     # Wires GenerationPipeline (new) + PipelineOrchestrator (modify)
+│   │   ├── phase-executor.ts       # Single-phase execution with retry + truncation continuation
+│   │   ├── batch-context-builder.ts # Cross-phase context: types, deps, CSS vars, contracts
+│   │   ├── heuristic-plan-builder.ts # Deterministic plan fallback when AI planning fails
+│   │   ├── schemas.ts              # Zod schemas (IntentOutput, PlanOutput, ArchitecturePlanSchema, ReviewOutput)
+│   │   ├── streaming-generator.ts  # SSE streaming orchestrator (routes new → GenerationPipeline, modify → PipelineOrchestrator)
 │   │   ├── build-validator.ts      # Missing deps, broken imports, syntax errors, import/export mismatch
+│   │   ├── export-service.ts       # ZIP export with fullstack-aware README, .env.example, Docker Compose
 │   │   ├── file-processor.ts       # File validation + Prettier formatting + version pinning
 │   │   ├── validation-pipeline.ts  # Multi-stage validation workflow
 │   │   ├── validators/             # Composable validators (path, syntax, JSON, pattern, architecture)
 │   │   ├── prompts/                # Provider-specific prompt assembly
-│   │   │   ├── prompt-provider.ts          # IPromptProvider interface
+│   │   │   ├── prompt-provider.ts          # IPromptProvider interface (+ multi-phase methods)
 │   │   │   ├── prompt-provider-factory.ts  # Creates ApiPromptProvider or ModalPromptProvider
 │   │   │   ├── generation-prompt-utils.ts  # Shared prompt building utilities
+│   │   │   ├── phase-prompts.ts            # Per-phase system prompts (scaffold, logic, UI, integration)
 │   │   │   ├── api/api-prompt-provider.ts  # OpenRouter prompt implementation
 │   │   │   └── modal/modal-prompt-provider.ts # Modal prompt implementation
+│   │   ├── recipes/                # Pluggable generation recipes
+│   │   │   ├── recipe-types.ts             # Recipe/fragment type definitions + phaseFragments
+│   │   │   ├── recipe-engine.ts            # Recipe selection + prompt composition
+│   │   │   ├── fragment-registry.ts        # Central fragment key → prompt text registry
+│   │   │   └── fullstack-fragments.ts      # Next.js, Prisma, Supabase Auth fragments
 │   │   └── version-manager.ts      # FIFO/LRU version eviction
 │   ├── analysis/      # Dependency graph, file indexing, AI-powered file planner
 │   ├── diff/          # Modification engine (with progress callbacks), multi-tier matcher, prompt builder
@@ -133,6 +145,7 @@ backend/
 │   │   ├── guard.ts               # applyRateLimit() + getClientIp() (rightmost-trusted IP)
 │   │   ├── rate-limiter.ts        # Sliding-window rate limiter
 │   │   ├── rate-limit-config.ts   # Tier configs (HIGH_COST, MEDIUM_COST, LOW_COST, CONFIG)
+│   │   ├── redis-rate-limiter.ts  # Redis-backed sliding window (Lua script, fail-open fallback)
 │   │   └── auth.ts                # Supabase JWT verification
 │   ├── api/           # CORS, gzip, request ID, error helpers
 │   │   ├── request-parser.ts       # JSON parsing + Zod validation
@@ -189,7 +202,7 @@ npm run lint                   # All workspaces
 
 1. User prompt → frontend ChatInterface → backend `/api/generate-stream` or `/api/modify-stream`
 2. Backend resolves AI provider (env var or runtime override from `provider-config.json`)
-3. `PipelineOrchestrator` runs a 4-stage pipeline: Intent (classify) → Planning (structure) → Execution (generate) → Review (validate). On OpenRouter, `IntentDetector` + `AgentRouter` route each stage to the optimal model. On Modal, `ModalPipelineFactory` resolves per-task endpoints.
+3. **New projects** → `GenerationPipeline`: complexity gate (≤10 files → one-shot, >10 → multi-phase batched), architecture planning, phase execution with cross-phase context. **Modifications** → `PipelineOrchestrator`: Intent → Planning → Execution → Review. On OpenRouter, `IntentDetector` + `AgentRouter` route each stage to the optimal model. On Modal, `ModalPipelineFactory` resolves per-task endpoints.
 4. AI provider streams response via SSE with backpressure control (SSEEncoder utility)
 5. Incremental JSON parser extracts files as they arrive
 6. Files validated, formatted (Prettier), version-pinned (package.json deps), streamed back to frontend
@@ -206,8 +219,10 @@ Multi-provider architecture with runtime switching:
 - **`AIProviderFactory`**: Reads `AI_PROVIDER` env var + runtime override, returns singleton
 - **OpenRouter** (default): OpenAI-compatible API with retry/backoff, structured output, SSE streaming
 - **Modal**: Self-hosted models with per-task endpoint resolution via `ModalPipelineFactory` (resolves `MODAL_<TASK>_URL` → `MODAL_DEFAULT_URL`)
-- **`PipelineOrchestrator`**: Stateless 4-stage pipeline (Intent → Planning → Execution → Review) used by both providers; Execution is hard-fail, other stages degrade gracefully
-- **`IPromptProvider`**: Abstracts system prompts and token budgets; `ApiPromptProvider` (OpenRouter) and `ModalPromptProvider` (Modal) implement it
+- **`GenerationPipeline`** (new projects): Multi-phase pipeline with complexity gate, architecture planning, batch context builder, and phase executor
+- **`PipelineOrchestrator`** (modifications only): 4-stage pipeline (Intent → Planning → Execution → Review); Execution is hard-fail, other stages degrade gracefully
+- **`IPromptProvider`**: Abstracts system prompts, token budgets, and multi-phase prompt methods; `ApiPromptProvider` (OpenRouter) and `ModalPromptProvider` (Modal) implement it
+- **Recipe Engine**: Pluggable generation recipes (React SPA, Next.js + Prisma, Next.js + Supabase Auth) with per-phase prompt fragments
 - **`AgentRouter`** (OpenRouter only): Task-specific routing with `FallbackAIProvider` (tries models in priority order)
 - **`IntentDetector`** (OpenRouter only): Classifies prompts into task types (intent, planning, coding, debugging, documentation)
 - **Runtime config**: `provider-config-store.ts` persists overrides to `data/provider-config.json`; `agent-config-store.ts` persists per-task model config to `data/agent-config.json`
@@ -255,7 +270,7 @@ Multi-provider architecture with runtime switching:
 
 ### Security
 
-- **Rate limiting** (`security/guard.ts`): Per-IP sliding-window rate limiter with tiered configs (HIGH_COST, MEDIUM_COST, LOW_COST, CONFIG); body size enforcement (413); `X-RateLimit-*` headers on every response
+- **Rate limiting** (`security/guard.ts`): Per-IP sliding-window rate limiter with tiered configs (HIGH_COST, MEDIUM_COST, LOW_COST, CONFIG); body size enforcement (413); `X-RateLimit-*` headers on every response; optional Redis backend (`redis-rate-limiter.ts`) with Lua-scripted sliding window and fail-open fallback
 - **IP extraction**: Prefers platform `request.ip`, falls back to rightmost-trusted X-Forwarded-For IP (configurable via `TRUSTED_PROXY_DEPTH`)
 - **CSRF protection**: `getCorsHeaders(request, { rejectInvalidOrigin: true })` rejects mutations with missing/invalid Origin header (infrastructure ready, not yet wired on routes)
 - **Authentication**: Optional Supabase Auth with JWT verification; `AuthContext` auto-redirects to `/login` on session expiry
@@ -276,6 +291,8 @@ Multi-provider architecture with runtime switching:
 - `SUPABASE_JWT_SECRET`: JWT verification for Supabase Auth (optional)
 - `RATE_LIMIT_ENABLED`: Enable rate limiting (default: true)
 - `TRUSTED_PROXY_DEPTH`: How many rightmost X-Forwarded-For IPs to trust (default: 1)
+- `REDIS_URL`: Redis connection URL for distributed rate limiting (optional; falls back to in-memory)
+- `ENABLE_FULLSTACK_RECIPES`: Enable fullstack generation recipes (default: false)
 
 **Frontend** (`.env`):
 - `VITE_API_BASE_URL`: Backend URL (default: http://localhost:4000)
@@ -286,7 +303,7 @@ Multi-provider architecture with runtime switching:
 
 **Frontend**: react 18, react-router-dom 7, @codesandbox/sandpack-react, @monaco-editor/react, @tanstack/react-virtual, lucide-react, react-markdown + remark-gfm, react-syntax-highlighter, zod, @supabase/supabase-js, @stackblitz/sdk, html2canvas
 
-**Backend**: next 14, zod, prettier, jszip, uuid
+**Backend**: next 14, zod, prettier, jszip, uuid, sharp, ioredis
 
 **Shared**: zod, tsup (dual ESM/CJS build)
 
@@ -297,8 +314,8 @@ Multi-provider architecture with runtime switching:
 
 ## Testing
 
-- **Backend**: Vitest + Node env, 88 test files in `lib/**/*.test.ts` and `app/api/__tests__/` (unit, perf, integration)
-- **Frontend**: Vitest + jsdom + React Testing Library, 25 test files in `src/**/__tests__/*.{test,spec}.{ts,tsx}`
+- **Backend**: Vitest + Node env, 99 test files in `lib/**/*.test.ts` and `app/api/__tests__/` (unit, perf, integration, eval)
+- **Frontend**: Vitest + jsdom + React Testing Library, 26 test files in `src/**/__tests__/*.{test,spec}.{ts,tsx}`
 - **Shared**: Vitest + Node env, 5 test files
 
 See [testing_guide.md](testing_guide.md) for file naming conventions, mock patterns, and per-framework examples.

@@ -11,6 +11,9 @@
  */
 
 import type { IPromptProvider, IntentOutput, PlanOutput } from '../prompt-provider';
+import type { ArchitecturePlan, PhaseLayer } from '../prompt-provider';
+import type { PhaseContext } from '../../batch-context-builder';
+import type { GenerationRecipe } from '../../recipes/recipe-types';
 import {
   detectComplexity,
   getFileRequirements,
@@ -39,7 +42,20 @@ import {
   MODAL_MAX_OUTPUT_TOKENS_GENERATION,
   MODAL_MAX_OUTPUT_TOKENS_MODIFICATION,
   MODAL_MAX_OUTPUT_TOKENS_REVIEW,
+  MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING,
+  MAX_OUTPUT_TOKENS_PLAN_REVIEW,
+  MAX_OUTPUT_TOKENS_SCAFFOLD,
+  MAX_OUTPUT_TOKENS_LOGIC,
+  MAX_OUTPUT_TOKENS_UI,
+  MAX_OUTPUT_TOKENS_INTEGRATION,
 } from '../../../constants';
+import {
+  getScaffoldPrompt,
+  getLogicPrompt,
+  getUIPrompt,
+  getIntegrationPrompt,
+  getPlanReviewPrompt as buildPlanReviewPrompt,
+} from '../phase-prompts';
 
 /** Token budget for bugfix = same as modification */
 const BUGFIX_BUDGET = MODAL_MAX_OUTPUT_TOKENS_MODIFICATION;
@@ -52,6 +68,13 @@ export class ModalPromptProvider implements IPromptProvider {
     executionModification: MODAL_MAX_OUTPUT_TOKENS_MODIFICATION,
     review: MODAL_MAX_OUTPUT_TOKENS_REVIEW,
     bugfix: BUGFIX_BUDGET,
+    // Multi-phase pipeline (Modal uses same budgets as API)
+    architecturePlanning: MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING,
+    planReview: MAX_OUTPUT_TOKENS_PLAN_REVIEW,
+    scaffold: MAX_OUTPUT_TOKENS_SCAFFOLD,
+    logic: MAX_OUTPUT_TOKENS_LOGIC,
+    ui: MAX_OUTPUT_TOKENS_UI,
+    integration: MAX_OUTPUT_TOKENS_INTEGRATION,
   };
 
   getIntentSystemPrompt(): string {
@@ -315,5 +338,89 @@ ${SYNTAX_INTEGRITY_RULES}
 ${DETAILED_REACT_GUIDANCE}
 
 ${DETAILED_JSON_OUTPUT_GUIDANCE}`;
+  }
+
+  // ─── Multi-Phase Pipeline Methods ──────────────────────────────────────
+
+  getArchitecturePlanningPrompt(userPrompt: string, intent: IntentOutput | null): string {
+    const intentBlock = intent
+      ? `=== INTENT ANALYSIS ===\nGoal: ${intent.clarifiedGoal}\nComplexity: ${intent.complexity}\nFeatures:\n${intent.features.map(f => `  - ${f}`).join('\n')}\nApproach: ${intent.technicalApproach}\n`
+      : '';
+
+    return `You are a SENIOR React software architect creating a detailed architecture plan for a multi-phase code generator.
+
+${intentBlock}
+=== OUTPUT: ArchitecturePlan JSON ===
+Return a single valid JSON object matching this schema exactly:
+
+{
+  "files": [
+    {
+      "path": "src/types/index.ts",
+      "purpose": "TypeScript interfaces",
+      "layer": "scaffold" | "logic" | "ui" | "integration",
+      "exports": ["SymbolName"],
+      "imports": ["src/other/file.ts"]
+    }
+  ],
+  "components": ["ComponentName"],
+  "dependencies": ["react", "react-dom"],
+  "routing": ["/", "/dashboard"],
+  "typeContracts": [
+    { "name": "TypeName", "definition": "interface TypeName { ... }" }
+  ],
+  "cssVariables": [
+    { "name": "--color-primary", "value": "#6366f1", "purpose": "Brand color" }
+  ],
+  "stateShape": {
+    "contexts": [{ "name": "CtxName", "stateFields": ["field: Type"], "actions": ["actionName"] }],
+    "hooks": [{ "name": "useHookName", "signature": "() => { ... }", "purpose": "..." }]
+  }
+}
+
+=== LAYER DEFINITIONS ===
+- "scaffold": types, interfaces, CSS tokens, package.json, main.tsx, index.css
+- "logic": hooks, contexts, utilities, API clients
+- "ui": React components (.tsx), co-located CSS files (.css)
+- "integration": pages, App.tsx, routing, top-level providers
+
+=== REQUIREMENTS ===
+- Every file must be assigned to exactly one layer
+- exports[] must list the TypeScript symbols this file exports
+- imports[] must list only other plan files (by path) that this file imports from
+- typeContracts must include the full TypeScript interface/type text
+- cssVariables must include ALL design tokens (colors, spacing, radii, shadows)
+- stateShape must define signatures for all shared hooks and contexts
+
+File count: simple=6–9, medium=10–14, complex=15–22
+
+Respond with valid JSON ONLY. No markdown code fences, no explanation.
+
+${getOutputBudgetGuidance(MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING)}
+
+${wrapUserInput(userPrompt)}`;
+  }
+
+  getPlanReviewPrompt(plan: ArchitecturePlan): string {
+    return buildPlanReviewPrompt(plan);
+  }
+
+  getPhasePrompt(
+    phase: PhaseLayer,
+    plan: ArchitecturePlan,
+    context: PhaseContext,
+    userPrompt: string,
+    recipe?: GenerationRecipe,
+  ): string {
+    switch (phase) {
+      case 'scaffold':
+        return getScaffoldPrompt(plan, userPrompt);
+      case 'logic':
+        return getLogicPrompt(plan, context, userPrompt);
+      case 'ui':
+        return getUIPrompt(plan, context, userPrompt, recipe);
+      case 'integration':
+        return getIntegrationPrompt(plan, context, userPrompt);
+    }
   }
 }

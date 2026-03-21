@@ -161,6 +161,24 @@ export async function POST(request: NextRequest) {
               );
             },
 
+            onPhaseStart: (data) => {
+              encoder.enqueueEvent(
+                controller,
+                'phase-start',
+                data,
+                EventPriority.NORMAL
+              );
+            },
+
+            onPhaseComplete: (data) => {
+              encoder.enqueueEvent(
+                controller,
+                'phase-complete',
+                data,
+                EventPriority.NORMAL
+              );
+            },
+
             onError: (error, errorData) => {
               // Error events are critical
               encoder.enqueueEvent(

@@ -4,12 +4,17 @@ Generate full React web applications from natural language prompts. Describe wha
 
 ## Features
 
-- **AI-powered generation** — describe your app, get working React code
-- **Live preview** — Sandpack-powered in-browser execution
+- **AI-powered generation** — describe your app, get working React code via multi-phase pipeline
+- **Live preview** — Sandpack-powered in-browser execution with console panel
 - **Code editor** — Monaco editor with file tree
 - **Version control** — undo/redo through generation history
 - **Auto-repair** — automatic error detection and fix (up to 3 attempts)
 - **Cloud sync** — optional Supabase-backed project storage
+- **Onboarding wizard** — guided 3-step project setup (type → features → design style)
+- **22 starter templates** — across 7 categories for quick project bootstrapping
+- **Image upload** — paste or drag-drop images into chat for context
+- **Fullstack recipes** — Next.js + Prisma and Next.js + Supabase Auth generation (feature-flagged)
+- **Fullstack export** — ZIP with context-aware README, Docker Compose, .env.example
 
 ## Architecture
 
@@ -24,13 +29,13 @@ Generate full React web applications from natural language prompts. Describe wha
           │
 ┌─────────▼───────────────────────────────────────────────┐
 │  Backend (Next.js 14, port 4000)                        │
-│  ┌──────────────┐  ┌─────────────┐  ┌────────────────┐  │
-│  │ AgentRouter  │  │ FileProcessor│  │ VersionManager │  │
-│  └──────┬───────┘  └─────────────┘  └────────────────┘  │
-│         │                                               │
-│  ┌──────▼───────────────────────┐                       │
-│  │ AIProvider (OpenRouter/Modal)│                       │
-│  └──────────────────────────────┘                       │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │
+│  │ AgentRouter  │  │ GenPipeline  │  │ RecipeEngine  │  │
+│  └──────┬───────┘  └──────┬───────┘  └───────────────┘  │
+│         │                 │                              │
+│  ┌──────▼─────────────────▼────┐                        │
+│  │ AIProvider (OpenRouter/Modal)│                        │
+│  └──────────────────────────────┘                        │
 └─────────────────────────────────────────────────────────┘
           │
 ┌─────────▼───────────────────────────────────────────────┐
@@ -75,6 +80,10 @@ Backend: http://localhost:4000
 | `MAX_OUTPUT_TOKENS` | No | `16384` | Token limit per generation |
 | `ALLOWED_ORIGINS` | No | `http://localhost:8080` | CORS origins (comma-separated) |
 | `LOG_LEVEL` | No | `info` | `debug` / `info` / `warn` / `error` |
+| `LOG_FORMAT` | No | `text` | `text` / `json` |
+| `RATE_LIMIT_ENABLED` | No | `true` | Enable rate limiting |
+| `REDIS_URL` | No | — | Redis URL for distributed rate limiting (falls back to in-memory) |
+| `ENABLE_FULLSTACK_RECIPES` | No | `false` | Enable fullstack generation (Next.js + Prisma/Supabase) |
 | `SUPABASE_JWT_SECRET` | No | — | Enables Supabase Auth verification |
 
 *Required for the selected provider.

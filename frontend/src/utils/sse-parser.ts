@@ -145,6 +145,20 @@ export async function parseSSEStream(
                             }
                             break;
 
+                        case 'phase-start':
+                            handlers.onProgress?.({
+                                phase: data.phase,
+                                label: `Generating ${data.phase} (phase ${data.phaseIndex + 1}/${data.totalPhases}, ${data.filesInPhase} files)…`,
+                            });
+                            break;
+
+                        case 'phase-complete':
+                            handlers.onProgress?.({
+                                phase: data.phase,
+                                label: `${data.phase} complete (${data.totalGenerated}/${data.totalPlanned} files generated)`,
+                            });
+                            break;
+
                         case 'error':
                             const errorData: StreamErrorData = {
                                 error: data.error,

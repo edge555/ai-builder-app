@@ -183,6 +183,19 @@ function fixLiteralNewlinesInStrings(content: string): string {
 }
 
 /**
+ * Fix common JSON syntax errors from AI output:
+ *  - Double commas: `true,   ,   "next"` → `true,   "next"`
+ *  - Trailing commas before } or ]: `"x": 1,\n}` → `"x": 1\n}`
+ */
+function fixJsonSyntax(content: string): string {
+    // Remove duplicate consecutive commas (with optional whitespace between them)
+    let fixed = content.replace(/,(\s*),+/g, ',$1');
+    // Remove trailing commas before closing brace or bracket
+    fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+    return fixed;
+}
+
+/**
  * Process a single file: sanitize path, normalize newlines, format with Prettier
  */
 export async function processFile(
@@ -215,6 +228,12 @@ export async function processFile(
     // STEP 2b: Pin package.json versions (replace "latest"/empty with curated versions)
     if (sanitizedPath.endsWith('package.json')) {
         normalizedContent = pinPackageVersions(normalizedContent);
+    }
+
+    // STEP 2c: Sanitize any .json file content — fix double commas and trailing commas
+    // AI frequently generates "key": value,   ,   "next" or trailing commas before } / ]
+    if (sanitizedPath.endsWith('.json')) {
+        normalizedContent = fixJsonSyntax(normalizedContent);
     }
 
     // STEP 3: Handle double-escaped sequences from JSON

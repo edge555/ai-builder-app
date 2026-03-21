@@ -56,17 +56,62 @@ export interface RecipeSelectorOptions {
  *   2. Map intent.projectType → recipe ID
  *   3. If recipe not found → react-spa + log warning
  */
+/**
+ * Explicit keywords that indicate the user actually wants a fullstack/backend setup.
+ * Without these, even if the LLM classifies as "fullstack", we fall back to SPA.
+ */
+const FULLSTACK_SIGNALS = [
+  'database', 'backend', 'server', 'api route', 'api endpoint',
+  'next.js', 'nextjs', 'prisma', 'postgresql', 'postgres', 'mysql', 'mongodb', 'sqlite',
+  'supabase', 'firebase', 'server-side', 'ssr', 'server side rendering',
+  'rest api', 'graphql', 'drizzle', 'orm',
+];
+
+const AUTH_SIGNALS = [
+  'login', 'sign in', 'signin', 'sign up', 'signup', 'register', 'registration',
+  'authentication', 'auth', 'oauth', 'jwt', 'session', 'supabase auth',
+  'user account', 'user accounts', 'protected route',
+];
+
+/**
+ * Returns true only if the user prompt contains explicit fullstack/auth signals.
+ * This prevents the LLM from over-classifying simple apps as fullstack.
+ */
+function hasExplicitSignals(userPrompt: string, signals: string[]): boolean {
+  const lower = userPrompt.toLowerCase();
+  return signals.some(s => {
+    // Multi-word signals (e.g. "api route") — substring match is safe
+    if (s.includes(' ') || s.includes('.') || s.includes('-')) return lower.includes(s);
+    // Single-word signals — use word boundary to avoid "auth" matching "author"
+    return new RegExp(`\\b${s}\\b`).test(lower);
+  });
+}
+
 export function selectRecipe(
   intent: IntentOutput | null,
-  options: RecipeSelectorOptions
+  options: RecipeSelectorOptions,
+  userPrompt?: string
 ): GenerationRecipe {
   if (!options.fullstackEnabled || !intent) {
     return getDefaultRecipe();
   }
 
   const projectType = intent.projectType;
-  if (!projectType) {
+  if (!projectType || projectType === 'spa') {
     return getDefaultRecipe();
+  }
+
+  // Guard: require explicit signals in the user's prompt before using a fullstack recipe.
+  // The LLM frequently over-classifies simple apps (blog, task tracker, todo) as fullstack.
+  if (userPrompt) {
+    if (projectType === 'fullstack-auth' && !hasExplicitSignals(userPrompt, AUTH_SIGNALS)) {
+      logger.info('Overriding fullstack-auth → spa: no explicit auth signals in prompt', { userPrompt });
+      return getDefaultRecipe();
+    }
+    if ((projectType === 'fullstack' || projectType === 'fullstack-auth') && !hasExplicitSignals(userPrompt, FULLSTACK_SIGNALS)) {
+      logger.info('Overriding fullstack → spa: no explicit fullstack signals in prompt', { projectType, userPrompt });
+      return getDefaultRecipe();
+    }
   }
 
   const recipeId = PROJECT_TYPE_TO_RECIPE[projectType];
@@ -149,6 +194,48 @@ export function composeExecutionPrompt(
   ];
 
   return parts.filter(Boolean).join('\n\n');
+}
+
+/**
+ * Compose a prompt fragment block for a specific pipeline phase.
+ * 
+ * Looks up `recipe.phaseFragments[phase]` and concatenates the fragments.
+ * If the recipe lacks specific fragments for the phase, it falls back to a default set
+ * of SPA fragments.
+ */
+export function composePhasePrompt(
+  recipe: GenerationRecipe | undefined | null,
+  phase: string
+): string {
+  // If recipe provides specific fragments for this phase, use them
+  if (recipe?.phaseFragments) {
+    const keys = recipe.phaseFragments[phase as keyof typeof recipe.phaseFragments];
+    if (keys && keys.length > 0) {
+      const parts: string[] = [];
+      for (const key of keys) {
+        const text = getFragment(key);
+        if (text) parts.push(text);
+        else logger.warn('Missing phase prompt fragment, skipping', { fragment: key, recipe: recipe.id, phase });
+      }
+      return parts.join('\n\n');
+    }
+  }
+
+  // Fallback to default SPA fragments based on the phase.
+  // Generally, UI and Integration phases need full visual/patterns guidance,
+  // while logic and scaffold prompts are heavily structured and don't need all visual patterns.
+  // For safety and fallback context, we'll provide the comprehensive regular set 
+  // similar to what was originally in getUIPrompt.
+  const DEFAULT_SPA_PHASE_FRAGMENTS = [
+    'LAYOUT_FUNDAMENTALS',
+    'BASELINE_VISUAL_POLISH',
+    'REALISTIC_DATA_GUIDANCE',
+    'ACCESSIBILITY_GUIDANCE',
+    'COMMON_REACT_PATTERNS',
+    'SYNTAX_INTEGRITY_RULES'
+  ];
+  
+  return DEFAULT_SPA_PHASE_FRAGMENTS.map(key => getFragment(key)).filter(Boolean).join('\n\n');
 }
 
 const CSS_BEST_PRACTICES = `=== CSS BEST PRACTICES ===

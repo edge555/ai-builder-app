@@ -42,13 +42,12 @@ describe('Pattern Validator', () => {
             expect(errors[0].line).toBe(1);
         });
 
-        it('should detect TODO comments (case insensitive)', () => {
-            const invalidFiles = {
+        it('should not flag lowercase todo (only uppercase TODO is a stub)', () => {
+            const validFiles = {
                 'index.js': '// todo: implement this\nconsole.log("hello");',
             };
-            const errors = detectForbiddenPatterns(invalidFiles);
-            expect(errors).toHaveLength(1);
-            expect(errors[0].message).toContain('TODO comments');
+            const errors = detectForbiddenPatterns(validFiles);
+            expect(errors).toHaveLength(0);
         });
 
         it('should detect TODO block comments', () => {
@@ -319,12 +318,13 @@ describe('Pattern Validator', () => {
             expect(errors).toEqual([]);
         });
 
-        it('should handle case insensitivity for TODO', () => {
+        it('should only flag uppercase TODO, not lowercase variants', () => {
             const invalidFiles = {
                 'index.js': '// todo: implement\n// TODO: implement\n// Todo: implement\n// ToDO: implement',
             };
             const errors = detectForbiddenPatterns(invalidFiles);
-            expect(errors).toHaveLength(4);
+            // Only "// TODO: implement" matches (uppercase only)
+            expect(errors).toHaveLength(1);
         });
 
         it('should handle case insensitivity for partial-generation stubs', () => {

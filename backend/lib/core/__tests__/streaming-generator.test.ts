@@ -7,15 +7,11 @@ vi.mock('../validation-pipeline');
 vi.mock('../build-validator');
 
 // Minimal PipelineResult helper
-const makePipelineResult = (files = [
+const makeGenerationResult = (files = [
     { path: 'src/App.tsx', content: 'export default function App() { return null; }' },
     { path: 'package.json', content: '{}' },
 ]) => ({
-    intentOutput: null,
-    planOutput: null,
-    executorFiles: files,
-    reviewOutput: null,
-    finalFiles: files,
+    intentOutput: null, architecturePlan: null, complexityRoute: 'one-shot', generatedFiles: files, warnings: [],
 });
 
 describe('StreamingProjectGenerator', () => {
@@ -28,7 +24,7 @@ describe('StreamingProjectGenerator', () => {
 
     beforeEach(() => {
         mockPipeline = {
-            runGenerationPipeline: vi.fn(),
+            runGeneration: vi.fn(),
         };
         mockBugfixProvider = {
             generate: vi.fn(),
@@ -62,7 +58,7 @@ describe('StreamingProjectGenerator', () => {
     // ─── Basic happy path ─────────────────────────────────────────────────────
 
     it('should generate a project with streaming emission', async () => {
-        mockPipeline.runGenerationPipeline.mockResolvedValue(makePipelineResult());
+        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
 
         mockValidationPipeline.validate.mockReturnValue({
             valid: true,
@@ -98,7 +94,7 @@ describe('StreamingProjectGenerator', () => {
             onError: vi.fn(),
         };
 
-        mockPipeline.runGenerationPipeline.mockImplementation(async () => {
+        mockPipeline.runGeneration.mockImplementation(async () => {
             callOrder.push('pipeline');
             throw new Error('Pipeline Error');
         });
@@ -125,7 +121,7 @@ describe('StreamingProjectGenerator', () => {
     // ─── Pipeline errors ──────────────────────────────────────────────────────
 
     it('should handle pipeline errors', async () => {
-        mockPipeline.runGenerationPipeline.mockRejectedValue(new Error('Pipeline Error'));
+        mockPipeline.runGeneration.mockRejectedValue(new Error('Pipeline Error'));
 
         const callbacks = {
             onError: vi.fn(),
@@ -144,7 +140,7 @@ describe('StreamingProjectGenerator', () => {
     // ─── Validation errors ────────────────────────────────────────────────────
 
     it('should handle validation errors', async () => {
-        mockPipeline.runGenerationPipeline.mockResolvedValue(makePipelineResult());
+        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
 
         mockValidationPipeline.validate.mockReturnValue({
             valid: false,
@@ -160,7 +156,7 @@ describe('StreamingProjectGenerator', () => {
     });
 
     it('calls onWarning for validation warnings', async () => {
-        mockPipeline.runGenerationPipeline.mockResolvedValue(makePipelineResult());
+        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
 
         mockValidationPipeline.validate.mockReturnValue({
             valid: true,
@@ -184,13 +180,13 @@ describe('StreamingProjectGenerator', () => {
     // ─── Pipeline stage callbacks ─────────────────────────────────────────────
 
     it('emits onPipelineStage for each stage start/complete', async () => {
-        mockPipeline.runGenerationPipeline.mockImplementation(
+        mockPipeline.runGeneration.mockImplementation(
             async (_prompt: string, callbacks: any) => {
                 callbacks.onStageStart?.('intent', 'Analyzing...');
                 callbacks.onStageComplete?.('intent');
                 callbacks.onStageStart?.('execution', 'Generating...');
                 callbacks.onStageComplete?.('execution');
-                return makePipelineResult();
+                return makeGenerationResult();
             }
         );
 
@@ -212,10 +208,10 @@ describe('StreamingProjectGenerator', () => {
     });
 
     it('emits degraded status when a stage fails', async () => {
-        mockPipeline.runGenerationPipeline.mockImplementation(
+        mockPipeline.runGeneration.mockImplementation(
             async (_prompt: string, callbacks: any) => {
                 callbacks.onStageFailed?.('intent', 'timeout');
-                return makePipelineResult();
+                return makeGenerationResult();
             }
         );
 
@@ -236,16 +232,16 @@ describe('StreamingProjectGenerator', () => {
 
     // ─── onProgress during execution chunk ───────────────────────────────────
 
-    it('calls onProgress during execution chunk', async () => {
-        const mockContent = JSON.stringify({ files: [
-            { path: 'src/App.tsx', content: 'export default function App() { return null; }' },
-        ]});
+    it('calls onProgress and onFileStream during execution', async () => {
+        const mockFile = { path: 'src/App.tsx', content: 'export default function App() { return null; }' };
 
-        mockPipeline.runGenerationPipeline.mockImplementation(
+        mockPipeline.runGeneration.mockImplementation(
             async (_prompt: string, callbacks: any) => {
-                callbacks.onExecutionChunk?.(mockContent.slice(0, 10), 10);
-                callbacks.onExecutionChunk?.(mockContent.slice(10), mockContent.length);
-                return makePipelineResult();
+                callbacks.onProgress?.(10);
+                callbacks.onFileStream?.(mockFile, false);
+                callbacks.onProgress?.(50);
+                callbacks.onFileStream?.(mockFile, true);
+                return makeGenerationResult();
             }
         );
 
@@ -259,16 +255,18 @@ describe('StreamingProjectGenerator', () => {
         mockBuildValidator.validate.mockReturnValue({ valid: true, errors: [] });
 
         const onProgress = vi.fn();
-        await generator.generateProjectStreaming('test', { onProgress });
+        const onFile = vi.fn();
+        await generator.generateProjectStreaming('test', { onProgress, onFile });
 
         expect(onProgress).toHaveBeenCalledWith(10);
-        expect(onProgress).toHaveBeenCalledWith(mockContent.length);
+        expect(onProgress).toHaveBeenCalledWith(50);
+        expect(onFile).toHaveBeenCalledTimes(4);
     });
 
     // ─── File emission ────────────────────────────────────────────────────────
 
     it('emits files with complete status after processing', async () => {
-        mockPipeline.runGenerationPipeline.mockResolvedValue(makePipelineResult());
+        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
 
         mockValidationPipeline.validate.mockReturnValue({
             valid: true,
@@ -290,7 +288,7 @@ describe('StreamingProjectGenerator', () => {
     // ─── onStreamEnd summary ──────────────────────────────────────────────────
 
     it('emits correct stream-end summary on success', async () => {
-        mockPipeline.runGenerationPipeline.mockResolvedValue(makePipelineResult());
+        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
 
         mockValidationPipeline.validate.mockReturnValue({
             valid: true,
@@ -316,7 +314,7 @@ describe('StreamingProjectGenerator', () => {
 
     it('passes abort signal to pipeline', async () => {
         const controller = new AbortController();
-        mockPipeline.runGenerationPipeline.mockRejectedValue(new Error('cancelled'));
+        mockPipeline.runGeneration.mockRejectedValue(new Error('cancelled'));
 
         const callbacks = {
             signal: controller.signal,
@@ -326,7 +324,7 @@ describe('StreamingProjectGenerator', () => {
         controller.abort();
         await generator.generateProjectStreaming('test', callbacks);
 
-        expect(mockPipeline.runGenerationPipeline).toHaveBeenCalledWith(
+        expect(mockPipeline.runGeneration).toHaveBeenCalledWith(
             'test',
             expect.objectContaining({ signal: controller.signal }),
             expect.any(Object)
@@ -336,9 +334,9 @@ describe('StreamingProjectGenerator', () => {
     it('returns cancelled when signal aborted before build-fix', async () => {
         const controller = new AbortController();
 
-        mockPipeline.runGenerationPipeline.mockImplementation(async () => {
+        mockPipeline.runGeneration.mockImplementation(async () => {
             controller.abort();
-            return makePipelineResult();
+            return makeGenerationResult();
         });
 
         mockValidationPipeline.validate.mockReturnValue({
@@ -354,7 +352,7 @@ describe('StreamingProjectGenerator', () => {
     // ─── projectState and version structure ───────────────────────────────────
 
     it('result contains projectState with correct structure', async () => {
-        mockPipeline.runGenerationPipeline.mockResolvedValue(makePipelineResult());
+        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
 
         mockValidationPipeline.validate.mockReturnValue({
             valid: true,
@@ -386,11 +384,11 @@ describe('StreamingProjectGenerator', () => {
     // ─── Request ID propagation ───────────────────────────────────────────────
 
     it('passes requestId to pipeline', async () => {
-        mockPipeline.runGenerationPipeline.mockRejectedValue(new Error('err'));
+        mockPipeline.runGeneration.mockRejectedValue(new Error('err'));
 
         await generator.generateProjectStreaming('test', {}, { requestId: 'req-123' });
 
-        expect(mockPipeline.runGenerationPipeline).toHaveBeenCalledWith(
+        expect(mockPipeline.runGeneration).toHaveBeenCalledWith(
             'test',
             expect.any(Object),
             expect.objectContaining({ requestId: 'req-123' })

@@ -43,6 +43,15 @@ export function parseIncrementalFiles(text: string, startFrom: number = 0): {
       continue;
     }
 
+    // Detect { "files": [ ... ] } wrapper and skip into the array so we can
+    // parse inner file objects incrementally as they stream in.
+    const lookahead = text.substring(currentIndex, currentIndex + 50);
+    const wrapperMatch = lookahead.match(/^\{\s*"files"\s*:\s*\[/);
+    if (wrapperMatch) {
+      currentIndex += wrapperMatch[0].length;
+      continue;
+    }
+
     // Try to find the matching closing brace for this object
     const startPos = currentIndex;
     let braceCount = 0;
@@ -86,8 +95,20 @@ export function parseIncrementalFiles(text: string, startFrom: number = 0): {
       const objText = text.substring(startPos, endPos);
       try {
         const obj = JSON.parse(objText);
-        // Only accept objects with required file fields
-        if (obj.path && typeof obj.content === 'string') {
+        // Handle wrapped format: { "files": [{ "path": "...", "content": "..." }, ...] }
+        if (obj.files && Array.isArray(obj.files)) {
+          for (const fileObj of obj.files) {
+            if (fileObj.path && typeof fileObj.content === 'string') {
+              files.push({
+                path: fileObj.path,
+                content: fileObj.content,
+                startIndex: startPos,
+                endIndex: endPos,
+              });
+            }
+          }
+        } else if (obj.path && typeof obj.content === 'string') {
+          // Handle bare format: { "path": "...", "content": "..." }
           files.push({
             path: obj.path,
             content: obj.content,

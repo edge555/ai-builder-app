@@ -73,6 +73,28 @@ export const MODAL_MAX_OUTPUT_TOKENS_INTENT = 1024;
 export const MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE = 8192;
 export const MODAL_MAX_OUTPUT_TOKENS_REVIEW = 32768;
 
+// ─── Multi-Phase Generation Pipeline ─────────────────────────────────────────
+// Per-phase output token budgets
+export const MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING = 8192;
+export const MAX_OUTPUT_TOKENS_PLAN_REVIEW = 4096;
+export const MAX_OUTPUT_TOKENS_SCAFFOLD = 10000;
+export const MAX_OUTPUT_TOKENS_LOGIC = 16000;
+export const MAX_OUTPUT_TOKENS_UI = 32000;
+export const MAX_OUTPUT_TOKENS_INTEGRATION = 12000;
+
+// Input safety threshold — 80% of model context window to avoid overflow
+export const INPUT_TOKEN_SAFETY_THRESHOLD = 0.8;
+
+// Retry and continuation limits
+export const MAX_PHASE_RETRIES = 2;
+export const MAX_CONTINUATION_ROUNDS = 2;
+
+// If a UI phase plans >12 files, split into sub-batches
+export const UI_BATCH_SPLIT_THRESHOLD = 12;
+
+// Complexity gate: <=10 files → one-shot, >10 → multi-phase
+export const COMPLEXITY_GATE_FILE_THRESHOLD = 10;
+
 // Route operation timeouts
 export const DIFF_TIMEOUT_MS = 30_000;   // 30 seconds
 export const EXPORT_TIMEOUT_MS = 60_000; // 60 seconds
