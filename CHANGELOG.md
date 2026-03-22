@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.2] - 2026-03-23
+
+### Changed
+- **Unified prompt provider** — merged `ApiPromptProvider` and `ModalPromptProvider` into a single `UnifiedPromptProvider` class configured via `PromptProviderConfig`. API and Modal paths now share identical prompt text; only token budgets and verbose guidance flag differ. Eliminates ~350 lines of duplicated prompt logic.
+- `PromptProviderFactory` simplified — `createPromptProvider('modal')` passes token budget overrides and `verboseGuidance: true`; `createPromptProvider('openrouter')` uses defaults.
+
+### For contributors
+- New `UnifiedPromptProvider` test suite (17 cases) in `backend/lib/core/prompts/__tests__/` covering API defaults, Modal overrides, verbose guidance across generation/modification/bugfix prompts, recipe dispatch, phase prompt routing, and dynamic token budgets.
+- `backend/lib/core/prompts/api/` and `backend/lib/core/prompts/modal/` directories removed.
+
 ## [1.3.1] - 2026-03-22
 
 ### Added

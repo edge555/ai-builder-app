@@ -2,8 +2,8 @@
  * @module core/prompts/generation-prompt-utils
  * @description Utility functions for prompt assembly — complexity detection,
  * file requirements, design-system detection, and quality bar references.
- * These are provider-agnostic; both ApiPromptProvider and ModalPromptProvider
- * import from here.
+ * These are provider-agnostic; used by UnifiedPromptProvider for both
+ * API and Modal paths.
  *
  * @requires ./shared-prompt-fragments - Reusable prompt text blocks
  */

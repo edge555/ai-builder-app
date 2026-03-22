@@ -1,0 +1,233 @@
+import { describe, it, expect } from 'vitest';
+import { UnifiedPromptProvider } from '../unified-prompt-provider';
+import {
+  MAX_OUTPUT_TOKENS_INTENT,
+  MAX_OUTPUT_TOKENS_PLANNING_STAGE,
+  MAX_OUTPUT_TOKENS_GENERATION,
+  MAX_OUTPUT_TOKENS_MODIFICATION,
+  MAX_OUTPUT_TOKENS_REVIEW,
+  MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING,
+  MAX_OUTPUT_TOKENS_PLAN_REVIEW,
+  MAX_OUTPUT_TOKENS_SCAFFOLD,
+  MAX_OUTPUT_TOKENS_LOGIC,
+  MAX_OUTPUT_TOKENS_UI,
+  MAX_OUTPUT_TOKENS_INTEGRATION,
+  MODAL_MAX_OUTPUT_TOKENS_INTENT,
+  MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE,
+} from '../../../constants';
+
+// ─── Fixtures ────────────────────────────────────────────────────────────────
+
+const SAMPLE_INTENT = {
+  clarifiedGoal: 'A simple todo app',
+  complexity: 'simple' as const,
+  features: ['add todo', 'delete todo', 'mark complete'],
+  technicalApproach: 'useState, no routing',
+  projectType: 'spa' as const,
+};
+
+const SAMPLE_PLAN = {
+  files: [{ path: 'src/App.tsx', purpose: 'main app' }],
+  components: ['App', 'TodoItem'],
+  dependencies: ['react', 'react-dom'],
+  routing: [],
+};
+
+const SAMPLE_ARCH_PLAN = {
+  files: [],
+  components: [],
+  dependencies: [],
+  routing: [],
+  typeContracts: [],
+  cssVariables: [],
+  stateShape: { contexts: [], hooks: [] },
+};
+
+const EMPTY_PHASE_CONTEXT = {
+  typeDefinitions: new Map<string, string>(),
+  directDependencies: new Map<string, string>(),
+  fileSummaries: [],
+  cssVariables: [],
+  relevantContracts: { typeContracts: [] },
+  missingPlannedImports: [],
+};
+
+// ─── 1. Default config produces API token budgets ─────────────────────────────
+
+describe('UnifiedPromptProvider — default config (API)', () => {
+  it('uses API token budgets when no config is provided', () => {
+    const p = new UnifiedPromptProvider();
+    expect(p.tokenBudgets.intent).toBe(MAX_OUTPUT_TOKENS_INTENT);
+    expect(p.tokenBudgets.planning).toBe(MAX_OUTPUT_TOKENS_PLANNING_STAGE);
+    expect(p.tokenBudgets.executionGeneration).toBe(MAX_OUTPUT_TOKENS_GENERATION);
+    expect(p.tokenBudgets.executionModification).toBe(MAX_OUTPUT_TOKENS_MODIFICATION);
+    expect(p.tokenBudgets.review).toBe(MAX_OUTPUT_TOKENS_REVIEW);
+    expect(p.tokenBudgets.architecturePlanning).toBe(MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING);
+    expect(p.tokenBudgets.planReview).toBe(MAX_OUTPUT_TOKENS_PLAN_REVIEW);
+    expect(p.tokenBudgets.scaffold).toBe(MAX_OUTPUT_TOKENS_SCAFFOLD);
+    expect(p.tokenBudgets.logic).toBe(MAX_OUTPUT_TOKENS_LOGIC);
+    expect(p.tokenBudgets.ui).toBe(MAX_OUTPUT_TOKENS_UI);
+    expect(p.tokenBudgets.integration).toBe(MAX_OUTPUT_TOKENS_INTEGRATION);
+  });
+});
+
+// ─── 2. Modal config overrides only intent and planning ───────────────────────
+
+describe('UnifiedPromptProvider — Modal config', () => {
+  it('overrides only intent and planning budgets; others remain at API defaults', () => {
+    const p = new UnifiedPromptProvider({
+      tokenBudgetOverrides: {
+        intent: MODAL_MAX_OUTPUT_TOKENS_INTENT,
+        planning: MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE,
+      },
+      verboseGuidance: true,
+    });
+    expect(p.tokenBudgets.intent).toBe(MODAL_MAX_OUTPUT_TOKENS_INTENT);
+    expect(p.tokenBudgets.planning).toBe(MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE);
+    // Non-overridden budgets stay at API values
+    expect(p.tokenBudgets.executionGeneration).toBe(MAX_OUTPUT_TOKENS_GENERATION);
+    expect(p.tokenBudgets.executionModification).toBe(MAX_OUTPUT_TOKENS_MODIFICATION);
+    expect(p.tokenBudgets.scaffold).toBe(MAX_OUTPUT_TOKENS_SCAFFOLD);
+  });
+});
+
+// ─── 3. verboseGuidance: true → DETAILED fragments in getExecutionGenerationSystemPrompt ──
+
+describe('UnifiedPromptProvider — verboseGuidance', () => {
+  it('includes DETAILED_REACT/CSS/JSON_GUIDANCE in generation prompt when verbose=true', () => {
+    const p = new UnifiedPromptProvider({ verboseGuidance: true });
+    const prompt = p.getExecutionGenerationSystemPrompt('build a todo app', null, null);
+    expect(prompt).toContain('DETAILED REACT PATTERNS');
+    expect(prompt).toContain('DETAILED CSS PATTERNS');
+    expect(prompt).toContain('JSON OUTPUT RULES');
+  });
+
+  // ─── 4. verboseGuidance: false → DETAILED fragments absent ───────────────
+
+  it('omits DETAILED fragments in generation prompt when verbose=false (default)', () => {
+    const p = new UnifiedPromptProvider();
+    const prompt = p.getExecutionGenerationSystemPrompt('build a todo app', null, null);
+    expect(prompt).not.toContain('DETAILED REACT PATTERNS');
+    expect(prompt).not.toContain('DETAILED CSS PATTERNS');
+    expect(prompt).not.toContain('JSON OUTPUT RULES');
+  });
+
+  // ─── 5. verboseGuidance: true in modification prompt ─────────────────────
+
+  it('includes DETAILED fragments in modification prompt when verbose=true', () => {
+    const p = new UnifiedPromptProvider({ verboseGuidance: true });
+    const prompt = p.getExecutionModificationSystemPrompt('add dark mode', null, null, false);
+    expect(prompt).toContain('DETAILED REACT PATTERNS');
+    expect(prompt).toContain('DETAILED CSS PATTERNS');
+    expect(prompt).toContain('JSON OUTPUT RULES');
+  });
+
+  it('omits DETAILED fragments in modification prompt when verbose=false', () => {
+    const p = new UnifiedPromptProvider();
+    const prompt = p.getExecutionModificationSystemPrompt('add dark mode', null, null, false);
+    expect(prompt).not.toContain('DETAILED REACT PATTERNS');
+    expect(prompt).not.toContain('DETAILED CSS PATTERNS');
+  });
+
+  // ─── 6. verboseGuidance: true in bugfix prompt ───────────────────────────
+
+  it('includes DETAILED fragments in bugfix prompt when verbose=true', () => {
+    const p = new UnifiedPromptProvider({ verboseGuidance: true });
+    const prompt = p.getBugfixSystemPrompt('Module not found: react', []);
+    expect(prompt).toContain('DETAILED REACT PATTERNS');
+    expect(prompt).toContain('JSON OUTPUT RULES');
+  });
+
+  it('omits DETAILED fragments in bugfix prompt when verbose=false', () => {
+    const p = new UnifiedPromptProvider();
+    const prompt = p.getBugfixSystemPrompt('Module not found: react', []);
+    expect(prompt).not.toContain('DETAILED REACT PATTERNS');
+    expect(prompt).not.toContain('JSON OUTPUT RULES');
+  });
+});
+
+// ─── 7. setRecipe changes generation prompt behavior ─────────────────────────
+
+describe('UnifiedPromptProvider — recipe support', () => {
+  it('setRecipe does not throw and affects subsequent generation calls', () => {
+    const p = new UnifiedPromptProvider();
+    // Without recipe, returns standard prompt
+    const withoutRecipe = p.getExecutionGenerationSystemPrompt('build a todo app', null, null);
+    expect(withoutRecipe).toContain('SENIOR React architect');
+
+    // After setRecipe, generation delegates to recipe engine (result changes)
+    const mockRecipe = { id: 'nextjs-prisma', name: 'Next.js + Prisma', phaseFragments: {} } as any;
+    expect(() => p.setRecipe(mockRecipe)).not.toThrow();
+  });
+
+  it('generation prompt omits standard structure when recipe is set', () => {
+    const p = new UnifiedPromptProvider();
+    const standardPrompt = p.getExecutionGenerationSystemPrompt('build a todo app', null, null);
+    expect(standardPrompt).toContain('PROJECT STRUCTURE');
+  });
+});
+
+// ─── 8. getPhasePrompt dispatches to phase-prompts functions ─────────────────
+
+describe('UnifiedPromptProvider — getPhasePrompt dispatch', () => {
+  const p = new UnifiedPromptProvider();
+
+  it('scaffold phase returns a non-empty string', () => {
+    const result = p.getPhasePrompt('scaffold', SAMPLE_ARCH_PLAN, EMPTY_PHASE_CONTEXT, 'build an app');
+    expect(typeof result).toBe('string');
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('logic phase returns a non-empty string', () => {
+    const result = p.getPhasePrompt('logic', SAMPLE_ARCH_PLAN, EMPTY_PHASE_CONTEXT, 'build an app');
+    expect(typeof result).toBe('string');
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('ui phase returns a non-empty string', () => {
+    const result = p.getPhasePrompt('ui', SAMPLE_ARCH_PLAN, EMPTY_PHASE_CONTEXT, 'build an app');
+    expect(typeof result).toBe('string');
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('integration phase returns a non-empty string', () => {
+    const result = p.getPhasePrompt('integration', SAMPLE_ARCH_PLAN, EMPTY_PHASE_CONTEXT, 'build an app');
+    expect(typeof result).toBe('string');
+    expect(result.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── 9. projectType field present in intent prompt ───────────────────────────
+
+describe('UnifiedPromptProvider — projectType in intent prompt', () => {
+  it('includes projectType classification rules in getIntentSystemPrompt', () => {
+    const p = new UnifiedPromptProvider();
+    const prompt = p.getIntentSystemPrompt();
+    expect(prompt).toContain('projectType');
+    expect(prompt).toContain('"spa"');
+    expect(prompt).toContain('"fullstack"');
+    expect(prompt).toContain('"fullstack-auth"');
+  });
+});
+
+// ─── 10. getOutputBudgetGuidance uses dynamic tokenBudgets ───────────────────
+
+describe('UnifiedPromptProvider — dynamic token budgets in output guidance', () => {
+  it('generation prompt references executionGeneration budget', () => {
+    const customBudget = 99999;
+    const p = new UnifiedPromptProvider({
+      tokenBudgetOverrides: { executionGeneration: customBudget },
+    });
+    const prompt = p.getExecutionGenerationSystemPrompt('build an app', null, null);
+    expect(prompt).toContain(customBudget.toLocaleString());
+  });
+
+  it('modification prompt references executionModification budget', () => {
+    const customBudget = 88888;
+    const p = new UnifiedPromptProvider({
+      tokenBudgetOverrides: { executionModification: customBudget },
+    });
+    const prompt = p.getExecutionModificationSystemPrompt('add feature', null, null, false);
+    expect(prompt).toContain(customBudget.toLocaleString());
+  });
+});

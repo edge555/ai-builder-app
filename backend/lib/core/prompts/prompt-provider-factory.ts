@@ -1,17 +1,19 @@
 /**
  * @module core/prompts/prompt-provider-factory
  * @description Factory for creating the active IPromptProvider implementation.
- * - openrouter → ApiPromptProvider (concise prompts, lower token budgets)
- * - modal → ModalPromptProvider (verbose prompts, full guidance, higher token budgets)
+ * Both providers use UnifiedPromptProvider — Modal overrides token budgets
+ * and enables verbose guidance; API uses defaults.
  *
  * @requires ./prompt-provider - IPromptProvider interface
- * @requires ./api/api-prompt-provider - OpenRouter implementation
- * @requires ./modal/modal-prompt-provider - Modal implementation
+ * @requires ./unified-prompt-provider - Single configurable implementation
  */
 
 import type { IPromptProvider } from './prompt-provider';
-import { ApiPromptProvider } from './api/api-prompt-provider';
-import { ModalPromptProvider } from './modal/modal-prompt-provider';
+import { UnifiedPromptProvider } from './unified-prompt-provider';
+import {
+  MODAL_MAX_OUTPUT_TOKENS_INTENT,
+  MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE,
+} from '../../constants';
 
 /**
  * Creates the appropriate IPromptProvider for the given AI provider.
@@ -20,7 +22,13 @@ import { ModalPromptProvider } from './modal/modal-prompt-provider';
  */
 export function createPromptProvider(providerName: 'modal' | 'openrouter'): IPromptProvider {
   if (providerName === 'modal') {
-    return new ModalPromptProvider();
+    return new UnifiedPromptProvider({
+      tokenBudgetOverrides: {
+        intent: MODAL_MAX_OUTPUT_TOKENS_INTENT,           // 1024 vs 512
+        planning: MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE, // 8192 vs 4096
+      },
+      verboseGuidance: true,
+    });
   }
-  return new ApiPromptProvider();
+  return new UnifiedPromptProvider();
 }

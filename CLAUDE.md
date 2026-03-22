@@ -125,12 +125,12 @@ backend/
 │   │   ├── validators/             # Composable validators (path, syntax, JSON, pattern, architecture)
 │   │   ├── prompts/                # Provider-specific prompt assembly
 │   │   │   ├── prompt-provider.ts          # IPromptProvider interface (+ multi-phase methods)
-│   │   │   ├── prompt-provider-factory.ts  # Creates ApiPromptProvider or ModalPromptProvider
+│   │   │   ├── prompt-provider-factory.ts  # Creates UnifiedPromptProvider (API or Modal config)
+│   │   │   ├── unified-prompt-provider.ts  # Single configurable provider (API default; Modal: higher budgets + verbose guidance)
 │   │   │   ├── generation-prompt-utils.ts  # Shared prompt building utilities
 │   │   │   ├── shared-prompt-fragments.ts  # Reusable prompt fragments (layout, polish, data, CRUD inference)
 │   │   │   ├── phase-prompts.ts            # Per-phase system prompts (scaffold, logic, UI, integration)
-│   │   │   ├── api/api-prompt-provider.ts  # OpenRouter prompt implementation
-│   │   │   └── modal/modal-prompt-provider.ts # Modal prompt implementation
+│   │   │   └── __tests__/                  # Unit tests for UnifiedPromptProvider (17 cases)
 │   │   ├── recipes/                # Pluggable generation recipes
 │   │   │   ├── recipe-types.ts             # Recipe/fragment type definitions + phaseFragments
 │   │   │   ├── recipe-engine.ts            # Recipe selection + prompt composition
@@ -224,7 +224,7 @@ Multi-provider architecture with runtime switching:
 - **Modal**: Self-hosted models with per-task endpoint resolution via `ModalPipelineFactory` (resolves `MODAL_<TASK>_URL` → `MODAL_DEFAULT_URL`)
 - **`GenerationPipeline`** (new projects): Multi-phase pipeline with complexity gate, architecture planning, batch context builder, and phase executor
 - **`PipelineOrchestrator`** (modifications only): 4-stage pipeline (Intent → Planning → Execution → Review); Execution is hard-fail, other stages degrade gracefully
-- **`IPromptProvider`**: Abstracts system prompts, token budgets, and multi-phase prompt methods; `ApiPromptProvider` (OpenRouter) and `ModalPromptProvider` (Modal) implement it
+- **`IPromptProvider`**: Abstracts system prompts, token budgets, and multi-phase prompt methods; `UnifiedPromptProvider` implements it for both providers via `PromptProviderConfig` (token budget overrides + verbose guidance flag)
 - **Recipe Engine**: Pluggable generation recipes (React SPA, Next.js + Prisma, Next.js + Supabase Auth) with per-phase prompt fragments
 - **`AgentRouter`** (OpenRouter only): Task-specific routing with `FallbackAIProvider` (tries models in priority order)
 - **`IntentDetector`** (OpenRouter only): Classifies prompts into task types (intent, planning, coding, debugging, documentation)
@@ -322,7 +322,7 @@ Multi-provider architecture with runtime switching:
 
 ## Testing
 
-- **Backend**: Vitest + Node env, 105 test files in `lib/**/*.test.ts` and `app/api/__tests__/` (unit, perf, integration, eval)
+- **Backend**: Vitest + Node env, 104 test files in `lib/**/*.test.ts` and `app/api/__tests__/` (unit, perf, integration, eval)
 - **Frontend**: Vitest + jsdom + React Testing Library, 26 test files in `src/**/__tests__/*.{test,spec}.{ts,tsx}`
 - **Shared**: Vitest + Node env, 5 test files
 
