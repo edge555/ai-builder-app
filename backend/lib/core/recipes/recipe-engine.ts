@@ -6,7 +6,7 @@
  * The selector runs after the intent stage. If fullstack recipes are disabled
  * (feature flag off) or intent is null, it falls back to react-spa.
  *
- * The composer replaces the hardcoded fragment assembly in ApiPromptProvider
+ * The composer replaces the hardcoded fragment assembly in UnifiedPromptProvider
  * with a data-driven approach: iterate the recipe's promptFragments list,
  * look up each fragment, and concatenate.
  */
@@ -135,7 +135,7 @@ export function selectRecipe(
 /**
  * Compose the execution generation system prompt from a recipe.
  *
- * Replaces the hardcoded fragment assembly in ApiPromptProvider.getExecutionGenerationSystemPrompt()
+ * Replaces the hardcoded fragment assembly in UnifiedPromptProvider.getExecutionGenerationSystemPrompt()
  * with a data-driven approach driven by the recipe's promptFragments list.
  */
 export function composeExecutionPrompt(

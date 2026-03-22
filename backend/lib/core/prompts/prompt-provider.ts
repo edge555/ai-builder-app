@@ -1,8 +1,7 @@
 /**
  * @module core/prompts/prompt-provider
- * @description IPromptProvider interface — implemented by ApiPromptProvider (OpenRouter)
- * and ModalPromptProvider (Modal). Each implementation provides system prompts and
- * token budgets appropriate for its provider.
+ * @description IPromptProvider interface — implemented by UnifiedPromptProvider.
+ * Configuration controls token budgets and verbose guidance per provider.
  *
  * @requires ./schemas - IntentOutput, PlanOutput types (via ../../core/schemas)
  */

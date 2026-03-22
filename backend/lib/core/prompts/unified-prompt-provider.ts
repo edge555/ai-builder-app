@@ -1,25 +1,26 @@
 /**
- * @module core/prompts/api/api-prompt-provider
- * @description IPromptProvider implementation for the OpenRouter (API) path.
- * Uses concise prompts — no detailed React/CSS guidance — to keep token costs low.
- * Token budgets match the API constants in lib/constants.ts.
+ * @module core/prompts/unified-prompt-provider
+ * @description Single configurable IPromptProvider implementation used by both
+ * OpenRouter (API) and Modal paths. The API path uses default config (concise prompts,
+ * lower token budgets). The Modal path overrides token budgets and enables verbose
+ * guidance fragments. All prompt text is identical — only configuration differs.
  *
- * @requires ../prompt-provider - IPromptProvider interface
- * @requires ../generation-prompt-utils - Shared utility functions
- * @requires ../shared-prompt-fragments - Shared prompt text blocks
+ * @requires ./prompt-provider - IPromptProvider interface
+ * @requires ./generation-prompt-utils - Shared utility functions
+ * @requires ./shared-prompt-fragments - Shared prompt text blocks
  * @requires ../../constants - Token budget constants
  */
 
-import type { IPromptProvider, IntentOutput, PlanOutput } from '../prompt-provider';
-import type { ArchitecturePlan, PhaseLayer } from '../prompt-provider';
-import type { PhaseContext } from '../../batch-context-builder';
-import type { GenerationRecipe } from '../../recipes/recipe-types';
+import type { IPromptProvider, IntentOutput, PlanOutput } from './prompt-provider';
+import type { ArchitecturePlan, PhaseLayer } from './prompt-provider';
+import type { PhaseContext } from '../batch-context-builder';
+import type { GenerationRecipe } from '../recipes/recipe-types';
 import {
   detectComplexity,
   getFileRequirements,
   shouldIncludeDesignSystem,
   getQualityBarReference,
-} from '../generation-prompt-utils';
+} from './generation-prompt-utils';
 import {
   LAYOUT_FUNDAMENTALS,
   BASELINE_VISUAL_POLISH,
@@ -31,9 +32,12 @@ import {
   getOutputBudgetGuidance,
   SYNTAX_INTEGRITY_RULES,
   COMMON_REACT_PATTERNS,
+  DETAILED_REACT_GUIDANCE,
+  DETAILED_CSS_GUIDANCE,
+  DETAILED_JSON_OUTPUT_GUIDANCE,
   SEARCH_REPLACE_GUIDANCE,
   wrapUserInput,
-} from '../shared-prompt-fragments';
+} from './shared-prompt-fragments';
 import {
   MAX_OUTPUT_TOKENS_INTENT,
   MAX_OUTPUT_TOKENS_PLANNING_STAGE,
@@ -46,45 +50,71 @@ import {
   MAX_OUTPUT_TOKENS_LOGIC,
   MAX_OUTPUT_TOKENS_UI,
   MAX_OUTPUT_TOKENS_INTEGRATION,
-} from '../../../constants';
-import { composeExecutionPrompt } from '../../recipes/recipe-engine';
+} from '../../constants';
+import { composeExecutionPrompt } from '../recipes/recipe-engine';
 import {
   getScaffoldPrompt,
   getLogicPrompt,
   getUIPrompt,
   getIntegrationPrompt,
   getPlanReviewPrompt as buildPlanReviewPrompt,
-} from '../phase-prompts';
+} from './phase-prompts';
 
-/** Token budget for bugfix = same as modification (full file set may need rewriting) */
-const BUGFIX_BUDGET = MAX_OUTPUT_TOKENS_MODIFICATION;
+/**
+ * Configuration for the UnifiedPromptProvider.
+ * Default values produce API (OpenRouter) behavior.
+ */
+export interface PromptProviderConfig {
+  /** Override specific token budgets (e.g. Modal uses higher intent/planning budgets). */
+  tokenBudgetOverrides?: Partial<IPromptProvider['tokenBudgets']>;
+  /** When true, appends DETAILED_REACT/CSS/JSON_GUIDANCE to execution and bugfix prompts. */
+  verboseGuidance?: boolean;
+}
 
-export class ApiPromptProvider implements IPromptProvider {
+/** Default API token budgets — used when no overrides are provided. */
+const API_TOKEN_BUDGETS: IPromptProvider['tokenBudgets'] = {
+  intent: MAX_OUTPUT_TOKENS_INTENT,
+  planning: MAX_OUTPUT_TOKENS_PLANNING_STAGE,
+  executionGeneration: MAX_OUTPUT_TOKENS_GENERATION,
+  executionModification: MAX_OUTPUT_TOKENS_MODIFICATION,
+  review: MAX_OUTPUT_TOKENS_REVIEW,
+  bugfix: MAX_OUTPUT_TOKENS_MODIFICATION, // bugfix = same as modification
+  // Multi-phase pipeline
+  architecturePlanning: MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING,
+  planReview: MAX_OUTPUT_TOKENS_PLAN_REVIEW,
+  scaffold: MAX_OUTPUT_TOKENS_SCAFFOLD,
+  logic: MAX_OUTPUT_TOKENS_LOGIC,
+  ui: MAX_OUTPUT_TOKENS_UI,
+  integration: MAX_OUTPUT_TOKENS_INTEGRATION,
+};
+
+export class UnifiedPromptProvider implements IPromptProvider {
   private recipe: GenerationRecipe | null;
+  readonly tokenBudgets: IPromptProvider['tokenBudgets'];
+  private readonly verboseGuidance: boolean;
 
-  constructor(recipe?: GenerationRecipe) {
-    this.recipe = recipe ?? null;
+  constructor(config?: PromptProviderConfig) {
+    this.recipe = null;
+    this.verboseGuidance = config?.verboseGuidance ?? false;
+    this.tokenBudgets = {
+      ...API_TOKEN_BUDGETS,
+      ...config?.tokenBudgetOverrides,
+    };
   }
 
   /** Update the recipe after intent analysis (for recipe-aware execution prompts). */
   setRecipe(recipe: GenerationRecipe): void {
     this.recipe = recipe;
   }
-  readonly tokenBudgets = {
-    intent: MAX_OUTPUT_TOKENS_INTENT,
-    planning: MAX_OUTPUT_TOKENS_PLANNING_STAGE,
-    executionGeneration: MAX_OUTPUT_TOKENS_GENERATION,
-    executionModification: MAX_OUTPUT_TOKENS_MODIFICATION,
-    review: MAX_OUTPUT_TOKENS_REVIEW,
-    bugfix: BUGFIX_BUDGET,
-    // Multi-phase pipeline
-    architecturePlanning: MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING,
-    planReview: MAX_OUTPUT_TOKENS_PLAN_REVIEW,
-    scaffold: MAX_OUTPUT_TOKENS_SCAFFOLD,
-    logic: MAX_OUTPUT_TOKENS_LOGIC,
-    ui: MAX_OUTPUT_TOKENS_UI,
-    integration: MAX_OUTPUT_TOKENS_INTEGRATION,
-  };
+
+  /**
+   * Returns the verbose guidance block (DETAILED_REACT + CSS + JSON fragments)
+   * when verboseGuidance is enabled, empty string otherwise.
+   */
+  private getVerboseBlock(): string {
+    if (!this.verboseGuidance) return '';
+    return `\n${DETAILED_REACT_GUIDANCE}\n\n${DETAILED_CSS_GUIDANCE}\n\n${DETAILED_JSON_OUTPUT_GUIDANCE}`;
+  }
 
   getIntentSystemPrompt(): string {
     return `You are an AI intent classifier for a web app builder.
@@ -193,8 +223,9 @@ ${DEPENDENCY_GUIDANCE}
 ${SYNTAX_INTEGRITY_RULES}
 
 ${COMMON_REACT_PATTERNS}
+${this.getVerboseBlock()}
 
-${getOutputBudgetGuidance(MAX_OUTPUT_TOKENS_GENERATION)}
+${getOutputBudgetGuidance(this.tokenBudgets.executionGeneration)}
 
 ${getQualityBarReference(complexity)}
 
@@ -245,9 +276,10 @@ Respond with valid JSON only. Do NOT wrap in markdown code fences.
 
 ${SEARCH_REPLACE_GUIDANCE}
 
-${getOutputBudgetGuidance(MAX_OUTPUT_TOKENS_MODIFICATION)}
+${getOutputBudgetGuidance(this.tokenBudgets.executionModification)}
 
 ${SYNTAX_INTEGRITY_RULES}
+${this.getVerboseBlock()}
 
 ${wrapUserInput(userPrompt)}`;
   }
@@ -283,16 +315,12 @@ ${errorContext}
 
 Fix ALL errors. Return the complete modified project as JSON with all files.
 Common fixes: add missing dependencies to package.json, fix broken imports, correct TypeScript errors.
-${SYNTAX_INTEGRITY_RULES}`;
+${SYNTAX_INTEGRITY_RULES}
+${this.getVerboseBlock()}`;
   }
 
   // ─── Multi-Phase Pipeline Methods ──────────────────────────────────────
 
-  /**
-   * Architecture planning: request a full ArchitecturePlan JSON.
-   * The AI must produce files with layer assignments, typeContracts,
-   * cssVariables, stateShape, and dependency lists.
-   */
   getArchitecturePlanningPrompt(userPrompt: string, intent: IntentOutput | null): string {
     const intentBlock = intent
       ? `=== INTENT ANALYSIS ===\nGoal: ${intent.clarifiedGoal}\nComplexity: ${intent.complexity}\nFeatures: ${intent.features.join(', ')}\nApproach: ${intent.technicalApproach}\n`
@@ -368,24 +396,15 @@ Base file count on complexity:
 
 Respond with valid JSON only. No markdown, no explanation.
 
-${getOutputBudgetGuidance(MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING)}
+${getOutputBudgetGuidance(this.tokenBudgets.architecturePlanning)}
 
 ${wrapUserInput(userPrompt)}`;
   }
 
-  /**
-   * Plan review: validates the ArchitecturePlan for internal consistency.
-   * Delegates to getPlanReviewPrompt from phase-prompts.ts.
-   */
   getPlanReviewPrompt(plan: ArchitecturePlan): string {
     return buildPlanReviewPrompt(plan);
   }
 
-  /**
-   * Phase prompt dispatcher.
-   * Delegates to the appropriate function in phase-prompts.ts based on phase.
-   * Recipe phaseFragments are injected into getUIPrompt when available.
-   */
   getPhasePrompt(
     phase: PhaseLayer,
     plan: ArchitecturePlan,
