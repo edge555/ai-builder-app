@@ -48,9 +48,9 @@ interface DesignStyle {
 }
 
 const DESIGN_STYLES: DesignStyle[] = [
-  { id: 'minimal', label: 'Minimal', description: 'Clean lines, lots of whitespace' },
-  { id: 'colorful', label: 'Colorful', description: 'Bold colors, vibrant accents' },
-  { id: 'corporate', label: 'Professional', description: 'Business-ready, polished look' },
+  { id: 'minimal', label: 'Editorial', description: 'Clean lines, lots of whitespace' },
+  { id: 'colorful', label: 'Energetic', description: 'Bold colors, vibrant accents' },
+  { id: 'corporate', label: 'Polished', description: 'Business-ready, refined look' },
 ];
 
 // ─── Prompt builder ────────────────────────────────────────────────────────
@@ -116,6 +116,7 @@ export function OnboardingOverlay({ onDismiss, onGeneratePrompt }: OnboardingOve
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedFeatures, setSelectedFeatures] = useState<Set<string>>(new Set());
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const totalSteps = 3;
@@ -138,13 +139,17 @@ export function OnboardingOverlay({ onDismiss, onGeneratePrompt }: OnboardingOve
 
   const handleComplete = useCallback(() => {
     localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
-    const dialog = dialogRef.current;
-    if (dialog?.open) {
-      dialog.close();
-    }
+    setIsGenerating(true);
     const prompt = buildPromptFromChoices(selectedType, selectedFeatures, selectedStyle);
-    onGeneratePrompt?.(prompt);
-    onDismiss();
+    // Brief delay so user sees the generating state before dialog closes
+    setTimeout(() => {
+      const dialog = dialogRef.current;
+      if (dialog?.open) {
+        dialog.close();
+      }
+      onGeneratePrompt?.(prompt);
+      onDismiss();
+    }, 300);
   }, [onDismiss, onGeneratePrompt, selectedType, selectedFeatures, selectedStyle]);
 
   const handleNext = () => {
@@ -183,6 +188,7 @@ export function OnboardingOverlay({ onDismiss, onGeneratePrompt }: OnboardingOve
       className="onboarding-overlay"
       aria-labelledby="onboarding-title"
       onKeyDown={handleKeyDown}
+      onClick={(e) => { if (e.target === dialogRef.current) handleDismiss(); }}
     >
       <div className="onboarding-content">
         <div className="onboarding-step-indicator">
@@ -280,10 +286,11 @@ export function OnboardingOverlay({ onDismiss, onGeneratePrompt }: OnboardingOve
             type="button"
             className="onboarding-btn onboarding-btn--primary"
             onClick={handleNext}
+            disabled={isGenerating || (currentStep === 0 && !selectedType)}
             autoFocus
           >
-            {isLast ? 'Generate App' : 'Next'}
-            <ArrowRight size={16} />
+            {isGenerating ? 'Starting...' : isLast ? 'Generate App' : 'Next'}
+            {!isGenerating && <ArrowRight size={16} />}
           </button>
         </div>
 

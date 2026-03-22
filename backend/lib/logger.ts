@@ -49,8 +49,8 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   error: 3,
 };
 
-// Sensitive field patterns for redaction
-const SENSITIVE_PATTERNS = [
+// Patterns matched against context KEY NAMES — any match → value redacted
+const SENSITIVE_KEY_PATTERNS = [
   /api[_-]?key/i,
   /api[_-]?url/i,
   /stream[_-]?url/i,
@@ -58,7 +58,6 @@ const SENSITIVE_PATTERNS = [
   /secret/i,
   /token/i,
   /authorization/i,
-  /bearer\s+\S+/i,
   /access[_-]?key/i,
   /private[_-]?key/i,
   /client[_-]?secret/i,
@@ -70,6 +69,14 @@ const SENSITIVE_PATTERNS = [
   /database[_-]?url/i,
   /connection[_-]?string/i,
 ];
+
+// Patterns matched against STRING VALUES — only high-confidence full-secret patterns
+// to avoid false positives like "token-limit-exceeded" being partially redacted
+const SENSITIVE_VALUE_PATTERNS = [
+  /bearer\s+\S+/i,           // Bearer tokens in Authorization headers
+  /^ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/, // JWT format
+];
+
 
 
 // ─── File Transport ───────────────────────────────────────────────────────────
@@ -138,10 +145,10 @@ function redactSensitiveData(obj: Record<string, unknown>): Record<string, unkno
   const redacted: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(obj)) {
-    // Check if key matches any sensitive pattern
-    const isSensitive = SENSITIVE_PATTERNS.some((pattern) => pattern.test(key));
+    // Check if key matches any sensitive pattern — if so, redact entire value
+    const isSensitiveKey = SENSITIVE_KEY_PATTERNS.some((pattern) => pattern.test(key));
 
-    if (isSensitive) {
+    if (isSensitiveKey) {
       redacted[key] = '[REDACTED]';
     } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
       // Recursively redact nested objects
@@ -154,9 +161,10 @@ function redactSensitiveData(obj: Record<string, unknown>): Record<string, unkno
           : item
       );
     } else if (typeof value === 'string') {
-      // Check for sensitive patterns in string values
+      // Only apply high-confidence patterns to string values (e.g. bearer tokens, JWTs)
+      // to avoid false positives like "token-limit-exceeded" being partially redacted
       let redactedValue = value;
-      for (const pattern of SENSITIVE_PATTERNS) {
+      for (const pattern of SENSITIVE_VALUE_PATTERNS) {
         redactedValue = redactedValue.replace(pattern, '[REDACTED]');
       }
       redacted[key] = redactedValue;

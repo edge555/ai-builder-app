@@ -91,16 +91,17 @@ describe('RedisRateLimiter', () => {
       );
     });
 
-    it('fails open on Redis error — allows the request', async () => {
+    it('falls back to in-memory limiter on Redis error (not fail-open)', async () => {
       mockRedisInstance.eval.mockRejectedValue(new Error('ECONNREFUSED'));
 
+      // First request: in-memory limiter is fresh → allowed, remaining = limit - 1
       const result = await limiter.check('HIGH_COST:1.2.3.4', 5, 60_000);
 
       expect(result.allowed).toBe(true);
       expect(result.remaining).toBe(4);
     });
 
-    it('fails open on Redis timeout', async () => {
+    it('falls back to in-memory limiter on Redis timeout', async () => {
       mockRedisInstance.eval.mockRejectedValue(new Error('Command timed out'));
 
       const result = await limiter.check('HIGH_COST:1.2.3.4', 10, 60_000);
@@ -109,12 +110,18 @@ describe('RedisRateLimiter', () => {
       expect(result.remaining).toBe(9);
     });
 
-    it('fails open on Redis OOM', async () => {
+    it('in-memory fallback actually enforces rate limits when Redis is down', async () => {
       mockRedisInstance.eval.mockRejectedValue(new Error('OOM command not allowed'));
+      const limit = 2;
 
-      const result = await limiter.check('HIGH_COST:1.2.3.4', 5, 60_000);
+      // Exhaust the limit via the in-memory fallback
+      await limiter.check('COST:1.2.3.4', limit, 60_000);
+      await limiter.check('COST:1.2.3.4', limit, 60_000);
 
-      expect(result.allowed).toBe(true);
+      // Third request must be blocked — this would NOT be blocked by the old fail-open behavior
+      const result = await limiter.check('COST:1.2.3.4', limit, 60_000);
+      expect(result.allowed).toBe(false);
+      expect(result.remaining).toBe(0);
     });
   });
 

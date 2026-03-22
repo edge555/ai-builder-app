@@ -720,6 +720,15 @@
   opacity: 1;
 }
 
+/* Touch devices: always show remove button with larger tap area */
+@media (hover: none) {
+  .chat-input-thumbnail-remove {
+    opacity: 1;
+    width: 24px;
+    height: 24px;
+  }
+}
+
 /* Drag-over state */
 .chat-input-form--drag-over {
   border-color: hsl(var(--primary));
