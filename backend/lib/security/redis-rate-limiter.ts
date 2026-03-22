@@ -12,7 +12,7 @@
 
 import Redis from 'ioredis';
 import { createLogger } from '../logger';
-import type { RateLimitResult } from './rate-limiter';
+import { RateLimiter, type RateLimitResult } from './rate-limiter';
 
 const logger = createLogger('security/redis-rate-limiter');
 
@@ -67,9 +67,11 @@ export class RedisRateLimiter {
   private readonly redis: Redis;
   private readonly keyPrefix: string;
   private fallbackActive = false;
+  private readonly memoryFallback: RateLimiter;
 
   constructor(redisUrl: string, keyPrefix = 'rl:') {
     this.keyPrefix = keyPrefix;
+    this.memoryFallback = new RateLimiter();
     this.redis = new Redis(redisUrl, {
       maxRetriesPerRequest: 1,
       retryStrategy(times) {
@@ -125,19 +127,15 @@ export class RedisRateLimiter {
         resetAt: result[2],
       };
     } catch (err) {
-      // Fail-open: allow the request on Redis error
       if (!this.fallbackActive) {
         this.fallbackActive = true;
-        logger.warn('Redis rate limiter error — allowing request', {
+        logger.warn('Redis rate limiter error — falling back to in-memory limiter', {
           error: err instanceof Error ? err.message : String(err),
           key,
         });
       }
-      return {
-        allowed: true,
-        remaining: limit - 1,
-        resetAt: now + windowMs,
-      };
+      // Fall back to in-memory rate limiting instead of allowing all requests
+      return this.memoryFallback.check(key, limit, windowMs);
     }
   }
 
@@ -149,6 +147,7 @@ export class RedisRateLimiter {
   /** Disconnect from Redis and clean up. */
   destroy(): void {
     this.redis.disconnect();
+    this.memoryFallback.destroy();
   }
 
   /** Number of tracked keys (approximate, for diagnostics only). */

@@ -62,6 +62,13 @@ const SENSITIVE_PATTERNS = [
   /access[_-]?key/i,
   /private[_-]?key/i,
   /client[_-]?secret/i,
+  /supabase[_-]?key/i,
+  /anon[_-]?key/i,
+  /service[_-]?role[_-]?key/i,
+  /jwt[_-]?secret/i,
+  /redis[_-]?url/i,
+  /database[_-]?url/i,
+  /connection[_-]?string/i,
 ];
 
 

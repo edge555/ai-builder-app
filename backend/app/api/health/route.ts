@@ -3,6 +3,9 @@ import { getCorsHeaders, handleOptions } from '../../../lib/api';
 import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import { config } from '../../../lib/config';
 import { getMetricsSummary } from '../../../lib/metrics';
+import { createLogger } from '../../../lib/logger';
+
+const logger = createLogger('api/health');
 
 export async function OPTIONS() {
   return handleOptions();
@@ -23,24 +26,25 @@ async function checkProviderReachability(): Promise<{
 
   try {
     let url: string;
-    const headers: Record<string, string> = {};
 
     if (config.provider.name === 'openrouter') {
+      // Use the public models endpoint — no auth required for reachability check
       url = 'https://openrouter.ai/api/v1/models';
-      if (config.provider.openrouterApiKey) {
-        headers['Authorization'] = `Bearer ${config.provider.openrouterApiKey}`;
-      }
     } else {
       url = config.provider.modalDefaultUrl!;
     }
 
-    const response = await fetch(url, { signal: controller.signal, headers });
+    const response = await fetch(url, { signal: controller.signal });
     return { reachable: response.status < 500, latencyMs: Date.now() - start };
   } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
+    // Log the real error server-side; return a generic message to avoid leaking
+    // internal hostnames, IP addresses, or infrastructure details.
+    logger.warn('Provider reachability check failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return {
       reachable: false,
-      error: controller.signal.aborted ? 'timeout after 5s' : error,
+      error: controller.signal.aborted ? 'timeout' : 'provider unreachable',
     };
   } finally {
     clearTimeout(timeout);

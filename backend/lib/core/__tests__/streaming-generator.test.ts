@@ -6,6 +6,17 @@ import * as buildValidatorModule from '../build-validator';
 vi.mock('../validation-pipeline');
 vi.mock('../build-validator');
 
+// Prevent WorkerPool from spawning real Prettier worker threads in unit tests.
+// processFiles is an implementation detail; StreamingProjectGenerator's logic
+// is what we're testing here.
+vi.mock('../file-processor', () => ({
+    processFiles: vi.fn(async (files: Array<{ path: string; content: string }>) => ({
+        files: Object.fromEntries(files.map(f => [f.path, f.content])),
+        warnings: [],
+    })),
+    processFile: vi.fn(async (file: { path: string; content: string }) => file),
+}));
+
 // Minimal PipelineResult helper
 const makeGenerationResult = (files = [
     { path: 'src/App.tsx', content: 'export default function App() { return null; }' },

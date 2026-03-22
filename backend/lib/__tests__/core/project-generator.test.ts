@@ -17,6 +17,16 @@ vi.mock('../../core/validators', async (importOriginal) => {
   };
 });
 
+// Prevent WorkerPool from spawning real Prettier worker threads in unit tests.
+vi.mock('../../core/file-processor', () => ({
+  processFiles: vi.fn(async (files: Array<{ path: string; content: string }>) => ({
+    files: Object.fromEntries(files.map(f => [f.path, f.content])),
+    warnings: [],
+  })),
+  processFile: vi.fn(async (file: { path: string; content: string }) => file),
+}));
+
+
 describe('ProjectGenerator', () => {
   let mockAIProvider: AIProvider;
   let mockBugfixProvider: AIProvider;
