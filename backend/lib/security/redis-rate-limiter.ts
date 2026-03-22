@@ -6,8 +6,8 @@
  * so it can be used as a drop-in replacement. Uses a Lua script for atomic
  * check-and-increment to avoid race conditions.
  *
- * On any Redis error (connection, timeout, OOM), falls back transparently
- * to allowing the request and logs the failure.
+ * On any Redis error (connection, timeout, OOM), falls back to an
+ * in-memory sliding-window limiter that still enforces rate limits.
  */
 
 import Redis from 'ioredis';

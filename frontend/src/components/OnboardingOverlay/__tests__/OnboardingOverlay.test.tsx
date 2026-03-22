@@ -2,9 +2,15 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { OnboardingOverlay } from '../OnboardingOverlay';
 
-// jsdom doesn't implement HTMLDialogElement.showModal/close — stub them
-HTMLDialogElement.prototype.showModal = vi.fn();
-HTMLDialogElement.prototype.close = vi.fn();
+// jsdom doesn't implement HTMLDialogElement.showModal/close — stub them.
+// showModal must set the `open` attribute so jsdom treats the dialog's
+// contents as accessible (role queries ignore inert/closed dialogs).
+HTMLDialogElement.prototype.showModal = vi.fn().mockImplementation(function(this: HTMLDialogElement) {
+  this.setAttribute('open', '');
+});
+HTMLDialogElement.prototype.close = vi.fn().mockImplementation(function(this: HTMLDialogElement) {
+  this.removeAttribute('open');
+});
 
 describe('OnboardingOverlay', () => {
   const defaultProps = {

@@ -85,7 +85,10 @@ describe('useSubmitPrompt', () => {
             false
         );
         expect(mockChatMessages.addAssistantMessage).toHaveBeenCalledWith(
-            expect.stringContaining('test-app')
+            expect.stringContaining('test-app'),
+            undefined,
+            undefined,
+            expect.any(Number)
         );
         expect(mockGeneration.setIsLoading).toHaveBeenCalledWith(false);
     });
@@ -155,7 +158,8 @@ describe('useSubmitPrompt', () => {
         expect(mockChatMessages.addAssistantMessage).toHaveBeenCalledWith(
             'Added a button',
             expect.objectContaining({ description: 'Added a button' }),
-            undefined
+            undefined,
+            expect.any(Number)
         );
     });
 
