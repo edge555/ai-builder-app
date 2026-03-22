@@ -12,7 +12,7 @@ Generate full React web applications from natural language prompts. Describe wha
 - **Auto-repair** — automatic error detection and fix with escalating repair tiers (deterministic fixes → AI repair → per-file rollback)
 - **Cloud sync** — optional Supabase-backed project storage
 - **Onboarding wizard** — guided 3-step project setup (type → features → design style)
-- **22 starter templates** — across 7 categories for quick project bootstrapping
+- **21 starter templates** — across 8 categories for quick project bootstrapping
 - **Image upload** — paste or drag-drop images into chat for context
 - **Fullstack recipes** — Next.js + Prisma and Next.js + Supabase Auth generation (feature-flagged)
 - **Fullstack export** — ZIP with context-aware README, Docker Compose, .env.example
@@ -82,7 +82,9 @@ Backend: http://localhost:4000
 | `ALLOWED_ORIGINS` | No | `http://localhost:8080` | CORS origins (comma-separated) |
 | `LOG_LEVEL` | No | `info` | `debug` / `info` / `warn` / `error` |
 | `LOG_FORMAT` | No | `text` | `text` / `json` |
+| `LOG_CATEGORIES` | No | all | Comma-separated filter: `ai,api,core,diff,analysis,streaming` |
 | `RATE_LIMIT_ENABLED` | No | `true` | Enable rate limiting |
+| `TRUSTED_PROXY_DEPTH` | No | `1` | Rightmost X-Forwarded-For IPs to trust for IP extraction |
 | `REDIS_URL` | No | — | Redis URL for distributed rate limiting (falls back to in-memory) |
 | `ENABLE_FULLSTACK_RECIPES` | No | `false` | Enable fullstack generation (Next.js + Prisma/Supabase) |
 | `SUPABASE_JWT_SECRET` | No | — | Enables Supabase Auth verification |

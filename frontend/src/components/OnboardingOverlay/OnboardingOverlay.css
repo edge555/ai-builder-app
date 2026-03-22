@@ -149,7 +149,7 @@
 .onboarding-feature-chip {
   padding: 8px 14px;
   border: 1px solid hsl(var(--border));
-  border-radius: 9999px;
+  border-radius: var(--radius-md);
   background: hsl(var(--card));
   font-size: 0.8125rem;
   color: hsl(var(--foreground));
@@ -255,6 +255,12 @@
 
 .onboarding-btn:active {
   transform: scale(0.98);
+}
+
+.onboarding-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Skip link */

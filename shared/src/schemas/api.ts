@@ -7,12 +7,12 @@ import { RUNTIME_ERROR_TYPES, ERROR_PRIORITIES, ERROR_SOURCES } from '../types/r
 // ============================================================================
 
 export const SerializedProjectStateSchema = z.object({
-    id: z.string().min(1, 'Project state must have a valid id'),
-    name: z.string().min(1, 'Project name is required'),
-    description: z.string(),
+    id: z.string().min(1, 'Project state must have a valid id').max(128),
+    name: z.string().min(1, 'Project name is required').max(200),
+    description: z.string().max(5000),
     files: z.record(
-        z.string().refine((path) => !path.includes('..') && !path.startsWith('/') && !path.match(/^[a-zA-Z]:/), {
-            message: 'Invalid file path: must be relative and cannot contain traversal (..)',
+        z.string().refine((path) => !path.includes('..') && !path.startsWith('/') && !path.match(/^[a-zA-Z]:/) && !path.includes('\\'), {
+            message: 'Invalid file path: must be relative and cannot contain traversal (..) or backslashes',
         }),
         z.string().max(500 * 1024, 'File content too large (max 500KB)')
     ).refine((files) => Object.keys(files).length <= 200, {
@@ -50,7 +50,7 @@ export const FileDiffSchema = z.object({
 export const SerializedVersionSchema = z.object({
     id: z.string(),
     projectId: z.string(),
-    prompt: z.string(),
+    prompt: z.string().max(50000),
     timestamp: z.string(),
     files: z.record(z.string(), z.string()),
     diffs: z.array(FileDiffSchema),
@@ -99,7 +99,7 @@ export const GenerateProjectRequestSchema = z.object({
  */
 export const ConversationTurnSchema = z.object({
     role: z.enum(['user', 'assistant']),
-    content: z.string().max(500),
+    content: z.string().max(5000),
     changeSummary: z.object({
         description: z.string().max(300),
         affectedFiles: z.array(z.string()).max(20),
@@ -137,8 +137,8 @@ export const FileMetadataEntrySchema = z.object({
     path: z.string().min(1, 'Each metadata entry must have a valid path field'),
     fileType: z.enum(['component', 'style', 'config', 'utility', 'hook', 'api_route', 'other']),
     lineCount: z.number().int().nonnegative(),
-    exports: z.array(z.string()),
-    imports: z.array(z.string()),
+    exports: z.array(z.string().max(200)).max(100),
+    imports: z.array(z.string().max(200)).max(100),
 });
 
 export const PlanProjectRequestSchema = z.object({

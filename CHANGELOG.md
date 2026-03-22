@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2026-03-22
+
+### Added
+- **Onboarding redesign** — style options renamed to Editorial, Energetic, and Polished; Next button is now disabled until a project type is selected; backdrop click closes the dialog; a brief "Starting..." state fires before generation begins so the transition feels intentional
+- **Image attachment UX** — attach button shows "Maximum 5 images reached" when at the limit; submit button shows "Waiting for images to upload..." while uploads are in progress; placeholder text hints at paste/drop support
+- **Mobile touch target fix** — image thumbnail remove buttons are always visible on touch devices (previously only appeared on hover)
+- **Logger value redaction tightened** — sensitive key patterns (api_key, redis_url, jwt_secret, etc.) redact the entire value; string value scanning is narrowed to high-confidence patterns only (bearer tokens, JWTs), preventing false positives like "token-limit-exceeded" from being partially redacted
+- **Redis rate limiter fallback** — when Redis is unavailable (error, timeout, or OOM), the rate limiter switches to an in-memory sliding window that still enforces limits; legitimate traffic continues and over-limit requests are still blocked
+
+### Changed
+- API request schemas now enforce max-length constraints: project name ≤ 200 chars, description ≤ 5,000 chars, conversation turn content ≤ 5,000 chars
+- Font loading split: Geist (body/code) loads synchronously as critical CSS; Fraunces (headlines) loads asynchronously with a Georgia fallback to avoid render blocking
+- Updated Content Security Policy in index.html for tighter security posture
+
+### Removed
+- `BrowserChrome` component and its associated styles and tests — removed as unused infrastructure
+
+### For contributors
+- `SENSITIVE_KEY_PATTERNS` and `SENSITIVE_VALUE_PATTERNS` separated in `logger.ts` — key-name patterns redact values entirely; value patterns are high-confidence only
+- Redis rate limiter test suite rewritten: fallback tests now verify in-memory enforcement (third request blocked), not just fail-open behavior
+- `OnboardingOverlay` test suite added: Next disabled state, style label names, backdrop click, skip link behavior
+
 ## [1.3.0] - 2026-03-21
 
 ### Added

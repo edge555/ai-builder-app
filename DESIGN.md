@@ -35,10 +35,17 @@
   - Rationale: Natural pairing with Geist Sans, developer-trusted, tabular-nums support
   - Usage: `font-family: 'Geist Mono', 'Fira Code', monospace;`
 
-- **Loading:** Google Fonts CDN
+- **Loading:** Google Fonts CDN, split into critical (render-blocking) and display (async)
   ```html
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,600&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Critical: Geist (body + code) — render-blocking -->
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Display: Fraunces (headlines only) — async, non-blocking -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,400;1,9..144,600&display=swap">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,400;1,9..144,600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   ```
+  - Only italic variants of Fraunces are loaded (normal/upright is never used)
+  - Geist 300 dropped (no CSS usage found)
+  - Fraunces loads async — Georgia fallback renders instantly, Fraunces swaps in
 
 - **Type scale:**
 
@@ -244,3 +251,4 @@ These are the deliberate departures from the category baseline:
 | 2026-03-18 | 8–16px border radius (not uniform pills)  | Warm but not bubbly. Avoids the uniform 9999px pill pattern that reads as generic AI slop. |
 | 2026-03-21 | `--gradient-primary` for CTA buttons        | Sanctioned gradient token for primary CTAs. Solid `--primary` for all other buttons. |
 | 2026-03-21 | Fraunces for brand-moment UI titles         | Onboarding wizard titles at 24px use Fraunces italic — first interaction = brand moment. |
+| 2026-03-22 | Font loading optimization                    | Dropped 5 unused variants (13→8), split Fraunces to async load. ~38% fewer font files, unblocks first paint. |
