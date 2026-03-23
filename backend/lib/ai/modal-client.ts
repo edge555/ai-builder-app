@@ -189,8 +189,8 @@ export class ModalClient implements AIProvider {
     return {
       prompt: this.formatPrompt(request),
       system_instruction: this.getSystemInstruction(request) ?? '',
-      temperature: request.temperature ?? config.ai.temperature,
-      max_tokens: request.maxOutputTokens ?? config.ai.maxOutputTokens,
+      temperature: request.temperature ?? 0.7,
+      max_tokens: request.maxOutputTokens ?? 16384,
       response_format: request.responseSchema ? 'json_object' : 'text',
     };
   }

@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.3] - 2026-03-24
+
+### Security
+- **Next.js 14 → 16** — clears 4 HIGH CVEs (GHSA-ggv3-7p47-pfv8, GHSA-h25m-26qc-wcjf, GHSA-9g9p-9gw9-jx7f, GHSA-3x4c-7pq8) in the backend server
+- **Auth guard on config routes** — `PUT /api/agent-config` and `PUT /api/provider-config` now require a valid Supabase JWT; returns 503 when `SUPABASE_JWT_SECRET` is not configured so callers can distinguish "not configured" from "forbidden"
+- **Credential scanning** — added `.gitleaks.toml` with custom rules for OpenRouter, Modal, and Supabase keys; run `gitleaks detect` before pushing to catch secrets before they land in history
+- **`.env.example` hardening** — production warning added to `SUPABASE_JWT_SECRET` explaining that omitting it leaves config routes unprotected
+
+### Fixed
+- **TypeScript strict mode** — 6 pre-existing type errors surfaced by Next.js 16's stricter compilation: incorrect `EventPriority` import source, non-existent `config.ai.*` property references, Zod v4 `.default()` type mismatch, filter/map type narrowing in pipeline orchestrator, removed non-existent `ValidationError.file` property, `Uint8Array` → `BufferSource` cast for Web Crypto API
+- **`request.ip` removal** — Next.js 16 removed `NextRequest.ip`; IP extraction now falls back entirely to X-Forwarded-For with configurable proxy depth
+
+### For contributors
+- `backend/tsconfig.json` now excludes `vitest.config.ts` from Next.js type-checking (was causing false type errors in CI)
+- `@types/uuid` added as devDependency (Next.js 16 resolves uuid to esm-browser entry without bundled types)
+
 ## [1.3.2] - 2026-03-23
 
 ### Changed

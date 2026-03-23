@@ -587,9 +587,11 @@ export class PipelineOrchestrator {
         return [];
       }
 
-      const result = files
-        .filter((f: unknown) => typeof (f as { path?: unknown }).path === 'string')
-        .map((f: { path: string; content?: string; operation?: string }) => ({
+      const result = (files as unknown[])
+        .filter((f): f is { path: string; content?: string; operation?: string } =>
+          typeof (f as { path?: unknown }).path === 'string'
+        )
+        .map((f) => ({
           path: f.path,
           content: typeof f.content === 'string' ? f.content : JSON.stringify(f),
         }));

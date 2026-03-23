@@ -1,0 +1,45 @@
+title = "gitleaks config"
+
+[extend]
+# Extend the default ruleset (covers AWS keys, GitHub tokens, generic API keys, etc.)
+useDefault = true
+
+# Custom rules for this project's specific secret patterns
+
+[[rules]]
+description = "OpenRouter API Key"
+id = "openrouter-api-key"
+regex = '''sk-or-v1-[a-zA-Z0-9]{60,80}'''
+tags = ["api-key", "openrouter"]
+
+[[rules]]
+description = "Modal API Key"
+id = "modal-api-key"
+regex = '''ak-[a-zA-Z0-9]{20,}'''
+tags = ["api-key", "modal"]
+
+[[rules]]
+description = "Supabase Service Role Key"
+id = "supabase-service-role-key"
+regex = '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+'''
+tags = ["api-key", "supabase", "jwt"]
+
+[allowlist]
+# Ignore example/template files
+paths = [
+  '''.env\.example''',
+  '''.env\.sample''',
+  '''.env\.template''',
+]
+# Ignore placeholder values
+regexes = [
+  '''your_.*_here''',
+  '''changeme''',
+  '''<your_''',
+  '''TODO''',
+]
+# Ignore the lockfile (can contain package integrity hashes that look like secrets)
+stopwords = [
+  "integrity",
+  "resolved",
+]

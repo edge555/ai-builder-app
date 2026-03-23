@@ -248,7 +248,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     if (!validationResult.valid) {
       // Identify files with syntax errors and drop them instead of failing entirely
       const syntaxErrors = validationResult.errors?.filter(e => e.type === 'syntax_error') ?? [];
-      const brokenFiles = new Set(syntaxErrors.map(e => e.filePath ?? e.file).filter(Boolean));
+      const brokenFiles = new Set(syntaxErrors.map(e => e.filePath).filter((p): p is string => Boolean(p)));
       const nonSyntaxErrors = validationResult.errors?.filter(e => e.type !== 'syntax_error') ?? [];
 
       if (brokenFiles.size > 0 && brokenFiles.size < Object.keys(prefixedFiles).length) {
@@ -263,7 +263,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           delete prefixedFiles[brokenPath];
           callbacks.onWarning?.({
             path: brokenPath,
-            message: `File dropped due to syntax errors: ${syntaxErrors.filter(e => (e.filePath ?? e.file) === brokenPath).map(e => e.message).join('; ')}`,
+            message: `File dropped due to syntax errors: ${syntaxErrors.filter(e => e.filePath === brokenPath).map(e => e.message).join('; ')}`,
             type: 'validation',
           });
           warningCount++;
@@ -289,7 +289,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         contextLogger.error('Validation errors — AI output failed validation', {
           errorCount: validationResult.errors?.length ?? 0,
           validationErrors: validationResult.errors,
-          filesThatFailed: validationResult.errors?.map(e => e.filePath ?? e.file ?? 'unknown'),
+          filesThatFailed: validationResult.errors?.map(e => e.filePath ?? 'unknown'),
           generatedFileCount: Object.keys(prefixedFiles).length,
           generatedFilePaths: Object.keys(prefixedFiles),
         });
