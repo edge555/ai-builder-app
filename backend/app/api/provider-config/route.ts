@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getCorsHeaders, handleOptions, handleError, parseJsonRequest, withRouteContext } from '../../../lib/api';
 import { getProviderConfigWithSource, saveProvider } from '../../../lib/ai/provider-config-store';
 import { resetProviderSingletons } from '../../../lib/ai/ai-provider-factory';
-import { applyRateLimit, RateLimitTier } from '../../../lib/security';
+import { applyRateLimit, RateLimitTier, requireAuth } from '../../../lib/security';
 
 export async function OPTIONS() {
   return handleOptions();
@@ -33,6 +33,11 @@ export const PUT = withRouteContext('api/provider-config', async (ctx, request: 
   const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.CONFIG);
   ctx.setRateLimitHeaders(rlHeaders);
   if (blocked) return blocked as NextResponse;
+
+  // Auth required for config mutations
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+  contextLogger.info('Provider config mutation authorized', { userId: auth.userId });
 
   const parsed = await parseJsonRequest(request, ProviderConfigSchema);
   if (!parsed.ok) return parsed.response;

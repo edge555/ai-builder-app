@@ -45,7 +45,7 @@ AI-powered app builder monorepo that generates web applications from natural lan
 
 Three workspaces managed via npm workspaces:
 - **frontend**: React 18/Vite SPA with Monaco editor and Sandpack preview
-- **backend**: Next.js 14 API server handling AI generation and streaming
+- **backend**: Next.js 16 API server handling AI generation and streaming
 - **shared**: Common types, Zod schemas, and utilities (dual ESM/CJS via tsup)
 
 Additionally: `supabase/` (edge functions + config), `modal-code-ai/` (Python Modal app).
@@ -149,7 +149,7 @@ backend/
 │   │   ├── rate-limiter.ts        # Sliding-window rate limiter
 │   │   ├── rate-limit-config.ts   # Tier configs (HIGH_COST, MEDIUM_COST, LOW_COST, CONFIG)
 │   │   ├── redis-rate-limiter.ts  # Redis-backed sliding window (Lua script, fail-open fallback)
-│   │   └── auth.ts                # Supabase JWT verification
+│   │   └── auth.ts                # Supabase JWT verification + requireAuth guard (gates config mutation routes)
 │   ├── api/           # CORS, gzip, request ID, error helpers
 │   │   ├── request-parser.ts       # JSON parsing + Zod validation
 │   │   ├── route-context.ts        # Request ID + context logger + rate-limit header merging
@@ -279,9 +279,9 @@ Multi-provider architecture with runtime switching:
 ### Security
 
 - **Rate limiting** (`security/guard.ts`): Per-IP sliding-window rate limiter with tiered configs (HIGH_COST, MEDIUM_COST, LOW_COST, CONFIG); body size enforcement (413); `X-RateLimit-*` headers on every response; optional Redis backend (`redis-rate-limiter.ts`) with Lua-scripted sliding window and fail-open fallback
-- **IP extraction**: Prefers platform `request.ip`, falls back to rightmost-trusted X-Forwarded-For IP (configurable via `TRUSTED_PROXY_DEPTH`)
+- **IP extraction**: Falls back to rightmost-trusted X-Forwarded-For IP (configurable via `TRUSTED_PROXY_DEPTH`); `request.ip` platform property no longer available in Next.js 16
 - **CSRF protection**: `getCorsHeaders(request, { rejectInvalidOrigin: true })` rejects mutations with missing/invalid Origin header (infrastructure ready, not yet wired on routes)
-- **Authentication**: Optional Supabase Auth with JWT verification; `AuthContext` auto-redirects to `/login` on session expiry
+- **Authentication**: Optional Supabase Auth with JWT verification; `AuthContext` auto-redirects to `/login` on session expiry; `requireAuth()` gates `PUT /api/agent-config` and `PUT /api/provider-config` (returns 503 when `SUPABASE_JWT_SECRET` is unset)
 
 ## Environment Variables
 
@@ -296,7 +296,7 @@ Multi-provider architecture with runtime switching:
 - `LOG_LEVEL`: debug/info/warn/error (default: info)
 - `LOG_FORMAT`: text/json (default: text)
 - `LOG_CATEGORIES`: ai,api,core,diff,analysis,streaming
-- `SUPABASE_JWT_SECRET`: JWT verification for Supabase Auth (optional)
+- `SUPABASE_JWT_SECRET`: JWT verification for Supabase Auth; also required for `PUT /api/agent-config` and `PUT /api/provider-config` in any publicly-reachable deployment (optional in dev)
 - `RATE_LIMIT_ENABLED`: Enable rate limiting (default: true)
 - `TRUSTED_PROXY_DEPTH`: How many rightmost X-Forwarded-For IPs to trust (default: 1)
 - `REDIS_URL`: Redis connection URL for distributed rate limiting (optional; falls back to in-memory)
@@ -311,7 +311,7 @@ Multi-provider architecture with runtime switching:
 
 **Frontend**: react 18, react-router-dom 7, @codesandbox/sandpack-react, @monaco-editor/react, @tanstack/react-virtual, lucide-react, react-markdown + remark-gfm, react-syntax-highlighter, zod, @supabase/supabase-js, @stackblitz/sdk, html2canvas
 
-**Backend**: next 14, zod, prettier, jszip, uuid, sharp, ioredis
+**Backend**: next 16, zod, prettier, jszip, uuid, sharp, ioredis
 
 **Shared**: zod, tsup (dual ESM/CJS build)
 

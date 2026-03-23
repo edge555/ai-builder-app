@@ -1,6 +1,7 @@
 import type { Logger } from '../logger';
 import type { BackpressureController } from './backpressure-controller';
-import { EventPriority, type SSEEncoder } from './sse-encoder';
+import { EventPriority } from './backpressure-controller';
+import type { SSEEncoder } from './sse-encoder';
 
 export interface StreamLifecycleConfig {
   heartbeatIntervalMs: number;

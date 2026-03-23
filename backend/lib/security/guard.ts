@@ -38,8 +38,10 @@ const IP_FORMAT = /^[\d.:a-fA-F]+$/;
  */
 export function getClientIp(request: NextRequest): string {
   // 1. Prefer platform-provided IP (not spoofable)
-  if (request.ip) {
-    return request.ip;
+  // Note: request.ip was removed in Next.js 16; cast for backwards-compat on platforms that still inject it
+  const platformIp = (request as NextRequest & { ip?: string }).ip;
+  if (platformIp) {
+    return platformIp;
   }
 
   // 2. Fall back to X-Forwarded-For with rightmost-trusted IP

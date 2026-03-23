@@ -136,7 +136,7 @@ export function getRateLimiter(): IRateLimiter {
       instance = new RateLimiter();
     }
   }
-  return instance;
+  return instance!;
 }
 
 /** Replace the singleton (for testing). */

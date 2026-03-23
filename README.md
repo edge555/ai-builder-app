@@ -29,7 +29,7 @@ Generate full React web applications from natural language prompts. Describe wha
 └─────────┼───────────────────────────────────────────────┘
           │
 ┌─────────▼───────────────────────────────────────────────┐
-│  Backend (Next.js 14, port 4000)                        │
+│  Backend (Next.js 16, port 4000)                        │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │
 │  │ AgentRouter  │  │ GenPipeline  │  │ RecipeEngine  │  │
 │  └──────┬───────┘  └──────┬───────┘  └───────────────┘  │
@@ -87,9 +87,9 @@ Backend: http://localhost:4000
 | `TRUSTED_PROXY_DEPTH` | No | `1` | Rightmost X-Forwarded-For IPs to trust for IP extraction |
 | `REDIS_URL` | No | — | Redis URL for distributed rate limiting (falls back to in-memory) |
 | `ENABLE_FULLSTACK_RECIPES` | No | `false` | Enable fullstack generation (Next.js + Prisma/Supabase) |
-| `SUPABASE_JWT_SECRET` | No | — | Enables Supabase Auth verification |
+| `SUPABASE_JWT_SECRET` | No* | — | Enables Supabase Auth; required for config mutation routes in production |
 
-*Required for the selected provider.
+*Required for the selected provider. `SUPABASE_JWT_SECRET` marked `No*` is optional in local dev but required for production deployments that expose AI model/provider config endpoints.
 
 ### Frontend (`frontend/.env`)
 
@@ -122,7 +122,7 @@ npm run lint                 # All workspaces
 
 ```
 ├── frontend/          # React 18/Vite SPA
-├── backend/           # Next.js 14 API server
+├── backend/           # Next.js 16 API server
 ├── shared/            # Common types + Zod schemas
 ├── supabase/          # Edge functions + config
 └── modal-code-ai/     # Python Modal app (self-hosted models)

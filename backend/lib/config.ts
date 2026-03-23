@@ -78,7 +78,7 @@ const envSchema = z.object({
   RATE_LIMIT_ENABLED: z
     .string()
     .transform((v) => v !== 'false' && v !== '0')
-    .default('true'),
+    .default(true),
   SUPABASE_JWT_SECRET: z.string().optional(),
   TRUSTED_PROXY_DEPTH: z.coerce.number().int().min(0).default(1),
   REDIS_URL: z.string().url().optional(),
@@ -88,7 +88,7 @@ const envSchema = z.object({
   ENABLE_FULLSTACK_RECIPES: z
     .string()
     .transform((v) => v === 'true' || v === '1')
-    .default('false'),
+    .default(false),
 });
 
 /**
