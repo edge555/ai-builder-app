@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:4000 ws://localhost:4000 https://*.supabase.co https://openrouter.ai; frame-src 'self' https://*.codesandbox.io https://*.csb.app blob:; worker-src 'self' blob:;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:4000 ws://localhost:4000 https://*.supabase.co https://openrouter.ai; frame-src 'self' https://*.codesandbox.io https://*.csb.app blob:; worker-src 'self' blob:;" />
   <!-- TODO: Set the document title to the name of your application -->
   <title>Lovable App</title>
   <meta name="description" content="Lovable Generated Project" />
@@ -20,14 +20,6 @@
   <meta name="twitter:site" content="@Lovable" />
   <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Critical fonts (Geist): render-blocking — needed for first paint -->
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <!-- Display font (Fraunces): async — only used for headlines, not needed for first paint -->
-  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,400;1,9..144,600&display=swap">
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,400;1,9..144,600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,400;1,9..144,600&display=swap" rel="stylesheet"></noscript>
 
   <!-- Critical above-the-fold CSS: design tokens + loading skeleton.
        Prevents FOUC while JS bundles load. Duplicated from index.css and PageSkeleton.css. -->
