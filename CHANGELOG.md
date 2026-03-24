@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.4] - 2026-03-24
+
+### Performance
+- **Self-hosted fonts** — replaced Google Fonts CDN with `@fontsource` packages (`geist-sans`, `geist-mono`, `fraunces`), eliminating a ~2950ms render-blocking external network request that was blocking First Contentful Paint
+- **CSP tightened** — removed `fonts.googleapis.com` from `style-src` and `fonts.gstatic.com` from `font-src`; fonts now served from same origin
+
+### Fixed
+- **OnboardingOverlay** — replaced hardcoded `font-family: 'Fraunces'` with `var(--font-display)` CSS variable for consistency
+
 ## [1.3.3] - 2026-03-24
 
 ### Security
