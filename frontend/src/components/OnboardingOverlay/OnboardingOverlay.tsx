@@ -80,9 +80,27 @@ function buildPromptFromChoices(
   };
 
   const styleLabels: Record<string, string> = {
-    minimal: 'Use a minimal, clean design with plenty of whitespace.',
-    colorful: 'Use a vibrant, colorful design with bold accent colors.',
-    corporate: 'Use a professional, polished design suitable for business.',
+    minimal:
+      'Design style: Editorial — clean lines, generous whitespace, understated elegance. ' +
+      'Primary color: #0f172a (near-black). Accent: #3b82f6 (blue, used sparingly for links/CTAs only). ' +
+      'Font: --font-display: Georgia, "Times New Roman", serif (headings only); --font-sans: system-ui, -apple-system, sans-serif (body). ' +
+      'Generous padding (24-48px sections). Line-height 1.7-1.8 for body text. ' +
+      'Cards have border only, no shadow. No gradients, no colored backgrounds. Maximum whitespace. ' +
+      'Headings: font-weight 400-500, serif, generous letter-spacing. This style OVERRIDES any domain color auto-selection.',
+    colorful:
+      'Design style: Energetic — bold colors, strong contrast, dynamic feel. ' +
+      'Primary color: #7c3aed (violet) or #e11d48 (rose) — pick the one that better fits the app domain. ' +
+      'Font: --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif (rounded feel). ' +
+      'Bold 700-weight headings. Colorful status badges. Primary CTA uses gradient: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary), #000 20%)). ' +
+      'Rounded corners (radius-lg to radius-xl). Hover effect: scale(1.05) + translateY(-2px). ' +
+      'Cards use shadow-md. Icons use primary/success/warning colors — not gray. This style OVERRIDES any domain color auto-selection.',
+    corporate:
+      'Design style: Polished — professional, refined, business-ready. ' +
+      'Primary color: #1e40af (deep blue) or #0f766e (teal) — pick the one that better fits the app domain. Cool slate neutral palette. ' +
+      'Font: --font-sans: "Inter", system-ui, sans-serif (precise, data-friendly). ' +
+      'Compact spacing, data-dense layouts. Subtle shadows, 1px borders everywhere. ' +
+      'border-radius max 8px (nothing larger). Headings font-weight 500 (not 700). No gradients. ' +
+      'Default body size: --text-sm. Status badges in muted tones. Minimal animations (--dur-fast only). This style OVERRIDES any domain color auto-selection.',
   };
 
   let prompt = `Build ${typeLabels[projectType ?? 'spa'] ?? 'a React application'}`;

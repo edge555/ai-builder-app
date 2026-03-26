@@ -36,54 +36,96 @@ export const LAYOUT_FUNDAMENTALS = `=== LAYOUT FUNDAMENTALS (ALWAYS APPLY) ===
 
 /**
  * Baseline visual polish — always included in every prompt regardless of design keywords.
- * Ensures every generated app has minimum production-quality polish.
+ * References CSS library classes directly — concrete patterns, not vague descriptions.
  */
 export const BASELINE_VISUAL_POLISH = `=== VISUAL POLISH (ALWAYS APPLY) ===
-1. HOVER & INTERACTION:
-   - All clickable elements (buttons, cards, links, list items) MUST have visible hover states.
-   - Use subtle transforms on hover: translateY(-1px) or translateY(-2px) for cards, scale(1.02) for buttons.
-   - Add box-shadow increase on hover for elevated elements.
 
-2. TRANSITIONS:
-   - Add transition: all 0.2s ease to every interactive element. Never let state changes be instant.
-   - Smooth color, background, shadow, and transform transitions on hover, focus, and active states.
+1. BUTTONS — use .btn + modifier from CSS library (already written, just add the class):
+   - Primary action  → className="btn btn-primary"
+   - Secondary/cancel → className="btn btn-secondary"
+   - Destructive     → className="btn btn-danger"
+   - Quiet/icon      → className="btn btn-ghost"
+   - Small variant   → add "btn-sm"; large → "btn-lg"
+   - The library handles: hover lift, active press, focus ring, disabled opacity automatically.
+   - NEVER write a custom button from scratch if .btn covers it.
 
-3. DEPTH & ELEVATION:
-   - Use box-shadow to create visual hierarchy: cards float above background, modals float above cards.
-   - Apply var(--shadow-sm) for subtle depth, var(--shadow-md) for cards, stronger shadows for modals/dropdowns.
-   - Use subtle background color differences between page, surface, and card layers.
+2. INPUTS — use .input + .input-group wrapper:
+   - <div className="input-group">
+       <label className="input-label">Label</label>
+       <input className="input" />
+       <span className="input-hint">Helper text</span>
+     </div>
+   - On validation error: add "input-error" to the wrapper div + <span className="input-error-msg">
+   - Focus glow (3px primary ring) and error states are already handled by the library.
 
-4. VISUAL HIERARCHY:
-   - Headings must be visually distinct: larger size, bolder weight, darker color than body text.
-   - Use color contrast to guide attention: primary color for CTAs, muted colors for secondary actions.
-   - Group related content with consistent padding and subtle borders or background changes.
+3. CARDS — use .card / .card-hover:
+   - Static info card  → className="card"
+   - Clickable card    → className="card card-hover"  (hover lift + shadow already included)
+   - NEVER hardcode card background or shadow — the library uses var(--color-surface-raised).
 
-5. POLISH DETAILS:
-   - Consistent border-radius using CSS variables (--radius-sm, --radius-md, --radius-lg).
-   - Use gap instead of margins for spacing between siblings.
-   - Buttons need padding (10px 20px minimum), never look like plain text links.
-   - Input fields need visible borders, focus rings (outline or box-shadow), and adequate padding.`;
+4. ELEVATION — consistent z-index + shadow stack:
+   - Page background: no shadow, var(--color-bg)
+   - Cards/panels:    var(--shadow-sm), z-index default
+   - Dropdowns:       var(--shadow-lg), z-index: 50
+   - Modals:          var(--shadow-xl), z-index: 100, backdrop-filter: blur(4px)
+   - Toasts:          var(--shadow-xl), z-index: 200, position: fixed
+
+5. TYPOGRAPHY — use token hierarchy, never hardcode sizes:
+   - Page title:    font-size: var(--text-3xl); font-weight: 700; letter-spacing: var(--tracking-tight)
+   - Section head:  font-size: var(--text-xl);  font-weight: 600; letter-spacing: var(--tracking-tight)
+   - Body text:     font-size: var(--text-base); line-height: var(--leading-relaxed); color: var(--color-text-secondary)
+   - Labels/meta:   font-size: var(--text-sm);   color: var(--color-text-tertiary)
+
+6. MOTION — intentional timing, not uniform:
+   - Hover / focus transitions: var(--dur-fast) var(--ease-out)   [150ms — snappy]
+   - Enter animations:          var(--dur-normal) var(--ease-out) [250ms — smooth]
+   - Exit / dismiss:            var(--dur-fast) var(--ease-in)    [150ms — quick out]
+   - Page-level fade in:        opacity 0→1 + translateY(8px→0), var(--dur-normal) var(--ease-out)
+   - NEVER use "transition: all 0.2s ease" uniformly — vary by context.
+
+7. DARK MODE — do not implement manually:
+   - NEVER add @media (prefers-color-scheme: dark) anywhere.
+   - The CSS library's [data-theme="dark"] block already handles all token overrides.
+   - Add ONE toggle button in the app header that sets/removes data-theme on <html>.
+   - ALWAYS use var(--color-*) tokens — never hardcode #fff, #000, or gray hex values.`;
 
 /**
- * Shared design system constants — premium aesthetics (conditional on design keywords).
+ * Design system constants — always included in every generation prompt.
+ * Concrete CSS library class references replace vague descriptions.
+ * shouldIncludeDesignSystem() now only gates the PREMIUM tier below this.
  */
-export const DESIGN_SYSTEM_CONSTANTS = `=== DESIGN PRINCIPLES (CRITICAL) ===
-Apply modern, premium design to ALL UI code.
+export const DESIGN_SYSTEM_CONSTANTS = `=== DESIGN PRINCIPLES (ALWAYS APPLY) ===
 
-1. COLOR & DEPTH:
-   - Vibrant, harmonious palettes via CSS variables — never default/basic colors.
-   - Multi-layered shadows for depth and visual hierarchy; subtle background-color differences between page, surface, and card layers.
-   - Border-radius: 8px for buttons/inputs, 12px for cards/panels (NOT uniform 9999px pills on everything).
-   - 4px base spacing scale (4/8/16/24/32px), generous whitespace.
+1. USE THE CSS LIBRARY CLASSES — do not reinvent what's already written:
+   - Buttons → .btn .btn-primary / .btn-secondary / .btn-danger / .btn-ghost
+   - Inputs  → .input + .input-group + .input-label (focus glow already included)
+   - Cards   → .card (add .card-hover for clickable cards)
+   - Badges  → .badge .badge-success / .badge-warning / .badge-error / .badge-neutral
+   - Empty states → .empty-state + .empty-state__icon + .empty-state__title + .empty-state__subtitle
 
-2. TYPOGRAPHY:
-   - Use Geist Sans ('Geist', system-ui, sans-serif) for all UI text. Clear hierarchy: large bold headings, line-height 1.6–1.8.
-   - Slight negative letter-spacing on headings (~-0.02em).
+2. COLOR — always use var() tokens, never hardcode:
+   - Primary actions: var(--color-primary) backgrounds, var(--color-primary-light) tints
+   - Destructive: var(--color-error) — .btn-danger only
+   - Success/warning feedback: var(--color-success-light) / var(--color-warning-light) backgrounds
+   - NEVER hardcode #ffffff, #000000, or gray values — use var(--color-bg), var(--color-text), var(--color-border)
 
-3. MICRO-ANIMATIONS:
-   - Expressive hover states (translate/scale, brightness, stronger shadow).
-   - Smooth transitions (0.2–0.3s, ease or cubic-bezier(0.4, 0, 0.2, 1)).
-   - Clear focus-visible styles; never remove outlines without replacement.`;
+3. ELEVATION HIERARCHY (use consistently):
+   - Page background  → var(--color-bg), no shadow
+   - Cards / sections → var(--color-surface-raised) + var(--shadow-sm)
+   - Dropdowns        → var(--shadow-lg) + z-index: 50
+   - Modals           → var(--shadow-xl) + z-index: 100 + backdrop-filter: blur(4px)
+   - Toasts           → var(--shadow-xl) + z-index: 200 + position: fixed
+
+4. TYPOGRAPHY — establish clear visual rhythm:
+   - Page title: var(--text-3xl), font-weight 700, letter-spacing var(--tracking-tight)
+   - Section heading: var(--text-xl), font-weight 600, letter-spacing var(--tracking-tight)
+   - Body: var(--text-base), line-height var(--leading-relaxed), color var(--color-text-secondary)
+   - Meta/label: var(--text-sm), color var(--color-text-tertiary)
+
+5. DARK MODE — handled automatically by [data-theme="dark"] on <html>:
+   - NEVER add @media (prefers-color-scheme: dark) — use [data-theme="dark"] selector only
+   - Add a theme toggle button: document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+   - The CSS library's [data-theme="dark"] block overrides all --color-* tokens automatically`;
 
 /**
  * Accessibility and quality guidance.

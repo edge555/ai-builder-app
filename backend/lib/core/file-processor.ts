@@ -94,6 +94,12 @@ const PINNED_VERSIONS: Record<string, string> = {
     // Styled components
     'styled-components': '^6.1.8',
 
+    // Fonts (@fontsource — self-hosted, works in Sandpack via CDN)
+    '@fontsource/inter': '^5.0.0',
+    '@fontsource/source-serif-4': '^5.0.0',
+    '@fontsource/geist': '^1.0.0',
+    '@fontsource/geist-mono': '^1.0.0',
+
     // TypeScript
     'typescript': '^5.4.3',
 };

@@ -21,6 +21,7 @@ import {
   shouldIncludeDesignSystem,
   getQualityBarReference,
 } from './generation-prompt-utils';
+import { getCSSLibrary, getCSSLibraryInstruction } from './css-library';
 import {
   LAYOUT_FUNDAMENTALS,
   BASELINE_VISUAL_POLISH,
@@ -175,6 +176,43 @@ Respond with valid JSON only.`;
     return `You are a SENIOR React architect generating production-quality, modular React applications.
 CRITICAL: NEVER put everything in App.tsx — use proper component separation.
 ${intentBlock}${planBlock}
+=== SMART COLOR & FONT SELECTION (choose based on app domain) ===
+Pick the primary color AND font that best matches the app's purpose.
+If the user specified a color, style, or "onboarding style" in their prompt, USE THAT INSTEAD — user override always wins.
+
+DOMAIN → PRIMARY COLOR + FONT:
+- Productivity / task / project management → #2563eb (blue) + Inter
+- Finance / money / budget / banking       → #059669 (green) + Inter
+- Food / restaurant / recipe               → #ea580c (orange) + system-ui
+- Health / fitness / wellness / medical    → #10b981 (emerald) + Inter
+- Social / community / chat / messaging    → #7c3aed (violet) + system-ui
+- E-commerce / shopping / marketplace      → #4f46e5 (indigo) + Inter
+- Creative / design / portfolio / art      → #e11d48 (rose) + Georgia serif
+- Blog / writing / editorial / news        → #334155 (slate) + Georgia serif
+- Education / learning / courses           → #0284c7 (sky) + Inter
+- Marketing / landing page / SaaS          → #4f46e5 (indigo) + system-ui
+- Default / other                          → #2563eb (blue) + Inter
+
+FONT RULES (apply after picking domain):
+- Inter     → --font-sans: 'Inter', system-ui, -apple-system, sans-serif
+              Add to package.json: "@fontsource/inter": "^5.0.0"
+              Add to src/main.tsx: import '@fontsource/inter/400.css'; import '@fontsource/inter/500.css'; import '@fontsource/inter/600.css';
+- Serif     → --font-display: Georgia, 'Times New Roman', serif  (headings only)
+              --font-sans: system-ui, -apple-system, sans-serif  (body)
+              Add to package.json: "@fontsource/source-serif-4": "^5.0.0"
+              Add to src/main.tsx: import '@fontsource/source-serif-4/400.css'; import '@fontsource/source-serif-4/600.css';
+- system-ui → --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif  (no @fontsource needed)
+- Geist (builder-style) → --font-sans: 'Geist', system-ui, sans-serif
+              Add to package.json: "@fontsource/geist": "^1.0.0"
+              Add to src/main.tsx: import '@fontsource/geist/400.css'; import '@fontsource/geist/500.css'; import '@fontsource/geist/600.css';
+- Monospace (code blocks always) → --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace
+              For code-heavy apps: Add "@fontsource/geist-mono": "^1.0.0" + import '@fontsource/geist-mono/400.css';
+
+TINT GENERATION (always derive these from chosen primary):
+- --color-primary-light: 10% opacity background of primary (e.g. rgba(37,99,235,.1) for blue)
+- --color-primary-ghost: 5% opacity background of primary
+- --color-primary-hover: 10% darker than primary (e.g. #1d4ed8 for blue #2563eb)
+
 === PROJECT STRUCTURE ===
 - package.json (all dependencies)
 - src/main.tsx (entry point only — ReactDOM.render)
@@ -201,22 +239,59 @@ ${REALISTIC_DATA_GUIDANCE}
 
 ${DATA_MANAGEMENT_INFERENCE}
 
-${useDesignSystem ? `${DESIGN_SYSTEM_CONSTANTS}\n` : ''}${ACCESSIBILITY_GUIDANCE}
+${DESIGN_SYSTEM_CONSTANTS}
+
+${useDesignSystem ? `=== PREMIUM DESIGN TIER (user requested expressive style) ===
+- Primary CTA: use a gradient — linear-gradient(135deg, var(--color-primary), var(--color-primary-hover))
+- Hover on cards/buttons: scale(1.02) or scale(1.05) in addition to translateY
+- Use var(--ease-spring) for playful bouncy hover interactions
+- Colorful status icons — use var(--color-success)/var(--color-warning)/var(--color-error), not gray
+- Section backgrounds: alternate between var(--color-bg) and var(--color-surface) for visual rhythm
+
+` : ''}${ACCESSIBILITY_GUIDANCE}
 
 === CSS BEST PRACTICES ===
 - BEM-like naming per component. No inline styles. Use modern CSS (aspect-ratio, clamp()).
 - Components MUST reference these variables instead of hardcoded values.
-- Define all tokens in :root in index.css using this starter set:
-  --color-primary: #3b82f6;    --color-primary-hover: #2563eb;
-  --color-bg: #ffffff;         --color-surface: #f8fafc;
-  --color-text: #1e293b;       --color-text-secondary: #64748b;
-  --color-border: #e2e8f0;     --color-error: #ef4444;
-  --color-success: #22c55e;
-  --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 32px;
-  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
-  --text-sm: 0.875rem; --text-base: 1rem; --text-lg: 1.125rem; --text-xl: 1.25rem;
-  --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+- Define all tokens in :root in index.css. Use the domain-appropriate primary color from the SMART COLOR & FONT SELECTION section above. Full token set:
+  /* Color — replace primary with domain color, generate tints */
+  --color-primary: #2563eb;       --color-primary-hover: #1d4ed8;
+  --color-primary-light: #dbeafe; --color-primary-ghost: #eff6ff;
+  --color-bg: #ffffff;            --color-surface: #f8fafc;
+  --color-surface-raised: #ffffff;--color-text: #0f172a;
+  --color-text-secondary: #64748b;--color-text-tertiary: #94a3b8;
+  --color-border: #e2e8f0;        --color-border-strong: #cbd5e1;
+  --color-error: #dc2626;         --color-error-light: #fef2f2;
+  --color-success: #16a34a;       --color-success-light: #f0fdf4;
+  --color-warning: #d97706;       --color-warning-light: #fffbeb;
+  /* Elevation — 5 levels */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.05);
+  /* Typography scale */
+  --text-xs: 0.75rem;  --text-sm: 0.875rem; --text-base: 1rem;
+  --text-lg: 1.125rem; --text-xl: 1.25rem;  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;--text-4xl: 2.25rem;
+  --leading-tight: 1.25; --leading-normal: 1.5; --leading-relaxed: 1.625;
+  --tracking-tight: -0.025em; --tracking-normal: 0; --tracking-wide: 0.025em;
+  /* Spacing */
+  --space-2xs: 2px; --space-xs: 4px;  --space-sm: 8px;  --space-md: 16px;
+  --space-lg: 24px; --space-xl: 32px; --space-2xl: 48px;--space-3xl: 64px;
+  /* Radii */
+  --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --radius-full: 9999px;
+  /* Motion — short form to match CSS library class references */
+  --dur-fast: 150ms; --dur-normal: 250ms; --dur-slow: 350ms;
+  --ease-out: cubic-bezier(0.16,1,0.3,1); --ease-in: cubic-bezier(0.55,0,1,0.45);
+  --ease-in-out: cubic-bezier(0.45,0,0.55,1); --ease-spring: cubic-bezier(0.34,1.56,0.64,1);
+  /* Font — set by domain selection above */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+
+${getCSSLibrary(complexity)}
+
+${getCSSLibraryInstruction(complexity)}
 
 ${DEPENDENCY_GUIDANCE}
 

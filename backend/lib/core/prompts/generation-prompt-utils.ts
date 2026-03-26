@@ -8,7 +8,7 @@
  * @requires ./shared-prompt-fragments - Reusable prompt text blocks
  */
 
-type ComplexityLevel = 'simple' | 'medium' | 'complex';
+export type ComplexityLevel = 'simple' | 'medium' | 'complex';
 
 /**
  * Returns true if the user prompt requests design-quality UI.
