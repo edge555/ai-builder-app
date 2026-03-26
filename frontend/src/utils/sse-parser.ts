@@ -40,6 +40,7 @@ export interface StreamProgressData {
     phase?: string;
     label?: string;
     length?: number;
+    isDegraded?: boolean;
 }
 
 export async function parseSSEStream(
@@ -141,6 +142,12 @@ export async function parseSSEStream(
                                 handlers.onProgress?.({
                                     phase: data.stage,
                                     label: data.label,
+                                });
+                            } else if (data.status === 'degraded' && data.label) {
+                                handlers.onProgress?.({
+                                    phase: data.stage,
+                                    label: data.label,
+                                    isDegraded: true,
                                 });
                             }
                             break;

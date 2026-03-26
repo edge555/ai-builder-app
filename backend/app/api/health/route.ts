@@ -51,6 +51,48 @@ async function checkProviderReachability(): Promise<{
   }
 }
 
+/**
+ * Validates the configured OpenRouter API key by probing /api/v1/auth/key.
+ * Only called for OpenRouter on deep checks. Never blocks the shallow health check.
+ */
+async function checkApiKeyValidity(): Promise<{
+  valid: boolean;
+  error?: string;
+}> {
+  const apiKey = config.provider.openrouterApiKey;
+  if (!apiKey) {
+    return { valid: false, error: 'no API key configured' };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: controller.signal,
+    });
+
+    if (response.status === 200) {
+      return { valid: true };
+    }
+    if (response.status === 401 || response.status === 403) {
+      return { valid: false, error: 'invalid or revoked API key' };
+    }
+    return { valid: false, error: `unexpected status ${response.status}` };
+  } catch (err) {
+    logger.warn('API key validity check failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return {
+      valid: false,
+      error: controller.signal.aborted ? 'timeout' : 'key check unreachable',
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function GET(request: NextRequest) {
   const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.LOW_COST);
   if (blocked) return blocked;
@@ -76,6 +118,14 @@ export async function GET(request: NextRequest) {
     };
     if (!providerCheck.reachable) {
       body.status = 'degraded';
+    }
+
+    if (config.provider.name === 'openrouter') {
+      const keyCheck = await checkApiKeyValidity();
+      body.keyCheck = keyCheck;
+      if (!keyCheck.valid && body.status !== 'degraded') {
+        body.status = 'degraded';
+      }
     }
   }
 

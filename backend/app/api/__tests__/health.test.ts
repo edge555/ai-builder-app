@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { NextRequest } from 'next/server';
 
 vi.mock('../../../lib/security', () => ({
   applyRateLimit: vi.fn().mockResolvedValue({ blocked: null, headers: {} }),
@@ -11,7 +12,7 @@ vi.mock('../../../lib/security', () => ({
 
 vi.mock('../../../lib/config', () => ({
   config: {
-    provider: { name: 'openrouter' },
+    provider: { name: 'openrouter', openrouterApiKey: 'test-key' },
     rateLimit: { enabled: true },
   },
 }));
@@ -21,13 +22,17 @@ vi.mock('../../../lib/api', () => ({
   handleOptions: vi.fn(() => new Response(null, { status: 204 })),
 }));
 
+vi.mock('../../../lib/metrics', () => ({
+  getMetricsSummary: vi.fn().mockReturnValue({ totalRequests: 0 }),
+}));
+
 import { GET, OPTIONS } from '../health/route';
 
 describe('Health API', () => {
-  let mockRequest: { headers: Headers; ip?: string };
+  let mockRequest: { url: string; headers: Headers; ip?: string };
 
   beforeEach(() => {
-    mockRequest = { headers: new Headers() };
+    mockRequest = { url: 'http://localhost:4000/api/health', headers: new Headers() };
     vi.clearAllMocks();
   });
 
@@ -88,6 +93,53 @@ describe('Health API', () => {
         Array.from({ length: 5 }, () => GET(mockRequest as unknown as NextRequest))
       );
       responses.forEach((r) => expect(r.status).toBe(200));
+    });
+
+    it('does not include providerCheck or keyCheck without ?deep=true', async () => {
+      const response = await GET(mockRequest as unknown as NextRequest);
+      const body = await response.json();
+      expect(body.providerCheck).toBeUndefined();
+      expect(body.keyCheck).toBeUndefined();
+    });
+
+    describe('?deep=true — key validity probe', () => {
+      let deepRequest: { url: string; headers: Headers };
+
+      beforeEach(() => {
+        deepRequest = { url: 'http://localhost:4000/api/health?deep=true', headers: new Headers() };
+      });
+
+      it('includes keyCheck field for openrouter', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200, ok: true }));
+
+        const response = await GET(deepRequest as unknown as NextRequest);
+        const body = await response.json();
+
+        expect(body.keyCheck).toBeDefined();
+        vi.unstubAllGlobals();
+      });
+
+      it('keyCheck.valid is true when OpenRouter returns 200', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200 }));
+
+        const response = await GET(deepRequest as unknown as NextRequest);
+        const body = await response.json();
+
+        expect(body.keyCheck.valid).toBe(true);
+        vi.unstubAllGlobals();
+      });
+
+      it('keyCheck.valid is false and status degraded when key is invalid (401)', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 401 }));
+
+        const response = await GET(deepRequest as unknown as NextRequest);
+        const body = await response.json();
+
+        expect(body.keyCheck.valid).toBe(false);
+        expect(body.keyCheck.error).toMatch(/invalid/);
+        expect(body.status).toBe('degraded');
+        vi.unstubAllGlobals();
+      });
     });
   });
 });

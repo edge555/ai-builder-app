@@ -194,45 +194,6 @@ export function ChatInput({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {/* Image thumbnails */}
-      {hasImages && (
-        <div className="chat-input-thumbnails">
-          {pendingImages.map((img) => (
-            <div
-              key={img.id}
-              className={`chat-input-thumbnail ${img.uploading ? 'chat-input-thumbnail--uploading' : ''} ${img.error ? 'chat-input-thumbnail--error' : ''}`}
-            >
-              <img src={img.previewUrl} alt={img.file.name} />
-              {img.uploading && (
-                <div className="chat-input-thumbnail-overlay">
-                  <span className="chat-input-thumbnail-spinner"></span>
-                </div>
-              )}
-              {img.error && (
-                <div className="chat-input-thumbnail-overlay chat-input-thumbnail-overlay--error" title={img.error}>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="15" y1="9" x2="9" y2="15"></line>
-                    <line x1="9" y1="9" x2="15" y2="15"></line>
-                  </svg>
-                </div>
-              )}
-              <button
-                type="button"
-                className="chat-input-thumbnail-remove"
-                onClick={() => removeImage(img.id)}
-                aria-label={`Remove ${img.file.name}`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="chat-input-row">
         {/* Image attach button */}
         <button
@@ -289,6 +250,46 @@ export function ChatInput({
           )}
         </button>
       </div>
+
+      {/* Image thumbnails — horizontal scroll strip below textarea */}
+      {hasImages && (
+        <div className="chat-input-thumbnails">
+          {pendingImages.map((img) => (
+            <div
+              key={img.id}
+              className={`chat-input-thumbnail ${img.uploading ? 'chat-input-thumbnail--uploading' : ''} ${img.error ? 'chat-input-thumbnail--error' : ''}`}
+            >
+              <img src={img.previewUrl} alt={img.file.name} />
+              {img.uploading && (
+                <div className="chat-input-thumbnail-overlay">
+                  <span className="chat-input-thumbnail-spinner"></span>
+                </div>
+              )}
+              {img.error && (
+                <div className="chat-input-thumbnail-overlay chat-input-thumbnail-overlay--error" title={img.error}>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="15" y1="9" x2="9" y2="15"></line>
+                    <line x1="9" y1="9" x2="15" y2="15"></line>
+                  </svg>
+                </div>
+              )}
+              <button
+                type="button"
+                className="chat-input-thumbnail-remove"
+                onClick={() => removeImage(img.id)}
+                aria-label={`Remove ${img.file.name}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {disabled && showAbort && onAbort && (
         <button
           type="button"

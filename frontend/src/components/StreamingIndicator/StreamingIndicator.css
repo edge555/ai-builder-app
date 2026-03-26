@@ -64,6 +64,10 @@
   color: hsl(var(--foreground));
 }
 
+.streaming-indicator-phase--degraded {
+  color: #B45309;
+}
+
 .streaming-indicator-detail {
   font-size: 0.75rem;
   color: hsl(var(--muted-foreground));

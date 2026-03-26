@@ -128,6 +128,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     setStreamingState({
       phase: 'connecting',
       progressLabel: null,
+      isDegraded: false,
       files: {},
       currentFile: null,
       filesReceived: 0,
@@ -151,6 +152,9 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
         signal: controller.signal,
       });
 
+      const generateStreamRequestId = response.headers.get('X-Request-Id');
+      if (generateStreamRequestId) genLogger.info('generate-stream started', { requestId: generateStreamRequestId });
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || `HTTP ${response.status}`);
@@ -170,6 +174,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
             ...prev,
             textLength: progressData.length ?? prev.textLength,
             progressLabel: progressData.label ?? prev.progressLabel,
+            isDegraded: progressData.isDegraded ?? prev.isDegraded,
             lastHeartbeat: Date.now(),
           } : null);
         },
@@ -283,6 +288,9 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
         signal: controller.signal,
       });
 
+      const generateRequestId = response.headers.get('X-Request-Id');
+      if (generateRequestId) genLogger.info('generate started', { requestId: generateRequestId });
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: response.statusText }));
         throw new Error(errorData.error || `HTTP ${response.status}`);
@@ -327,6 +335,9 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ projectState: currentState, prompt, runtimeError, shouldSkipPlanning: options?.shouldSkipPlanning, conversationHistory: options?.conversationHistory, attachments: options?.attachments }),
         signal: controller.signal,
       });
+
+      const modifyRequestId = response.headers.get('X-Request-Id');
+      if (modifyRequestId) genLogger.info('modify started', { requestId: modifyRequestId });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: response.statusText }));
@@ -379,6 +390,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     setStreamingState({
       phase: 'connecting',
       progressLabel: null,
+      isDegraded: false,
       files: {},
       currentFile: null,
       filesReceived: 0,
@@ -417,6 +429,9 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
         signal: controller.signal,
       });
 
+      const modifyStreamRequestId = response.headers.get('X-Request-Id');
+      if (modifyStreamRequestId) genLogger.info('modify-stream started', { requestId: modifyStreamRequestId });
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || `HTTP ${response.status}`);
@@ -436,6 +451,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
             ...prev,
             textLength: progressData.length ?? prev.textLength,
             progressLabel: progressData.label ?? prev.progressLabel,
+            isDegraded: progressData.isDegraded ?? prev.isDegraded,
             lastHeartbeat: Date.now(),
           } : null);
         },

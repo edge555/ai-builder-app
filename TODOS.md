@@ -1,33 +1,5 @@
 # TODOS
 
-## Design Debt
-
-### Image attachment strip: below-textarea horizontal scroll
-- **What:** Move `.chat-input-thumbnails` below the textarea (between textarea and submit button). Replace `flex-wrap: wrap` with `overflow-x: auto; flex-wrap: nowrap`. Add a right-edge fade gradient when images overflow.
-- **Why:** With 5 image thumbnails on a 375px screen, the current above-textarea wrap creates an unpredictably tall input area. Horizontal scroll with a fade hint is the agreed UX pattern. The strip below the textarea keeps input area height stable.
-- **Context:** Originally decided during /plan-design-review on 2026-03-21. Layout direction (below textarea, not above) decided during /plan-design-review on 2026-03-22. Affects `ChatInput.tsx` and `ChatInterface.css`.
-- **Depends on:** ChatInput image attachment markup (already implemented)
-
-### Phase progress: warning color for degraded stages
-- **What:** Wire SSE `degraded` status through `sse-parser.ts` → `GenerationContext` → progress label CSS class. Use DESIGN.md Warning color (`#B45309`) for degraded phase text.
-- **Why:** When a pipeline phase fails/degrades (e.g., plan review fails, execution retries), users currently see the same neutral progress text. Warning-colored text distinguishes normal progress from fallback behavior.
-- **Context:** Decided during /plan-design-review on 2026-03-21. The backend already emits `degraded` status in SSE events; the frontend ignores it.
-- **Depends on:** `phase-start`/`phase-complete` SSE events (already implemented)
-
-### Onboarding: assembled prompt preview on Step 3
-- **What:** On Step 3 (Design style) of the onboarding wizard, display a read-only preview of the assembled prompt below the style choices. User sees exactly what will be sent before clicking "Generate App".
-- **Why:** The wizard silently fires a prompt assembled from choices without showing the user what was built. Users have no chance to review or catch unexpected combinations before generation starts. Trust is earned at the pixel level.
-- **Context:** Decided during /plan-design-review on 2026-03-22. `buildPromptFromChoices()` already returns the string — just display it in a styled `<pre>` or `<blockquote>` element above the actions row.
-- **Depends on:** OnboardingOverlay Step 3 UI (already implemented)
-
-## Infrastructure
-
-### Health check: API key validity probe
-- **What:** Add an optional API key validation step to the health route's deep check (`?deep=true`). For OpenRouter, probe `/api/v1/auth/key` with the configured API key to verify it's valid, not just that the endpoint is reachable.
-- **Why:** The health check was updated (c6b7c91) to use the public `/models` endpoint without auth — a good change for reachability, but it means a revoked/expired API key still returns a healthy status until the first generation request fails.
-- **Context:** Decided during /plan-eng-review on 2026-03-22. The `?deep=true` flag already triggers a provider probe in `backend/app/api/health/route.ts`. Add key validation as a separate step in the deep check path. Should not block the shallow health check (no `?deep=true`).
-- **Depends on:** None (independent addition to health route)
-
 ## Architecture (from /plan-ceo-review EXPANSION on 2026-03-23)
 
 ### Unified Pipeline Architecture [P1, L]
@@ -74,11 +46,6 @@
 
 ## Observability
 
-### Frontend Request ID Correlation [P2, S]
-- **What:** Add `X-Request-Id` header to all frontend API calls (generate, modify, upload). Log the request ID in browser console. Store it with chat messages for end-to-end tracing.
-- **Why:** Backend already generates request IDs and logs them. Frontend doesn't send or store them, making it impossible to correlate user reports with backend logs.
-- **Context:** Backend already has X-Request-Id in response headers. Frontend API client at `frontend/src/integrations/`.
-- **Depends on:** None
 
 ## Delight / Vision
 

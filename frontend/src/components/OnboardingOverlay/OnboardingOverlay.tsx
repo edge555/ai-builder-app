@@ -268,6 +268,12 @@ export function OnboardingOverlay({ onDismiss, onGeneratePrompt }: OnboardingOve
                 </button>
               ))}
             </div>
+            <div className="onboarding-prompt-preview">
+              <p className="onboarding-prompt-preview-label">Prompt preview</p>
+              <blockquote className="onboarding-prompt-preview-text">
+                {buildPromptFromChoices(selectedType, selectedFeatures, selectedStyle)}
+              </blockquote>
+            </div>
           </>
         )}
 

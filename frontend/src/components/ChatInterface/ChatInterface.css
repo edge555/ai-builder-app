@@ -642,17 +642,27 @@
   cursor: not-allowed;
 }
 
-/* Thumbnail strip above the input row */
+/* Thumbnail strip below the input row — horizontal scroll with right-edge fade */
 .chat-input-thumbnails {
   display: flex;
   gap: 0.5rem;
-  padding: 0.25rem 0 0.5rem;
-  flex-wrap: wrap;
+  padding: 0.5rem 0 0.25rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   width: 100%;
+  scrollbar-width: none;
+  /* Fade hint: right edge fades to card background when content overflows */
+  mask-image: linear-gradient(to right, black calc(100% - 36px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 36px), transparent 100%);
+}
+
+.chat-input-thumbnails::-webkit-scrollbar {
+  display: none;
 }
 
 .chat-input-thumbnail {
   position: relative;
+  flex-shrink: 0;
   width: 64px;
   height: 64px;
   border-radius: var(--radius);

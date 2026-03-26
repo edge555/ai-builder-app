@@ -13,7 +13,7 @@ export interface StreamingIndicatorProps {
  * Displays file names as they're generated with heartbeat status.
  */
 export function StreamingIndicator({ state }: StreamingIndicatorProps) {
-  const { phase, progressLabel, currentFile, filesReceived, totalFiles, textLength, lastHeartbeat, warnings, summary } = state;
+  const { phase, progressLabel, isDegraded, currentFile, filesReceived, totalFiles, textLength, lastHeartbeat, warnings, summary } = state;
   const [showWarnings, setShowWarnings] = useState(false);
 
   if (phase === 'idle') return null;
@@ -30,7 +30,7 @@ export function StreamingIndicator({ state }: StreamingIndicatorProps) {
         </div>
 
         <div className="streaming-indicator-info">
-          <div className="streaming-indicator-phase">
+          <div className={`streaming-indicator-phase${isDegraded ? ' streaming-indicator-phase--degraded' : ''}`}>
             {phase === 'connecting' && 'Connecting to AI...'}
             {phase === 'generating' && (progressLabel || 'AI is generating code...')}
             {phase === 'processing' && 'Receiving files...'}

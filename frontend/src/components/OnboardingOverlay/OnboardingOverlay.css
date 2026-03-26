@@ -212,6 +212,34 @@
   line-height: 1.4;
 }
 
+/* Step 3: Prompt preview */
+.onboarding-prompt-preview {
+  width: 100%;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.onboarding-prompt-preview-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: hsl(var(--muted-foreground));
+  margin: 0 0 6px;
+}
+
+.onboarding-prompt-preview-text {
+  margin: 0;
+  padding: 10px 12px;
+  background: hsl(var(--muted));
+  border-left: 2px solid hsl(var(--primary));
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: 0.8125rem;
+  color: hsl(var(--foreground));
+  line-height: 1.5;
+  font-style: normal;
+}
+
 /* Action buttons */
 .onboarding-actions {
   display: flex;
