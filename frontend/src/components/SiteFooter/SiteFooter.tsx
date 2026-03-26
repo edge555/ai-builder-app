@@ -7,7 +7,7 @@ export function SiteFooter() {
         <p className="site-footer-text">© 2026 AI App Builder</p>
         <div className="site-footer-links">
           <a
-            href="https://github.com"
+            href="https://github.com/edge555/ai-builder-app"
             target="_blank"
             rel="noopener noreferrer"
             className="site-footer-link"
@@ -15,7 +15,12 @@ export function SiteFooter() {
             GitHub
           </a>
           <span className="site-footer-dot">•</span>
-          <a href="#" className="site-footer-link">
+          <a
+            href="https://claude.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="site-footer-link"
+          >
             Built with AI
           </a>
         </div>
