@@ -110,7 +110,7 @@ backend/
 │   │   ├── ai-retry.ts             # Shared retry-with-backoff logic (executeWithRetry)
 │   │   └── sse-stream-processor.ts # Provider-agnostic SSE stream parsing
 │   ├── core/          # Generation, validation, formatting
-│   │   ├── generation-pipeline.ts  # Multi-phase new-project pipeline (complexity gate, batched execution)
+│   │   ├── generation-pipeline.ts  # New-project pipeline: complexity gate (≤10 files → one-shot, >10 → multi-phase batched), architecture planning, phase execution with cross-phase summary cache
 │   │   ├── pipeline-orchestrator.ts # Modification-only pipeline: Intent → Planning → Execution → Review
 │   │   ├── pipeline-factory.ts     # Wires GenerationPipeline (new) + PipelineOrchestrator (modify)
 │   │   ├── phase-executor.ts       # Single-phase execution with retry + truncation continuation
@@ -206,7 +206,7 @@ npm run lint                   # All workspaces
 
 1. User prompt → frontend ChatInterface → backend `/api/generate-stream` or `/api/modify-stream`
 2. Backend resolves AI provider (env var or runtime override from `provider-config.json`)
-3. **New projects** → `GenerationPipeline`: complexity gate (≤10 files → one-shot, >10 → multi-phase batched), architecture planning, phase execution with cross-phase context. **Modifications** → `PipelineOrchestrator`: Intent → Planning → Execution → Review. On OpenRouter, `IntentDetector` + `AgentRouter` route each stage to the optimal model. On Modal, `ModalPipelineFactory` resolves per-task endpoints.
+3. **New projects** → `GenerationPipeline`: intent resolves → planning fires immediately (overlapped with synchronous recipe selection) → complexity gate (≤10 files → `executeOneShot()` with 1 AI call + plan review skipped; >10 files → `executeMultiPhase()` with plan review + phase batching + cross-phase summary cache). **Modifications** → `PipelineOrchestrator`: Intent → Planning → Execution → Review. On OpenRouter, `IntentDetector` + `AgentRouter` route each stage to the optimal model. On Modal, `ModalPipelineFactory` resolves per-task endpoints.
 4. AI provider streams response via SSE with backpressure control (SSEEncoder utility)
 5. Incremental JSON parser extracts files as they arrive
 6. Files validated, formatted (Prettier), version-pinned (package.json deps), streamed back to frontend
@@ -223,7 +223,7 @@ Multi-provider architecture with runtime switching:
 - **`AIProviderFactory`**: Reads `AI_PROVIDER` env var + runtime override, returns singleton
 - **OpenRouter** (default): OpenAI-compatible API with retry/backoff, structured output, SSE streaming
 - **Modal**: Self-hosted models with per-task endpoint resolution via `ModalPipelineFactory` (resolves `MODAL_<TASK>_URL` → `MODAL_DEFAULT_URL`)
-- **`GenerationPipeline`** (new projects): Multi-phase pipeline with complexity gate, architecture planning, batch context builder, and phase executor
+- **`GenerationPipeline`** (new projects): intent resolves → planning fires immediately (overlapped with synchronous recipe selection <1ms) → complexity gate (≤10 files → `executeOneShot()` single AI call, plan review skipped; >10 files → `executeMultiPhase()` with plan review + phase batching + cross-phase summary cache to avoid re-summarizing scaffold files)
 - **`PipelineOrchestrator`** (modifications only): 4-stage pipeline (Intent → Planning → Execution → Review); Execution is hard-fail, other stages degrade gracefully
 - **`IPromptProvider`**: Abstracts system prompts, token budgets, and multi-phase prompt methods; `UnifiedPromptProvider` implements it for both providers via `PromptProviderConfig` (token budget overrides + verbose guidance flag)
 - **Recipe Engine**: Pluggable generation recipes (React SPA, Next.js + Prisma, Next.js + Supabase Auth) with per-phase prompt fragments
