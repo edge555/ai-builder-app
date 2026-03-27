@@ -241,6 +241,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         .filter(Boolean)
     );
 
+    if (brokenFiles.size > 0 && brokenFiles.size >= Object.keys(prefixedFiles).length) {
+      // All (or only) files are broken — hard fail rather than delivering nothing
+      contextLogger.error('All generated files have syntax errors — aborting before build-fix', {
+        brokenFiles: Array.from(brokenFiles),
+      });
+      return { success: false, error: 'Generation produced no valid files (all have syntax errors)' };
+    }
+
     if (brokenFiles.size > 0 && brokenFiles.size < Object.keys(prefixedFiles).length) {
       contextLogger.warn('Dropping files with syntax errors instead of failing', {
         droppedFiles: Array.from(brokenFiles),

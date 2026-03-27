@@ -195,9 +195,9 @@ DO NOT repeat files you have already generated.`;
 
         const finalFiles = Array.from(generatedFiles.values());
 
-        // Hard fail for scaffold layer if no files generated successfully
-        if (layer === 'scaffold' && finalFiles.length === 0) {
-          throw new Error('Scaffold phase failed: No files generated successfully');
+        // Hard fail for scaffold or oneshot layer if no files generated successfully
+        if ((layer === 'scaffold' || layer === 'oneshot') && finalFiles.length === 0) {
+          throw new Error(`${layer === 'oneshot' ? 'One-shot' : 'Scaffold'} phase failed: No files generated successfully`);
         }
 
         // Emit final completeness markers for the successful files

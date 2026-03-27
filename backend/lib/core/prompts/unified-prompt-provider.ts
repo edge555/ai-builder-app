@@ -498,7 +498,9 @@ ${wrapUserInput(userPrompt)}`;
       case 'integration':
         return getIntegrationPrompt(plan, context, userPrompt);
       case 'oneshot':
-        return this.getExecutionGenerationSystemPrompt(userPrompt, null, null);
+        // Pass architecture plan data so the AI knows which files to generate.
+        // ArchitecturePlan has the same files/components/dependencies shape as PlanOutput.
+        return this.getExecutionGenerationSystemPrompt(userPrompt, null, plan as unknown as import('../schemas').PlanOutput);
     }
   }
 }

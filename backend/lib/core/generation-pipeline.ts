@@ -519,6 +519,8 @@ export class GenerationPipeline {
           for (const file of result.files) {
             allFiles.push(file);
             generatedFilesMap.set(file.path, file.content);
+            // Invalidate stale cache entry if this file was regenerated in a later phase
+            summaryCache.delete(file.path);
           }
           allWarnings.push(...result.warnings);
 
