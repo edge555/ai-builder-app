@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.6] - 2026-03-27
+
+### Performance
+- **True one-shot execution path** — projects with ≤10 files now issue a single AI call instead of two sequential scaffold+UI calls, saving 10-20s per generation
+- **Skip plan review for simple projects** — plan review AI call (4096 tokens, ~5-10s) is skipped for ≤10 file projects; complex projects (>10 files) still run full review
+- **Intent→Planning latency overlap** — planning AI call fires immediately after intent resolves, with recipe selection running synchronously (<1ms) while planning is in flight; saves 2-5s
+- **File summary cache** — `buildPhaseContext()` now accepts an optional `summaryCache: Map<string, FileSummary>` to avoid re-summarizing scaffold files on every phase; `executeMultiPhase()` creates the cache once and threads it through all phases
+- **Remove redundant post-pipeline validation** — `validationPipeline.validate()` (incl. TypeScript syntax parsing) removed from `streaming-generator.ts`; per-phase `PhaseExecutor` already validates syntax with retry; build-fix loop is the final safety net
+
+### Added
+- `ExecutionLayer = PhaseLayer | 'oneshot'` type in `schemas.ts` — internal-only virtual layer for the one-shot execution path; kept separate from `PhaseLayerEnum` so AI planning schema is not affected
+- `expectedFiles?: string[]` override on `PhaseDefinition` — enables truncation detection for the oneshot layer (files have no 'oneshot' layer in the plan)
+- `getPhasePrompt('oneshot', ...)` case in `UnifiedPromptProvider` — delegates to `getExecutionGenerationSystemPrompt()`, the existing full-app generation prompt
+- `tokenBudgets.oneshot` set to `MAX_OUTPUT_TOKENS_GENERATION` in all prompt providers
+
+### Fixed
+- One-shot continuation prompt now lists already-generated file paths to prevent broken imports when truncation retry fires
+
+### Tests
+- Added 15 new tests covering all 5 optimization phases: summary cache hits/misses, plan review gate (file count threshold), review stage events when skipped, abort signal stops planning, executePhase once for oneshot, multi-phase routing for >10 files, expectedFiles override, continuation prompt content, syntax-error file drop, validationPipeline not called
+
 ## [1.3.5] - 2026-03-27
 
 ### Added
