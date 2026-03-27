@@ -32,7 +32,7 @@ function LoginPage() {
                 addToast({
                     type: 'success',
                     message: `Verification email sent to ${email}. Please check your inbox.`,
-                    duration: 8000,
+                    autoDismissMs: 8000,
                 });
             }
         } catch (err) {

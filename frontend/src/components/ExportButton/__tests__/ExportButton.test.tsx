@@ -62,6 +62,7 @@ describe('ExportButton', () => {
 
     it('should render export button', () => {
         vi.mocked(useProjectState).mockReturnValue({
+            canUndo: false, canRedo: false,
             projectState: mockProjectState as any,
         });
 
@@ -71,6 +72,7 @@ describe('ExportButton', () => {
 
     it('should be disabled when no project state exists', () => {
         vi.mocked(useProjectState).mockReturnValue({
+            canUndo: false, canRedo: false,
             projectState: null,
         });
 
@@ -82,6 +84,7 @@ describe('ExportButton', () => {
 
     it('should trigger export on click', async () => {
         vi.mocked(useProjectState).mockReturnValue({
+            canUndo: false, canRedo: false,
             projectState: mockProjectState as any,
         });
 
@@ -112,6 +115,7 @@ describe('ExportButton', () => {
 
     it('should show loading state during export', async () => {
         vi.mocked(useProjectState).mockReturnValue({
+            canUndo: false, canRedo: false,
             projectState: mockProjectState as any,
         });
 
@@ -136,6 +140,7 @@ describe('ExportButton', () => {
 
     it('should create download link with correct filename', async () => {
         vi.mocked(useProjectState).mockReturnValue({
+            canUndo: false, canRedo: false,
             projectState: mockProjectState as any,
         });
 
@@ -165,6 +170,7 @@ describe('ExportButton', () => {
 
     it('should handle export errors gracefully', async () => {
         vi.mocked(useProjectState).mockReturnValue({
+            canUndo: false, canRedo: false,
             projectState: mockProjectState as any,
         });
 
@@ -188,6 +194,7 @@ describe('ExportButton', () => {
 
     it('should show error message in title on failure', async () => {
         vi.mocked(useProjectState).mockReturnValue({
+            canUndo: false, canRedo: false,
             projectState: mockProjectState as any,
         });
 
@@ -205,6 +212,7 @@ describe('ExportButton', () => {
 
     it('should cleanup blob URL after download', async () => {
         vi.mocked(useProjectState).mockReturnValue({
+            canUndo: false, canRedo: false,
             projectState: mockProjectState as any,
         });
 
@@ -226,6 +234,7 @@ describe('ExportButton', () => {
 
     it('should have proper ARIA label', () => {
         vi.mocked(useProjectState).mockReturnValue({
+            canUndo: false, canRedo: false,
             projectState: mockProjectState as any,
         });
 
@@ -236,6 +245,7 @@ describe('ExportButton', () => {
 
     it('should handle missing configuration', async () => {
         vi.mocked(useProjectState).mockReturnValue({
+            canUndo: false, canRedo: false,
             projectState: mockProjectState as any,
         });
 
