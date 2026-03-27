@@ -31,6 +31,7 @@ import {
 } from './shared-prompt-fragments';
 import { composePhasePrompt } from '../recipes/recipe-engine';
 import { getCSSLibrary, getCSSLibraryInstruction } from './css-library';
+import { detectComplexity } from './generation-prompt-utils';
 import {
   MAX_OUTPUT_TOKENS_SCAFFOLD,
   MAX_OUTPUT_TOKENS_LOGIC,
@@ -276,7 +277,7 @@ export function getUIPrompt(
   recipe?: GenerationRecipe,
 ): string {
   const uiFiles = plan.files.filter(f => f.layer === 'ui');
-  const complexity = plan.complexity;
+  const complexity = detectComplexity(userPrompt);
 
   // Use recipe phase fragments if available, otherwise fall back to defaults
   const fragmentsBlock = composePhasePrompt(recipe, 'ui');
