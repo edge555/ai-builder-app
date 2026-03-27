@@ -7,6 +7,7 @@ import { ProjectGallery } from '@/components/ProjectGallery/ProjectGallery';
 import { SiteFooter } from '@/components/SiteFooter/SiteFooter';
 import { SiteHeader } from '@/components/SiteHeader/SiteHeader';
 import { TemplateGrid } from '@/components/TemplateGrid/TemplateGrid';
+import { useAuthState } from '@/context/AuthContext.context';
 import { initialSuggestions } from '@/data/prompt-suggestions';
 import { starterTemplates } from '@/data/templates';
 import { storageService, type ProjectMetadata, type UserTemplate } from '@/services/storage';
@@ -75,6 +76,7 @@ export function WelcomePage({
   savedProjects,
   isLoadingProjects = false,
 }: WelcomePageProps) {
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuthState();
   const hasProjects = savedProjects.length > 0;
 
   const [promptInput, setPromptInput] = useState('');
@@ -88,7 +90,15 @@ export function WelcomePage({
     projectId: null,
     projectName: null,
   });
-  const [showOnboarding, setShowOnboarding] = useState(() => shouldShowOnboarding());
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Show onboarding only for authenticated users who haven't seen it yet.
+  // Wait until auth finishes loading so we don't flash it for unauthenticated users.
+  useEffect(() => {
+    if (!isAuthLoading && isAuthenticated && shouldShowOnboarding()) {
+      setShowOnboarding(true);
+    }
+  }, [isAuthLoading, isAuthenticated]);
   const [isScrolled, setIsScrolled] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
 

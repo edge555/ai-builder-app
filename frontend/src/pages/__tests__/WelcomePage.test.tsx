@@ -55,6 +55,10 @@ vi.mock('@/components/OnboardingOverlay/OnboardingOverlay', () => ({
     shouldShowOnboarding: () => false,
 }));
 
+vi.mock('@/context/AuthContext.context', () => ({
+    useAuthState: () => ({ isAuthenticated: false, isLoading: false, user: null, session: null }),
+}));
+
 vi.mock('@/components/ConfirmDialog/ConfirmDialog', () => ({
     ConfirmDialog: ({ isOpen, title, message, onConfirm, onCancel }: any) =>
         isOpen ? (

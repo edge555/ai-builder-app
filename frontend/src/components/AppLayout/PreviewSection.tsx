@@ -76,11 +76,13 @@ export function PreviewSection({ activePanel }: PreviewSectionProps) {
   }, [autoRepair, errorHandlers]);
 
   const handleBundlerIdle = useCallback(() => {
-    // Bundler recovered, clear errors
+    // Only clear when no repair is pending or in-flight.
+    // During 'detecting' the 800ms debounce is running; during 'repairing' an AI call is active.
+    // In both cases the bundler briefly hits 'idle' between compile cycles — that is NOT a
+    // real recovery and clearing here is what causes the red/white blink loop.
     const repairPhase = errorHandlers.getRepairPhase();
-    if (repairPhase !== 'repairing') {
+    if (repairPhase === 'idle') {
       errorHandlers.clearAllErrors();
-      errorHandlers.setRepairPhase('idle');
     }
   }, [errorHandlers]);
 
