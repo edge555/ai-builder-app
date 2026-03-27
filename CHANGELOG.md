@@ -14,11 +14,15 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `ExecutionLayer = PhaseLayer | 'oneshot'` type in `schemas.ts` — internal-only virtual layer for the one-shot execution path; kept separate from `PhaseLayerEnum` so AI planning schema is not affected
 - `expectedFiles?: string[]` override on `PhaseDefinition` — enables truncation detection for the oneshot layer (files have no 'oneshot' layer in the plan)
-- `getPhasePrompt('oneshot', ...)` case in `UnifiedPromptProvider` — delegates to `getExecutionGenerationSystemPrompt()`, the existing full-app generation prompt
+- `getPhasePrompt('oneshot', ...)` case in `UnifiedPromptProvider` — delegates to `getExecutionGenerationSystemPrompt()` with the architecture plan, so the AI knows which files to generate
 - `tokenBudgets.oneshot` set to `MAX_OUTPUT_TOKENS_GENERATION` in all prompt providers
 
 ### Fixed
 - One-shot continuation prompt now lists already-generated file paths to prevent broken imports when truncation retry fires
+- Oneshot prompt now passes `ArchitecturePlan` to `getExecutionGenerationSystemPrompt()` so the AI sees the planned file list; previously passed `null` causing the AI to guess the file structure
+- `phase-executor.ts` now hard-fails for `oneshot` layer when zero files are generated (same guard that existed for `scaffold`)
+- `streaming-generator.ts` now returns an error when all generated files have syntax errors instead of silently passing them to the build-fix loop
+- `executeMultiPhase()` now invalidates summary cache entries when a file is regenerated, preventing stale summaries in cross-phase context
 
 ### Tests
 - Added 15 new tests covering all 5 optimization phases: summary cache hits/misses, plan review gate (file count threshold), review stage events when skipped, abort signal stops planning, executePhase once for oneshot, multi-phase routing for >10 files, expectedFiles override, continuation prompt content, syntax-error file drop, validationPipeline not called
