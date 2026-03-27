@@ -191,7 +191,7 @@ Generated apps have a telltale "AI look" — generic blue (#3b82f6), flat shadow
 
 #### Tasks
 
-- [ ] **5.1** Upgrade responsive section in `LAYOUT_FUNDAMENTALS` in `shared-prompt-fragments.ts`
+- [x] **5.1** Upgrade responsive section in `LAYOUT_FUNDAMENTALS` in `shared-prompt-fragments.ts`
   - Replace "reflow at 768px" with mobile-first specifics:
     - Mobile-first CSS: base = mobile, `@media (min-width: 768px)` for tablet
     - Fluid typography: `clamp(1rem, 0.5rem + 1.5vw, 1.25rem)`
@@ -202,7 +202,7 @@ Generated apps have a telltale "AI look" — generic blue (#3b82f6), flat shadow
     - Images: `max-width: 100%; height: auto; display: block`
     - Scrollable areas: `-webkit-overflow-scrolling: touch`
 
-- [ ] **5.2** Upgrade image guidance in `REALISTIC_DATA_GUIDANCE` in `shared-prompt-fragments.ts`
+- [x] **5.2** Upgrade image guidance in `REALISTIC_DATA_GUIDANCE` in `shared-prompt-fragments.ts`
   - Replace vague image placeholder instruction with:
     - Wrap in `aspect-ratio` containers to prevent layout shift
     - `loading="lazy"` on all below-fold images
@@ -216,22 +216,22 @@ Generated apps have a telltale "AI look" — generic blue (#3b82f6), flat shadow
 
 #### Tasks
 
-- [ ] **6.1** Update existing tests in `backend/lib/core/prompts/__tests__/unified-prompt-provider.test.ts`
+- [x] **6.1** Update existing tests in `backend/lib/core/prompts/__tests__/unified-prompt-provider.test.ts`
   - Tests 3–6 check verboseGuidance → DESIGN_SYSTEM_CONSTANTS presence/absence
     - **Test 4 currently asserts `DESIGN_SYSTEM_CONSTANTS` is ABSENT** — this breaks after 2.1 (always-on). Update assertion to reflect always-on behavior
   - Update any test checking CSS variable names: `--duration-fast` → `--dur-fast`
 
-- [ ] **6.2** Add new test: `getCSSLibrary()` tier gating
+- [x] **6.2** Add new test: `getCSSLibrary()` tier gating
   - `getCSSLibrary('simple')` → contains `.btn`, does NOT contain `.toast` or `.skeleton`
   - `getCSSLibrary('medium')` → contains both `.btn` and `.toast` and `.skeleton`
   - `getCSSLibrary('complex')` → same as medium
 
-- [ ] **6.3** Add new test: domain color detection
+- [x] **6.3** Add new test: domain color detection
   - Generation prompt for "build a finance dashboard" contains green `#059669`
   - Generation prompt for "build a recipe manager" contains orange `#ea580c`
   - Generation prompt for "build a todo app" contains default blue `#2563eb`
 
-- [ ] **6.4** Add new test: DESIGN_SYSTEM_CONSTANTS always-on
+- [x] **6.4** Add new test: DESIGN_SYSTEM_CONSTANTS always-on
   - Generation prompt always contains `DESIGN_SYSTEM_CONSTANTS` regardless of `verboseGuidance` value
 
 ---

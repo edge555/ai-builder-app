@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.5] - 2026-03-27
+
+### Added
+- **Embedded CSS library** — `CSS_LIBRARY_BASE` (buttons, cards, forms, layout, typography, utilities) and `CSS_LIBRARY_FULL` (toasts, modals, skeletons, tabs, badges, alerts) are now verbatim-injected into generation prompts; AI copies real CSS instead of inventing it, eliminating the primary source of visual inconsistency
+- **Complexity-gated CSS injection** — `getCSSLibrary(complexity)` returns BASE for simple apps and FULL for medium/complex apps, keeping simple prompts lean
+- **Domain color detection** — `getDesignSystemConstants()` detects app domain (finance, recipe, todo, e-commerce, etc.) from the user prompt and injects matching primary/secondary color variables
+- **Design system constants always-on** — DESIGN_SYSTEM_CONSTANTS (spacing, radius, shadow, animation tokens) injected unconditionally into all generation prompts regardless of verboseGuidance flag
+- **Mobile-first responsive patterns** — `LAYOUT_FUNDAMENTALS` upgraded with fluid typography via `clamp()`, 44px touch targets, mobile nav patterns (hamburger/bottom tab), bottom sheets, and `-webkit-overflow-scrolling: touch`
+- **Image handling guidance** — `REALISTIC_DATA_GUIDANCE` upgraded with aspect-ratio containers, lazy loading, `onError` fallback pattern with sibling div overlay, and avatar initials fallback
+
+### Fixed
+- **Multi-phase complexity bug** — `phase-prompts.ts` was reading `plan.complexity` which doesn't exist on `ArchitecturePlan` (always `undefined`); medium/complex multi-phase apps were silently falling back to BASE CSS only; fixed by using `detectComplexity(userPrompt)` instead
+
+### Tests
+- Added 9 new tests covering CSS library tier gating (`getCSSLibrary` simple/medium/complex), domain color detection (finance/recipe/todo), and DESIGN_SYSTEM_CONSTANTS always-on behavior (verboseGuidance true/false/default); total: 26 prompt provider tests
+
 ## [1.3.4] - 2026-03-24
 
 ### Performance
