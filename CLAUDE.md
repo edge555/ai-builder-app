@@ -128,9 +128,10 @@ backend/
 │   │   │   ├── prompt-provider-factory.ts  # Creates UnifiedPromptProvider (API or Modal config)
 │   │   │   ├── unified-prompt-provider.ts  # Single configurable provider (API default; Modal: higher budgets + verbose guidance)
 │   │   │   ├── generation-prompt-utils.ts  # Shared prompt building utilities
+│   │   │   ├── css-library.ts              # Embedded CSS library (BASE + FULL tiers, complexity-gated)
 │   │   │   ├── shared-prompt-fragments.ts  # Reusable prompt fragments (layout, polish, data, CRUD inference)
 │   │   │   ├── phase-prompts.ts            # Per-phase system prompts (scaffold, logic, UI, integration)
-│   │   │   └── __tests__/                  # Unit tests for UnifiedPromptProvider (17 cases)
+│   │   │   └── __tests__/                  # Unit tests for UnifiedPromptProvider (26 cases)
 │   │   ├── recipes/                # Pluggable generation recipes
 │   │   │   ├── recipe-types.ts             # Recipe/fragment type definitions + phaseFragments
 │   │   │   ├── recipe-engine.ts            # Recipe selection + prompt composition

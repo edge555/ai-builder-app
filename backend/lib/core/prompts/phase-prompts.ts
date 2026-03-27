@@ -30,6 +30,8 @@ import {
   wrapUserInput,
 } from './shared-prompt-fragments';
 import { composePhasePrompt } from '../recipes/recipe-engine';
+import { getCSSLibrary, getCSSLibraryInstruction } from './css-library';
+import { detectComplexity } from './generation-prompt-utils';
 import {
   MAX_OUTPUT_TOKENS_SCAFFOLD,
   MAX_OUTPUT_TOKENS_LOGIC,
@@ -191,6 +193,16 @@ ${formatCSSVariables(plan)}
    ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
    Do NOT generate a placeholder or add comments about subsequent phases.
 5. Every file must be complete and self-contained.
+6. DARK MODE: index.css MUST include a [data-theme="dark"] block that overrides all color tokens
+   for dark backgrounds. NEVER use @media (prefers-color-scheme: dark) — the builder toggles
+   dark mode by setting data-theme="dark" on <html>. Minimum dark mode overrides:
+   [data-theme="dark"] {
+     --color-bg: #0f172a; --color-surface: #1e293b; --color-surface-raised: #334155;
+     --color-text: #f1f5f9; --color-text-secondary: #94a3b8; --color-text-tertiary: #64748b;
+     --color-border: #334155; --color-border-strong: #475569;
+     --shadow-sm: 0 1px 3px rgba(0,0,0,.3); --shadow-md: 0 4px 6px rgba(0,0,0,.3);
+     --shadow-lg: 0 10px 15px rgba(0,0,0,.35); --shadow-xl: 0 20px 25px rgba(0,0,0,.4);
+   }
 
 ${DEPENDENCY_GUIDANCE}
 
@@ -265,6 +277,7 @@ export function getUIPrompt(
   recipe?: GenerationRecipe,
 ): string {
   const uiFiles = plan.files.filter(f => f.layer === 'ui');
+  const complexity = detectComplexity(userPrompt);
 
   // Use recipe phase fragments if available, otherwise fall back to defaults
   const fragmentsBlock = composePhasePrompt(recipe, 'ui');
@@ -275,6 +288,10 @@ The scaffold (types, CSS vars) and logic (hooks, contexts) layers are already ge
 ${formatFilePlan(uiFiles)}
 
 ${formatPhaseContext(context)}
+
+${getCSSLibrary(complexity)}
+
+${getCSSLibraryInstruction(complexity)}
 
 === UI RULES ===
 1. Import types from scaffold-layer type files. Import hooks/contexts from logic-layer files.
@@ -333,6 +350,16 @@ ${routingBlock}
 7. Each page component should be thin: compose existing components, manage page-level state only.
 8. CRITICAL: The app MUST be fully functional on first render — no loading screens, no blank pages.
    All data hooks provide pre-populated sample data. All UI components render content immediately.
+9. DARK MODE TOGGLE: App.tsx (or the root layout component) MUST include a theme toggle button
+   in the header/nav area. Implementation:
+   const [theme, setTheme] = React.useState<'light' | 'dark'>('light');
+   const toggleTheme = () => {
+     const next = theme === 'light' ? 'dark' : 'light';
+     setTheme(next);
+     document.documentElement.setAttribute('data-theme', next);
+   };
+   Render a button that calls toggleTheme() — use a Sun/Moon icon (lucide-react: Sun, Moon).
+   Do NOT use @media (prefers-color-scheme) — toggle only via data-theme attribute on <html>.
 
 ${COMMON_REACT_PATTERNS}
 
