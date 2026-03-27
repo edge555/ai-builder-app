@@ -119,9 +119,13 @@ export type ReviewOutput = z.infer<typeof ReviewOutputSchema>;
 
 // ─── Architecture Plan Schema (Multi-Phase Generation Pipeline) ────────────
 
-/** Valid layer assignments for files in an architecture plan. */
+/** Valid layer assignments for files in an architecture plan (used in AI-facing JSON schema). */
 export const PhaseLayerEnum = z.enum(['scaffold', 'logic', 'ui', 'integration']);
 export type PhaseLayer = z.infer<typeof PhaseLayerEnum>;
+
+/** Execution-time layer — extends PhaseLayer with the internal 'oneshot' virtual layer.
+ *  NOT used in the AI-facing planning schema; only used in PhaseDefinition and prompt dispatch. */
+export type ExecutionLayer = PhaseLayer | 'oneshot';
 
 /** Schema for type contract definitions shared across phases. */
 export const TypeContractSchema = z.object({

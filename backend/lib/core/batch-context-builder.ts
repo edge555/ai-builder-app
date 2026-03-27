@@ -247,12 +247,14 @@ export function getContractsForBatch(
  * @param plan - The full architecture plan
  * @param generatedFiles - Files already generated in previous phases (path → content)
  * @param currentBatchFiles - Planned files being generated in this batch
+ * @param summaryCache - Optional cache shared across phases to avoid re-summarizing files
  */
 export function buildPhaseContext(
   phase: PhaseLayer,
   plan: ArchitecturePlan,
   generatedFiles: Map<string, string>,
   currentBatchFiles: PlannedFile[],
+  summaryCache?: Map<string, FileSummary>,
 ): PhaseContext {
   // 1. Type definitions — full content of scaffold-layer type files
   const typeDefinitions = new Map<string, string>();
@@ -275,7 +277,12 @@ export function buildPhaseContext(
   for (const [path, content] of generatedFiles.entries()) {
     // Skip files already included as full content in typeDefinitions or directDeps
     if (typeDefinitions.has(path) || directDependencies.has(path)) continue;
-    fileSummaries.push(summarizeFile(path, content));
+    let summary = summaryCache?.get(path);
+    if (!summary) {
+      summary = summarizeFile(path, content);
+      summaryCache?.set(path, summary);
+    }
+    fileSummaries.push(summary);
   }
 
   // 4. CSS variables — extracted from all generated CSS files

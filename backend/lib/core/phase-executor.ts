@@ -6,7 +6,7 @@
  */
 
 import type { AIProvider } from '../ai/ai-provider';
-import type { IPromptProvider, PhaseLayer, ArchitecturePlan } from './prompts/prompt-provider';
+import type { IPromptProvider, PhaseLayer, ExecutionLayer, ArchitecturePlan } from './prompts/prompt-provider';
 import type { BuildValidator, BuildValidationResult } from './build-validator';
 import type { PhaseContext } from './batch-context-builder';
 import type { GeneratedFile } from './schemas';
@@ -18,10 +18,12 @@ import { PHASE_EXECUTION_TIMEOUT } from '../constants';
 const logger = createLogger('PhaseExecutor');
 
 export interface PhaseDefinition {
-  layer: PhaseLayer;
+  layer: ExecutionLayer;
   plan: ArchitecturePlan;
   userPrompt: string;
   recipe?: GenerationRecipe;
+  /** Override the expected file list for truncation detection (required for 'oneshot' layer). */
+  expectedFiles?: string[];
 }
 
 export interface PhaseCallbacks {
@@ -63,7 +65,7 @@ export class PhaseExecutor {
     const maxOutputTokens = this.promptProvider.tokenBudgets[layer as keyof typeof this.promptProvider.tokenBudgets] as number;
     let attempt = 1;
     const maxAttempts = 2; // Simple retry logic (decision 7A)
-    const allExpectedFiles = plan.files.filter((f) => f.layer === layer).map((f) => f.path);
+    const allExpectedFiles = phaseDef.expectedFiles ?? plan.files.filter((f) => f.layer === layer).map((f) => f.path);
 
     let lastErrorFeedback = '';
 
@@ -151,7 +153,14 @@ export class PhaseExecutor {
           accumulatedText = '';
           lastParsedIndex = 0;
 
-          const continuationPrompt = `You were generating the ${layer} layer files but the output was truncated.
+          const alreadyGeneratedPaths = Array.from(generatedFiles.keys());
+          const continuationPrompt = layer === 'oneshot'
+            ? `You were generating a complete application but the output was truncated.
+These files were already generated: ${alreadyGeneratedPaths.map((p) => `- ${p}`).join('\n')}
+Generate ONLY the following missing files: ${missingPaths.map((p) => `- ${p}`).join('\n')}
+
+DO NOT repeat files you have already generated.`
+            : `You were generating the ${layer} layer files but the output was truncated.
 Please generate ONLY the following missing files exactly matching the previous structure instructions:
 ${missingPaths.map((p) => `- ${p}`).join('\n')}
 
