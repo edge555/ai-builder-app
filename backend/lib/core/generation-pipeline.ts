@@ -16,6 +16,7 @@ import { buildHeuristicPlan } from './heuristic-plan-builder';
 import { PhaseExecutor, type PhaseDefinition, type PhaseCallbacks } from './phase-executor';
 import { BuildValidator } from './build-validator';
 import { buildPhaseContext } from './batch-context-builder';
+import type { PhaseContext } from './batch-context-builder';
 import { COMPLEXITY_GATE_FILE_THRESHOLD, UI_BATCH_SPLIT_THRESHOLD } from '../constants';
 
 const logger = createLogger('GenerationPipeline');
@@ -148,32 +149,34 @@ export class GenerationPipeline {
 
     if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
 
-    // ── Recipe Selection ──────────────────────────────────────────────────────
-    const recipe = selectRecipe(intentOutput, {
-      fullstackEnabled: config.recipes.fullstackEnabled,
-    }, userPrompt);
-    contextLogger.info('Recipe selected', { recipeId: recipe.id });
-    
-    // Inject recipe into prompt provider if supported
-    this.promptProvider.setRecipe?.(recipe);
-
-    // ── Task 5.2: Enhanced Planning Stage ─────────────────────────────────────
+    // ── Task 5.2: Planning Stage — fired immediately after intent resolves ─────
+    // Fire the planning AI call before recipe selection to minimise latency.
+    // Recipe selection is synchronous (<1ms) and completes long before planning finishes.
     callbacks.onStageStart?.('planning', 'Drafting architecture plan…');
     const planningStageStartMs = Date.now();
     contextLogger.debug('Enhanced Planning stage start');
 
+    const planSystemPrompt = this.promptProvider.getArchitecturePlanningPrompt(userPrompt, intentOutput);
+    const planningPromise = this.planningProvider.generate({
+      prompt: userPrompt,
+      systemInstruction: planSystemPrompt,
+      maxOutputTokens: this.promptProvider.tokenBudgets.architecturePlanning,
+      responseSchema: ARCHITECTURE_PLAN_JSON_SCHEMA,
+      signal: callbacks.signal,
+    });
+
+    // ── Recipe Selection (runs while planning is in flight) ────────────────────
+    const recipe = selectRecipe(intentOutput, {
+      fullstackEnabled: config.recipes.fullstackEnabled,
+    }, userPrompt);
+    contextLogger.info('Recipe selected', { recipeId: recipe.id });
+    this.promptProvider.setRecipe?.(recipe);
+
+    // ── Await planning result ─────────────────────────────────────────────────
     let architecturePlan: ArchitecturePlan | null = null;
     let _planRawContent: string | undefined;
     try {
-      const planSystemPrompt = this.promptProvider.getArchitecturePlanningPrompt(userPrompt, intentOutput);
-
-      const response = await this.planningProvider.generate({
-        prompt: userPrompt,
-        systemInstruction: planSystemPrompt,
-        maxOutputTokens: this.promptProvider.tokenBudgets.architecturePlanning,
-        responseSchema: ARCHITECTURE_PLAN_JSON_SCHEMA,
-        signal: callbacks.signal,
-      });
+      const response = await planningPromise;
 
       _planRawContent = response.content ?? undefined;
 
@@ -215,56 +218,65 @@ export class GenerationPipeline {
     if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
 
     // ── Task 5.3: Plan Review Stage ───────────────────────────────────────────
-    callbacks.onStageStart?.('review', 'Reviewing architecture plan…');
-    const reviewStageStartMs = Date.now();
-    contextLogger.debug('Plan Review stage start');
+    if (architecturePlan.files.length > COMPLEXITY_GATE_FILE_THRESHOLD) {
+      callbacks.onStageStart?.('review', 'Reviewing architecture plan…');
+      const reviewStageStartMs = Date.now();
+      contextLogger.debug('Plan Review stage start');
 
-    let _reviewRawContent: string | undefined;
-    try {
-      const planReviewPrompt = this.promptProvider.getPlanReviewPrompt(architecturePlan);
+      let _reviewRawContent: string | undefined;
+      try {
+        const planReviewPrompt = this.promptProvider.getPlanReviewPrompt(architecturePlan);
 
-      const response = await this.reviewProvider.generate({
-        prompt: 'Review the architecture plan',
-        systemInstruction: planReviewPrompt,
-        maxOutputTokens: this.promptProvider.tokenBudgets.planReview,
-        responseSchema: PLAN_REVIEW_JSON_SCHEMA,
-        signal: callbacks.signal,
-      });
-
-      _reviewRawContent = response.content ?? undefined;
-
-      if (!response.success || !response.content) {
-        throw new Error(response.error ?? 'Plan review stage AI call failed');
-      }
-
-      const parsed = JSON.parse(response.content);
-      const zodResult = PlanReviewSchema.safeParse(parsed);
-
-      if (!zodResult.success) {
-        throw new Error(`PlanReview schema mismatch: ${zodResult.error.message}`);
-      }
-
-      const reviewOutput = zodResult.data;
-
-      if (!reviewOutput.valid || reviewOutput.issues.length > 0) {
-        contextLogger.warn('Plan Review found issues', {
-          issues: reviewOutput.issues.length,
-          durationMs: Date.now() - reviewStageStartMs,
+        const response = await this.reviewProvider.generate({
+          prompt: 'Review the architecture plan',
+          systemInstruction: planReviewPrompt,
+          maxOutputTokens: this.promptProvider.tokenBudgets.planReview,
+          responseSchema: PLAN_REVIEW_JSON_SCHEMA,
+          signal: callbacks.signal,
         });
-        architecturePlan = this.applyPlanCorrections(architecturePlan, reviewOutput);
-      } else {
-        contextLogger.info('Plan Review found no issues', { durationMs: Date.now() - reviewStageStartMs });
-      }
-      callbacks.onStageComplete?.('review');
 
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      contextLogger.warn('Plan review stage failed, proceeding with original plan', {
-        error: message,
-        stack: err instanceof Error ? err.stack : undefined,
-        responsePreview: _reviewRawContent ? _reviewRawContent.substring(0, 400) : undefined,
+        _reviewRawContent = response.content ?? undefined;
+
+        if (!response.success || !response.content) {
+          throw new Error(response.error ?? 'Plan review stage AI call failed');
+        }
+
+        const parsed = JSON.parse(response.content);
+        const zodResult = PlanReviewSchema.safeParse(parsed);
+
+        if (!zodResult.success) {
+          throw new Error(`PlanReview schema mismatch: ${zodResult.error.message}`);
+        }
+
+        const reviewOutput = zodResult.data;
+
+        if (!reviewOutput.valid || reviewOutput.issues.length > 0) {
+          contextLogger.warn('Plan Review found issues', {
+            issues: reviewOutput.issues.length,
+            durationMs: Date.now() - reviewStageStartMs,
+          });
+          architecturePlan = this.applyPlanCorrections(architecturePlan, reviewOutput);
+        } else {
+          contextLogger.info('Plan Review found no issues', { durationMs: Date.now() - reviewStageStartMs });
+        }
+        callbacks.onStageComplete?.('review');
+
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        contextLogger.warn('Plan review stage failed, proceeding with original plan', {
+          error: message,
+          stack: err instanceof Error ? err.stack : undefined,
+          responsePreview: _reviewRawContent ? _reviewRawContent.substring(0, 400) : undefined,
+        });
+        callbacks.onStageFailed?.('review', message);
+      }
+    } else {
+      contextLogger.info('Skipping plan review for simple project', {
+        fileCount: architecturePlan.files.length,
+        threshold: COMPLEXITY_GATE_FILE_THRESHOLD,
       });
-      callbacks.onStageFailed?.('review', message);
+      callbacks.onStageStart?.('review', 'Skipping plan review…');
+      callbacks.onStageComplete?.('review');
     }
 
     if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
@@ -297,9 +309,7 @@ export class GenerationPipeline {
       allGeneratedFiles = result.files;
       allWarnings.push(...result.warnings);
     } else {
-      // One-shot: same execution path — complexity gate reserved for future optimisation
-      const result = await this.executeMultiPhase(
-        mergedPhases,
+      const result = await this.executeOneShot(
         architecturePlan,
         userPrompt,
         recipe,
@@ -444,6 +454,8 @@ export class GenerationPipeline {
     const allWarnings: string[] = [];
     // Accumulated map of path -> content for inter-phase context
     const generatedFilesMap = new Map<string, string>();
+    // Shared summary cache — avoids re-summarizing scaffold files on every phase
+    const summaryCache = new Map<string, import('./batch-context-builder').FileSummary>();
     const totalPlanned = mergedPhases.reduce((sum, p) => sum + p.files.length, 0);
 
     for (let phaseIndex = 0; phaseIndex < mergedPhases.length; phaseIndex++) {
@@ -478,7 +490,8 @@ export class GenerationPipeline {
           phase.layer,
           plan,
           generatedFilesMap,
-          batchFiles
+          batchFiles,
+          summaryCache
         );
 
         const phaseDef: PhaseDefinition = {
@@ -555,6 +568,66 @@ export class GenerationPipeline {
     }
 
     return { files: allFiles, warnings: allWarnings };
+  }
+
+  /**
+   * True one-shot execution path for simple projects (≤10 files).
+   * Issues a single AI call with the full-app generation prompt instead of
+   * running scaffold + UI as two sequential calls.
+   */
+  private async executeOneShot(
+    plan: ArchitecturePlan,
+    userPrompt: string,
+    recipe: any,
+    callbacks: PipelineCallbacks,
+    contextLogger: any
+  ): Promise<{ files: GeneratedFile[]; warnings: string[] }> {
+    callbacks.onStageStart?.('oneshot', 'Generating application…');
+    callbacks.onPhaseStart?.({
+      phase: 'oneshot',
+      phaseIndex: 0,
+      totalPhases: 1,
+      filesInPhase: plan.files.length,
+    });
+    contextLogger.info('Starting one-shot execution', { fileCount: plan.files.length });
+
+    const emptyContext: PhaseContext = {
+      typeDefinitions: new Map(),
+      directDependencies: new Map(),
+      fileSummaries: [],
+      cssVariables: [],
+      relevantContracts: { typeContracts: [], stateShape: { contexts: [], hooks: [] } },
+    };
+
+    const phaseDef: PhaseDefinition = {
+      layer: 'oneshot',
+      plan,
+      userPrompt,
+      recipe,
+      expectedFiles: plan.files.map((f) => f.path),
+    };
+
+    const allWarnings: string[] = [];
+    const phaseCallbacks: PhaseCallbacks = {
+      onProgress: callbacks.onProgress,
+      onFileStream: callbacks.onFileStream,
+      onWarning: (warning) => allWarnings.push(warning),
+      signal: callbacks.signal,
+    };
+
+    const result = await this.phaseExecutor.executePhase(phaseDef, emptyContext, phaseCallbacks);
+    allWarnings.push(...result.warnings);
+
+    callbacks.onStageComplete?.('oneshot');
+    callbacks.onPhaseComplete?.({
+      phase: 'oneshot',
+      phaseIndex: 0,
+      filesGenerated: result.files.length,
+      totalGenerated: result.files.length,
+      totalPlanned: plan.files.length,
+    });
+
+    return { files: result.files, warnings: allWarnings };
   }
 
   /**
