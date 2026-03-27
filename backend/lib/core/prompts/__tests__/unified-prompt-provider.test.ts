@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { UnifiedPromptProvider } from '../unified-prompt-provider';
+import { getCSSLibrary } from '../css-library';
 import {
   MAX_OUTPUT_TOKENS_INTENT,
   MAX_OUTPUT_TOKENS_PLANNING_STAGE,
@@ -102,14 +103,16 @@ describe('UnifiedPromptProvider — verboseGuidance', () => {
     expect(prompt).toContain('JSON OUTPUT RULES');
   });
 
-  // ─── 4. verboseGuidance: false → DETAILED fragments absent ───────────────
+  // ─── 4. verboseGuidance: false → DETAILED fragments absent; DESIGN_SYSTEM always present ──
 
-  it('omits DETAILED fragments in generation prompt when verbose=false (default)', () => {
+  it('omits DETAILED fragments but keeps DESIGN_SYSTEM_CONSTANTS when verbose=false (default)', () => {
     const p = new UnifiedPromptProvider();
     const prompt = p.getExecutionGenerationSystemPrompt('build a todo app', null, null);
     expect(prompt).not.toContain('DETAILED REACT PATTERNS');
     expect(prompt).not.toContain('DETAILED CSS PATTERNS');
     expect(prompt).not.toContain('JSON OUTPUT RULES');
+    // DESIGN_SYSTEM_CONSTANTS is always-on (phase 2.1) — must be present regardless of verboseGuidance
+    expect(prompt).toContain('DESIGN PRINCIPLES (ALWAYS APPLY)');
   });
 
   // ─── 5. verboseGuidance: true in modification prompt ─────────────────────
@@ -229,5 +232,73 @@ describe('UnifiedPromptProvider — dynamic token budgets in output guidance', (
     });
     const prompt = p.getExecutionModificationSystemPrompt('add feature', null, null, false);
     expect(prompt).toContain(customBudget.toLocaleString());
+  });
+});
+
+// ─── 11. getCSSLibrary tier gating ────────────────────────────────────────────
+
+describe('getCSSLibrary — complexity tier gating', () => {
+  it('simple tier: contains .btn, does NOT contain .toast or .skeleton', () => {
+    const css = getCSSLibrary('simple');
+    expect(css).toContain('.btn');
+    expect(css).not.toContain('.toast');
+    expect(css).not.toContain('.skeleton');
+  });
+
+  it('medium tier: contains both .btn and .toast and .skeleton', () => {
+    const css = getCSSLibrary('medium');
+    expect(css).toContain('.btn');
+    expect(css).toContain('.toast');
+    expect(css).toContain('.skeleton');
+  });
+
+  it('complex tier: same as medium — contains .btn, .toast, and .skeleton', () => {
+    const css = getCSSLibrary('complex');
+    expect(css).toContain('.btn');
+    expect(css).toContain('.toast');
+    expect(css).toContain('.skeleton');
+  });
+});
+
+// ─── 12. Domain color detection ───────────────────────────────────────────────
+
+describe('UnifiedPromptProvider — domain color detection in generation prompt', () => {
+  const p = new UnifiedPromptProvider();
+
+  it('finance domain prompt contains green #059669', () => {
+    const prompt = p.getExecutionGenerationSystemPrompt('build a personal finance dashboard', null, null);
+    expect(prompt).toContain('#059669');
+  });
+
+  it('recipe domain prompt contains orange #ea580c', () => {
+    const prompt = p.getExecutionGenerationSystemPrompt('build a recipe manager', null, null);
+    expect(prompt).toContain('#ea580c');
+  });
+
+  it('todo app prompt contains default blue #2563eb', () => {
+    const prompt = p.getExecutionGenerationSystemPrompt('build a todo app', null, null);
+    expect(prompt).toContain('#2563eb');
+  });
+});
+
+// ─── 13. DESIGN_SYSTEM_CONSTANTS always-on ───────────────────────────────────
+
+describe('UnifiedPromptProvider — DESIGN_SYSTEM_CONSTANTS always-on', () => {
+  it('generation prompt always contains DESIGN_SYSTEM_CONSTANTS when verboseGuidance=true', () => {
+    const p = new UnifiedPromptProvider({ verboseGuidance: true });
+    const prompt = p.getExecutionGenerationSystemPrompt('build an app', null, null);
+    expect(prompt).toContain('DESIGN PRINCIPLES (ALWAYS APPLY)');
+  });
+
+  it('generation prompt always contains DESIGN_SYSTEM_CONSTANTS when verboseGuidance=false', () => {
+    const p = new UnifiedPromptProvider({ verboseGuidance: false });
+    const prompt = p.getExecutionGenerationSystemPrompt('build an app', null, null);
+    expect(prompt).toContain('DESIGN PRINCIPLES (ALWAYS APPLY)');
+  });
+
+  it('generation prompt always contains DESIGN_SYSTEM_CONSTANTS when no config is passed', () => {
+    const p = new UnifiedPromptProvider();
+    const prompt = p.getExecutionGenerationSystemPrompt('build an app', null, null);
+    expect(prompt).toContain('DESIGN PRINCIPLES (ALWAYS APPLY)');
   });
 });
