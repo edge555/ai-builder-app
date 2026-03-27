@@ -29,10 +29,17 @@ export const LAYOUT_FUNDAMENTALS = `=== LAYOUT FUNDAMENTALS (ALWAYS APPLY) ===
    - Prefer gap over margin chains for sibling spacing
    - Ensure text, buttons, and inputs align to a visual grid
 
-5. RESPONSIVE:
-   - Use min(), max(), clamp() for fluid sizing
-   - Single breakpoint at ~768px for mobile/desktop shift
-   - Allow flex-wrap and auto-fill grids to reflow naturally`;
+5. RESPONSIVE (MOBILE-FIRST):
+   - Write base styles for mobile first, then override in @media (min-width: 768px) for tablet/desktop
+   - Fluid typography: font-size: clamp(1rem, 0.5rem + 1.5vw, 1.25rem)
+   - Use min(), max(), clamp() for all fluid sizing — never fixed px widths on containers
+   - Container pattern: max-width: 1200px; margin: 0 auto; padding: 0 var(--space-md)
+   - Touch targets: ALL interactive elements (buttons, links, inputs) minimum 44px × 44px
+   - Mobile navigation: hamburger overlay for secondary nav OR bottom tab bar for primary nav
+   - Mobile modals: full-width bottom sheets on < 768px (border-radius top corners only)
+   - Scrollable areas: -webkit-overflow-scrolling: touch; scroll-behavior: smooth
+   - Images: max-width: 100%; height: auto; display: block (prevents inline gaps)
+   - Allow flex-wrap and auto-fill grids to reflow naturally at smaller widths`;
 
 /**
  * Baseline visual polish — always included in every prompt regardless of design keywords.
@@ -160,6 +167,14 @@ NEVER use generic placeholder content. Generated apps must feel real and lived-i
    - For additional placeholder images, use https://picsum.photos/WIDTH/HEIGHT (e.g., https://picsum.photos/400/300)
    - Add ?random=N query param to get different images: https://picsum.photos/400/300?random=1
    - For avatars: https://picsum.photos/80/80?random=N
+   - ALWAYS wrap images in an aspect-ratio container to prevent layout shift:
+     <div style={{ aspectRatio: '16/9', overflow: 'hidden' }}><img src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" /></div>
+   - Add loading="lazy" to ALL images that are not in the initial viewport (hero/above-fold images may be eager)
+   - ALWAYS add an onError fallback — picsum can return broken URLs:
+     <img onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.removeAttribute('hidden'); }} ... />
+     with a sibling fallback div: <div hidden style={{ background: 'var(--color-primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ color: 'var(--color-primary)' }}>📷</span></div>
+   - Avatar fallback: when an avatar image fails, show user initials on var(--color-primary-light) background:
+     <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--color-primary-light)', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>{name.charAt(0).toUpperCase()}</div>
 
 4. INITIAL STATE (CRITICAL — most common failure point):
    - Apps MUST load with pre-populated sample data — never start empty, never show a loading spinner on first render
