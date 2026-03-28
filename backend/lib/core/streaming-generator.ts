@@ -93,6 +93,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     let lastParsedIndex = 0;
     const emittedFiles = new Set<string>();
     let warningCount = 0;
+    let plannedTotal = 0;
 
     // Map pipeline callbacks to StreamingCallbacks
     const pipelineCallbacks: GenerationCallbacks = {
@@ -112,6 +113,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
         callbacks.onProgress?.(accumulatedLength);
       },
       onPhaseStart: (data) => {
+        plannedTotal += data.filesInPhase;
         callbacks.onPhaseStart?.(data);
       },
       onPhaseComplete: (data) => {
@@ -120,12 +122,11 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       onFileStream: (file, isComplete) => {
         if (!emittedFiles.has(file.path) || isComplete) {
           emittedFiles.add(file.path);
-          // Just use the set size, or wait for finalization.
           callbacks.onFile?.({
             path: file.path,
             content: file.content,
             index: emittedFiles.size - 1,
-            total: Math.max(emittedFiles.size, 10), // Total isn't cleanly known during multi-phase easily without passing ArchitecturePlan through, so passing an estimate
+            total: plannedTotal > 0 ? plannedTotal : Math.max(emittedFiles.size, 10),
             status: isComplete ? 'complete' : 'partial',
           });
         }

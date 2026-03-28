@@ -38,7 +38,8 @@ describe('PhaseExecutor', () => {
     directDependencies: new Map(),
     fileSummaries: [],
     cssVariables: [],
-    relevantContracts: { typeContracts: [], stateShape: { contexts: [], hooks: [] } }
+    relevantContracts: { typeContracts: [], stateShape: { contexts: [], hooks: [] } },
+    missingPlannedImports: [],
   };
 
   beforeEach(() => {

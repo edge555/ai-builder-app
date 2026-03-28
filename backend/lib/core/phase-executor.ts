@@ -95,32 +95,35 @@ export class PhaseExecutor {
         // the AgentRouter fallback faster than the global 300s HTTP timeout.
         const phaseSignal = this.createPhaseSignal(callbacks?.signal);
 
-        await this.provider.generateStreaming({
-          systemInstruction: systemPrompt,
-          prompt: '', // We bake the userPrompt into the system prompt structure for phases
-          maxOutputTokens,
-          signal: phaseSignal.signal,
-          onChunk: (chunk: string, totalLength: number) => {
-            phaseSignal.touch(); // reset inactivity timer on each chunk
-            accumulatedText += chunk;
-            callbacks?.onProgress?.(totalLength);
+        try {
+          await this.provider.generateStreaming({
+            systemInstruction: systemPrompt,
+            prompt: '', // We bake the userPrompt into the system prompt structure for phases
+            maxOutputTokens,
+            signal: phaseSignal.signal,
+            onChunk: (chunk: string, totalLength: number) => {
+              phaseSignal.touch(); // reset inactivity timer on each chunk
+              accumulatedText += chunk;
+              callbacks?.onProgress?.(totalLength);
 
-            const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
-            if (parseResult.files.length > 0) {
-              for (const file of parseResult.files) {
-                if (!generatedFiles.has(file.path)) {
-                  generatedFiles.set(file.path, { path: file.path, content: file.content });
-                  callbacks?.onFileStream?.(file, false); // Initial stream pass
-                } else {
-                  // Replace with updated content if it grew (e.g., if parsing was partial vs full)
-                  generatedFiles.set(file.path, { path: file.path, content: file.content });
+              const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
+              if (parseResult.files.length > 0) {
+                for (const file of parseResult.files) {
+                  if (!generatedFiles.has(file.path)) {
+                    generatedFiles.set(file.path, { path: file.path, content: file.content });
+                    callbacks?.onFileStream?.(file, false); // Initial stream pass
+                  } else {
+                    // Replace with updated content if it grew (e.g., if parsing was partial vs full)
+                    generatedFiles.set(file.path, { path: file.path, content: file.content });
+                  }
                 }
+                lastParsedIndex = parseResult.lastParsedIndex;
               }
-              lastParsedIndex = parseResult.lastParsedIndex;
-            }
-          },
-        });
-        phaseSignal.clear();
+            },
+          });
+        } finally {
+          phaseSignal.clear();
+        }
 
         // ─── Truncation Detection & Continuation (Decision 12A) ─────────────────────
         // We allow up to 2 continuation rounds within the current execution attempt
@@ -167,30 +170,33 @@ ${missingPaths.map((p) => `- ${p}`).join('\n')}
 DO NOT repeat files you have already generated.`;
 
           const contSignal = this.createPhaseSignal(callbacks?.signal);
-          await this.provider.generateStreaming({
-            systemInstruction: systemPrompt, // Keep original context instructions for syntax accuracy
-            prompt: continuationPrompt,
-            maxOutputTokens, // Give a full fresh budget
-            signal: contSignal.signal,
-            onChunk: (chunk: string, totalLength: number) => {
-              contSignal.touch(); // reset inactivity timer on each chunk
-              accumulatedText += chunk;
-              callbacks?.onProgress?.(totalLength);
+          try {
+            await this.provider.generateStreaming({
+              systemInstruction: systemPrompt, // Keep original context instructions for syntax accuracy
+              prompt: continuationPrompt,
+              maxOutputTokens, // Give a full fresh budget
+              signal: contSignal.signal,
+              onChunk: (chunk: string, totalLength: number) => {
+                contSignal.touch(); // reset inactivity timer on each chunk
+                accumulatedText += chunk;
+                callbacks?.onProgress?.(totalLength);
 
-              const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
-              if (parseResult.files.length > 0) {
-                for (const file of parseResult.files) {
-                  // Only accept files that were actually missing
-                  if (missingPaths.includes(file.path)) {
-                    generatedFiles.set(file.path, { path: file.path, content: file.content });
-                    callbacks?.onFileStream?.(file, false);
+                const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
+                if (parseResult.files.length > 0) {
+                  for (const file of parseResult.files) {
+                    // Only accept files that were actually missing
+                    if (missingPaths.includes(file.path)) {
+                      generatedFiles.set(file.path, { path: file.path, content: file.content });
+                      callbacks?.onFileStream?.(file, false);
+                    }
                   }
+                  lastParsedIndex = parseResult.lastParsedIndex;
                 }
-                lastParsedIndex = parseResult.lastParsedIndex;
-              }
-            },
-          });
-          contSignal.clear();
+              },
+            });
+          } finally {
+            contSignal.clear();
+          }
         }
 
         const finalFiles = Array.from(generatedFiles.values());

@@ -287,17 +287,17 @@ export class GenerationPipeline {
     
     contextLogger.info(`Complexity Gate routing`, { route: complexityRoute });
 
-    // ── Task 5.5: Phase Merge Logic ───────────────────────────────────────────
-    const mergedPhases = this.mergePhases(architecturePlan);
-    contextLogger.info('Phases after merge', { 
-      phases: mergedPhases.map(p => ({ layer: p.layer, fileCount: p.files.length })) 
-    });
-
     // ── Task 5.6: Multi-Phase Execution Loop ──────────────────────────────────
     let allGeneratedFiles: GeneratedFile[] = [];
     const allWarnings: string[] = [];
 
     if (complexityRoute === 'multi-phase') {
+      // ── Task 5.5: Phase Merge Logic ─────────────────────────────────────────
+      const mergedPhases = this.mergePhases(architecturePlan);
+      contextLogger.info('Phases after merge', {
+        phases: mergedPhases.map(p => ({ layer: p.layer, fileCount: p.files.length }))
+      });
+
       const result = await this.executeMultiPhase(
         mergedPhases,
         architecturePlan,
@@ -599,6 +599,7 @@ export class GenerationPipeline {
       fileSummaries: [],
       cssVariables: [],
       relevantContracts: { typeContracts: [], stateShape: { contexts: [], hooks: [] } },
+      missingPlannedImports: [],
     };
 
     const phaseDef: PhaseDefinition = {
@@ -649,7 +650,8 @@ export class GenerationPipeline {
    * Roughly estimates the input tokens required for single-shot generation.
    */
   private estimateOneShotInputTokens(plan: ArchitecturePlan): number {
+    const SYSTEM_PROMPT_BASELINE_TOKENS = 4000;
     const stringifiedPlan = JSON.stringify(plan, null, 2);
-    return Math.floor(stringifiedPlan.length / 4);
+    return SYSTEM_PROMPT_BASELINE_TOKENS + Math.floor(stringifiedPlan.length / 4);
   }
 }
