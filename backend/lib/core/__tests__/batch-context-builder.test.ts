@@ -10,7 +10,7 @@
  * - Edge cases: empty generatedFiles, files not in plan, CSS with no variables
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   buildPhaseContext,
   getDirectDeps,
@@ -18,6 +18,7 @@ import {
   getContractsForBatch,
   summarizeFile,
 } from '../batch-context-builder';
+import type { FileSummary } from '../batch-context-builder';
 import type { ArchitecturePlan, PlannedFile } from '../../schemas';
 
 // ─── Fixture Factories ───────────────────────────────────────────────────────
@@ -554,5 +555,85 @@ describe('buildPhaseContext — edge cases', () => {
     // skips batch paths. So it ends up in fileSummaries (not in directDeps).
     // This is acceptable — the key assertion: no crash.
     expect(ctx).toBeDefined();
+  });
+});
+
+// ─── buildPhaseContext — summaryCache ─────────────────────────────────────────
+
+describe('buildPhaseContext — summaryCache', () => {
+  it('calls summarizeFile once per unique path across two calls with same files', () => {
+    const plan = makePlan();
+    const generated = new Map([
+      ['src/types/index.ts', TYPES_CONTENT],
+      ['src/index.css', CSS_CONTENT],
+    ]);
+    const batch = [plan.files.find(f => f.path === 'src/hooks/useTodos.ts')!];
+
+    // Spy on the real summarizeFile by wrapping via the cache
+    const summaryCache = new Map<string, FileSummary>();
+    const setSpy = vi.spyOn(summaryCache, 'set');
+
+    buildPhaseContext('logic', plan, generated, batch, summaryCache);
+    buildPhaseContext('logic', plan, generated, batch, summaryCache);
+
+    // set() is called only on cache misses — should be called once per unique path
+    const setCalls = setSpy.mock.calls.map(([path]) => path);
+    const uniqueSetPaths = new Set(setCalls);
+    expect(setCalls.length).toBe(uniqueSetPaths.size);
+  });
+
+  it('stores computed summary in cache on first call', () => {
+    const plan = makePlan();
+    // Use the logic phase with App.tsx already generated — App.tsx is not a direct
+    // dep of useTodos.ts and is not scaffold, so it lands in fileSummaries
+    const appContent = `import { TodoList } from './components/TodoList';
+export default function App() { return <TodoList />; }`;
+    const generated = new Map([
+      ['src/types/index.ts', TYPES_CONTENT],
+      ['src/App.tsx', appContent],
+    ]);
+    const batch = [plan.files.find(f => f.path === 'src/hooks/useTodos.ts')!];
+    const summaryCache = new Map<string, FileSummary>();
+
+    buildPhaseContext('logic', plan, generated, batch, summaryCache);
+
+    // src/App.tsx is not scaffold and not a direct dep — it goes to fileSummaries and cache
+    expect(summaryCache.has('src/App.tsx')).toBe(true);
+    expect(summaryCache.get('src/App.tsx')?.path).toBe('src/App.tsx');
+  });
+
+  it('returns cached summary on second call without recomputing', () => {
+    const plan = makePlan();
+    const appContent = `export default function App() { return null; }`;
+    const generated = new Map([
+      ['src/types/index.ts', TYPES_CONTENT],
+      ['src/App.tsx', appContent],
+    ]);
+    const batch = [plan.files.find(f => f.path === 'src/hooks/useTodos.ts')!];
+    const summaryCache = new Map<string, FileSummary>();
+
+    buildPhaseContext('logic', plan, generated, batch, summaryCache);
+    const cachedSummary = summaryCache.get('src/App.tsx')!;
+    expect(cachedSummary).toBeDefined();
+
+    // Mutate generated content — cached result should still be returned (not recomputed)
+    generated.set('src/App.tsx', '// completely different content');
+    buildPhaseContext('logic', plan, generated, batch, summaryCache);
+
+    expect(summaryCache.get('src/App.tsx')).toBe(cachedSummary);
+  });
+
+  it('works correctly with no summaryCache param (existing behavior unchanged)', () => {
+    const plan = makePlan();
+    const generated = new Map([
+      ['src/types/index.ts', TYPES_CONTENT],
+      ['src/index.css', CSS_CONTENT],
+    ]);
+    const batch = [plan.files.find(f => f.path === 'src/hooks/useTodos.ts')!];
+
+    // No cache param — should not throw and should return correct context
+    expect(() => buildPhaseContext('logic', plan, generated, batch)).not.toThrow();
+    const ctx = buildPhaseContext('logic', plan, generated, batch);
+    expect(ctx.typeDefinitions.has('src/types/index.ts')).toBe(true);
   });
 });

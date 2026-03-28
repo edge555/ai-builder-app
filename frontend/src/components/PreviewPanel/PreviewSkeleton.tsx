@@ -2,7 +2,7 @@ import { forwardRef } from 'react';
 import './PreviewSkeleton.css';
 
 interface PreviewSkeletonProps {
-  phase?: 'generating' | 'modifying' | 'validating' | 'processing';
+  phase?: 'planning' | 'generating' | 'modifying' | 'validating' | 'processing';
 }
 
 /**
@@ -12,6 +12,7 @@ interface PreviewSkeletonProps {
 export const PreviewSkeleton = forwardRef<HTMLDivElement, PreviewSkeletonProps>(
   function PreviewSkeleton({ phase = 'generating' }, ref) {
     const phaseMessages = {
+      planning: 'Planning your application...',
       generating: 'Generating your application...',
       modifying: 'Applying changes...',
       validating: 'Validating code...',

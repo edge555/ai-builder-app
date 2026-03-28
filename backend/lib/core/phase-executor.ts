@@ -6,7 +6,7 @@
  */
 
 import type { AIProvider } from '../ai/ai-provider';
-import type { IPromptProvider, PhaseLayer, ArchitecturePlan } from './prompts/prompt-provider';
+import type { IPromptProvider, PhaseLayer, ExecutionLayer, ArchitecturePlan } from './prompts/prompt-provider';
 import type { BuildValidator, BuildValidationResult } from './build-validator';
 import type { PhaseContext } from './batch-context-builder';
 import type { GeneratedFile } from './schemas';
@@ -18,10 +18,12 @@ import { PHASE_EXECUTION_TIMEOUT } from '../constants';
 const logger = createLogger('PhaseExecutor');
 
 export interface PhaseDefinition {
-  layer: PhaseLayer;
+  layer: ExecutionLayer;
   plan: ArchitecturePlan;
   userPrompt: string;
   recipe?: GenerationRecipe;
+  /** Override the expected file list for truncation detection (required for 'oneshot' layer). */
+  expectedFiles?: string[];
 }
 
 export interface PhaseCallbacks {
@@ -63,7 +65,7 @@ export class PhaseExecutor {
     const maxOutputTokens = this.promptProvider.tokenBudgets[layer as keyof typeof this.promptProvider.tokenBudgets] as number;
     let attempt = 1;
     const maxAttempts = 2; // Simple retry logic (decision 7A)
-    const allExpectedFiles = plan.files.filter((f) => f.layer === layer).map((f) => f.path);
+    const allExpectedFiles = phaseDef.expectedFiles ?? plan.files.filter((f) => f.layer === layer).map((f) => f.path);
 
     let lastErrorFeedback = '';
 
@@ -93,32 +95,35 @@ export class PhaseExecutor {
         // the AgentRouter fallback faster than the global 300s HTTP timeout.
         const phaseSignal = this.createPhaseSignal(callbacks?.signal);
 
-        await this.provider.generateStreaming({
-          systemInstruction: systemPrompt,
-          prompt: '', // We bake the userPrompt into the system prompt structure for phases
-          maxOutputTokens,
-          signal: phaseSignal.signal,
-          onChunk: (chunk: string, totalLength: number) => {
-            phaseSignal.touch(); // reset inactivity timer on each chunk
-            accumulatedText += chunk;
-            callbacks?.onProgress?.(totalLength);
+        try {
+          await this.provider.generateStreaming({
+            systemInstruction: systemPrompt,
+            prompt: '', // We bake the userPrompt into the system prompt structure for phases
+            maxOutputTokens,
+            signal: phaseSignal.signal,
+            onChunk: (chunk: string, totalLength: number) => {
+              phaseSignal.touch(); // reset inactivity timer on each chunk
+              accumulatedText += chunk;
+              callbacks?.onProgress?.(totalLength);
 
-            const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
-            if (parseResult.files.length > 0) {
-              for (const file of parseResult.files) {
-                if (!generatedFiles.has(file.path)) {
-                  generatedFiles.set(file.path, { path: file.path, content: file.content });
-                  callbacks?.onFileStream?.(file, false); // Initial stream pass
-                } else {
-                  // Replace with updated content if it grew (e.g., if parsing was partial vs full)
-                  generatedFiles.set(file.path, { path: file.path, content: file.content });
+              const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
+              if (parseResult.files.length > 0) {
+                for (const file of parseResult.files) {
+                  if (!generatedFiles.has(file.path)) {
+                    generatedFiles.set(file.path, { path: file.path, content: file.content });
+                    callbacks?.onFileStream?.(file, false); // Initial stream pass
+                  } else {
+                    // Replace with updated content if it grew (e.g., if parsing was partial vs full)
+                    generatedFiles.set(file.path, { path: file.path, content: file.content });
+                  }
                 }
+                lastParsedIndex = parseResult.lastParsedIndex;
               }
-              lastParsedIndex = parseResult.lastParsedIndex;
-            }
-          },
-        });
-        phaseSignal.clear();
+            },
+          });
+        } finally {
+          phaseSignal.clear();
+        }
 
         // ─── Truncation Detection & Continuation (Decision 12A) ─────────────────────
         // We allow up to 2 continuation rounds within the current execution attempt
@@ -151,44 +156,54 @@ export class PhaseExecutor {
           accumulatedText = '';
           lastParsedIndex = 0;
 
-          const continuationPrompt = `You were generating the ${layer} layer files but the output was truncated.
+          const alreadyGeneratedPaths = Array.from(generatedFiles.keys());
+          const continuationPrompt = layer === 'oneshot'
+            ? `You were generating a complete application but the output was truncated.
+These files were already generated: ${alreadyGeneratedPaths.map((p) => `- ${p}`).join('\n')}
+Generate ONLY the following missing files: ${missingPaths.map((p) => `- ${p}`).join('\n')}
+
+DO NOT repeat files you have already generated.`
+            : `You were generating the ${layer} layer files but the output was truncated.
 Please generate ONLY the following missing files exactly matching the previous structure instructions:
 ${missingPaths.map((p) => `- ${p}`).join('\n')}
 
 DO NOT repeat files you have already generated.`;
 
           const contSignal = this.createPhaseSignal(callbacks?.signal);
-          await this.provider.generateStreaming({
-            systemInstruction: systemPrompt, // Keep original context instructions for syntax accuracy
-            prompt: continuationPrompt,
-            maxOutputTokens, // Give a full fresh budget
-            signal: contSignal.signal,
-            onChunk: (chunk: string, totalLength: number) => {
-              contSignal.touch(); // reset inactivity timer on each chunk
-              accumulatedText += chunk;
-              callbacks?.onProgress?.(totalLength);
+          try {
+            await this.provider.generateStreaming({
+              systemInstruction: systemPrompt, // Keep original context instructions for syntax accuracy
+              prompt: continuationPrompt,
+              maxOutputTokens, // Give a full fresh budget
+              signal: contSignal.signal,
+              onChunk: (chunk: string, totalLength: number) => {
+                contSignal.touch(); // reset inactivity timer on each chunk
+                accumulatedText += chunk;
+                callbacks?.onProgress?.(totalLength);
 
-              const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
-              if (parseResult.files.length > 0) {
-                for (const file of parseResult.files) {
-                  // Only accept files that were actually missing
-                  if (missingPaths.includes(file.path)) {
-                    generatedFiles.set(file.path, { path: file.path, content: file.content });
-                    callbacks?.onFileStream?.(file, false);
+                const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
+                if (parseResult.files.length > 0) {
+                  for (const file of parseResult.files) {
+                    // Only accept files that were actually missing
+                    if (missingPaths.includes(file.path)) {
+                      generatedFiles.set(file.path, { path: file.path, content: file.content });
+                      callbacks?.onFileStream?.(file, false);
+                    }
                   }
+                  lastParsedIndex = parseResult.lastParsedIndex;
                 }
-                lastParsedIndex = parseResult.lastParsedIndex;
-              }
-            },
-          });
-          contSignal.clear();
+              },
+            });
+          } finally {
+            contSignal.clear();
+          }
         }
 
         const finalFiles = Array.from(generatedFiles.values());
 
-        // Hard fail for scaffold layer if no files generated successfully
-        if (layer === 'scaffold' && finalFiles.length === 0) {
-          throw new Error('Scaffold phase failed: No files generated successfully');
+        // Hard fail for scaffold or oneshot layer if no files generated successfully
+        if ((layer === 'scaffold' || layer === 'oneshot') && finalFiles.length === 0) {
+          throw new Error(`${layer === 'oneshot' ? 'One-shot' : 'Scaffold'} phase failed: No files generated successfully`);
         }
 
         // Emit final completeness markers for the successful files

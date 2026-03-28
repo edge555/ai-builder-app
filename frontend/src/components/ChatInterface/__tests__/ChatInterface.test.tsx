@@ -159,7 +159,7 @@ describe('ChatInterface', () => {
 
     it('shows suggestions in empty state', () => {
         const suggestions = [
-            { prompt: 'Build a todo app', label: 'Todo App', category: 'app' as const },
+            { id: 'todo', prompt: 'Build a todo app', label: 'Todo App', category: 'ui' as const, icon: '📋' },
         ];
         render(<ChatInterface {...defaultProps} suggestions={suggestions} />);
         expect(screen.getByTestId('prompt-suggestions')).toBeInTheDocument();
@@ -207,7 +207,7 @@ describe('ChatInterface', () => {
                 {...defaultProps}
                 isLoading={true}
                 isStreaming={true}
-                streamingState={{ phase: 'streaming', filesReceived: 1, totalFiles: 3, textLength: 100 }}
+                streamingState={{ phase: 'generating', filesReceived: 1, totalFiles: 3, textLength: 100, progressLabel: null, isDegraded: false, files: {}, currentFile: null, error: null, lastHeartbeat: null, warnings: [], summary: null }}
             />
         );
         expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
@@ -216,7 +216,7 @@ describe('ChatInterface', () => {
     // ─── Streaming ────────────────────────────────────────────────────────────
 
     it('shows streaming indicator when isStreaming is true', () => {
-        const streamingState = { phase: 'streaming' as const, filesReceived: 2, totalFiles: 5, textLength: 200 };
+        const streamingState = { phase: 'generating' as const, filesReceived: 2, totalFiles: 5, textLength: 200, progressLabel: null, isDegraded: false, files: {}, currentFile: null, error: null, lastHeartbeat: null, warnings: [], summary: null };
         render(<ChatInterface {...defaultProps} isLoading={true} isStreaming={true} streamingState={streamingState} />);
         expect(screen.getByTestId('streaming-indicator')).toBeInTheDocument();
     });
@@ -280,7 +280,7 @@ describe('ChatInterface', () => {
 
     it('calls onSubmitPrompt when suggestion is selected in empty state', async () => {
         const onSubmitPrompt = vi.fn().mockResolvedValue(undefined);
-        const suggestions = [{ prompt: 'Build a todo app', label: 'Todo App', category: 'app' as const }];
+        const suggestions = [{ id: 'todo', prompt: 'Build a todo app', label: 'Todo App', category: 'ui' as const, icon: '📋' }];
 
         render(<ChatInterface {...defaultProps} onSubmitPrompt={onSubmitPrompt} suggestions={suggestions} />);
 

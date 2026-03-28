@@ -8,10 +8,10 @@
 
 import type { IntentOutput, PlanOutput, ArchitecturePlan } from '../schemas';
 import type { PhaseContext } from '../batch-context-builder';
-import type { PhaseLayer } from '../schemas';
+import type { PhaseLayer, ExecutionLayer } from '../schemas';
 import type { GenerationRecipe } from '../recipes/recipe-types';
 
-export type { IntentOutput, PlanOutput, ArchitecturePlan, PhaseLayer };
+export type { IntentOutput, PlanOutput, ArchitecturePlan, PhaseLayer, ExecutionLayer };
 
 /**
  * Unified prompt interface for the 4-stage pipeline.
@@ -81,7 +81,7 @@ export interface IPromptProvider {
    * Delegates to the appropriate function in phase-prompts.ts.
    */
   getPhasePrompt(
-    phase: PhaseLayer,
+    phase: ExecutionLayer,
     plan: ArchitecturePlan,
     context: PhaseContext,
     userPrompt: string,
@@ -109,5 +109,6 @@ export interface IPromptProvider {
     logic: number;
     ui: number;
     integration: number;
+    oneshot: number;
   };
 }

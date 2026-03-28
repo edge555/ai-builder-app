@@ -34,6 +34,7 @@ const ERROR_TITLES: Record<ErrorType, string> = {
   timeout: 'Request Timeout',
   rate_limit: 'Rate Limit',
   api_error: 'API Error',
+  provider_unavailable: 'Provider Unavailable',
   cancelled: 'Cancelled',
   unknown: 'Error',
 };
@@ -48,6 +49,7 @@ const ERROR_SUGGESTIONS: Record<ErrorType, string> = {
   timeout: 'Try a shorter, more specific prompt or check your connection.',
   rate_limit: 'The system will retry automatically when the rate limit clears.',
   api_error: 'The server returned an error. Please try again later.',
+  provider_unavailable: 'The AI provider is temporarily unavailable. Please try again in a moment.',
   cancelled: 'The request was cancelled.',
   unknown: 'An unexpected error occurred. Please try again.',
 };

@@ -234,7 +234,7 @@ function DiffContent({ diff }: DiffContentProps) {
     return (
         <div className="diff-content">
             {Array.isArray(diff.hunks) && diff.hunks.length > 0 ? (
-                diff.hunks.map((hunk, hunkIndex) => (
+                diff.hunks.map((hunk) => (
                     <div key={`hunk-${hunk.oldStart}-${hunk.newStart}`} className="diff-hunk">
                         <div className="diff-hunk-header">
                             @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@

@@ -175,8 +175,7 @@ describe('useUndoRedo — interleaved undo / redo / push sequences', () => {
     act(() => { result.current.pushState(makeState('a')); });
     rerender({ current: makeState('a') });
 
-    let s1: SerializedProjectState | null = null;
-    act(() => { s1 = result.current.undo(); }); // undo to 'a' off stack, get 'a' back
+    act(() => { result.current.undo(); }); // undo to 'a' off stack, get 'a' back
 
     // After undo, redo stack has 'a', undo stack is empty
     expect(result.current.canUndo).toBe(false);

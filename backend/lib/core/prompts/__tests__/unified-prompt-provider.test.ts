@@ -69,6 +69,7 @@ describe('UnifiedPromptProvider — default config (API)', () => {
     expect(p.tokenBudgets.logic).toBe(MAX_OUTPUT_TOKENS_LOGIC);
     expect(p.tokenBudgets.ui).toBe(MAX_OUTPUT_TOKENS_UI);
     expect(p.tokenBudgets.integration).toBe(MAX_OUTPUT_TOKENS_INTEGRATION);
+    expect(p.tokenBudgets.oneshot).toBe(MAX_OUTPUT_TOKENS_GENERATION);
   });
 });
 

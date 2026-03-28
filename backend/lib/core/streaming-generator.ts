@@ -93,6 +93,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     let lastParsedIndex = 0;
     const emittedFiles = new Set<string>();
     let warningCount = 0;
+    let plannedTotal = 0;
 
     // Map pipeline callbacks to StreamingCallbacks
     const pipelineCallbacks: GenerationCallbacks = {
@@ -112,6 +113,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
         callbacks.onProgress?.(accumulatedLength);
       },
       onPhaseStart: (data) => {
+        plannedTotal += data.filesInPhase;
         callbacks.onPhaseStart?.(data);
       },
       onPhaseComplete: (data) => {
@@ -120,12 +122,11 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       onFileStream: (file, isComplete) => {
         if (!emittedFiles.has(file.path) || isComplete) {
           emittedFiles.add(file.path);
-          // Just use the set size, or wait for finalization.
           callbacks.onFile?.({
             path: file.path,
             content: file.content,
             index: emittedFiles.size - 1,
-            total: Math.max(emittedFiles.size, 10), // Total isn't cleanly known during multi-phase easily without passing ArchitecturePlan through, so passing an estimate
+            total: plannedTotal > 0 ? plannedTotal : Math.max(emittedFiles.size, 10),
             status: isComplete ? 'complete' : 'partial',
           });
         }
@@ -230,76 +231,43 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       warningCount++;
     }
 
-    // Validate the output (syntax validation)
-    contextLogger.debug('Validating files', { files: Object.keys(prefixedFiles) });
-    const validationResult = this.validationPipeline.validate(prefixedFiles);
+    // Drop files with syntax errors before build-fix — partial output is better than total failure.
+    // Per-phase PhaseExecutor already validates syntax; this is a final safety net.
+    contextLogger.debug('Checking for syntax errors before build-fix', { files: Object.keys(prefixedFiles) });
+    const syntaxCheckResult = this.buildValidator.validate(prefixedFiles);
+    const brokenFiles = new Set(
+      syntaxCheckResult.errors
+        .filter(e => e.type === 'syntax_error')
+        .map(e => e.file)
+        .filter(Boolean)
+    );
 
-    if (validationResult.warnings && validationResult.warnings.length > 0) {
-      for (const warning of validationResult.warnings) {
+    if (brokenFiles.size > 0 && brokenFiles.size >= Object.keys(prefixedFiles).length) {
+      // All (or only) files are broken — hard fail rather than delivering nothing
+      contextLogger.error('All generated files have syntax errors — aborting before build-fix', {
+        brokenFiles: Array.from(brokenFiles),
+      });
+      return { success: false, error: 'Generation produced no valid files (all have syntax errors)' };
+    }
+
+    if (brokenFiles.size > 0 && brokenFiles.size < Object.keys(prefixedFiles).length) {
+      contextLogger.warn('Dropping files with syntax errors instead of failing', {
+        droppedFiles: Array.from(brokenFiles),
+        syntaxErrorCount: syntaxCheckResult.errors.filter(e => e.type === 'syntax_error').length,
+        remainingFiles: Object.keys(prefixedFiles).filter(p => !brokenFiles.has(p)),
+      });
+      for (const brokenPath of brokenFiles) {
+        delete prefixedFiles[brokenPath];
+        const fileErrors = syntaxCheckResult.errors
+          .filter(e => e.file === brokenPath && e.type === 'syntax_error')
+          .map(e => e.message)
+          .join('; ');
         callbacks.onWarning?.({
-          path: warning.filePath ?? '',
-          message: warning.message,
+          path: brokenPath,
+          message: `File dropped due to syntax errors: ${fileErrors}`,
           type: 'validation',
         });
         warningCount++;
-      }
-    }
-
-    if (!validationResult.valid) {
-      // Identify files with syntax errors and drop them instead of failing entirely
-      const syntaxErrors = validationResult.errors?.filter(e => e.type === 'syntax_error') ?? [];
-      const brokenFiles = new Set(syntaxErrors.map(e => e.filePath).filter((p): p is string => Boolean(p)));
-      const nonSyntaxErrors = validationResult.errors?.filter(e => e.type !== 'syntax_error') ?? [];
-
-      if (brokenFiles.size > 0 && brokenFiles.size < Object.keys(prefixedFiles).length) {
-        // Drop broken files and continue — partial output is better than total failure
-        contextLogger.warn('Dropping files with syntax errors instead of failing', {
-          droppedFiles: Array.from(brokenFiles),
-          syntaxErrorCount: syntaxErrors.length,
-          remainingFiles: Object.keys(prefixedFiles).filter(p => !brokenFiles.has(p)),
-        });
-
-        for (const brokenPath of brokenFiles) {
-          delete prefixedFiles[brokenPath];
-          callbacks.onWarning?.({
-            path: brokenPath,
-            message: `File dropped due to syntax errors: ${syntaxErrors.filter(e => e.filePath === brokenPath).map(e => e.message).join('; ')}`,
-            type: 'validation',
-          });
-          warningCount++;
-        }
-
-        // Re-validate without broken files if there are other errors
-        if (nonSyntaxErrors.length > 0) {
-          contextLogger.error('Non-syntax validation errors remain after dropping broken files', {
-            errorCount: nonSyntaxErrors.length,
-            validationErrors: nonSyntaxErrors,
-          });
-          const error = 'AI output failed validation';
-          callbacks.onError?.(error);
-          return {
-            success: false,
-            error,
-            validationErrors: nonSyntaxErrors,
-          };
-        }
-        // Proceed with remaining valid files
-      } else {
-        // All files broken or non-syntax errors — hard fail
-        contextLogger.error('Validation errors — AI output failed validation', {
-          errorCount: validationResult.errors?.length ?? 0,
-          validationErrors: validationResult.errors,
-          filesThatFailed: validationResult.errors?.map(e => e.filePath ?? 'unknown'),
-          generatedFileCount: Object.keys(prefixedFiles).length,
-          generatedFilePaths: Object.keys(prefixedFiles),
-        });
-        const error = 'AI output failed validation';
-        callbacks.onError?.(error);
-        return {
-          success: false,
-          error,
-          validationErrors: validationResult.errors,
-        };
       }
     }
 
@@ -313,9 +281,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     }
 
     // Build validation with auto-retry using the injected bugfix provider
-    // Use sanitizedOutput if validation passed cleanly, otherwise use prefixedFiles
-    // (which may have had broken files removed)
-    const filesToBuildFix = validationResult.sanitizedOutput ?? prefixedFiles;
+    const filesToBuildFix = prefixedFiles;
     const finalFiles = await this.runBuildFixLoop(
       filesToBuildFix,
       description,

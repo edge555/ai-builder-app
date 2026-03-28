@@ -55,7 +55,7 @@ describe('StreamingProjectGenerator', () => {
             validate: vi.fn(),
         };
         mockBuildValidator = {
-            validate: vi.fn(),
+            validate: vi.fn().mockReturnValue({ valid: true, errors: [] }),
             formatErrorsForAI: vi.fn(),
         };
 
@@ -148,44 +148,49 @@ describe('StreamingProjectGenerator', () => {
         }));
     });
 
-    // ─── Validation errors ────────────────────────────────────────────────────
+    // ─── Syntax-error file dropping (Phase 4) ────────────────────────────────
 
-    it('should handle validation errors', async () => {
-        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
+    it('drops a broken file, delivers the rest, and fires onWarning', async () => {
+        // Include main.tsx so the safety-net injector doesn't add a 4th file
+        const canonicalMain = `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App';\nimport './index.css';\nReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);\n`;
+        const inputFiles = [
+            { path: 'src/main.tsx',   content: canonicalMain },
+            { path: 'src/App.tsx',    content: 'export default function App() { return null; }' },
+            { path: 'src/Broken.tsx', content: 'this is not valid }{' },
+            { path: 'package.json',   content: '{}' },
+        ];
+        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult(inputFiles));
 
-        mockValidationPipeline.validate.mockReturnValue({
-            valid: false,
-            errors: [{ type: 'syntax', message: 'Syntax error' }],
-        });
-
-        const callbacks = { onError: vi.fn() };
-        const result = await generator.generateProjectStreaming('test', callbacks);
-
-        expect(result.success).toBe(false);
-        expect(callbacks.onError).toHaveBeenCalled();
-        expect(result.validationErrors).toHaveLength(1);
-    });
-
-    it('calls onWarning for validation warnings', async () => {
-        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
-
-        mockValidationPipeline.validate.mockReturnValue({
-            valid: true,
-            warnings: [{ filePath: 'src/App.tsx', message: 'Unused import' }],
-            sanitizedOutput: {
-                'src/App.tsx': 'export default function App() { return null; }',
-                'package.json': '{}',
-            },
-        });
-        mockBuildValidator.validate.mockReturnValue({ valid: true, errors: [] });
+        // buildValidator flags the broken file as a syntax_error on first call
+        mockBuildValidator.validate
+            .mockReturnValueOnce({
+                valid: false,
+                errors: [{ type: 'syntax_error', file: 'src/Broken.tsx', message: 'Unexpected token', severity: 'fixable' }],
+            })
+            // second call from runBuildFixLoop — no errors
+            .mockReturnValue({ valid: true, errors: [] });
 
         const onWarning = vi.fn();
-        await generator.generateProjectStreaming('test', { onWarning });
+        const result = await generator.generateProjectStreaming('test', { onWarning });
 
+        expect(result.success).toBe(true);
+        // broken file not in final output
+        expect(result.projectState!.files['src/Broken.tsx']).toBeUndefined();
+        // three remaining files delivered (main.tsx, App.tsx, package.json)
+        expect(Object.keys(result.projectState!.files)).toHaveLength(3);
+        // onWarning fired for the dropped file
         expect(onWarning).toHaveBeenCalledWith(expect.objectContaining({
-            path: 'src/App.tsx',
+            path: 'src/Broken.tsx',
             type: 'validation',
         }));
+    });
+
+    it('does not call validationPipeline.validate', async () => {
+        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
+
+        await generator.generateProjectStreaming('test', {});
+
+        expect(mockValidationPipeline.validate).not.toHaveBeenCalled();
     });
 
     // ─── Pipeline stage callbacks ─────────────────────────────────────────────
@@ -271,7 +276,8 @@ describe('StreamingProjectGenerator', () => {
 
         expect(onProgress).toHaveBeenCalledWith(10);
         expect(onProgress).toHaveBeenCalledWith(50);
-        expect(onFile).toHaveBeenCalledTimes(4);
+        // 2 streaming onFile calls + 3 final onFile calls (App.tsx, package.json, injected main.tsx)
+        expect(onFile).toHaveBeenCalledTimes(5);
     });
 
     // ─── File emission ────────────────────────────────────────────────────────
@@ -313,9 +319,10 @@ describe('StreamingProjectGenerator', () => {
         const onStreamEnd = vi.fn();
         await generator.generateProjectStreaming('test', { onStreamEnd });
 
+        // makeGenerationResult has App.tsx + package.json; main.tsx injected as safety net → 3 total
         expect(onStreamEnd).toHaveBeenCalledWith(expect.objectContaining({
-            totalFiles: 2,
-            successfulFiles: 2,
+            totalFiles: 3,
+            successfulFiles: 3,
             failedFiles: 0,
             warnings: 0,
         }));
@@ -348,11 +355,6 @@ describe('StreamingProjectGenerator', () => {
         mockPipeline.runGeneration.mockImplementation(async () => {
             controller.abort();
             return makeGenerationResult();
-        });
-
-        mockValidationPipeline.validate.mockReturnValue({
-            valid: true,
-            sanitizedOutput: { 'src/App.tsx': 'export default function App() { return null; }', 'package.json': '{}' },
         });
 
         const result = await generator.generateProjectStreaming('test', { signal: controller.signal });

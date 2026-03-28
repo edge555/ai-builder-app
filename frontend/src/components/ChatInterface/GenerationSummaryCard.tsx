@@ -26,8 +26,6 @@ export function GenerationSummaryCard({ files, changeSummary }: GenerationSummar
   // Categorize files
   const components = paths.filter(p => p.match(/components?\//i) && p.endsWith('.tsx'));
   const pages = paths.filter(p => p.match(/page\.tsx$|pages?\//i));
-  const styles = paths.filter(p => p.endsWith('.css'));
-  const hooks = paths.filter(p => p.match(/hooks?\//i) || p.match(/use[A-Z]/));
   const apiRoutes = paths.filter(p => p.includes('/api/') && p.includes('route.'));
 
   // Extract dependencies from package.json

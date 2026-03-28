@@ -8,6 +8,7 @@ interface StatusIndicatorProps {
 
 const phaseLabels: Record<LoadingPhase, string> = {
   idle: 'Ready',
+  planning: 'Planning',
   generating: 'Generating',
   modifying: 'Modifying',
   validating: 'Validating',

@@ -46,26 +46,30 @@
 
 ## Observability
 
-
-## Delight / Vision
-
-### Generation Replay
-- **What:** Store SSE events with timestamps during generation. Add a "Replay" button that replays the streaming build animation — like a time-lapse of the AI building the app.
-- **Why:** Wow moment for demos and sharing. Users could record and share on social media. "Watch an AI build my app in 30 seconds."
-- **Context:** Vision item from /plan-ceo-review EXPANSION on 2026-03-23. ~4 hours effort.
-- **Depends on:** None
-
 ### Smart Error Explanations
 - **What:** When auto-repair triggers, produce a one-sentence human-readable explanation of what was fixed — e.g., "Fixed: the Button component was imported from the wrong path."
 - **Why:** Builds trust ("the AI knows what it's doing") and educates non-technical users. The repair engine already knows what it fixed; just format and surface it.
 - **Context:** Vision item from /plan-ceo-review EXPANSION on 2026-03-23. ~2 hours effort. Integration: `DiagnosticRepairEngine` + `ErrorOverlay`.
 - **Depends on:** None
 
-### Fork This App — Share Links
-- **What:** Every project gets a shareable URL. Click it and you get a copy of the app in your own builder. "I built this with AI — fork it and make it yours."
-- **Why:** Turns every user into a distribution channel. Viral growth loop — someone shares their AI-generated app, others fork and customize.
-- **Context:** Vision item from /plan-ceo-review EXPANSION on 2026-03-23. ~8 hours effort. Requires: serialize project to Supabase, generate share URL, fork on load.
-- **Depends on:** Cloud storage (already exists via Supabase)
+
+## Performance Observability (deferred from generation speed optimization, 2026-03-27)
+
+### Generation Pipeline Stage Timing [P2, S]
+- **What:** Add per-stage P50/P95 timing to the existing metrics system for the generation pipeline (intent, planning, plan-review, each execution phase, post-processing).
+- **Why:** The generation speed optimization was built on estimated savings (2-6s, 5-10s, etc.) without real baseline data. Without timing instrumentation, it's impossible to validate the 20% claim or guide future optimization rounds.
+- **Pros:** Validates speedup claims. Catches performance regressions automatically. Exposes via existing `/api/health?metrics=true`. Zero new infrastructure.
+- **Cons:** ~20 lines of metrics code per stage.
+- **Context:** The pipeline already logs `durationMs` per stage via `contextLogger.info`. This TODO formalizes it as histograms via the existing `recordOperation()` / `getMetricsSummary()` in `backend/lib/metrics.ts`. Should be done after the speed optimization ships so you have before/after data.
+- **Depends on:** Generation speed optimization (this plan)
+
+### Separate Complexity Gate Thresholds [P3, XS]
+- **What:** Use separate constants for "skip plan review threshold" (currently `COMPLEXITY_GATE_FILE_THRESHOLD`) and "use one-shot threshold" (currently same constant). Currently both gate at <=10 files, compounding safety net removal.
+- **Why:** Allows independent tuning of when to skip review vs. when to use one-shot execution. E.g., skip review at <=6 files, one-shot at <=8 files.
+- **Pros:** Finer-grained control of risk/speed tradeoff at the 8-10 file boundary.
+- **Cons:** Two constants to reason about. Low priority — current behavior is safe.
+- **Context:** Deferred from generation speed optimization plan (2026-03-27). Threshold tuning should be informed by real timing data from the observability TODO above.
+- **Depends on:** Generation Pipeline Stage Timing (need data to pick the right values)
 
 ## Validation Enhancements (deferred from modification & repair pipeline)
 

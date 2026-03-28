@@ -7,8 +7,6 @@ import type { PromptSuggestion } from '@/data/prompt-suggestions';
 import { useCollapsibleMessages } from '@/hooks/useCollapsibleMessages';
 
 import { ErrorMessage, classifyError } from '../ErrorMessage';
-import { FileChangeSummary } from '../FileChangeSummary/FileChangeSummary';
-import { MarkdownRenderer } from '../MarkdownRenderer/MarkdownRenderer';
 import { PromptSuggestions } from '../PromptSuggestions';
 import { QuickActions } from '../QuickActions/QuickActions';
 import { StreamingIndicator } from '../StreamingIndicator';

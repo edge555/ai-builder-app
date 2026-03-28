@@ -43,7 +43,26 @@ export const initialSuggestions: PromptSuggestion[] = [
 /**
  * Context-aware suggestions based on existing project features.
  */
-const contextualSuggestions: Record<string, PromptSuggestion[]> = {
+interface ContextualSuggestions {
+  noAuth: PromptSuggestion[];
+  noNav: PromptSuggestion[];
+  noDarkMode: PromptSuggestion[];
+  noFooter: PromptSuggestion[];
+  dashboard: PromptSuggestion[];
+  ecommerce: PromptSuggestion[];
+  taskApp: PromptSuggestion[];
+  forms: PromptSuggestion[];
+  improvements: PromptSuggestion[];
+  nextSteps: {
+    auth: PromptSuggestion[];
+    dashboard: PromptSuggestion[];
+    ecommerce: PromptSuggestion[];
+    taskApp: PromptSuggestion[];
+    generic: PromptSuggestion[];
+  };
+}
+
+const contextualSuggestions: ContextualSuggestions = {
   // Suggestions when project has no authentication
   noAuth: [
     {

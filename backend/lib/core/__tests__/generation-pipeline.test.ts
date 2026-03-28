@@ -66,12 +66,14 @@ describe('GenerationPipeline (Phase 5)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Return a realistic result: at least the files expected by the phase plan.
-    // The implementation uses the plan's files list to determine batch contents,
-    // so the mock must return matching file paths to pass the zero-file guard.
+    // For 'oneshot', expectedFiles overrides the layer filter (no files have layer 'oneshot').
+    // For multi-phase layers, filter by layer as before.
     mocks.executePhase.mockImplementation(async (phaseDef: any) => {
-      const files = (phaseDef.plan?.files ?? [])
-        .filter((f: any) => f.layer === phaseDef.layer)
-        .map((f: any) => ({ path: f.path, content: `// ${f.path}` }));
+      const files = phaseDef.layer === 'oneshot'
+        ? (phaseDef.expectedFiles ?? []).map((p: string) => ({ path: p, content: `// ${p}` }))
+        : (phaseDef.plan?.files ?? [])
+            .filter((f: any) => f.layer === phaseDef.layer)
+            .map((f: any) => ({ path: f.path, content: `// ${f.path}` }));
       return { files, warnings: [] };
     });
 
@@ -95,7 +97,7 @@ describe('GenerationPipeline (Phase 5)', () => {
         intent: 100, planning: 100, executionGeneration: 100, 
         executionModification: 100, review: 100, bugfix: 100,
         architecturePlanning: 8192, planReview: 4096,
-        scaffold: 2000, logic: 2000, ui: 2000, integration: 2000
+        scaffold: 2000, logic: 2000, ui: 2000, integration: 2000, oneshot: 2000
       }
     };
 
@@ -150,16 +152,26 @@ describe('GenerationPipeline (Phase 5)', () => {
   });
 
   // ── Plan Review (Task 5.3) ──────────────────────────────────────────────────
+
+  // Large plan (>10 files) used by plan review tests
+  const largePlanJson = JSON.stringify({
+    files: Array.from({ length: 11 }, (_, i) => ({
+      path: `src/f${i}.ts`, purpose: 'test', layer: 'logic', exports: [], imports: []
+    })),
+    components: [], dependencies: [], routing: [], typeContracts: [], cssVariables: [],
+    stateShape: { contexts: [], hooks: [] }
+  });
+
   it('runs plan review and applies corrections successfully', async () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
-    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson });
-    
+    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: largePlanJson });
+
     const reviewJson = JSON.stringify({
       valid: false,
-      issues: [{ type: 'missing_type', file: 'src/main.ts', detail: 'Missing User type' }],
+      issues: [{ type: 'missing_type', file: 'src/f0.ts', detail: 'Missing User type' }],
       corrections: {
         filesToAdd: [{ path: 'src/types.ts', purpose: 'types', layer: 'scaffold', exports: [], imports: [] }],
-        filesToRemove: ['src/main.ts'],
+        filesToRemove: ['src/f0.ts'],
         importsToFix: []
       }
     });
@@ -168,19 +180,86 @@ describe('GenerationPipeline (Phase 5)', () => {
     const result = await pipeline.runGeneration('make a simple app');
 
     expect(mockReviewProvider.generate).toHaveBeenCalledTimes(1);
-    expect(result.architecturePlan?.files).toHaveLength(1);
-    expect(result.architecturePlan?.files[0].path).toBe('src/types.ts');
+    expect(result.architecturePlan?.files.some(f => f.path === 'src/types.ts')).toBe(true);
+    expect(result.architecturePlan?.files.some(f => f.path === 'src/f0.ts')).toBe(false);
   });
 
   it('proceeds with unreviewed plan if plan review fails', async () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
-    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson });
+    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: largePlanJson });
     mockReviewProvider.generate.mockRejectedValue(new Error('Review Timeout'));
 
     const result = await pipeline.runGeneration('make a simple app');
 
-    expect(result.architecturePlan?.files).toHaveLength(1);
-    expect(result.architecturePlan?.files[0].path).toBe('src/main.ts');
+    expect(result.architecturePlan?.files).toHaveLength(11);
+  });
+
+  it('skips plan review (no AI call) for plans with <=10 files', async () => {
+    mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
+    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson }); // 1 file
+
+    await pipeline.runGeneration('make a simple app');
+
+    expect(mockReviewProvider.generate).not.toHaveBeenCalled();
+  });
+
+  it('calls plan review for plans with >10 files', async () => {
+    mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
+    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: largePlanJson }); // 11 files
+    mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
+
+    await pipeline.runGeneration('make a complex app');
+
+    expect(mockReviewProvider.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires onStageStart and onStageComplete for review even when skipped', async () => {
+    mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
+    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson }); // 1 file — skips review
+
+    const stageStarts: string[] = [];
+    const stageCompletes: string[] = [];
+
+    await pipeline.runGeneration('simple app', {
+      onStageStart: (stage) => stageStarts.push(stage),
+      onStageComplete: (stage) => stageCompletes.push(stage),
+    });
+
+    expect(stageStarts).toContain('review');
+    expect(stageCompletes).toContain('review');
+    // onStageComplete must never fire without a prior onStageStart
+    const reviewStartIdx = stageStarts.indexOf('review');
+    const reviewCompleteIdx = stageCompletes.indexOf('review');
+    expect(reviewStartIdx).toBeGreaterThanOrEqual(0);
+    expect(reviewCompleteIdx).toBeGreaterThanOrEqual(0);
+  });
+
+  // ── Planning fires immediately after intent (Phase 3) ──────────────────────
+  it('passes full intent output to planning after intent resolves', async () => {
+    mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
+    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson });
+
+    await pipeline.runGeneration('test intent to planning');
+
+    expect(mockPromptProvider.getArchitecturePlanningPrompt).toHaveBeenCalledWith(
+      'test intent to planning',
+      expect.objectContaining({ complexity: 'simple' })
+    );
+    expect(mockPlanningProvider.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('abort signal after intent prevents planning call', async () => {
+    const controller = new AbortController();
+    mockIntentProvider.generate.mockImplementation(async () => {
+      controller.abort();
+      return { success: true, content: validIntentJson };
+    });
+
+    await expect(
+      pipeline.runGeneration('test abort', { signal: controller.signal })
+    ).rejects.toThrow('Generation cancelled by client');
+
+    expect(mockPlanningProvider.generate).not.toHaveBeenCalled();
   });
 
   // ── Complexity Gate (Task 5.4) ──────────────────────────────────────────────
@@ -210,14 +289,16 @@ describe('GenerationPipeline (Phase 5)', () => {
   });
 
   // ── Phase Merge (Task 5.5) ──────────────────────────────────────────────────
-  it('merges logic layer with <=1 file into UI phase', async () => {
+  it('merges logic layer with <=1 file into UI phase (multi-phase route)', async () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
+    // Use >10 files to force multi-phase route: 1 scaffold + 1 logic + 9 ui = 11
     const plan = {
       files: [
         { path: 'src/types.ts', purpose: 'types', layer: 'scaffold', exports: [], imports: [] },
         { path: 'src/utils.ts', purpose: 'utils', layer: 'logic', exports: [], imports: [] },
-        { path: 'src/App.tsx', purpose: 'app', layer: 'ui', exports: [], imports: [] },
-        { path: 'src/index.tsx', purpose: 'entry', layer: 'ui', exports: [], imports: [] },
+        ...Array.from({ length: 9 }, (_, i) => ({
+          path: `src/Comp${i}.tsx`, purpose: `comp${i}`, layer: 'ui', exports: [], imports: []
+        })),
       ],
       components: [], dependencies: [], routing: [], typeContracts: [], cssVariables: [],
       stateShape: { contexts: [], hooks: [] }
@@ -233,14 +314,17 @@ describe('GenerationPipeline (Phase 5)', () => {
     expect(executedLayers).not.toContain('logic'); // merged into UI
   });
 
-  it('keeps logic as separate phase when it has > 1 file', async () => {
+  it('keeps logic as separate phase when it has > 1 file (multi-phase route)', async () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
+    // Use >10 files to force multi-phase route: 1 scaffold + 2 logic + 8 ui = 11
     const plan = {
       files: [
         { path: 'src/types.ts', purpose: 'types', layer: 'scaffold', exports: [], imports: [] },
         { path: 'src/utils.ts', purpose: 'utils', layer: 'logic', exports: [], imports: [] },
         { path: 'src/helpers.ts', purpose: 'helpers', layer: 'logic', exports: [], imports: [] },
-        { path: 'src/App.tsx', purpose: 'app', layer: 'ui', exports: [], imports: [] },
+        ...Array.from({ length: 8 }, (_, i) => ({
+          path: `src/Comp${i}.tsx`, purpose: `comp${i}`, layer: 'ui', exports: [], imports: []
+        })),
       ],
       components: [], dependencies: [], routing: [], typeContracts: [], cssVariables: [],
       stateShape: { contexts: [], hooks: [] }
@@ -254,8 +338,59 @@ describe('GenerationPipeline (Phase 5)', () => {
     expect(executedLayers).toContain('logic'); // kept separate
   });
 
+  // ── Phase 5: True One-Shot Execution ──────────────────────────────────────
+  it('calls executePhase exactly once with layer oneshot for plans with <=10 files', async () => {
+    mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
+    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson }); // 1 file
+
+    await pipeline.runGeneration('simple app');
+
+    expect(mocks.executePhase).toHaveBeenCalledTimes(1);
+    expect(mocks.executePhase).toHaveBeenCalledWith(
+      expect.objectContaining({ layer: 'oneshot' }),
+      expect.any(Object),
+      expect.any(Object)
+    );
+  });
+
+  it('uses multi-phase path (no oneshot call) for plans with >10 files', async () => {
+    mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
+    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: largePlanJson }); // 11 files
+    mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
+
+    const result = await pipeline.runGeneration('complex app');
+
+    const calledLayers = mocks.executePhase.mock.calls.map((c: any[]) => c[0].layer);
+    expect(calledLayers).not.toContain('oneshot');
+    expect(result.complexityRoute).toBe('multi-phase');
+  });
+
+  it('passes all plan file paths as expectedFiles in oneshot PhaseDefinition', async () => {
+    mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
+    const plan = {
+      files: [
+        { path: 'src/main.ts', purpose: 'entry', layer: 'scaffold', exports: [], imports: [] },
+        { path: 'src/App.tsx', purpose: 'app', layer: 'ui', exports: [], imports: [] },
+      ],
+      components: [], dependencies: [], routing: [], typeContracts: [], cssVariables: [],
+      stateShape: { contexts: [], hooks: [] }
+    };
+    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: JSON.stringify(plan) });
+
+    await pipeline.runGeneration('simple app');
+
+    expect(mocks.executePhase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        layer: 'oneshot',
+        expectedFiles: ['src/main.ts', 'src/App.tsx'],
+      }),
+      expect.any(Object),
+      expect.any(Object)
+    );
+  });
+
   // ── Multi-Phase Execution (Task 5.6) ────────────────────────────────────────
-  it('executes phases sequentially and accumulates files', async () => {
+  it('one-shot calls executePhase once and collects all files', async () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
     const plan = {
       files: [
@@ -266,22 +401,26 @@ describe('GenerationPipeline (Phase 5)', () => {
       stateShape: { contexts: [], hooks: [] }
     };
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: JSON.stringify(plan) });
-    mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    mocks.executePhase
-      .mockResolvedValueOnce({ files: [{ path: 'src/types.ts', content: 'export type T = {};' }], warnings: [] })
-      .mockResolvedValueOnce({ files: [{ path: 'src/App.tsx', content: 'export default function App() {}' }], warnings: [] });
+    // One-shot: single call returns all files
+    mocks.executePhase.mockResolvedValueOnce({
+      files: [
+        { path: 'src/types.ts', content: 'export type T = {};' },
+        { path: 'src/App.tsx', content: 'export default function App() {}' },
+      ],
+      warnings: [],
+    });
 
     const result = await pipeline.runGeneration('test execution');
 
+    expect(mocks.executePhase).toHaveBeenCalledTimes(1);
     expect(result.generatedFiles).toHaveLength(2);
     expect(result.generatedFiles.map(f => f.path)).toEqual(['src/types.ts', 'src/App.tsx']);
   });
 
-  it('emits phase-start and phase-complete events', async () => {
+  it('emits oneshot phase-start and phase-complete events for simple plans', async () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
-    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson });
-    mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
+    mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson }); // 1 file → one-shot
 
     const stageStarts: string[] = [];
     const stageCompletes: string[] = [];
@@ -291,7 +430,7 @@ describe('GenerationPipeline (Phase 5)', () => {
       onStageComplete: (stage) => stageCompletes.push(stage),
     });
 
-    expect(stageStarts).toContain('scaffold');
-    expect(stageCompletes).toContain('scaffold');
+    expect(stageStarts).toContain('oneshot');
+    expect(stageCompletes).toContain('oneshot');
   });
 });

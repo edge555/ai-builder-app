@@ -60,7 +60,7 @@ export interface FrontendConfig {
 export const config: FrontendConfig = {
   api: {
     baseUrl: env.VITE_API_BASE_URL || '',
-    timeout: 65000,
+    timeout: 300000,
   },
   supabase: {
     url: env.VITE_SUPABASE_URL || '',

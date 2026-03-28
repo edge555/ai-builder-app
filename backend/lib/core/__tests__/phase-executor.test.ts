@@ -38,7 +38,8 @@ describe('PhaseExecutor', () => {
     directDependencies: new Map(),
     fileSummaries: [],
     cssVariables: [],
-    relevantContracts: { typeContracts: [], stateShape: { contexts: [], hooks: [] } }
+    relevantContracts: { typeContracts: [], stateShape: { contexts: [], hooks: [] } },
+    missingPlannedImports: [],
   };
 
   beforeEach(() => {
@@ -58,10 +59,10 @@ describe('PhaseExecutor', () => {
       getBugfixSystemPrompt: vi.fn(),
       getPhasePrompt: vi.fn().mockReturnValue('mocked system prompt'),
       tokenBudgets: {
-        intent: 100, planning: 100, executionGeneration: 100, 
+        intent: 100, planning: 100, executionGeneration: 100,
         executionModification: 100, review: 100, bugfix: 100,
         architecturePlanning: 100, planReview: 100,
-        scaffold: 2000, logic: 2000, ui: 2000, integration: 2000
+        scaffold: 2000, logic: 2000, ui: 2000, integration: 2000, oneshot: 2000
       }
     };
 
@@ -158,6 +159,69 @@ describe('PhaseExecutor', () => {
     expect(result.files).toHaveLength(1);
     expect(result.files[0].path).toBe('src/ui/Button.tsx');
     expect(result.warnings[0]).toContain('LLM Crash');
+  });
+
+  // ── Phase 5: expectedFiles override + oneshot continuation ────────────────
+
+  it('uses expectedFiles override for allExpectedFiles when set in PhaseDefinition', async () => {
+    // Files in the plan have layer 'scaffold', but phaseDef.layer is 'oneshot' (no layer match)
+    // Without expectedFiles, allExpectedFiles would be empty and truncation detection disabled.
+    const oneshotDef: PhaseDefinition = {
+      layer: 'oneshot',
+      plan: basePlan,
+      userPrompt: 'test',
+      expectedFiles: ['src/types.ts', 'src/main.ts', 'src/ui/Button.tsx'],
+    };
+
+    let callCount = 0;
+    mockProvider.generateStreaming.mockImplementation(async (req: AIStreamingRequest) => {
+      callCount++;
+      if (callCount === 1) {
+        // Only emit one file — truncation should be detected for the other two
+        const chunk = '{ "path": "src/types.ts", "content": "export type T = {}" }';
+        req.onChunk?.(chunk, chunk.length);
+      } else {
+        // Continuation: emit the remaining files
+        const chunk = '{ "path": "src/main.ts", "content": "main" } { "path": "src/ui/Button.tsx", "content": "btn" }';
+        req.onChunk?.(chunk, chunk.length);
+      }
+      return { success: true };
+    });
+
+    const result = await executor.executePhase(oneshotDef, baseContext);
+
+    expect(callCount).toBe(2); // truncation detected → continuation fired
+    expect(result.files).toHaveLength(3);
+  });
+
+  it('oneshot continuation prompt includes already-generated file paths', async () => {
+    const oneshotDef: PhaseDefinition = {
+      layer: 'oneshot',
+      plan: basePlan,
+      userPrompt: 'test',
+      expectedFiles: ['src/types.ts', 'src/main.ts'],
+    };
+
+    let callCount = 0;
+    mockProvider.generateStreaming.mockImplementation(async (req: AIStreamingRequest) => {
+      callCount++;
+      if (callCount === 1) {
+        const chunk = '{ "path": "src/types.ts", "content": "export type T = {}" }';
+        req.onChunk?.(chunk, chunk.length);
+      } else {
+        const chunk = '{ "path": "src/main.ts", "content": "main" }';
+        req.onChunk?.(chunk, chunk.length);
+      }
+      return { success: true };
+    });
+
+    await executor.executePhase(oneshotDef, baseContext);
+
+    // Continuation prompt (second call) should list already-generated files
+    const continuationCall = mockProvider.generateStreaming.mock.calls[1][0];
+    expect(continuationCall.prompt).toContain('src/types.ts'); // already generated
+    expect(continuationCall.prompt).toContain('src/main.ts');  // missing file
+    expect(continuationCall.prompt).toContain('already generated');
   });
 
   it('detects truncation and requests missing files via continuation', async () => {

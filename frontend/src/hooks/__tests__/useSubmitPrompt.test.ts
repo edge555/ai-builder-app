@@ -61,7 +61,7 @@ describe('useSubmitPrompt', () => {
         vi.mocked(useProjectActions).mockReturnValue(mockProjectActions);
         vi.mocked(useChatMessages).mockReturnValue(mockChatMessages);
         vi.mocked(useGenerationActions).mockReturnValue(mockGeneration);
-        vi.mocked(useToastActions).mockReturnValue({ addToast: vi.fn() });
+        vi.mocked(useToastActions).mockReturnValue({ addToast: vi.fn(), dismissToast: vi.fn(), clearAll: vi.fn() });
     });
 
     it('should submit generation prompt and update state on success', async () => {

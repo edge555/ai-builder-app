@@ -12,7 +12,7 @@
  */
 
 import type { IPromptProvider, IntentOutput, PlanOutput } from './prompt-provider';
-import type { ArchitecturePlan, PhaseLayer } from './prompt-provider';
+import type { ArchitecturePlan, PhaseLayer, ExecutionLayer } from './prompt-provider';
 import type { PhaseContext } from '../batch-context-builder';
 import type { GenerationRecipe } from '../recipes/recipe-types';
 import {
@@ -87,6 +87,7 @@ const API_TOKEN_BUDGETS: IPromptProvider['tokenBudgets'] = {
   logic: MAX_OUTPUT_TOKENS_LOGIC,
   ui: MAX_OUTPUT_TOKENS_UI,
   integration: MAX_OUTPUT_TOKENS_INTEGRATION,
+  oneshot: MAX_OUTPUT_TOKENS_GENERATION,
 };
 
 export class UnifiedPromptProvider implements IPromptProvider {
@@ -481,7 +482,7 @@ ${wrapUserInput(userPrompt)}`;
   }
 
   getPhasePrompt(
-    phase: PhaseLayer,
+    phase: ExecutionLayer,
     plan: ArchitecturePlan,
     context: PhaseContext,
     userPrompt: string,
@@ -496,6 +497,10 @@ ${wrapUserInput(userPrompt)}`;
         return getUIPrompt(plan, context, userPrompt, recipe);
       case 'integration':
         return getIntegrationPrompt(plan, context, userPrompt);
+      case 'oneshot':
+        // Pass architecture plan data so the AI knows which files to generate.
+        // ArchitecturePlan has the same files/components/dependencies shape as PlanOutput.
+        return this.getExecutionGenerationSystemPrompt(userPrompt, null, plan as unknown as import('../schemas').PlanOutput);
     }
   }
 }

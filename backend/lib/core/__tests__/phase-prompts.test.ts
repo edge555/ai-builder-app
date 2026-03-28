@@ -45,7 +45,8 @@ describe('phase-prompts', () => {
     relevantContracts: {
       typeContracts: mockPlan.typeContracts,
       stateShape: mockPlan.stateShape,
-    }
+    },
+    missingPlannedImports: [],
   };
 
   it('getScaffoldPrompt includes expected sections', () => {
