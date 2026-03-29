@@ -8,8 +8,21 @@
 import type { ProjectState, EditDetail, ConversationTurn } from '@ai-app-builder/shared';
 import type { CodeSlice } from '../analysis/file-planner/types';
 import { buildProjectMap } from '../analysis/project-map';
+import { getFileOutline } from '../analysis/slice-selector';
+import { MAX_CONTEXT_SLICES_MODIFICATION } from '../constants';
 import type { FailedFileEdit } from './file-edit-applicator';
 import { findClosestRegion } from './multi-tier-matcher';
+
+/**
+ * Prepend 1-based line numbers to file content.
+ * Format: "  1: line content"
+ * Used so the AI can write precise search strings by referencing line numbers.
+ */
+export function addLineNumbers(content: string): string {
+    const lines = content.split('\n');
+    const width = String(lines.length).length;
+    return lines.map((line, i) => `${String(i + 1).padStart(width, ' ')}: ${line}`).join('\n');
+}
 
 /**
  * Build the modification prompt with relevant code slices.
@@ -42,15 +55,16 @@ export function buildModificationPrompt(
         prompt += `=== PRIMARY FILES (likely need modification) ===\n\n`;
         for (const slice of primarySlices) {
             prompt += `--- ${slice.filePath} ---\n`;
-            prompt += `${slice.content}\n\n`;
+            prompt += `${addLineNumbers(slice.content)}\n\n`;
         }
     }
 
     if (contextSlices.length > 0) {
-        prompt += `=== CONTEXT FILES (for reference) ===\n\n`;
-        for (const slice of contextSlices) {
+        const cappedContext = contextSlices.slice(0, MAX_CONTEXT_SLICES_MODIFICATION);
+        prompt += `=== CONTEXT FILES (outlines for reference) ===\n\n`;
+        for (const slice of cappedContext) {
             prompt += `--- ${slice.filePath} ---\n`;
-            prompt += `${slice.content}\n\n`;
+            prompt += `${getFileOutline(slice.content, slice.filePath)}\n\n`;
         }
     }
 
@@ -223,7 +237,7 @@ export function buildFailedEditRetryPrompt(
     for (const failed of failedFileEdits) {
         const currentContent = failed.partialContent ?? failed.originalContent;
         prompt += `=== FILE: ${failed.path} (current content) ===\n`;
-        prompt += `${currentContent}\n\n`;
+        prompt += `${addLineNumbers(currentContent)}\n\n`;
         prompt += `--- Failed edits for ${failed.path} ---\n`;
         for (const detail of failed.failedEdits) {
             prompt += `Edit #${detail.editIndex + 1}: ${detail.error}\n`;

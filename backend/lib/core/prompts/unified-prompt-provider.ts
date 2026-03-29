@@ -44,7 +44,6 @@ import {
   MAX_OUTPUT_TOKENS_PLANNING_STAGE,
   MAX_OUTPUT_TOKENS_GENERATION,
   MAX_OUTPUT_TOKENS_MODIFICATION,
-  MAX_OUTPUT_TOKENS_REVIEW,
   MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING,
   MAX_OUTPUT_TOKENS_PLAN_REVIEW,
   MAX_OUTPUT_TOKENS_SCAFFOLD,
@@ -78,7 +77,6 @@ const API_TOKEN_BUDGETS: IPromptProvider['tokenBudgets'] = {
   planning: MAX_OUTPUT_TOKENS_PLANNING_STAGE,
   executionGeneration: MAX_OUTPUT_TOKENS_GENERATION,
   executionModification: MAX_OUTPUT_TOKENS_MODIFICATION,
-  review: MAX_OUTPUT_TOKENS_REVIEW,
   bugfix: MAX_OUTPUT_TOKENS_MODIFICATION, // bugfix = same as modification
   // Multi-phase pipeline
   architecturePlanning: MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING,
@@ -328,55 +326,38 @@ Generate a complete React application with perfect syntax and proper component s
 
     return `You are a SENIOR full-stack developer modifying an existing web application.
 ${intentBlock}
-=== COMPONENT RULES ===
-- Never add >30 lines to App.tsx — create new components in ui/, layout/, or features/ instead.
-- Keep components under 80 lines. Extract repeated logic into hooks in src/hooks/.
-- Co-locate CSS per component (ComponentName.tsx + ComponentName.css).
-
-${LAYOUT_FUNDAMENTALS}
-${designSystemSection}
-=== OUTPUT FORMAT ===
+=== OUTPUT FORMAT (READ FIRST — MOST IMPORTANT) ===
 Return a JSON object: { "files": [ ... ] }
 Each element has "path", "operation" ("modify"|"create"|"replace_file"|"delete").
 - "create": include "content" with full file content (new files only).
 - "delete": just path and operation.
-- "modify": include "edits" array with search/replace pairs.
-- "replace_file": include "content" with the complete new file content. Use ONLY when the file needs such extensive changes that search/replace would be unreliable (e.g. >60% of lines changing). Prefer "modify" for smaller changes.
-Respond with valid JSON only. Do NOT wrap in markdown code fences.
+- "modify": include "edits" array with search/replace pairs. Use ONLY for files >200 lines.
+- "replace_file": include "content" with the complete new file content.
 
-=== EDIT RULES ===
-- "search" must exactly match existing code (whitespace, newlines included). Include 3–5 lines of context.
-- Multiple edits to same file: list in file order. No line numbers in search.
-- Small changes (<30 lines): modify. Large features (>50 lines new): create new component files.
-- If a file needs many scattered edits (>5 edits or >60% rewrite), use "replace_file" instead of "modify".
+**200-LINE DECISION RULE (MANDATORY):**
+Line numbers are shown in the file content for reference. Check the last line number.
+- Files with ≤200 lines → ALWAYS use "replace_file" with complete file content.
+- Files with >200 lines → Use "modify" with precise search/replace pairs.
+A correct "replace_file" is always better than a failed "modify". When in doubt, use "replace_file".
+
+Respond with valid JSON only. Do NOT wrap in markdown code fences.
 
 ${SEARCH_REPLACE_GUIDANCE}
 
+=== COMPONENT RULES ===
+- Never add >30 lines to App.tsx — create new components in ui/, layout/, or features/ instead.
+- Keep components under 80 lines. Extract repeated logic into hooks in src/hooks/.
+- Co-locate CSS per component (ComponentName.tsx + ComponentName.css).
+- Large new features (>50 lines): create new component files instead of bloating existing ones.
+
+${LAYOUT_FUNDAMENTALS}
+${designSystemSection}
 ${getOutputBudgetGuidance(this.tokenBudgets.executionModification)}
 
 ${SYNTAX_INTEGRITY_RULES}
 ${this.getVerboseBlock()}
 
 ${wrapUserInput(userPrompt)}`;
-  }
-
-  getReviewSystemPrompt(): string {
-    return `You are a senior React code reviewer performing a final quality check on a generated application.
-
-Review the provided files for:
-1. Broken imports (missing files, wrong paths)
-2. TypeScript errors (undefined variables, wrong types)
-3. Missing CSS classes referenced in JSX
-4. package.json missing required dependencies
-5. Syntax errors (unclosed JSX, missing brackets)
-
-Return a JSON object:
-- verdict: "pass" if the code is correct, "fixed" if you made corrections
-- corrections: array of { path, content, reason } for files you corrected (empty array if verdict is "pass")
-
-Each correction must include the COMPLETE file content — not just the changed section.
-Only correct files with definite errors. Do NOT refactor or improve working code.
-Respond with valid JSON only.`;
   }
 
   getBugfixSystemPrompt(errorContext: string, failureHistory: string[]): string {

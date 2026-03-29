@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-03-29
+
+### Changed
+- **Remove review stage from modification pipeline** — eliminates 32k-token AI call that re-read all merged files for marginal value; `finalFiles` now comes directly from execution output
+- **Replace_file bias for files under 200 lines** — prompt instructs AI to use `replace_file` (complete file content) instead of search/replace for small files, eliminating the main class of match failures
+- **Conditional intent/planning stages** — `classifyModificationComplexity` skips intent+planning for simple edits (<=2 primary files), repair mode, or small projects (<=8 files); saves 1-2 AI calls per modification
+- **Heuristic file selection for small projects** — projects with <=8 files skip AI FilePlanner entirely; keyword-based matching selects primary vs context files
+- **Context files capped and outlined** — context slices limited to `MAX_CONTEXT_SLICES_MODIFICATION` (8) and use outlines instead of full content, reducing input tokens
+
+### Added
+- **Line numbers in file content** — `addLineNumbers()` prepends line numbers to primary file content sent to AI, improving search/replace accuracy
+- **Automatic replace_file fallback** — when search/replace fails, `retryWithReplaceFileFallback` makes one AI call to get complete file content; path-validated to prevent overwriting unrelated files or creating new files
+- **`classifyModificationComplexity` function** — exported classifier for skip-intent/skip-planning decisions based on primary file count, project size, and error context
+- **`selectFilesHeuristically` function** — word-boundary keyword matching against file basenames for small-project file selection
+- **Ordered pipeline skip flags** — `runOrderedModificationPipeline` now accepts `skipIntent`/`skipPlanning` options, consistent with `runModificationPipeline`
+- **Project map in modification prompts** — `buildProjectMap` included in modification user prompts for structural awareness
+
+### Removed
+- `runReviewStage`, `mergeReviewCorrections`, `buildReviewUserPrompt` methods from `PipelineOrchestrator`
+- `getReviewSystemPrompt` from `IPromptProvider` interface and `UnifiedPromptProvider`
+- `ReviewOutputSchema`, `ReviewOutput` types from `schemas.ts`
+- `MAX_OUTPUT_TOKENS_REVIEW`, `MODAL_MAX_OUTPUT_TOKENS_REVIEW`, `MAX_REVIEW_CONTENT_CHARS` constants
+- Review provider creation from `pipeline-factory.ts` (4 providers reduced to 3)
+
+### Fixed
+- Path validation in replace_file fallback blocks AI from creating new files or overwriting paths outside the failed-edit set
+- Word-boundary regex in `selectFilesHeuristically` prevents false matches (e.g., "app" no longer matches "application")
+
 ## [1.3.6] - 2026-03-27
 
 ### Performance

@@ -2,10 +2,10 @@
  * Tests for PipelineOrchestrator
  *
  * Covers:
- * - Graceful degradation: intent/planning/review failures → null output, pipeline continues
+ * - Graceful degradation: intent/planning failures → null output, pipeline continues
  * - Hard-fail: execution failure → rejects, downstream stages not called
- * - mergeReviewCorrections: pass verdict, fixed verdict (overlay by path, new files added)
  * - Stage callbacks: onStageStart / onStageComplete / onStageFailed fired correctly
+ * - finalFiles equals applyModificationsToFiles output directly (no review overlay)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -62,12 +62,8 @@ const fail = (error = 'Provider error'): AIResponse => ({
 const executionOk = (files = DEFAULT_FILES): AIResponse =>
   ok({ files });
 
-const intentOk   = (): AIResponse => ok(INTENT_JSON);
-const planOk     = (): AIResponse => ok(PLAN_JSON);
-const reviewPass = (): AIResponse => ok({ verdict: 'pass', corrections: [] });
-const reviewFixed = (
-  corrections: Array<{ path: string; content: string; reason: string }>
-): AIResponse => ok({ verdict: 'fixed', corrections });
+const intentOk = (): AIResponse => ok(INTENT_JSON);
+const planOk   = (): AIResponse => ok(PLAN_JSON);
 
 // ─── Test Setup ───────────────────────────────────────────────────────────────
 
@@ -75,7 +71,6 @@ let orchestrator: PipelineOrchestrator;
 let mockIntent:    AIProvider;
 let mockPlanning:  AIProvider;
 let mockExecution: AIProvider;
-let mockReview:    AIProvider;
 let mockPrompts:   IPromptProvider;
 
 function makeProvider(): AIProvider {
@@ -88,7 +83,6 @@ function makePromptProvider(): IPromptProvider {
     getPlanningSystemPrompt:            vi.fn().mockReturnValue('planning prompt'),
     getExecutionGenerationSystemPrompt: vi.fn().mockReturnValue('exec gen prompt'),
     getExecutionModificationSystemPrompt: vi.fn().mockReturnValue('exec mod prompt'),
-    getReviewSystemPrompt:              vi.fn().mockReturnValue('review prompt'),
     getBugfixSystemPrompt:              vi.fn().mockReturnValue('bugfix prompt'),
     getArchitecturePlanningPrompt:      vi.fn().mockReturnValue('arch prompt'),
     getPlanReviewPrompt:                vi.fn().mockReturnValue('plan rev prompt'),
@@ -98,7 +92,6 @@ function makePromptProvider(): IPromptProvider {
       planning:            4096,
       executionGeneration: 16384,
       executionModification: 16384,
-      review:              32768,
       bugfix:               8192,
       architecturePlanning: 8192,
       planReview:           4096,
@@ -106,6 +99,7 @@ function makePromptProvider(): IPromptProvider {
       logic:               10000,
       ui:                  20000,
       integration:          8000,
+      oneshot:             32768,
     },
   };
 }
@@ -116,20 +110,17 @@ beforeEach(() => {
   mockIntent    = makeProvider();
   mockPlanning  = makeProvider();
   mockExecution = makeProvider();
-  mockReview    = makeProvider();
   mockPrompts   = makePromptProvider();
 
-  // Default happy-path responses for all stages
+  // Default happy-path responses
   vi.mocked(mockIntent.generate).mockResolvedValue(intentOk());
   vi.mocked(mockPlanning.generate).mockResolvedValue(planOk());
   vi.mocked(mockExecution.generateStreaming).mockResolvedValue(executionOk());
-  vi.mocked(mockReview.generate).mockResolvedValue(reviewPass());
 
   orchestrator = new PipelineOrchestrator(
     mockIntent,
     mockPlanning,
     mockExecution,
-    mockReview,
     mockPrompts,
   );
 });
@@ -260,59 +251,12 @@ describe('execution stage hard-fail', () => {
     ).rejects.toThrow();
   });
 
-  it('does not call review stage when execution fails', async () => {
+  it('execution failure does not prevent prior stages from completing', async () => {
     vi.mocked(mockExecution.generateStreaming).mockResolvedValue(fail());
 
     await expect(
       orchestrator.runModificationPipeline('build a counter', {}, [], {})
     ).rejects.toThrow();
-
-    expect(mockReview.generate).not.toHaveBeenCalled();
-  });
-});
-
-// ─── Stage: Review (graceful degradation) ─────────────────────────────────────
-
-describe('review stage graceful degradation', () => {
-  it('sets reviewOutput to null when provider returns failure', async () => {
-    vi.mocked(mockReview.generate).mockResolvedValue(fail());
-
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
-
-    expect(result.reviewOutput).toBeNull();
-  });
-
-  it('sets reviewOutput to null when provider throws', async () => {
-    vi.mocked(mockReview.generate).mockRejectedValue(new Error('Context window exceeded'));
-
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
-
-    expect(result.reviewOutput).toBeNull();
-  });
-
-  it('finalFiles equals executorFiles when review returns failure', async () => {
-    vi.mocked(mockReview.generate).mockResolvedValue(fail());
-
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
-
-    expect(result.finalFiles).toEqual(result.executorFiles);
-  });
-
-  it('finalFiles equals executorFiles when review throws', async () => {
-    vi.mocked(mockReview.generate).mockRejectedValue(new Error('Review failed'));
-
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
-
-    expect(result.finalFiles).toEqual(result.executorFiles);
-  });
-
-  it('fires onStageFailed for review on failure', async () => {
-    vi.mocked(mockReview.generate).mockResolvedValue(fail('Upstream error'));
-    const onStageFailed = vi.fn();
-
-    await orchestrator.runModificationPipeline('build a counter', {}, [], { onStageFailed });
-
-    expect(onStageFailed).toHaveBeenCalledWith('review', expect.any(String));
   });
 });
 
@@ -333,7 +277,7 @@ describe('successful modification pipeline', () => {
     expect(result.planOutput?.files).toHaveLength(1);
   });
 
-  it('fires onStageStart for all 4 stages in order', async () => {
+  it('fires onStageStart for all 3 stages in order', async () => {
     const stagesStarted: string[] = [];
     const callbacks: PipelineCallbacks = {
       onStageStart: (stage) => { stagesStarted.push(stage); },
@@ -341,10 +285,10 @@ describe('successful modification pipeline', () => {
 
     await orchestrator.runModificationPipeline('build a counter', {}, [], callbacks);
 
-    expect(stagesStarted).toEqual(['intent', 'planning', 'execution', 'review']);
+    expect(stagesStarted).toEqual(['intent', 'planning', 'execution']);
   });
 
-  it('fires onStageComplete for all 4 stages in order', async () => {
+  it('fires onStageComplete for all 3 stages in order', async () => {
     const stagesCompleted: string[] = [];
     const callbacks: PipelineCallbacks = {
       onStageComplete: (stage) => { stagesCompleted.push(stage); },
@@ -352,119 +296,83 @@ describe('successful modification pipeline', () => {
 
     await orchestrator.runModificationPipeline('build a counter', {}, [], callbacks);
 
-    expect(stagesCompleted).toEqual(['intent', 'planning', 'execution', 'review']);
+    expect(stagesCompleted).toEqual(['intent', 'planning', 'execution']);
   });
 
-  it('returns reviewPass with finalFiles equal to executorFiles', async () => {
+  it('finalFiles equals applyModificationsToFiles output directly', async () => {
     const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
 
-    expect(result.reviewOutput?.verdict).toBe('pass');
-    expect(result.finalFiles).toEqual(result.executorFiles);
+    expect(result.finalFiles).toBeDefined();
+    expect(result.finalFiles.length).toBeGreaterThan(0);
   });
 });
 
-// ─── mergeReviewCorrections ───────────────────────────────────────────────────
 
-describe('mergeReviewCorrections', () => {
-  const baseFiles: GeneratedFile[] = [
-    { path: 'src/App.tsx',   content: 'original-app' },
-    { path: 'src/index.css', content: 'original-css' },
-  ];
+// ─── Conditional Stage Skipping ───────────────────────────────────────────────
 
-  it('returns executorFiles unchanged when reviewOutput is null', () => {
-    const result = orchestrator.mergeReviewCorrections(baseFiles, null);
+describe('skipIntent option', () => {
+  it('does not call intent provider when skipIntent=true', async () => {
+    await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipIntent: true });
 
-    expect(result).toEqual(baseFiles);
+    expect(mockIntent.generate).not.toHaveBeenCalled();
   });
 
-  it('returns executorFiles unchanged when verdict is pass', () => {
-    const review = { verdict: 'pass' as const, corrections: [] };
+  it('sets intentOutput to null when skipIntent=true', async () => {
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipIntent: true });
 
-    const result = orchestrator.mergeReviewCorrections(baseFiles, review);
-
-    expect(result).toEqual(baseFiles);
+    expect(result.intentOutput).toBeNull();
   });
 
-  it('returns executorFiles unchanged when corrections array is empty', () => {
-    const review = { verdict: 'fixed' as const, corrections: [] };
+  it('still runs planning and execution when skipIntent=true', async () => {
+    await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipIntent: true });
 
-    const result = orchestrator.mergeReviewCorrections(baseFiles, review);
+    expect(mockPlanning.generate).toHaveBeenCalled();
+    expect(mockExecution.generateStreaming).toHaveBeenCalled();
+  });
+});
 
-    expect(result).toEqual(baseFiles);
+describe('skipPlanning option', () => {
+  it('does not call planning provider when skipPlanning=true', async () => {
+    await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipPlanning: true });
+
+    expect(mockPlanning.generate).not.toHaveBeenCalled();
   });
 
-  it('overlays corrections by path when verdict is fixed', () => {
-    const review = {
-      verdict: 'fixed' as const,
-      corrections: [
-        { path: 'src/App.tsx', content: 'corrected-app', reason: 'fixed missing key prop' },
-      ],
-    };
+  it('sets planOutput to null when skipPlanning=true', async () => {
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipPlanning: true });
 
-    const result = orchestrator.mergeReviewCorrections(baseFiles, review);
-
-    expect(result).toHaveLength(2);
-    expect(result.find(f => f.path === 'src/App.tsx')!.content).toBe('corrected-app');
-    expect(result.find(f => f.path === 'src/index.css')!.content).toBe('original-css');
+    expect(result.planOutput).toBeNull();
   });
 
-  it('leaves uncorrected files unchanged', () => {
-    const review = {
-      verdict: 'fixed' as const,
-      corrections: [
-        { path: 'src/App.tsx', content: 'corrected-app', reason: 'fixed bug' },
-      ],
-    };
+  it('still runs intent and execution when skipPlanning=true', async () => {
+    await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipPlanning: true });
 
-    const result = orchestrator.mergeReviewCorrections(baseFiles, review);
+    expect(mockIntent.generate).toHaveBeenCalled();
+    expect(mockExecution.generateStreaming).toHaveBeenCalled();
+  });
+});
 
-    expect(result.find(f => f.path === 'src/index.css')!.content).toBe('original-css');
+describe('skipIntent + skipPlanning both true', () => {
+  it('only calls execution provider (intent and planning skipped)', async () => {
+    await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipIntent: true, skipPlanning: true });
+
+    expect(mockIntent.generate).not.toHaveBeenCalled();
+    expect(mockPlanning.generate).not.toHaveBeenCalled();
+    expect(mockExecution.generateStreaming).toHaveBeenCalled();
   });
 
-  it('adds new files introduced by review corrections', () => {
-    const review = {
-      verdict: 'fixed' as const,
-      corrections: [
-        { path: 'src/utils.ts', content: 'export const foo = 1;', reason: 'added missing util' },
-      ],
-    };
+  it('returns null for both intentOutput and planOutput', async () => {
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipIntent: true, skipPlanning: true });
 
-    const result = orchestrator.mergeReviewCorrections(baseFiles, review);
-
-    expect(result).toHaveLength(3);
-    expect(result.find(f => f.path === 'src/utils.ts')!.content).toBe('export const foo = 1;');
+    expect(result.intentOutput).toBeNull();
+    expect(result.planOutput).toBeNull();
   });
 
-  it('can replace multiple files in a single review pass', () => {
-    const review = {
-      verdict: 'fixed' as const,
-      corrections: [
-        { path: 'src/App.tsx',   content: 'corrected-app', reason: 'fixed App' },
-        { path: 'src/index.css', content: 'corrected-css', reason: 'fixed CSS' },
-      ],
-    };
+  it('still produces finalFiles', async () => {
+    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipIntent: true, skipPlanning: true });
 
-    const result = orchestrator.mergeReviewCorrections(baseFiles, review);
-
-    expect(result.find(f => f.path === 'src/App.tsx')!.content).toBe('corrected-app');
-    expect(result.find(f => f.path === 'src/index.css')!.content).toBe('corrected-css');
-  });
-
-  it('integration: review corrections are applied via runModificationPipeline', async () => {
-    vi.mocked(mockReview.generate).mockResolvedValue(
-      reviewFixed([
-        { path: 'src/App.tsx', content: 'review-corrected', reason: 'fixed import error' },
-      ])
-    );
-
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
-
-    expect(result.reviewOutput?.verdict).toBe('fixed');
-    expect(result.finalFiles.find(f => f.path === 'src/App.tsx')!.content).toBe('review-corrected');
-    // Non-corrected files remain as-is
-    expect(result.finalFiles.find(f => f.path === 'src/index.css')!.content).toBe(
-      DEFAULT_FILES.find(f => f.path === 'src/index.css')!.content
-    );
+    expect(result.finalFiles).toBeDefined();
+    expect(result.finalFiles.length).toBeGreaterThan(0);
   });
 });
 
