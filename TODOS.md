@@ -7,7 +7,7 @@
 - **Why:** Dual pipelines duplicate Intent, Planning, and Review stages. Every improvement must be manually replicated. The unified pipeline becomes the single extension point for agentic features (tool use, session context, self-testing).
 - **Pros:** Single codepath to maintain, ~500 LOC reduction, enables all Phase 2/3 features.
 - **Cons:** Significant refactor touching generation and modification paths. Risk of regression in both flows.
-- **Context:** Both pipelines follow Intent→Planning→Execution→Review. Execution differs (multi-phase batched vs single-phase). Strategy pattern handles this. Files: `backend/lib/core/generation-pipeline.ts`, `backend/lib/core/pipeline-orchestrator.ts`.
+- **Context:** Generation pipeline follows Intent→Planning→Execution (multi-phase batched). Modification pipeline follows Intent→Planning→Execution (3 stages; review removed in v1.4.0). Execution strategy differs — that's the main variation point. Files: `backend/lib/core/generation-pipeline.ts`, `backend/lib/core/pipeline-orchestrator.ts`.
 - **Depends on:** CI/CD pipeline (tests must pass before merging)
 
 ### WebContainers Preview Migration [P1, XL]

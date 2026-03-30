@@ -19,13 +19,15 @@
 
 import type { AIProvider } from '../ai/ai-provider';
 import type { IPromptProvider } from './prompts/prompt-provider';
-import type { IntentOutput, PlanOutput, ReviewOutput } from './schemas';
-import { IntentOutputSchema, PlanOutputSchema, ReviewOutputSchema } from './schemas';
+import type { IntentOutput, PlanOutput } from './schemas';
+import { IntentOutputSchema, PlanOutputSchema } from './schemas';
 import { toSimpleJsonSchema } from './zod-to-json-schema';
 import { createLogger } from '../logger';
 import type { CodeSlice } from '../analysis/file-planner/types';
-import { MAX_REVIEW_CONTENT_CHARS } from '../constants';
 import { getFileOutline } from '../analysis/slice-selector';
+import { addLineNumbers } from '../diff/prompt-builder';
+import { buildProjectMap } from '../analysis/project-map';
+import { MAX_CONTEXT_SLICES_MODIFICATION } from '../constants';
 import { selectRecipe } from './recipes/recipe-engine';
 import { extractJsonFromResponse } from '../ai/modal-response-parser';
 import { config } from '../config';
@@ -36,12 +38,11 @@ const logger = createLogger('PipelineOrchestrator');
 
 const INTENT_JSON_SCHEMA = toSimpleJsonSchema(IntentOutputSchema);
 const PLAN_JSON_SCHEMA = toSimpleJsonSchema(PlanOutputSchema);
-const REVIEW_JSON_SCHEMA = toSimpleJsonSchema(ReviewOutputSchema);
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
 
 /** Stages emitted as SSE events. Bugfix is an internal loop — not a public stage. */
-export type PipelineStage = 'intent' | 'planning' | 'execution' | 'review';
+export type PipelineStage = 'intent' | 'planning' | 'execution';
 
 export interface PipelineCallbacks {
   /** Fired when a stage begins. `label` is a human-readable status string. */
@@ -64,10 +65,9 @@ export interface GeneratedFile {
 export interface PipelineResult {
   intentOutput: IntentOutput | null;
   planOutput: PlanOutput | null;
-  /** Raw files returned by the execution stage (before review corrections). */
+  /** Raw files returned by the execution stage. */
   executorFiles: GeneratedFile[];
-  reviewOutput: ReviewOutput | null;
-  /** Final files after merging review corrections into executorFiles. */
+  /** Final files — same as executorFiles after apply_modifications. */
   finalFiles: GeneratedFile[];
 }
 
@@ -78,7 +78,6 @@ export class PipelineOrchestrator {
     private readonly intentProvider: AIProvider,
     private readonly planningProvider: AIProvider,
     private readonly executionProvider: AIProvider,
-    private readonly reviewProvider: AIProvider,
     private readonly promptProvider: IPromptProvider
   ) {}
 
@@ -100,7 +99,7 @@ export class PipelineOrchestrator {
     currentFiles: Record<string, string>,
     fileSlices: CodeSlice[],
     callbacks: PipelineCallbacks,
-    options?: { requestId?: string; designSystem?: boolean }
+    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean }
   ): Promise<PipelineResult> {
     const contextLogger = options?.requestId
       ? logger.withRequestId(options.requestId)
@@ -112,15 +111,21 @@ export class PipelineOrchestrator {
       currentFileCount: Object.keys(currentFiles).length,
       sliceCount: fileSlices.length,
       primaryFiles: fileSlices.filter(s => s.relevance === 'primary').map(s => s.filePath),
+      skipIntent: options?.skipIntent ?? false,
+      skipPlanning: options?.skipPlanning ?? false,
     });
 
     // ── Stage 1: Intent ──────────────────────────────────────────────────────
-    const intentOutput = await this.runIntentStage(userPrompt, callbacks, contextLogger);
+    const intentOutput = options?.skipIntent
+      ? null
+      : await this.runIntentStage(userPrompt, callbacks, contextLogger);
 
     if (callbacks.signal?.aborted) throw new Error('Modification cancelled by client');
 
     // ── Stage 2: Planning ────────────────────────────────────────────────────
-    const planOutput = await this.runPlanningStage(userPrompt, intentOutput, callbacks, contextLogger);
+    const planOutput = options?.skipPlanning
+      ? null
+      : await this.runPlanningStage(userPrompt, intentOutput, callbacks, contextLogger);
 
     if (callbacks.signal?.aborted) throw new Error('Modification cancelled by client');
 
@@ -130,29 +135,22 @@ export class PipelineOrchestrator {
       intentOutput,
       planOutput,
       fileSlices,
+      currentFiles,
       callbacks,
       contextLogger,
       options?.designSystem ?? false
     );
 
-    if (callbacks.signal?.aborted) throw new Error('Modification cancelled by client');
-
-    // ── Stage 4: Review ──────────────────────────────────────────────────────
-    // Build review files: current files overlaid with executor modifications
-    const mergedForReview = this.applyModificationsToFiles(currentFiles, executorContent);
-    const reviewOutput = await this.runReviewStage(mergedForReview, callbacks, contextLogger);
-
-    const finalFiles = this.mergeReviewCorrections(mergedForReview, reviewOutput);
+    const finalFiles = this.applyModificationsToFiles(currentFiles, executorContent);
 
     contextLogger.info('[MOD-PIPELINE] complete', {
       durationMs: Date.now() - pipelineStartMs,
       executorFileCount: executorContent.length,
       executorFilePaths: executorContent.filter(f => f.path !== '__pipeline_raw__').map(f => f.path),
       finalFileCount: finalFiles.length,
-      reviewVerdict: reviewOutput?.verdict ?? 'skipped',
     });
 
-    return { intentOutput, planOutput, executorFiles: executorContent, reviewOutput, finalFiles };
+    return { intentOutput, planOutput, executorFiles: executorContent, finalFiles };
   }
 
   // ─── Ordered Execution Pipeline (Phase 3) ─────────────────────────────────
@@ -167,18 +165,22 @@ export class PipelineOrchestrator {
     tiers: string[][],
     validateFile: (path: string, content: string) => Promise<{ valid: boolean; errorText?: string }>,
     callbacks: PipelineCallbacks,
-    options?: { requestId?: string; designSystem?: boolean }
+    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean }
   ): Promise<PipelineResult> {
     const contextLogger = options?.requestId
       ? logger.withRequestId(options.requestId)
       : logger;
 
     // ── Stage 1: Intent ──────────────────────────────────────────────────────
-    const intentOutput = await this.runIntentStage(userPrompt, callbacks, contextLogger);
+    const intentOutput = options?.skipIntent
+      ? null
+      : await this.runIntentStage(userPrompt, callbacks, contextLogger);
     if (callbacks.signal?.aborted) throw new Error('Modification cancelled by client');
 
     // ── Stage 2: Planning ────────────────────────────────────────────────────
-    const planOutput = await this.runPlanningStage(userPrompt, intentOutput, callbacks, contextLogger);
+    const planOutput = options?.skipPlanning
+      ? null
+      : await this.runPlanningStage(userPrompt, intentOutput, callbacks, contextLogger);
     if (callbacks.signal?.aborted) throw new Error('Modification cancelled by client');
 
     callbacks.onStageStart?.('execution', `Applying ordered modifications (${tiers.length} tiers)…`);
@@ -217,12 +219,9 @@ export class PipelineOrchestrator {
 
     const executorContent = Array.from(accumulatedChanges.entries()).map(([path, content]) => ({ path, content }));
 
-    // ── Stage 4: Review ──────────────────────────────────────────────────────
-    const mergedForReview = this.applyModificationsToFiles(currentFiles, executorContent);
-    const reviewOutput = await this.runReviewStage(mergedForReview, callbacks, contextLogger);
-    const finalFiles = this.mergeReviewCorrections(mergedForReview, reviewOutput);
+    const finalFiles = this.applyModificationsToFiles(currentFiles, executorContent);
 
-    return { intentOutput, planOutput, executorFiles: executorContent, reviewOutput, finalFiles };
+    return { intentOutput, planOutput, executorFiles: executorContent, finalFiles };
   }
 
   private async processFileWithRetry(
@@ -294,7 +293,7 @@ export class PipelineOrchestrator {
     const lines: string[] = [`User Request: ${userPrompt}\n`];
     lines.push('=== TARGET FILE (modify this full file) ===\n');
     const targetContent = accumulatedChanges.get(targetFilePath) ?? currentFiles[targetFilePath] ?? '';
-    lines.push(`--- ${targetFilePath} ---\n${targetContent}\n`);
+    lines.push(`--- ${targetFilePath} ---\n${addLineNumbers(targetContent)}\n`);
 
     lines.push('=== MODIFIED CONTEXT FILES (outlines of other changed files) ===\n');
     let hasContext = false;
@@ -308,45 +307,6 @@ export class PipelineOrchestrator {
 
     lines.push('Based on the user request and context, output ONLY the JSON object { "files": [...] } for the TARGET FILE. No markdown fences.');
     return lines.join('\n');
-  }
-
-  // ─── Correction Merger ────────────────────────────────────────────────────
-
-  /**
-   * Path-keyed overlay: replaces executor files with reviewer corrections.
-   * Files not present in corrections are returned unchanged.
-   */
-  mergeReviewCorrections(
-    executorFiles: GeneratedFile[],
-    reviewOutput: ReviewOutput | null
-  ): GeneratedFile[] {
-    if (!reviewOutput || reviewOutput.verdict === 'pass' || reviewOutput.corrections.length === 0) {
-      return executorFiles;
-    }
-
-    const correctionMap = new Map(
-      reviewOutput.corrections.map((c) => [c.path, c.content])
-    );
-
-    const merged = executorFiles.map((file) =>
-      correctionMap.has(file.path)
-        ? { path: file.path, content: correctionMap.get(file.path)! }
-        : file
-    );
-
-    // Add any new files introduced by review corrections
-    for (const correction of reviewOutput.corrections) {
-      if (!executorFiles.some((f) => f.path === correction.path)) {
-        merged.push({ path: correction.path, content: correction.content });
-      }
-    }
-
-    logger.info('Review corrections applied', {
-      verdict: reviewOutput.verdict,
-      correctionCount: reviewOutput.corrections.length,
-    });
-
-    return merged;
   }
 
   // ─── Private Stage Runners ────────────────────────────────────────────────
@@ -452,6 +412,7 @@ export class PipelineOrchestrator {
     intentOutput: IntentOutput | null,
     planOutput: PlanOutput | null,
     fileSlices: CodeSlice[],
+    currentFiles: Record<string, string>,
     callbacks: PipelineCallbacks,
     contextLogger: ReturnType<typeof logger.withRequestId>,
     designSystem: boolean
@@ -465,7 +426,7 @@ export class PipelineOrchestrator {
     });
 
     // Build the modification user prompt with code context
-    const modificationUserPrompt = this.buildModificationUserPrompt(userPrompt, fileSlices);
+    const modificationUserPrompt = this.buildModificationUserPrompt(userPrompt, fileSlices, currentFiles);
 
     const response = await this.executionProvider.generateStreaming({
       prompt: modificationUserPrompt,
@@ -495,54 +456,6 @@ export class PipelineOrchestrator {
 
     return parsedFiles;
   }
-
-  private async runReviewStage(
-    files: GeneratedFile[],
-    callbacks: PipelineCallbacks,
-    contextLogger: ReturnType<typeof logger.withRequestId>
-  ): Promise<ReviewOutput | null> {
-    callbacks.onStageStart?.('review', 'Reviewing for errors…');
-    const stageStartMs = Date.now();
-    contextLogger.debug('Review stage start', { fileCount: files.length });
-
-    try {
-      const reviewPrompt = this.buildReviewUserPrompt(files);
-
-      const response = await this.reviewProvider.generate({
-        prompt: reviewPrompt,
-        systemInstruction: this.promptProvider.getReviewSystemPrompt(),
-        maxOutputTokens: this.promptProvider.tokenBudgets.review,
-        responseSchema: REVIEW_JSON_SCHEMA,
-        signal: callbacks.signal,
-      });
-
-      if (!response.success || !response.content) {
-        throw new Error(response.error ?? 'Review stage returned empty content');
-      }
-
-      const parsed = JSON.parse(response.content);
-      const zodResult = ReviewOutputSchema.safeParse(parsed);
-
-      if (!zodResult.success) {
-        throw new Error(`Review schema mismatch: ${zodResult.error.message}`);
-      }
-
-      contextLogger.info('Review stage complete', {
-        verdict: zodResult.data.verdict,
-        corrections: zodResult.data.corrections.length,
-        correctedFiles: zodResult.data.corrections.map(c => c.path),
-        durationMs: Date.now() - stageStartMs,
-      });
-      callbacks.onStageComplete?.('review');
-      return zodResult.data;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      contextLogger.warn('Review stage failed (degraded)', { error: message });
-      callbacks.onStageFailed?.('review', message);
-      return null;
-    }
-  }
-
 
 
   /**
@@ -615,46 +528,34 @@ export class PipelineOrchestrator {
   // ─── Prompt Builders ──────────────────────────────────────────────────────
 
   /**
-   * Builds the review user prompt by serializing files into labeled sections.
-   * Truncates combined content to MAX_REVIEW_CONTENT_CHARS to stay within budget.
-   */
-  private buildReviewUserPrompt(files: GeneratedFile[]): string {
-    const sections: string[] = ['Review the following React application files for errors:\n'];
-    let totalChars = sections[0].length;
-
-    for (const file of files) {
-      const section = `=== ${file.path} ===\n${file.content}\n\n`;
-      if (totalChars + section.length > MAX_REVIEW_CONTENT_CHARS) {
-        sections.push(`[... ${files.length - sections.length + 1} more files truncated to fit review budget]\n`);
-        break;
-      }
-      sections.push(section);
-      totalChars += section.length;
-    }
-
-    return sections.join('');
-  }
-
-  /**
    * Builds the modification user prompt with primary and context file slices.
    */
-  private buildModificationUserPrompt(userPrompt: string, slices: CodeSlice[]): string {
+  private buildModificationUserPrompt(userPrompt: string, slices: CodeSlice[], currentFiles: Record<string, string>): string {
     const primarySlices = slices.filter((s) => s.relevance === 'primary');
     const contextSlices = slices.filter((s) => s.relevance === 'context');
 
-    const lines: string[] = [`User Request: ${userPrompt}\n`];
+    const lines: string[] = [];
+
+    // Project map for structural awareness
+    const projectMap = buildProjectMap({ files: currentFiles } as any);
+    if (projectMap) {
+      lines.push(`${projectMap}\n`);
+    }
+
+    lines.push(`User Request: ${userPrompt}\n`);
 
     if (primarySlices.length > 0) {
       lines.push('=== PRIMARY FILES (likely need modification) ===\n');
       for (const slice of primarySlices) {
-        lines.push(`--- ${slice.filePath} ---\n${slice.content}\n`);
+        lines.push(`--- ${slice.filePath} ---\n${addLineNumbers(slice.content)}\n`);
       }
     }
 
     if (contextSlices.length > 0) {
-      lines.push('=== CONTEXT FILES (for reference) ===\n');
-      for (const slice of contextSlices) {
-        lines.push(`--- ${slice.filePath} ---\n${slice.content}\n`);
+      const cappedContext = contextSlices.slice(0, MAX_CONTEXT_SLICES_MODIFICATION);
+      lines.push('=== CONTEXT FILES (outlines for reference) ===\n');
+      for (const slice of cappedContext) {
+        lines.push(`--- ${slice.filePath} ---\n${getFileOutline(slice.content, slice.filePath)}\n`);
       }
     }
 

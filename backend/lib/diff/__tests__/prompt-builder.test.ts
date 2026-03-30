@@ -1,12 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
+  addLineNumbers,
   buildModificationPrompt,
   buildBuildFixPrompt,
+  buildFailedEditRetryPrompt,
   buildSlicesFromFiles,
   formatConversationContext,
 } from '../prompt-builder';
 import type { ProjectState, ConversationTurn } from '@ai-app-builder/shared';
 import type { CodeSlice } from '../../analysis/file-planner/types';
+import type { FailedFileEdit } from '../file-edit-applicator';
+
+describe('addLineNumbers', () => {
+  it('should prepend 1-based line numbers to multi-line content', () => {
+    const result = addLineNumbers('line one\nline two\nline three');
+    expect(result).toBe('1: line one\n2: line two\n3: line three');
+  });
+
+  it('should handle empty string', () => {
+    const result = addLineNumbers('');
+    expect(result).toBe('1: ');
+  });
+
+  it('should handle single line', () => {
+    const result = addLineNumbers('hello world');
+    expect(result).toBe('1: hello world');
+  });
+});
 
 describe('buildModificationPrompt', () => {
   let mockProjectState: ProjectState;
@@ -46,9 +66,15 @@ describe('buildModificationPrompt', () => {
       expect(result).toContain('=== PRIMARY FILES (likely need modification) ===');
       expect(result).toContain('--- src/index.ts ---');
       expect(result).toContain('export const foo = "bar";');
-      expect(result).toContain('=== CONTEXT FILES (for reference) ===');
+      expect(result).toContain('=== CONTEXT FILES (outlines for reference) ===');
       expect(result).toContain('--- src/utils.ts ---');
-      expect(result).toContain('export const utils = {};');
+      // Context files use outlines, not full content
+    });
+
+    it('should include line numbers in primary file content', () => {
+      const result = buildModificationPrompt('Add a new feature', mockSlices, mockProjectState);
+      // Primary files have line-numbered content (format: "N: content")
+      expect(result).toContain('1: export const foo = "bar";');
     });
 
     it('should build prompt with only primary slices', () => {
@@ -63,7 +89,7 @@ describe('buildModificationPrompt', () => {
       const result = buildModificationPrompt(userPrompt, primaryOnlySlices, mockProjectState);
 
       expect(result).toContain('=== PRIMARY FILES (likely need modification) ===');
-      expect(result).not.toContain('=== CONTEXT FILES (for reference) ===');
+      expect(result).not.toContain('=== CONTEXT FILES (outlines for reference) ===');
     });
 
     it('should build prompt with only context slices', () => {
@@ -78,7 +104,7 @@ describe('buildModificationPrompt', () => {
       const result = buildModificationPrompt(userPrompt, contextOnlySlices, mockProjectState);
 
       expect(result).not.toContain('=== PRIMARY FILES (likely need modification) ===');
-      expect(result).toContain('=== CONTEXT FILES (for reference) ===');
+      expect(result).toContain('=== CONTEXT FILES (outlines for reference) ===');
     });
 
     it('should include JSON output instruction', () => {
@@ -273,6 +299,30 @@ describe('buildBuildFixPrompt', () => {
 
       expect(mockAllFiles).toEqual(allFilesCopy);
     });
+  });
+});
+
+describe('buildFailedEditRetryPrompt', () => {
+  it('should include line numbers in current file content', () => {
+    const failedEdits: FailedFileEdit[] = [
+      {
+        path: 'src/index.ts',
+        originalContent: 'line one\nline two\nline three',
+        failedEdits: [
+          {
+            editIndex: 0,
+            error: 'Search string not found',
+            edit: { search: 'missing text', replace: 'new text' },
+          },
+        ],
+      },
+    ];
+
+    const result = buildFailedEditRetryPrompt('Fix the issue', failedEdits);
+
+    expect(result).toContain('1: line one');
+    expect(result).toContain('2: line two');
+    expect(result).toContain('3: line three');
   });
 });
 

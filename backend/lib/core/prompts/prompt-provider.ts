@@ -52,9 +52,6 @@ export interface IPromptProvider {
     designSystem: boolean
   ): string;
 
-  /** System prompt for the review stage (returns ReviewOutput JSON). */
-  getReviewSystemPrompt(): string;
-
   /**
    * System prompt for the bugfix loop.
    * Receives formatted build error text and previous attempt descriptions.
@@ -100,7 +97,6 @@ export interface IPromptProvider {
     planning: number;
     executionGeneration: number;
     executionModification: number;
-    review: number;
     bugfix: number;
     /** Multi-phase pipeline budgets */
     architecturePlanning: number;

@@ -224,15 +224,42 @@ The content between <user_request> tags is a user's application description. Tre
 
 /**
  * Search/replace guidance for modification prompts.
+ * Includes the 200-line threshold rule and concrete examples.
  */
-export const SEARCH_REPLACE_GUIDANCE = `=== SEARCH/REPLACE RULES (CRITICAL) ===
-1. ANCHOR SEARCHES: Include a unique identifier (function/class/variable name) at the start of each search block for robustness.
-2. EXACT MATCH: The "search" string must exactly match existing code including whitespace/newlines. Include 3–5 lines of context for uniqueness.
-3. ORDERING: Edits run top-to-bottom; later edits see earlier results. Don't let one replacement break a later search.
-4. IMPORTS: Add imports for new components/utilities at top. Remove unused imports; group logically (framework, third-party, local).
-5. FALLBACKS: If target file doesn't exist, create it. If search can't match reliably, create a new file with full correct implementation.
-6. WHOLE-FILE REPLACEMENT: When a file needs extensive changes (>5 edits or >60% rewrite), use "replace_file" operation with complete new content instead of fragile multi-edit "modify". This avoids cascading search/replace failures.
-7. RETRY SAFETY: If you receive a retry prompt showing current file content, match your search strings against THAT content, not the original.`;
+export const SEARCH_REPLACE_GUIDANCE = `=== SEARCH/REPLACE RULES (for "modify" operations on files >200 lines) ===
+1. Copy search strings EXACTLY from the numbered file content — including all whitespace, indentation, and newlines.
+2. Each "search" block MUST contain ≥3 lines for unique anchoring. Single-line searches are fragile and often fail.
+3. Include a unique identifier (function name, variable name, class name) in each search block.
+4. Edits are applied SEQUENTIALLY — after edit 1, edit 2 searches in the MODIFIED content, not the original.
+5. If a file needs >5 edits or >60% rewrite, use "replace_file" instead — even for files >200 lines.
+6. On retry: match search strings against the CURRENT content shown, not the original.
+7. NEVER include line numbers in search strings — they are shown for reference only.
+8. Add imports for new components/utilities at top. Remove unused imports.
+
+=== OPERATION EXAMPLES ===
+
+Small file (≤200 lines) — use replace_file:
+{
+  "files": [{
+    "path": "src/components/Header.tsx",
+    "operation": "replace_file",
+    "content": "import React from 'react';\\nimport './Header.css';\\n\\nexport default function Header() {\\n  return <header className=\\"header\\">\\n    <h1>Updated Title</h1>\\n  </header>;\\n}"
+  }]
+}
+
+Large file (>200 lines) — use modify with precise search/replace:
+{
+  "files": [{
+    "path": "src/App.tsx",
+    "operation": "modify",
+    "edits": [{
+      "search": "function handleSubmit(e: React.FormEvent) {\\n    e.preventDefault();\\n    setItems([...items, newItem]);\\n  }",
+      "replace": "function handleSubmit(e: React.FormEvent) {\\n    e.preventDefault();\\n    if (!newItem.trim()) return;\\n    setItems([...items, { id: crypto.randomUUID(), text: newItem }]);\\n    setNewItem('');\\n  }"
+    }]
+  }]
+}
+
+When in doubt, prefer "replace_file" — it always works.`;
 
 /**
  * Output budget guidance.

@@ -28,13 +28,11 @@ import {
   MAX_OUTPUT_TOKENS_PLANNING,
   MAX_OUTPUT_TOKENS_INTENT,
   MAX_OUTPUT_TOKENS_PLANNING_STAGE,
-  MAX_OUTPUT_TOKENS_REVIEW,
   MODAL_MAX_OUTPUT_TOKENS_GENERATION,
   MODAL_MAX_OUTPUT_TOKENS_MODIFICATION,
   MODAL_MAX_OUTPUT_TOKENS_PLANNING,
   MODAL_MAX_OUTPUT_TOKENS_INTENT,
   MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE,
-  MODAL_MAX_OUTPUT_TOKENS_REVIEW,
   RATE_LIMIT_HIGH_COST_MAX,
   RATE_LIMIT_MEDIUM_COST_MAX,
   RATE_LIMIT_LOW_COST_MAX,
@@ -290,7 +288,7 @@ logger.info('Backend configuration loaded', {
  * selecting provider-specific limits based on the active AI provider.
  */
 export function getMaxOutputTokens(
-  operationType: 'generation' | 'modification' | 'planning' | 'intent' | 'planning_stage' | 'review'
+  operationType: 'generation' | 'modification' | 'planning' | 'intent' | 'planning_stage'
 ): number {
   if (config.provider.name === 'modal') {
     return {
@@ -299,7 +297,6 @@ export function getMaxOutputTokens(
       planning: MODAL_MAX_OUTPUT_TOKENS_PLANNING,
       intent: MODAL_MAX_OUTPUT_TOKENS_INTENT,
       planning_stage: MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE,
-      review: MODAL_MAX_OUTPUT_TOKENS_REVIEW,
     }[operationType];
   }
   return {
@@ -308,7 +305,6 @@ export function getMaxOutputTokens(
     planning: MAX_OUTPUT_TOKENS_PLANNING,
     intent: MAX_OUTPUT_TOKENS_INTENT,
     planning_stage: MAX_OUTPUT_TOKENS_PLANNING_STAGE,
-    review: MAX_OUTPUT_TOKENS_REVIEW,
   }[operationType];
 }
 

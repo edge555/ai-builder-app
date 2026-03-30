@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-03-29
+
+### Performance
+- **Simple edits now use 1 AI call** — the pipeline skips intent and planning for single- or two-file changes, repair mode, and small projects (≤8 files); complex multi-file changes still run the full 3-stage pipeline
+- **Modifications are faster and more reliable** — review stage removed (was a 32k-token AI call re-reading all merged files); pipeline now goes Intent → Planning → Execution
+- **Less input token usage** — context files capped at 8 slices using outlines (signatures only) instead of full content; modification prompts now include the project file map for structural awareness
+
+### Changed
+- **Small files use full-replacement by default** — the AI is now told to return complete file content (`replace_file`) for files under 200 lines, instead of search/replace patches; eliminates the main class of modification match failures
+- **Small projects skip the AI file planner** — for projects with ≤8 files, files are selected via keyword matching against file names instead of an AI planning call
+
+### Added
+- **Automatic fallback when edits fail** — if a search/replace operation can't find its target, the engine automatically retries with a full-file replacement; path-validated so the AI can't create new files or touch unrelated paths
+- **Line numbers in file content** — primary files shown to the AI now include line numbers, improving search/replace precision for the cases where it's still used
+
+### Removed
+- Review stage from the modification pipeline (was `PipelineOrchestrator` stage 4); build validation + auto-repair cover the same ground more efficiently
+
+### For contributors
+- `classifyModificationComplexity(slices, fileCount, errorContext)` — exported function that decides whether to skip intent/planning; 10 test cases in `modification-engine-complexity.test.ts`
+- `retryWithReplaceFileFallback` — path-validated: only accepts paths that were in the failed-edit set AND exist in `currentFiles`
+- `runOrderedModificationPipeline` now accepts `skipIntent`/`skipPlanning` options, consistent with `runModificationPipeline`
+- Removed: `ReviewOutputSchema`, `ReviewOutput`, `MAX_OUTPUT_TOKENS_REVIEW`, `MODAL_MAX_OUTPUT_TOKENS_REVIEW`, `MAX_REVIEW_CONTENT_CHARS`
+
+### Fixed
+- Word-boundary matching in heuristic file selector (was substring — `"app"` incorrectly matched `"application"`)
+
 ## [1.3.6] - 2026-03-27
 
 ### Performance

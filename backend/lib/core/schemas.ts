@@ -105,17 +105,6 @@ export const PlanOutputSchema = z.object({
 
 export type PlanOutput = z.infer<typeof PlanOutputSchema>;
 
-// Review stage output
-export const ReviewOutputSchema = z.object({
-  verdict: z.enum(['pass', 'fixed']).describe('pass = no changes needed; fixed = corrections provided'),
-  corrections: z.array(z.object({
-    path: z.string().describe('File path to replace'),
-    content: z.string().describe('Full replacement file content'),
-    reason: z.string().describe('Why this correction was made'),
-  })).describe('Files to replace (empty when verdict is pass)'),
-});
-
-export type ReviewOutput = z.infer<typeof ReviewOutputSchema>;
 
 // ─── Architecture Plan Schema (Multi-Phase Generation Pipeline) ────────────
 

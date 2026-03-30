@@ -26,6 +26,7 @@ export const DIFF_CONTEXT_LINES = 3;
 // Slice selection constants
 export const MAX_PRIMARY_SLICES = 10;
 export const MAX_CONTEXT_SLICES = 15;
+export const MAX_CONTEXT_SLICES_MODIFICATION = 8;
 
 // Validation limits
 export const MAX_COMPONENT_LINES = 80;
@@ -67,12 +68,9 @@ export const MODAL_MAX_OUTPUT_TOKENS_PLANNING = 2048;
 // Per-stage token budgets for the multi-stage pipeline (OpenRouter)
 export const MAX_OUTPUT_TOKENS_INTENT = 512;
 export const MAX_OUTPUT_TOKENS_PLANNING_STAGE = 4096;
-export const MAX_OUTPUT_TOKENS_REVIEW = 32768; // full-file corrections; must match execution budget
-
 // Per-stage token budgets for the multi-stage pipeline (Modal)
 export const MODAL_MAX_OUTPUT_TOKENS_INTENT = 1024;
 export const MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE = 8192;
-export const MODAL_MAX_OUTPUT_TOKENS_REVIEW = 32768;
 
 // ─── Multi-Phase Generation Pipeline ─────────────────────────────────────────
 // Per-phase output token budgets
@@ -120,9 +118,6 @@ export const MAX_BODY_HIGH_COST_BYTES = 2 * 1024 * 1024;   // 2 MB
 export const MAX_BODY_MEDIUM_COST_BYTES = 2 * 1024 * 1024; // 2 MB
 export const MAX_BODY_LOW_COST_BYTES = 5 * 1024 * 1024;    // 5 MB
 export const MAX_BODY_CONFIG_BYTES = 64 * 1024;             // 64 KB
-
-// Pipeline review stage
-export const MAX_REVIEW_CONTENT_CHARS = 128_000; // ~128k chars ≈ ~32k tokens; keeps within review budget
 
 // ─── Known Packages (deterministic fix + validation) ────────────────────────
 // Single source of truth for packages the builder commonly generates.

@@ -32,8 +32,10 @@ import {
   TokenBudgetManager,
 } from '../analysis';
 import { getTokenBudget } from '../constants';
-import { buildSlicesFromFiles } from './prompt-builder';
+import { buildSlicesFromFiles, buildReplaceFileRetryPrompt } from './prompt-builder';
 import { selectRepairFiles, type ErrorContext } from './repair-file-selector';
+import type { FailedFileEdit } from './file-edit-applicator';
+import { extractJsonFromResponse } from '../ai/modal-response-parser';
 import { createModificationResult } from './result-builder';
 import { DiagnosticRepairEngine } from './diagnostic-repair-engine';
 import { CheckpointManager } from './checkpoint-manager';
@@ -54,7 +56,6 @@ export type ModificationPhase =
   | 'intent'
   | 'planning'
   | 'generating'
-  | 'reviewing'
   | 'applying'
   | 'validating'
   | 'build-fixing';
@@ -130,9 +131,10 @@ export class ModificationEngine {
     try {
       // Step 1: Select code slices
       onProgress?.('planning', 'Analyzing project and planning changes...');
-      const skipPlanning = options?.shouldSkipPlanning || shouldSkipPlanningHeuristic(prompt, projectState);
+      const fileCount = Object.keys(projectState.files).length;
+      const skipFilePlanner = options?.shouldSkipPlanning || fileCount <= 8 || !!options?.errorContext;
       const { slices, category } = await this.selectCodeSlices(
-        projectState, prompt, skipPlanning, options?.errorContext
+        projectState, prompt, skipFilePlanner, options?.errorContext
       );
 
       // Step 2: Determine design system inclusion
@@ -145,6 +147,13 @@ export class ModificationEngine {
         contextFiles: slices.filter(s => s.relevance === 'context').map(s => s.filePath),
       });
 
+      // Step 2.5: Classify complexity to decide whether to run intent/planning stages
+      const { skipIntent, skipPlanning } = classifyModificationComplexity(
+        slices,
+        fileCount,
+        options?.errorContext
+      );
+
       // Step 3: Build pipeline callbacks
       const pipelineCallbacks: PipelineCallbacks = {
         onStageStart: (stage, label) => {
@@ -153,7 +162,6 @@ export class ModificationEngine {
           if (stage === 'intent') onProgress?.('intent', label);
           else if (stage === 'planning') onProgress?.('planning', label);
           else if (stage === 'execution') onProgress?.('generating', 'Generating code modifications...');
-          else if (stage === 'review') onProgress?.('reviewing', 'Reviewing changes...');
         },
         onStageComplete: (stage) => {
           contextLogger.debug('Pipeline stage complete', { stage });
@@ -177,7 +185,7 @@ export class ModificationEngine {
           projectState.files,
           slices,
           pipelineCallbacks,
-          { requestId, designSystem: shouldIncludeDesignSystem }
+          { requestId, designSystem: shouldIncludeDesignSystem, skipIntent, skipPlanning }
         );
       } else {
         onProgress?.('generating', `Generating code modifications (ordered, ${primaryFiles.length} files)...`);
@@ -201,7 +209,7 @@ export class ModificationEngine {
           impactReport.tiers,
           validateFile,
           pipelineCallbacks,
-          { requestId, designSystem: shouldIncludeDesignSystem }
+          { requestId, designSystem: shouldIncludeDesignSystem, skipIntent, skipPlanning }
         );
       }
 
@@ -214,7 +222,8 @@ export class ModificationEngine {
       onProgress?.('applying', 'Applying modifications...');
       const { updatedFiles, deletedFiles } = await this.resolveModifications(
         projectState.files,
-        pipelineResult
+        pipelineResult,
+        { userPrompt: prompt, designSystem: shouldIncludeDesignSystem }
       );
 
       // Step 5.5: Diff size guard — auto-convert modify ops that changed >90% of a file
@@ -330,11 +339,13 @@ export class ModificationEngine {
    * Resolve the pipeline result into a diff (updatedFiles + deletedFiles) by:
    * 1. Using finalFiles (create/replace_file + review corrections) as the base
    * 2. Applying any search/replace modify ops from executorFiles
-   * 3. Diffing the result against currentFiles
+   * 3. Auto-retrying failed edits with replace_file fallback
+   * 4. Diffing the result against currentFiles
    */
   private async resolveModifications(
     currentFiles: Record<string, string>,
-    pipelineResult: PipelineResult
+    pipelineResult: PipelineResult,
+    fallbackOptions?: { userPrompt: string; designSystem: boolean }
   ): Promise<{ updatedFiles: Record<string, string | null>; deletedFiles: string[] }> {
     // Start from finalFiles (create/replace_file applied + review corrections)
     const fileMap = new Map<string, string>(
@@ -346,14 +357,36 @@ export class ModificationEngine {
     if (modifyOps.length > 0) {
       const tempState = { files: Object.fromEntries(fileMap) } as ProjectState;
       const editResult = await applyFileEdits(modifyOps, tempState);
-      if (editResult.success && editResult.updatedFiles) {
+
+      // Always apply updates (both successful and partial for failed files)
+      if (editResult.updatedFiles) {
         for (const [path, content] of Object.entries(editResult.updatedFiles)) {
           if (content !== null) {
             fileMap.set(path, content);
           }
         }
-      } else {
-        logger.warn('Some modify ops failed to apply', { error: editResult.error });
+      }
+
+      // Auto replace_file fallback for failed edits
+      if (editResult.failedFileEdits && editResult.failedFileEdits.length > 0) {
+        if (fallbackOptions) {
+          logger.info('Attempting replace_file fallback for failed edits', {
+            failedFiles: editResult.failedFileEdits.map(f => f.path),
+          });
+          const fallbackFiles = await this.retryWithReplaceFileFallback(
+            editResult.failedFileEdits,
+            fallbackOptions.userPrompt,
+            fallbackOptions.designSystem,
+            currentFiles
+          );
+          for (const file of fallbackFiles) {
+            fileMap.set(file.path, file.content);
+          }
+        } else {
+          logger.warn('Modify ops failed, no fallback available', {
+            failedFiles: editResult.failedFileEdits.map(f => f.path),
+          });
+        }
       }
     }
 
@@ -414,6 +447,70 @@ export class ModificationEngine {
   }
 
   /**
+   * Retry failed search/replace edits by asking the AI to return complete file content
+   * using replace_file. This is the highest-leverage fallback — eliminates the entire
+   * "match failure" class at the cost of 1 extra AI call per batch of failed files.
+   */
+  private async retryWithReplaceFileFallback(
+    failedFileEdits: FailedFileEdit[],
+    userPrompt: string,
+    designSystem: boolean,
+    currentFiles: Record<string, string>,
+  ): Promise<GeneratedFile[]> {
+    const retryPrompt = buildReplaceFileRetryPrompt(userPrompt, failedFileEdits);
+    const systemInstruction = this.promptProvider.getExecutionModificationSystemPrompt(
+      userPrompt, null, null, designSystem
+    );
+
+    try {
+      const response = await this.bugfixProvider.generate({
+        prompt: retryPrompt,
+        systemInstruction,
+        maxOutputTokens: this.promptProvider.tokenBudgets.executionModification,
+      });
+
+      if (!response.success || !response.content) {
+        logger.warn('Replace_file fallback AI call failed', { error: response.error });
+        return [];
+      }
+
+      const jsonStr = extractJsonFromResponse(response.content);
+      if (!jsonStr) {
+        logger.warn('Replace_file fallback: could not extract JSON from response');
+        return [];
+      }
+
+      const parsed = JSON.parse(jsonStr);
+      const files = Array.isArray(parsed?.files) ? parsed.files
+        : Array.isArray(parsed) ? parsed
+        : typeof parsed?.path === 'string' ? [parsed] : [];
+
+      // Only accept paths we were asked to retry AND that exist in currentFiles
+      // — prevent AI from overwriting unrelated files or creating new files via fallback
+      const allowedPaths = new Set(failedFileEdits.map(f => f.path));
+      const result: GeneratedFile[] = [];
+      for (const file of files) {
+        if (typeof file.path === 'string' && typeof file.content === 'string'
+          && allowedPaths.has(file.path) && file.path in currentFiles) {
+          result.push({ path: file.path, content: file.content });
+        }
+      }
+
+      logger.info('Replace_file fallback succeeded', {
+        recoveredFiles: result.map(f => f.path),
+        failedFiles: failedFileEdits.map(f => f.path),
+      });
+
+      return result;
+    } catch (err) {
+      logger.warn('Replace_file fallback failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return [];
+    }
+  }
+
+  /**
    * Select code slices based on user prompt and planning strategy.
    */
   private async selectCodeSlices(
@@ -432,12 +529,14 @@ export class ModificationEngine {
         errorType: errorContext.errorType,
       });
     } else if (shouldSkipPlanning) {
-      slices = buildSlicesFromFiles(projectState);
+      slices = selectFilesHeuristically(projectState, prompt);
       const fileCount = Object.keys(projectState.files).length;
       const budgetManager = new TokenBudgetManager(getTokenBudget(fileCount));
       slices = budgetManager.trimToFit(slices, { chunks: new Map(), chunksByFile: new Map(), fileMetadata: new Map() });
-      logger.info('Skipping FilePlanner, using all files as primary', {
-        fileCount: slices.length
+      logger.info('Skipping FilePlanner, using heuristic file selection', {
+        fileCount,
+        primaryCount: slices.filter(s => s.relevance === 'primary').length,
+        contextCount: slices.filter(s => s.relevance === 'context').length,
       });
     } else {
       const planResult = await this.filePlanner.planWithCategory(prompt, projectState);
@@ -469,26 +568,68 @@ export class ModificationEngine {
 }
 
 /**
- * Heuristic to skip the AI planning call for obvious cases.
+ * Classifies modification complexity to decide whether to skip intent and/or planning stages.
+ *
+ * Rules:
+ * - errorContext present (repair mode) → skip both
+ * - <=2 primary files → skip both (fast path: execution only)
+ * - >2 primary files AND >8 project files → run both
+ * - >2 primary files AND <=8 project files (small project) → skip both
  */
-function shouldSkipPlanningHeuristic(prompt: string, projectState: ProjectState): boolean {
-  const fileCount = Object.keys(projectState.files).length;
-  if (fileCount <= 8) {
-    logger.info('Skipping planning: small project', { fileCount });
-    return true;
+export function classifyModificationComplexity(
+  slices: CodeSlice[],
+  projectFileCount: number,
+  errorContext?: ErrorContext,
+): { skipIntent: boolean; skipPlanning: boolean } {
+  if (errorContext) {
+    logger.info('Complexity: skip both (repair mode)');
+    return { skipIntent: true, skipPlanning: true };
   }
 
+  const primaryCount = slices.filter(s => s.relevance === 'primary').length;
+
+  if (primaryCount <= 2) {
+    logger.info('Complexity: skip both (<=2 primary files)', { primaryCount });
+    return { skipIntent: true, skipPlanning: true };
+  }
+
+  if (projectFileCount > 8) {
+    logger.info('Complexity: run both (>2 primary, large project)', { primaryCount, projectFileCount });
+    return { skipIntent: false, skipPlanning: false };
+  }
+
+  logger.info('Complexity: skip both (>2 primary, small project)', { primaryCount, projectFileCount });
+  return { skipIntent: true, skipPlanning: true };
+}
+
+/**
+ * Heuristic file selection for small projects or repair mode (no AI FilePlanner call).
+ * Matches prompt keywords against file basenames to categorize primary vs context.
+ * Falls back to all-primary if no matches found.
+ */
+function selectFilesHeuristically(projectState: ProjectState, prompt: string): CodeSlice[] {
   const promptLower = prompt.toLowerCase();
-  for (const filePath of Object.keys(projectState.files)) {
-    const fileName = filePath.split('/').pop() ?? '';
+  const allFiles = Object.entries(projectState.files);
+
+  const matchedPaths = new Set<string>();
+  for (const [path] of allFiles) {
+    const fileName = path.split('/').pop() ?? '';
     const baseName = fileName.replace(/\.[^.]+$/, '');
-    if (baseName.length >= 3 && promptLower.includes(baseName.toLowerCase())) {
-      logger.info('Skipping planning: prompt mentions file', { file: filePath, baseName });
-      return true;
+    if (baseName.length >= 3 && new RegExp(`\\b${baseName.toLowerCase()}\\b`).test(promptLower)) {
+      matchedPaths.add(path);
     }
   }
 
-  return false;
+  // Fallback: all primary if no keyword matches
+  if (matchedPaths.size === 0) {
+    return allFiles.map(([filePath, content]) => ({ filePath, content, relevance: 'primary' as const }));
+  }
+
+  return allFiles.map(([filePath, content]) => ({
+    filePath,
+    content,
+    relevance: matchedPaths.has(filePath) ? 'primary' as const : 'context' as const,
+  }));
 }
 
 /**

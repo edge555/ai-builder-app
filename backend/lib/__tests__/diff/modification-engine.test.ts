@@ -32,7 +32,6 @@ const makePipelineResult = (finalFiles: Array<{ path: string; content: string }>
   intentOutput: null,
   planOutput: null,
   executorFiles,
-  reviewOutput: null,
   finalFiles,
 });
 

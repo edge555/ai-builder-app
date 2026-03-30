@@ -6,7 +6,6 @@ import {
   MAX_OUTPUT_TOKENS_PLANNING_STAGE,
   MAX_OUTPUT_TOKENS_GENERATION,
   MAX_OUTPUT_TOKENS_MODIFICATION,
-  MAX_OUTPUT_TOKENS_REVIEW,
   MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING,
   MAX_OUTPUT_TOKENS_PLAN_REVIEW,
   MAX_OUTPUT_TOKENS_SCAFFOLD,
@@ -62,7 +61,6 @@ describe('UnifiedPromptProvider — default config (API)', () => {
     expect(p.tokenBudgets.planning).toBe(MAX_OUTPUT_TOKENS_PLANNING_STAGE);
     expect(p.tokenBudgets.executionGeneration).toBe(MAX_OUTPUT_TOKENS_GENERATION);
     expect(p.tokenBudgets.executionModification).toBe(MAX_OUTPUT_TOKENS_MODIFICATION);
-    expect(p.tokenBudgets.review).toBe(MAX_OUTPUT_TOKENS_REVIEW);
     expect(p.tokenBudgets.architecturePlanning).toBe(MAX_OUTPUT_TOKENS_ARCHITECTURE_PLANNING);
     expect(p.tokenBudgets.planReview).toBe(MAX_OUTPUT_TOKENS_PLAN_REVIEW);
     expect(p.tokenBudgets.scaffold).toBe(MAX_OUTPUT_TOKENS_SCAFFOLD);

@@ -23,21 +23,18 @@ import { GenerationPipeline } from './generation-pipeline';
 import './recipes/fragment-registry';
 
 /**
- * Creates a fully-wired PipelineOrchestrator.
+ * Creates a fully-wired PipelineOrchestrator for modifications.
  *
- * Resolves 4 task-specific AI providers in parallel, then creates
- * the appropriate IPromptProvider for the active AI provider.
- *
- * Used by `createStreamingProjectGenerator()` and `createModificationEngine()`
- * in Phase 5.
+ * Resolves 3 task-specific AI providers in parallel (intent, planning, execution).
+ * Review stage has been removed — accuracy improvements (replace_file bias +
+ * auto-fallback) make it redundant.
  */
 export async function createPipelineOrchestrator(): Promise<PipelineOrchestrator> {
-  const [intentProvider, planningProvider, executionProvider, reviewProvider, providerName] =
+  const [intentProvider, planningProvider, executionProvider, providerName] =
     await Promise.all([
       createAIProvider('intent'),
       createAIProvider('planning'),
       createAIProvider('execution'),
-      createAIProvider('review'),
       getEffectiveProvider(),
     ]);
 
@@ -47,7 +44,6 @@ export async function createPipelineOrchestrator(): Promise<PipelineOrchestrator
     intentProvider,
     planningProvider,
     executionProvider,
-    reviewProvider,
     promptProvider
   );
 }
