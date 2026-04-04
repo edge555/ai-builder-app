@@ -3,6 +3,8 @@
  * POST /api/invite/:token  — accept invite: bind user_id + update workspace_ids metadata
  */
 
+export const runtime = 'nodejs';
+
 import { NextRequest } from 'next/server';
 import { createHash } from 'crypto';
 import { requireAuth, createServiceRoleSupabaseClient } from '../../../../lib/security/auth';

@@ -4,6 +4,8 @@
  * DELETE /api/org/:orgId/workspaces/:wid/members  — remove member (body: { memberId })
  */
 
+export const runtime = 'nodejs';
+
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createHash } from 'crypto';
