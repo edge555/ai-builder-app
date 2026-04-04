@@ -19,7 +19,17 @@ const SECURITY_HEADERS: Record<string, string> = {
 /** Routes that don't require authentication */
 const PUBLIC_PATHS = ['/api/health'];
 
+/** Returns the appropriate Access-Control-Allow-Origin for the request origin. */
+function getCorsOrigin(request: NextRequest): string {
+  const allowed = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:8080').split(',').map(s => s.trim());
+  const origin = request.headers.get('origin') ?? '';
+  return allowed.includes(origin) ? origin : allowed[0];
+}
+
 export async function middleware(request: NextRequest) {
+  const corsOrigin = getCorsOrigin(request);
+  const corsHeadersMap = { 'Access-Control-Allow-Origin': corsOrigin };
+
   const response = NextResponse.next();
 
   // Apply security headers
@@ -42,14 +52,20 @@ export async function middleware(request: NextRequest) {
   // Extract Bearer token
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Missing or invalid Authorization header' }, { status: 401 });
+    return NextResponse.json(
+      { error: 'Missing or invalid Authorization header' },
+      { status: 401, headers: corsHeadersMap }
+    );
   }
 
   const token = authHeader.slice(7);
   const result = await verifySupabaseToken(token, jwtSecret);
 
   if (!result) {
-    return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+    return NextResponse.json(
+      { error: 'Invalid or expired token' },
+      { status: 401, headers: corsHeadersMap }
+    );
   }
 
   // Set X-User-Id header for downstream route handlers
@@ -58,9 +74,7 @@ export async function middleware(request: NextRequest) {
 
   return NextResponse.next({
     request: { headers: requestHeaders },
-    headers: Object.fromEntries(
-      Object.entries(SECURITY_HEADERS)
-    ),
+    headers: Object.fromEntries(Object.entries(SECURITY_HEADERS)),
   });
 }
 

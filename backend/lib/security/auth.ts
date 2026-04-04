@@ -3,7 +3,6 @@
  * Uses Web Crypto API (no Node.js crypto dependency).
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { getCorsHeaders } from '../api/utils';
 
 interface JwtPayload {
     sub: string;
@@ -67,6 +66,13 @@ export async function verifySupabaseToken(
  * When no JWT secret is configured (dev without Supabase), returns 403
  * with a message telling the operator to set SUPABASE_JWT_SECRET.
  */
+/** Minimal edge-safe CORS headers — avoids importing zlib-dependent utils.ts */
+function corsHeaders(request: Request): Record<string, string> {
+    const allowed = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:8080').split(',').map(s => s.trim());
+    const origin = request.headers.get('origin') ?? '';
+    return { 'Access-Control-Allow-Origin': allowed.includes(origin) ? origin : allowed[0] };
+}
+
 export async function requireAuth(
     request: Request
 ): Promise<{ userId: string } | Response> {
@@ -74,7 +80,7 @@ export async function requireAuth(
     if (!jwtSecret) {
         return new Response(
             JSON.stringify({ error: 'Auth not configured — set SUPABASE_JWT_SECRET to enable.', configured: false }),
-            { status: 503, headers: { ...getCorsHeaders(request), 'Content-Type': 'application/json' } }
+            { status: 503, headers: { ...corsHeaders(request), 'Content-Type': 'application/json' } }
         );
     }
 
@@ -82,7 +88,7 @@ export async function requireAuth(
     if (!authHeader?.startsWith('Bearer ')) {
         return new Response(
             JSON.stringify({ error: 'Missing or invalid Authorization header' }),
-            { status: 401, headers: { ...getCorsHeaders(request), 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...corsHeaders(request), 'Content-Type': 'application/json' } }
         );
     }
 
@@ -92,7 +98,7 @@ export async function requireAuth(
     if (!result) {
         return new Response(
             JSON.stringify({ error: 'Invalid or expired token' }),
-            { status: 401, headers: { ...getCorsHeaders(request), 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...corsHeaders(request), 'Content-Type': 'application/json' } }
         );
     }
 
