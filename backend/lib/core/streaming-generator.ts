@@ -354,7 +354,17 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 /**
  * Creates a StreamingProjectGenerator with the full pipeline + bugfix provider.
  */
-export async function createStreamingProjectGenerator(): Promise<StreamingProjectGenerator> {
+export async function createStreamingProjectGenerator(overrideProvider?: AIProvider): Promise<StreamingProjectGenerator> {
+  if (overrideProvider) {
+    // Workspace mode: use a single provider for all pipeline stages (v1 — no per-task routing)
+    const providerName = await getEffectiveProvider();
+    const promptProvider = createPromptProvider(providerName);
+    const pipeline = new GenerationPipeline(
+      overrideProvider, overrideProvider, overrideProvider,
+      overrideProvider, overrideProvider, promptProvider
+    );
+    return new StreamingProjectGenerator(pipeline, overrideProvider, promptProvider);
+  }
   const [pipeline, providerName] = await Promise.all([
     createGenerationPipeline(),
     getEffectiveProvider(),

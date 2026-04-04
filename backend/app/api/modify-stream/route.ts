@@ -25,6 +25,9 @@ import {
   SSEEncoder,
   createStreamLifecycle,
 } from '../../../lib/streaming';
+import { requireAuth } from '../../../lib/security/auth';
+import { resolveWorkspaceProvider } from '../../../lib/security/workspace-resolver';
+import { createServiceRoleSupabaseClient } from '../../../lib/security/auth';
 
 const logger = createLogger('api/modify-stream');
 
@@ -54,9 +57,60 @@ export async function POST(request: NextRequest) {
     if (!parsed.ok) return parsed.response;
     const body = parsed.data;
 
+    // Workspace mode: verify membership and resolve org API key
+    let workspaceProvider = undefined;
+    if (body.workspaceId) {
+      const authResult = await requireAuth(request);
+      if (authResult instanceof Response) return authResult;
+
+      const resolved = await resolveWorkspaceProvider(authResult.userId, body.workspaceId);
+      if (!resolved) {
+        // Not configured or no key — fall through to default provider
+      } else if ('forbidden' in resolved) {
+        return new Response(
+          JSON.stringify({ error: 'Not a member of this workspace' }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
+      } else {
+        workspaceProvider = resolved.provider;
+
+        // Fire-and-forget: snapshot current project state BEFORE generation starts.
+        // Enables CheckpointManager rollback on auto-repair failure.
+        // If snapshot fails, log and continue — generation must not be blocked.
+        if (body.projectId) {
+          const supabase = createServiceRoleSupabaseClient();
+          if (supabase) {
+            // Verify project belongs to this workspace before writing snapshot (IDOR guard).
+            supabase
+              .from('workspace_projects')
+              .select('id')
+              .eq('id', body.projectId)
+              .eq('workspace_id', body.workspaceId!)
+              .maybeSingle()
+              .then(({ data: project, error: lookupErr }) => {
+                if (lookupErr || !project) {
+                  if (lookupErr) contextLogger.warn('ProjectSnapshot ownership check failed', { error: lookupErr.message });
+                  return; // Skip snapshot — project not in this workspace
+                }
+                const filesJson = Object.fromEntries(
+                  Object.entries(body.projectState.files).map(([path, content]) => [path, { code: content }])
+                );
+                return supabase
+                  .from('workspace_project_snapshots')
+                  .upsert({ project_id: body.projectId, files_json: filesJson }, { onConflict: 'project_id' })
+                  .then(({ error }) => {
+                    if (error) contextLogger.warn('ProjectSnapshot upsert failed (non-blocking)', { error: error.message });
+                  });
+              });
+          }
+        }
+      }
+    }
+
     contextLogger.info('Starting streaming modification', {
       promptLength: body.prompt.length,
       shouldSkipPlanning: body.shouldSkipPlanning,
+      workspaceMode: !!workspaceProvider,
     });
 
     // Deserialize project state
@@ -92,7 +146,7 @@ export async function POST(request: NextRequest) {
           );
 
           // Run modification engine (blocking call — emits files post-hoc)
-          const engine = await createModificationEngine();
+          const engine = await createModificationEngine(workspaceProvider);
           const result = await engine.modifyProject(projectState, body.prompt, {
             shouldSkipPlanning,
             errorContext,

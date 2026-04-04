@@ -2,6 +2,7 @@
  * Supabase JWT verification for Edge Runtime.
  * Uses Web Crypto API (no Node.js crypto dependency).
  */
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 interface JwtPayload {
     sub: string;
@@ -95,6 +96,51 @@ export async function requireAuth(
     }
 
     return result;
+}
+
+/**
+ * Creates a Supabase client authenticated as the requesting user.
+ * Passes the user's JWT in the Authorization header so Supabase RLS
+ * enforces policies using auth.uid() — no manual ownership checks needed.
+ *
+ * Returns null if SUPABASE_URL or SUPABASE_ANON_KEY are not configured.
+ */
+export function createUserSupabaseClient(userToken: string): SupabaseClient | null {
+    const url = process.env.SUPABASE_URL;
+    const anonKey = process.env.SUPABASE_ANON_KEY;
+    if (!url || !anonKey) return null;
+
+    return createClient(url, anonKey, {
+        global: {
+            headers: {
+                Authorization: `Bearer ${userToken}`,
+            },
+        },
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+        },
+    });
+}
+
+/**
+ * Creates a Supabase client using the service role key (bypasses RLS).
+ * Use only for server-side admin operations where RLS cannot be applied,
+ * e.g. reading org API keys on behalf of a verified member.
+ *
+ * Returns null if SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY are not configured.
+ */
+export function createServiceRoleSupabaseClient(): SupabaseClient | null {
+    const url = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !serviceKey) return null;
+
+    return createClient(url, serviceKey, {
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+        },
+    });
 }
 
 function base64UrlDecode(str: string): Uint8Array {

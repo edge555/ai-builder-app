@@ -634,8 +634,18 @@ function selectFilesHeuristically(projectState: ProjectState, prompt: string): C
 
 /**
  * Creates a ModificationEngine with the full pipeline + bugfix provider.
+ * Pass overrideProvider to use a workspace-specific API key for all stages.
  */
-export async function createModificationEngine(): Promise<ModificationEngine> {
+export async function createModificationEngine(overrideProvider?: AIProvider): Promise<ModificationEngine> {
+  if (overrideProvider) {
+    // Workspace mode: single provider for all stages (v1 — no per-task routing)
+    const providerName = await getEffectiveProvider();
+    const promptProvider = createPromptProvider(providerName);
+    const pipeline = new PipelineOrchestrator(
+      overrideProvider, overrideProvider, overrideProvider, promptProvider
+    );
+    return new ModificationEngine(pipeline, overrideProvider, promptProvider);
+  }
   const [pipeline, bugfixProvider, providerName] = await Promise.all([
     createPipelineOrchestrator(),
     createAIProvider('bugfix'),

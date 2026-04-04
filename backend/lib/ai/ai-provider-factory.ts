@@ -21,6 +21,8 @@ import type { TaskType } from './agent-config-types';
 import { createModalClientForTask } from './modal-pipeline-factory';
 import { AgentRouter } from './agent-router';
 import { getEffectiveProvider } from './provider-config-store';
+import { OpenRouterClient } from './openrouter-client';
+import { config } from '../config';
 import { createLogger } from '../logger';
 
 const logger = createLogger('ai-provider-factory');
@@ -65,6 +67,16 @@ async function ensureInitialized(): Promise<void> {
  *
  * Uses settings override if set, otherwise falls back to AI_PROVIDER env var.
  */
+/**
+ * Creates a one-off OpenRouterClient using a workspace-specific API key.
+ * Bypasses the singleton AgentRouter and IntentDetector — all pipeline stages
+ * use a single model (execution model) for workspace members in v1.
+ * Task-specific routing for workspace members is a v2 enhancement.
+ */
+export function createWorkspaceProvider(apiKey: string): AIProvider {
+    return new OpenRouterClient(config.provider.openrouterExecutionModel, { apiKey });
+}
+
 export async function createAIProvider(taskType: TaskType = 'execution'): Promise<AIProvider> {
   const provider = await getEffectiveProvider();
   if (provider === 'modal') {
