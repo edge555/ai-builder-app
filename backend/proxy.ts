@@ -1,5 +1,5 @@
 /**
- * Next.js Middleware — Security Headers + JWT Auth
+ * Next.js Proxy (formerly middleware) — Security Headers + JWT Auth
  *
  * Runs on all /api/* routes in the Edge Runtime.
  * Adds security headers and verifies Supabase JWT on protected routes.
