@@ -66,10 +66,16 @@ frontend/src/
 │                      #   TemplateGrid, ConfirmDialog, ErrorBoundary, UndoRedoButtons, etc.
 ├── context/           # React Context providers (split state/actions pattern)
 │   └── AuthContext, ProjectContext, GenerationContext, ChatMessagesContext,
-│       PreviewErrorContext, AutoRepairContext, ErrorAggregatorContext, ToastContext
+│       PreviewErrorContext, AutoRepairContext, ErrorAggregatorContext, ToastContext,
+│       WorkspaceContext (workspace-scoped identity + AI provider injection)
 ├── hooks/             # Custom hooks (useSubmitPrompt, useAutoSave, useUndoRedo,
-│                      #   useCountdown, useSidebarResize, useCollapsibleMessages, etc.)
+│                      #   useCountdown, useSidebarResize, useCollapsibleMessages,
+│                      #   useMemberAutoSave (workspace project auto-save with toast on failure), etc.)
 ├── pages/             # WelcomePage, BuilderPage, LoginPage, AgentSettingsPage (lazy-loaded)
+│                      # Member pages: OnboardingPage, MemberWorkspacePickerPage,
+│                      #   MemberBuilderPage, MemberJoinPage
+│                      # Admin pages: admin/AdminDashboardPage, admin/AdminWorkspaceListPage,
+│                      #   admin/AdminWorkspacePage, admin/AdminWorkspaceCreatePage, admin/OrgSettingsPage
 ├── services/          # Storage, cloud, error aggregation, agent config, image-upload
 │   ├── storage/       # IndexedDB abstraction (StorageService, HybridStorageService,
 │   │                  #   project-store, chat-store, metadata-store, template-store)
@@ -95,7 +101,15 @@ backend/
 │   ├── health/           # Health check (?deep=true for provider probe, ?metrics=true for stats)
 │   ├── upload/           # Image upload (POST, sharp re-encoding, Supabase Storage)
 │   ├── agent-config/     # Per-task model config (GET/PUT)
-│   └── provider-config/  # Runtime provider override (GET/PUT)
+│   ├── provider-config/  # Runtime provider override (GET/PUT)
+│   ├── invite/[token]/   # Invite token redemption (GET token info, POST accept)
+│   ├── member/projects/  # Member project save/load scoped to workspace (GET, POST)
+│   ├── member/projects/[pid]/ # Member project by ID (GET, PUT)
+│   ├── member/session/   # Member session info (GET)
+│   ├── org/              # Org creation (POST)
+│   ├── org/self-provision/ # Self-provision org for authenticated user (POST)
+│   ├── org/[orgId]/settings/ # Org settings CRUD: name, API key, labels (GET/PUT)
+│   └── org/[orgId]/workspaces/ # Workspace listing and creation (GET/POST)
 ├── lib/
 │   ├── ai/            # Multi-provider AI abstraction
 │   │   ├── ai-provider.ts          # AIProvider interface
@@ -150,7 +164,9 @@ backend/
 │   │   ├── rate-limiter.ts        # Sliding-window rate limiter
 │   │   ├── rate-limit-config.ts   # Tier configs (HIGH_COST, MEDIUM_COST, LOW_COST, CONFIG)
 │   │   ├── redis-rate-limiter.ts  # Redis-backed sliding window (Lua script, fail-open fallback)
-│   │   └── auth.ts                # Supabase JWT verification + requireAuth guard (gates config mutation routes)
+│   │   ├── auth.ts                # Supabase JWT verification + requireAuth guard (gates config mutation routes)
+│   │   ├── crypto.ts              # AES-256-GCM encryption/decryption for org API keys (WORKSPACE_MASTER_KEY)
+│   │   └── workspace-resolver.ts  # Validates membership, decrypts org API key, returns workspace-scoped AIProvider
 │   ├── api/           # CORS, gzip, request ID, error helpers
 │   │   ├── request-parser.ts       # JSON parsing + Zod validation
 │   │   ├── route-context.ts        # Request ID + context logger + rate-limit header merging
@@ -201,11 +217,20 @@ npm run lint                   # All workspaces
 - `/project/new`: BuilderPage — new project (optional `?prompt=` query param)
 - `/project/:id`: BuilderPage — existing project from IndexedDB
 - `/settings/agents`: AgentSettingsPage — AI model/provider configuration
+- `/onboarding`: OnboardingPage — first-time workspace setup for new org members
+- `/workspace`: MemberWorkspacePickerPage — choose between personal and org workspace
+- `/workspace/:wid/project/:pid`: MemberBuilderPage — full builder scoped to a workspace project
+- `/join/:token`: MemberJoinPage — accept an org invite via token
+- `/admin`: AdminDashboardPage — overview of org members and projects
+- `/admin/workspaces`: AdminWorkspaceListPage — manage workspaces
+- `/admin/workspaces/:wid`: AdminWorkspacePage — workspace detail (members, projects)
+- `/admin/workspaces/create`: AdminWorkspaceCreatePage — create a new workspace
+- `/admin/settings`: OrgSettingsPage — rename org, rotate API key, configure labels
 
 ### Request Flow
 
 1. User prompt → frontend ChatInterface → backend `/api/generate-stream` or `/api/modify-stream`
-2. Backend resolves AI provider (env var or runtime override from `provider-config.json`)
+2. Backend resolves AI provider: if request carries a workspace identity header, `WorkspaceResolver` validates membership, decrypts the org's API key (AES-256-GCM), and returns a workspace-scoped `AIProvider`; otherwise falls through to env var / runtime override from `provider-config.json`
 3. **New projects** → `GenerationPipeline`: intent resolves → planning fires immediately (overlapped with synchronous recipe selection) → complexity gate (≤10 files → `executeOneShot()` with 1 AI call + plan review skipped; >10 files → `executeMultiPhase()` with plan review + phase batching + cross-phase summary cache). **Modifications** → `PipelineOrchestrator`: 3-stage pipeline (Intent → Planning → Execution); intent and planning skipped automatically for simple edits (≤2 primary files) or small projects (≤8 files). On OpenRouter, `IntentDetector` + `AgentRouter` route each stage to the optimal model. On Modal, `ModalPipelineFactory` resolves per-task endpoints.
 4. AI provider streams response via SSE with backpressure control (SSEEncoder utility)
 5. Incremental JSON parser extracts files as they arrive
@@ -283,6 +308,8 @@ Multi-provider architecture with runtime switching:
 - **IP extraction**: Falls back to rightmost-trusted X-Forwarded-For IP (configurable via `TRUSTED_PROXY_DEPTH`); `request.ip` platform property no longer available in Next.js 16
 - **CSRF protection**: `getCorsHeaders(request, { rejectInvalidOrigin: true })` rejects mutations with missing/invalid Origin header (infrastructure ready, not yet wired on routes)
 - **Authentication**: Optional Supabase Auth with JWT verification; `AuthContext` auto-redirects to `/login` on session expiry; `requireAuth()` gates `PUT /api/agent-config` and `PUT /api/provider-config` (returns 503 when `SUPABASE_JWT_SECRET` is unset)
+- **Org API key encryption** (`security/crypto.ts`): AES-256-GCM encryption for org API keys stored in Supabase; keyed from `WORKSPACE_MASTER_KEY` (base64-encoded 32 bytes); decryption errors return `null` (fall through to default provider) rather than propagating 500s
+- **Workspace provider resolution** (`security/workspace-resolver.ts`): validates `workspaceId` + member session before decrypting org API key; IDOR-safe snapshot upsert in `modify-stream` validates `projectId` belongs to the requesting workspace
 
 ## Environment Variables
 
@@ -298,6 +325,7 @@ Multi-provider architecture with runtime switching:
 - `LOG_FORMAT`: text/json (default: text)
 - `LOG_CATEGORIES`: ai,api,core,diff,analysis,streaming
 - `SUPABASE_JWT_SECRET`: JWT verification for Supabase Auth; also required for `PUT /api/agent-config` and `PUT /api/provider-config` in any publicly-reachable deployment (optional in dev)
+- `WORKSPACE_MASTER_KEY`: Base64-encoded 32-byte key for AES-256-GCM encryption of org API keys; required when using Blank Canvas Admin org workspaces
 - `RATE_LIMIT_ENABLED`: Enable rate limiting (default: true)
 - `TRUSTED_PROXY_DEPTH`: How many rightmost X-Forwarded-For IPs to trust (default: 1)
 - `REDIS_URL`: Redis connection URL for distributed rate limiting (optional; falls back to in-memory)

@@ -16,6 +16,7 @@ Generate full React web applications from natural language prompts. Describe wha
 - **Image upload** — paste or drag-drop images into chat for context
 - **Fullstack recipes** — Next.js + Prisma and Next.js + Supabase Auth generation (feature-flagged)
 - **Fullstack export** — ZIP with context-aware README, Docker Compose, .env.example
+- **Blank Canvas Admin** — invite members to a shared org workspace where all AI generation uses the org's own API key; admin dashboard for members, projects, and settings
 
 ## Architecture
 
@@ -88,6 +89,7 @@ Backend: http://localhost:4000
 | `REDIS_URL` | No | — | Redis URL for distributed rate limiting (falls back to in-memory) |
 | `ENABLE_FULLSTACK_RECIPES` | No | `false` | Enable fullstack generation (Next.js + Prisma/Supabase) |
 | `SUPABASE_JWT_SECRET` | No* | — | Enables Supabase Auth; required for config mutation routes in production |
+| `WORKSPACE_MASTER_KEY` | No* | — | Base64-encoded 32-byte key for AES-256-GCM org API key encryption (required for Blank Canvas Admin) |
 
 *Required for the selected provider. `SUPABASE_JWT_SECRET` marked `No*` is optional in local dev but required for production deployments that expose AI model/provider config endpoints.
 
