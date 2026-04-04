@@ -30,17 +30,31 @@ export async function middleware(request: NextRequest) {
   const corsOrigin = getCorsOrigin(request);
   const corsHeadersMap = { 'Access-Control-Allow-Origin': corsOrigin };
 
-  const response = NextResponse.next();
+  // SECURITY: Always strip client-supplied X-User-Id before forwarding.
+  // This header is exclusively set by this middleware after JWT verification —
+  // trusting it from the client would allow complete authentication bypass.
+  // We build sanitizedHeaders once and use it in every NextResponse.next() call.
+  const sanitizedHeaders = new Headers(request.headers);
+  sanitizedHeaders.delete('X-User-Id');
+  sanitizedHeaders.delete('x-user-id'); // belt-and-suspenders: strip lowercase too
 
-  // Apply security headers
-  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
-    response.headers.set(key, value);
+  /** Helper: forward the request with sanitized headers + security response headers. */
+  function passThrough(extraRequestHeaders?: Headers): NextResponse {
+    const forwardHeaders = extraRequestHeaders ?? sanitizedHeaders;
+    const res = NextResponse.next({ request: { headers: forwardHeaders } });
+    for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+      res.headers.set(key, value);
+    }
+    return res;
   }
 
   // Pass OPTIONS preflight through — route handlers return the correct CORS response
   if (request.method === 'OPTIONS') {
-    return response;
+    return passThrough();
   }
+
+  // Apply security headers to the final response (used for non-early paths)
+  const response = passThrough();
 
   // Skip auth for public routes
   const { pathname } = request.nextUrl;
@@ -73,14 +87,11 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  // Set X-User-Id header for downstream route handlers
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('X-User-Id', result.userId);
+  // Set X-User-Id header for downstream route handlers (on top of sanitized headers)
+  const authedHeaders = new Headers(sanitizedHeaders);
+  authedHeaders.set('X-User-Id', result.userId);
 
-  return NextResponse.next({
-    request: { headers: requestHeaders },
-    headers: Object.fromEntries(Object.entries(SECURITY_HEADERS)),
-  });
+  return passThrough(authedHeaders);
 }
 
 export const config = {

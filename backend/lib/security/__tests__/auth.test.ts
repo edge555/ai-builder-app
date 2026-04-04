@@ -151,6 +151,7 @@ describe('verifySupabaseToken', () => {
       mockSubtle.importKey.mockResolvedValue('mock-ec-key');
       mockSubtle.verify.mockResolvedValue(true);
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
         json: () => Promise.resolve({ keys: [{ kty: 'EC', crv: 'P-256', kid: 'test-kid' }] }),
       }));
       vi.stubEnv('SUPABASE_URL', 'https://test.supabase.co');

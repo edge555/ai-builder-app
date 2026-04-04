@@ -140,12 +140,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const appUrl = process.env.APP_URL ?? 'https://app.blankcanvas.dev';
         const inviteUrl = `${appUrl}/join/${inviteToken}`;
 
+        // HTML-escape user-controlled strings before interpolating into email body
+        const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const safeDisplayName = esc(parsed.data.display_name);
+        const safeWorkspaceName = esc(workspace?.name ?? 'a workspace');
+        const safeOrgName = esc(org?.name ?? 'an organization');
+
         const { error: emailError } = await resend.emails.send({
             from: process.env.RESEND_FROM_EMAIL ?? 'invite@blankcanvas.dev',
             to: parsed.data.email,
-            subject: `You've been invited to ${workspace?.name ?? 'a workspace'} on Blank Canvas`,
-            html: `<p>Hi ${parsed.data.display_name},</p>
-<p>You've been invited to join <strong>${workspace?.name ?? 'a workspace'}</strong> at ${org?.name ?? 'an organization'} on Blank Canvas.</p>
+            subject: `You've been invited to ${safeWorkspaceName} on Blank Canvas`,
+            html: `<p>Hi ${safeDisplayName},</p>
+<p>You've been invited to join <strong>${safeWorkspaceName}</strong> at ${safeOrgName} on Blank Canvas.</p>
 <p><a href="${inviteUrl}">Accept your invitation</a></p>
 <p>This link expires in ${INVITE_EXPIRES_HOURS} hours.</p>`,
         });

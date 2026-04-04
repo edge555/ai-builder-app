@@ -25,6 +25,7 @@ async function fetchJwks(jwksUrl: string): Promise<JsonWebKey[]> {
     const cached = jwksCache.get(jwksUrl);
     if (cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) return cached.keys;
     const res = await fetch(jwksUrl);
+    if (!res.ok) throw new Error(`JWKS fetch failed: ${res.status}`);
     const { keys } = await res.json() as { keys: JsonWebKey[] };
     jwksCache.set(jwksUrl, { keys, fetchedAt: Date.now() });
     return keys;
