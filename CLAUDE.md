@@ -218,14 +218,14 @@ npm run lint                   # All workspaces
 - `/project/:id`: BuilderPage — existing project from IndexedDB
 - `/settings/agents`: AgentSettingsPage — AI model/provider configuration
 - `/onboarding`: OnboardingPage — first-time workspace setup for new org members
-- `/workspace`: MemberWorkspacePickerPage — choose between personal and org workspace
-- `/workspace/:wid/project/:pid`: MemberBuilderPage — full builder scoped to a workspace project
+- `/w`: MemberWorkspacePickerPage — choose between personal and org workspace
+- `/w/:workspaceId`: MemberBuilderPage — full builder scoped to a workspace
 - `/join/:token`: MemberJoinPage — accept an org invite via token
-- `/admin`: AdminDashboardPage — overview of org members and projects
-- `/admin/workspaces`: AdminWorkspaceListPage — manage workspaces
-- `/admin/workspaces/:wid`: AdminWorkspacePage — workspace detail (members, projects)
-- `/admin/workspaces/create`: AdminWorkspaceCreatePage — create a new workspace
-- `/admin/settings`: OrgSettingsPage — rename org, rotate API key, configure labels
+- `/admin/:orgId`: AdminDashboardPage — overview of org members and projects
+- `/admin/:orgId/workspaces`: AdminWorkspaceListPage — manage workspaces
+- `/admin/:orgId/workspaces/:wid`: AdminWorkspacePage — workspace detail (members, projects)
+- `/admin/:orgId/workspaces/new`: AdminWorkspaceCreatePage — create a new workspace
+- `/admin/:orgId/settings`: OrgSettingsPage — rename org, rotate API key, configure labels
 
 ### Request Flow
 
