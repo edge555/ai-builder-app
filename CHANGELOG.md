@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2026-04-04
+
+### Added
+- **Blank Canvas Admin** — organizations can now invite members to a shared workspace where all AI generation uses the org's own API key. Admins manage invites, monitor member projects, and configure org settings from a dedicated dashboard.
+- **WorkspaceContext** — frontend now carries workspace-scoped identity through generation and modification requests. When a user is in a workspace session, their API calls automatically use the org's encrypted API key rather than the default provider.
+- **Member pages** — four new member-facing routes: workspace picker (choose between personal and org workspace), member builder (full app builder scoped to a workspace project), member join (accept invite flow), and onboarding (first-time workspace setup).
+- **Admin pages** — dedicated admin UI: dashboard (overview of members and projects), members list (invite, remove, role management), project browser (view all member projects), org settings (rename org, rotate API key, customize labels).
+- **Invite API** (`/api/invite`) — admin issues invite tokens; members redeem them to join a workspace. Tokens are single-use and time-limited.
+- **Member project API** (`/api/member/projects`) — members save and load projects scoped to their workspace. Auto-save triggers after each successful generation or modification.
+- **Org settings API** (`/api/org/:orgId/settings`) — admins read and update org name, custom labels, and API key. Key is encrypted at rest with AES-256-GCM before storage; the plaintext never leaves the server.
+- **AES-256-GCM API key encryption** (`backend/lib/security/crypto.ts`) — org API keys encrypted with a server-side master key (`WORKSPACE_MASTER_KEY`). Decryption errors are caught and logged without propagating 500s to members.
+- **Workspace provider resolution** (`backend/lib/security/workspace-resolver.ts`) — validates membership, fetches org API key, decrypts it, and returns a workspace-scoped `AIProvider`. Falls through to default provider when Supabase is not configured or org has no key set.
+- **Database migration** (`supabase/migrations/20260404_add_blank_canvas_admin.sql`) — new tables: `organizations`, `workspaces`, `members`, `workspace_projects`, `workspace_project_snapshots`. Row-level security enforces org boundaries.
+- **Auto-save with user feedback** (`useMemberAutoSave`) — project files save to the backend after every streaming completion. Save failures now surface a toast notification so members know their changes may not be persisted.
+
+### Security
+- **IDOR fix in snapshot upsert** — `modify-stream` snapshot now validates that the client-supplied `projectId` belongs to the authenticated `workspaceId` before writing. Previously, any workspace member could overwrite another workspace's snapshot by sending an arbitrary `projectId`.
+- **Decryption error containment** — `decryptApiKey()` in workspace-resolver is now wrapped in a try-catch; corrupted or tampered ciphertext returns `null` (falls through to default provider) instead of an unhandled 500.
+- **Org name update fixed** — `UpdateSettingsSchema` was missing the `name` field; `PUT /api/org/:orgId/settings` with only `name` returned a 400 "No fields to update" error and silently dropped the change. Fixed.
+- **Dead import removed** — unused `extractBearerToken` import removed from `generate-stream/route.ts`.
+
 ## [1.4.0] - 2026-03-29
 
 ### Performance
