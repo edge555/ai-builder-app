@@ -46,14 +46,6 @@ CREATE POLICY "workspace_admin" ON public.workspaces
     )
   );
 
--- Members can read their own workspace
-CREATE POLICY "workspace_member_read" ON public.workspaces
-  FOR SELECT USING (
-    id IN (
-      SELECT workspace_id FROM public.members WHERE user_id = auth.uid()
-    )
-  );
-
 -- -----------------------------------------------------------------------------
 -- members
 -- -----------------------------------------------------------------------------
@@ -84,6 +76,14 @@ CREATE POLICY "member_admin" ON public.members
 -- Members can read their own row
 CREATE POLICY "member_self_read" ON public.members
   FOR SELECT USING (user_id = auth.uid());
+
+-- Members can read their own workspace (requires members table — defined here after it)
+CREATE POLICY "workspace_member_read" ON public.workspaces
+  FOR SELECT USING (
+    id IN (
+      SELECT workspace_id FROM public.members WHERE user_id = auth.uid()
+    )
+  );
 
 -- -----------------------------------------------------------------------------
 -- workspace_projects

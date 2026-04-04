@@ -38,7 +38,8 @@ export async function OPTIONS() {
     return handleOptions();
 }
 
-export async function GET(request: NextRequest, { params }: { params: { pid: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ pid: string }> }) {
+    const { pid } = await params;
     const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.LOW_COST);
     if (blocked) return blocked;
 
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest, { params }: { params: { pid: str
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
-    const ownership = await verifyProjectOwnership(supabase, params.pid, authResult.userId);
+    const ownership = await verifyProjectOwnership(supabase, pid, authResult.userId);
     if (!ownership) {
         return corsError(request, 'Project not found', 404);
     }
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest, { params }: { params: { pid: str
     const { data: project, error } = await supabase
         .from('workspace_projects')
         .select('id, name, files_json, created_at, updated_at')
-        .eq('id', params.pid)
+        .eq('id', pid)
         .single();
 
     if (error || !project) return corsError(request, 'Project not found', 404);
@@ -66,7 +67,8 @@ export async function GET(request: NextRequest, { params }: { params: { pid: str
     });
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { pid: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ pid: string }> }) {
+    const { pid } = await params;
     const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.LOW_COST);
     if (blocked) return blocked;
 
@@ -81,7 +83,7 @@ export async function PUT(request: NextRequest, { params }: { params: { pid: str
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
-    const ownership = await verifyProjectOwnership(supabase, params.pid, authResult.userId);
+    const ownership = await verifyProjectOwnership(supabase, pid, authResult.userId);
     if (!ownership) {
         return corsError(request, 'Project not found', 404);
     }
@@ -93,12 +95,12 @@ export async function PUT(request: NextRequest, { params }: { params: { pid: str
     const { data: project, error } = await supabase
         .from('workspace_projects')
         .update(updates)
-        .eq('id', params.pid)
+        .eq('id', pid)
         .select('id, name, updated_at')
         .single();
 
     if (error) {
-        logger.error('Failed to save project', { error: error.message, projectId: params.pid });
+        logger.error('Failed to save project', { error: error.message, projectId: pid });
         return corsError(request, 'Failed to save project', 500);
     }
 

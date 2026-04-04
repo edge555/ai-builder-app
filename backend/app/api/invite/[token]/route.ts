@@ -20,14 +20,15 @@ export async function OPTIONS() {
     return handleOptions();
 }
 
-export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+    const { token } = await params;
     const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.LOW_COST);
     if (blocked) return blocked;
 
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
-    const tokenHash = hashToken(params.token);
+    const tokenHash = hashToken(token);
 
     const { data: member, error } = await supabase
         .from('members')
@@ -67,7 +68,8 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
     });
 }
 
-export async function POST(request: NextRequest, { params }: { params: { token: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+    const { token } = await params;
     const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.LOW_COST);
     if (blocked) return blocked;
 
@@ -80,7 +82,7 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
-    const tokenHash = hashToken(params.token);
+    const tokenHash = hashToken(token);
 
     const { data: member, error } = await supabase
         .from('members')

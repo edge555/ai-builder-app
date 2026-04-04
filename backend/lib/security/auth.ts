@@ -12,8 +12,27 @@ interface JwtPayload {
     [key: string]: unknown;
 }
 
+interface JwtHeader {
+    alg: string;
+    kid?: string;
+}
+
+// In-memory JWKS cache { [url]: { keys: JWK[], fetchedAt: number } }
+const jwksCache = new Map<string, { keys: JsonWebKey[]; fetchedAt: number }>();
+const JWKS_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function fetchJwks(jwksUrl: string): Promise<JsonWebKey[]> {
+    const cached = jwksCache.get(jwksUrl);
+    if (cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) return cached.keys;
+    const res = await fetch(jwksUrl);
+    const { keys } = await res.json() as { keys: JsonWebKey[] };
+    jwksCache.set(jwksUrl, { keys, fetchedAt: Date.now() });
+    return keys;
+}
+
 /**
  * Verifies a Supabase JWT and extracts the userId (sub claim).
+ * Supports both HS256 (legacy secret) and ES256 (new asymmetric keys via JWKS).
  * Returns null if the token is invalid or expired.
  */
 export async function verifySupabaseToken(
@@ -26,20 +45,42 @@ export async function verifySupabaseToken(
 
         const [headerB64, payloadB64, signatureB64] = parts;
 
-        // Verify signature using HMAC-SHA256
+        const header = JSON.parse(new TextDecoder().decode(base64UrlDecode(headerB64))) as JwtHeader;
         const encoder = new TextEncoder();
-        const key = await crypto.subtle.importKey(
-            'raw',
-            encoder.encode(jwtSecret),
-            { name: 'HMAC', hash: 'SHA-256' },
-            false,
-            ['verify']
-        );
-
-        const signatureBytes = base64UrlDecode(signatureB64);
         const dataBytes = encoder.encode(`${headerB64}.${payloadB64}`);
+        const signatureBytes = base64UrlDecode(signatureB64);
 
-        const valid = await crypto.subtle.verify('HMAC', key, signatureBytes as BufferSource, dataBytes as BufferSource);
+        let valid = false;
+
+        if (header.alg === 'ES256') {
+            // ES256: verify using JWKS from Supabase's well-known endpoint
+            const supabaseUrl = process.env.SUPABASE_URL;
+            if (!supabaseUrl) return null;
+            const jwksUrl = `${supabaseUrl}/auth/v1/.well-known/jwks.json`;
+            const keys = await fetchJwks(jwksUrl);
+            const jwk = header.kid ? keys.find(k => k.kid === header.kid) ?? keys[0] : keys[0];
+            if (!jwk) return null;
+            const ecKey = await crypto.subtle.importKey(
+                'jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']
+            );
+            valid = await crypto.subtle.verify(
+                { name: 'ECDSA', hash: 'SHA-256' },
+                ecKey,
+                signatureBytes as BufferSource,
+                dataBytes as BufferSource
+            );
+        } else {
+            // HS256: verify using the legacy JWT secret (UTF-8 encoded)
+            const key = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(jwtSecret),
+                { name: 'HMAC', hash: 'SHA-256' },
+                false,
+                ['verify']
+            );
+            valid = await crypto.subtle.verify('HMAC', key, signatureBytes as BufferSource, dataBytes as BufferSource);
+        }
+
         if (!valid) return null;
 
         // Decode payload
@@ -50,9 +91,7 @@ export async function verifySupabaseToken(
         const now = Math.floor(Date.now() / 1000);
         if (payload.exp && payload.exp < now) return null;
 
-        // Extract userId from sub claim
         if (!payload.sub) return null;
-
         return { userId: payload.sub };
     } catch {
         return null;
@@ -76,6 +115,11 @@ function corsHeaders(request: Request): Record<string, string> {
 export async function requireAuth(
     request: Request
 ): Promise<{ userId: string } | Response> {
+    // The middleware already verified the JWT and set X-User-Id — trust it.
+    const userId = request.headers.get('x-user-id');
+    if (userId) return { userId };
+
+    // Fallback for routes that bypass middleware (e.g. direct calls in tests).
     const jwtSecret = process.env.SUPABASE_JWT_SECRET;
     if (!jwtSecret) {
         return new Response(

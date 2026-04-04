@@ -25,7 +25,8 @@ export async function OPTIONS() {
     return handleOptions();
 }
 
-export async function GET(request: NextRequest, { params }: { params: { orgId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
+    const { orgId } = await params;
     const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.LOW_COST);
     if (blocked) return blocked;
 
@@ -35,14 +36,14 @@ export async function GET(request: NextRequest, { params }: { params: { orgId: s
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
-    if (!await verifyOrgAdmin(supabase, params.orgId, authResult.userId)) {
+    if (!await verifyOrgAdmin(supabase, orgId, authResult.userId)) {
         return corsError(request, 'Forbidden', 403);
     }
 
     const { data: workspaces, error } = await supabase
         .from('workspaces')
         .select('id, name, created_at')
-        .eq('org_id', params.orgId)
+        .eq('org_id', orgId)
         .is('deleted_at', null)
         .order('created_at', { ascending: true });
 
@@ -55,7 +56,8 @@ export async function GET(request: NextRequest, { params }: { params: { orgId: s
     });
 }
 
-export async function POST(request: NextRequest, { params }: { params: { orgId: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ orgId: string }> }) {
+    const { orgId } = await params;
     const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.LOW_COST);
     if (blocked) return blocked;
 
@@ -70,13 +72,13 @@ export async function POST(request: NextRequest, { params }: { params: { orgId: 
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
-    if (!await verifyOrgAdmin(supabase, params.orgId, authResult.userId)) {
+    if (!await verifyOrgAdmin(supabase, orgId, authResult.userId)) {
         return corsError(request, 'Forbidden', 403);
     }
 
     const { data: workspace, error } = await supabase
         .from('workspaces')
-        .insert({ org_id: params.orgId, name: parsed.data.name })
+        .insert({ org_id: orgId, name: parsed.data.name })
         .select('id, name, created_at')
         .single();
 

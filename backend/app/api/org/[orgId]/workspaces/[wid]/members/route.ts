@@ -40,7 +40,8 @@ export async function OPTIONS() {
     return handleOptions();
 }
 
-export async function GET(request: NextRequest, { params }: { params: { orgId: string; wid: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ orgId: string; wid: string }> }) {
+    const { orgId, wid } = await params;
     const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.LOW_COST);
     if (blocked) return blocked;
 
@@ -50,14 +51,14 @@ export async function GET(request: NextRequest, { params }: { params: { orgId: s
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
-    if (!await verifyOrgAdmin(supabase, params.orgId, authResult.userId)) {
+    if (!await verifyOrgAdmin(supabase, orgId, authResult.userId)) {
         return corsError(request, 'Forbidden', 403);
     }
 
     const { data: members, error } = await supabase
         .from('members')
         .select('id, email, display_name, joined_at, invite_token_expires_at, created_at')
-        .eq('workspace_id', params.wid)
+        .eq('workspace_id', wid)
         .order('created_at', { ascending: true });
 
     if (error) return corsError(request, 'Failed to fetch members', 500);
@@ -74,7 +75,8 @@ export async function GET(request: NextRequest, { params }: { params: { orgId: s
     });
 }
 
-export async function POST(request: NextRequest, { params }: { params: { orgId: string; wid: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ orgId: string; wid: string }> }) {
+    const { orgId, wid } = await params;
     const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.LOW_COST);
     if (blocked) return blocked;
 
@@ -89,10 +91,10 @@ export async function POST(request: NextRequest, { params }: { params: { orgId: 
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
-    if (!await verifyOrgAdmin(supabase, params.orgId, authResult.userId)) {
+    if (!await verifyOrgAdmin(supabase, orgId, authResult.userId)) {
         return corsError(request, 'Forbidden', 403);
     }
-    if (!await verifyWorkspaceInOrg(supabase, params.orgId, params.wid)) {
+    if (!await verifyWorkspaceInOrg(supabase, orgId, wid)) {
         return corsError(request, 'Workspace not found', 404);
     }
 
@@ -103,14 +105,14 @@ export async function POST(request: NextRequest, { params }: { params: { orgId: 
     const expiresAt = new Date(Date.now() + INVITE_EXPIRES_HOURS * 60 * 60 * 1000).toISOString();
 
     // Fetch org details for email
-    const { data: org } = await supabase.from('organizations').select('name').eq('id', params.orgId).single();
-    const { data: workspace } = await supabase.from('workspaces').select('name').eq('id', params.wid).single();
+    const { data: org } = await supabase.from('organizations').select('name').eq('id', orgId).single();
+    const { data: workspace } = await supabase.from('workspaces').select('name').eq('id', wid).single();
 
     // Insert member row
     const { data: member, error: memberError } = await supabase
         .from('members')
         .insert({
-            workspace_id: params.wid,
+            workspace_id: wid,
             email: parsed.data.email,
             display_name: parsed.data.display_name,
             invite_token_hash: tokenHash,
@@ -162,7 +164,8 @@ export async function POST(request: NextRequest, { params }: { params: { orgId: 
     });
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { orgId: string; wid: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ orgId: string; wid: string }> }) {
+    const { orgId, wid } = await params;
     const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.LOW_COST);
     if (blocked) return blocked;
 
@@ -177,7 +180,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { orgId
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
-    if (!await verifyOrgAdmin(supabase, params.orgId, authResult.userId)) {
+    if (!await verifyOrgAdmin(supabase, orgId, authResult.userId)) {
         return corsError(request, 'Forbidden', 403);
     }
 
@@ -185,7 +188,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { orgId
         .from('members')
         .delete()
         .eq('id', parsed.data.memberId)
-        .eq('workspace_id', params.wid);
+        .eq('workspace_id', wid);
 
     if (error) {
         return corsError(request, 'Failed to remove member', 500);
