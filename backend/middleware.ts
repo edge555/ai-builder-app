@@ -37,6 +37,11 @@ export async function middleware(request: NextRequest) {
     response.headers.set(key, value);
   }
 
+  // Pass OPTIONS preflight through — route handlers return the correct CORS response
+  if (request.method === 'OPTIONS') {
+    return response;
+  }
+
   // Skip auth for public routes
   const { pathname } = request.nextUrl;
   if (PUBLIC_PATHS.some((p) => pathname === p)) {
