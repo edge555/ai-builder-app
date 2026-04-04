@@ -3,6 +3,7 @@
  * Uses Web Crypto API (no Node.js crypto dependency).
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { getCorsHeaders } from '../api/utils';
 
 interface JwtPayload {
     sub: string;
@@ -73,7 +74,7 @@ export async function requireAuth(
     if (!jwtSecret) {
         return new Response(
             JSON.stringify({ error: 'Auth not configured — set SUPABASE_JWT_SECRET to enable.', configured: false }),
-            { status: 503, headers: { 'Content-Type': 'application/json' } }
+            { status: 503, headers: { ...getCorsHeaders(request), 'Content-Type': 'application/json' } }
         );
     }
 
@@ -81,7 +82,7 @@ export async function requireAuth(
     if (!authHeader?.startsWith('Bearer ')) {
         return new Response(
             JSON.stringify({ error: 'Missing or invalid Authorization header' }),
-            { status: 401, headers: { 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...getCorsHeaders(request), 'Content-Type': 'application/json' } }
         );
     }
 
@@ -91,7 +92,7 @@ export async function requireAuth(
     if (!result) {
         return new Response(
             JSON.stringify({ error: 'Invalid or expired token' }),
-            { status: 401, headers: { 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...getCorsHeaders(request), 'Content-Type': 'application/json' } }
         );
     }
 
