@@ -37,6 +37,28 @@ interface WorkspaceProject {
     updated_at: string;
 }
 
+interface WorkspaceProjectDetail {
+    id: string;
+    name: string;
+    updated_at: string;
+    files_json: Record<string, { code: string }> | null;
+}
+
+function toSerializedState(pid: string, data: WorkspaceProjectDetail): SerializedProjectState | null {
+    if (!data.files_json) return null;
+    return {
+        id: pid,
+        name: data.name || 'Untitled project',
+        description: '',
+        files: Object.fromEntries(
+            Object.entries(data.files_json).map(([path, f]) => [path, f.code])
+        ),
+        createdAt: data.updated_at,
+        updatedAt: data.updated_at,
+        currentVersionId: '',
+    };
+}
+
 // ── Auto-save component (must be inside GenerationProvider + ProjectProvider) ──
 
 function MemberAutoSaveWatcher({ projectId, accessToken }: { projectId: string; accessToken: string }) {
@@ -88,25 +110,8 @@ function ProjectListView({
                 },
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json() as {
-                id: string;
-                name: string;
-                updated_at: string;
-                files_json: Record<string, { code: string }> | null;
-            };
-            const state: SerializedProjectState | null = data.files_json
-                ? {
-                    id: pid,
-                    name: data.name || 'Untitled project',
-                    description: '',
-                    files: Object.fromEntries(
-                        Object.entries(data.files_json).map(([path, f]) => [path, f.code])
-                    ),
-                    createdAt: data.updated_at,
-                    updatedAt: data.updated_at,
-                    currentVersionId: '',
-                  }
-                : null;
+            const data = await res.json() as WorkspaceProjectDetail;
+            const state = toSerializedState(pid, data);
             onSelectProject(pid, state);
         } catch (e) {
             logger.error('Failed to load project', { error: String(e) });
@@ -218,6 +223,53 @@ export function MemberBuilderPage() {
             navigate('/login', { replace: true });
         }
     }, [authLoading, isAuthenticated, navigate]);
+
+    useEffect(() => {
+        if (!projectParam) {
+            setSelectedProjectId(null);
+            setSelectedProjectState(null);
+            return;
+        }
+
+        setSelectedProjectId(projectParam);
+        if (!session || !workspaceId) return;
+        if (selectedProjectId === projectParam && selectedProjectState !== null) return;
+
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(`${FUNCTIONS_BASE_URL}/member/projects/${projectParam}`, {
+                    headers: {
+                        'Authorization': `Bearer ${session.accessToken}`,
+                        'apikey': SUPABASE_ANON_KEY,
+                    },
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json() as WorkspaceProjectDetail;
+                if (!cancelled) {
+                    setSelectedProjectState(toSerializedState(projectParam, data));
+                }
+            } catch (e) {
+                logger.error('Failed to hydrate project from URL', { projectId: projectParam, error: String(e) });
+                if (!cancelled) {
+                    setSelectedProjectId(null);
+                    setSelectedProjectState(null);
+                    setSearchParams({});
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        projectParam,
+        session,
+        workspaceId,
+        selectedProjectId,
+        selectedProjectState,
+        setSearchParams,
+    ]);
 
     if (!workspaceId || authLoading || !session) {
         return <div className="member-loading">Loading…</div>;

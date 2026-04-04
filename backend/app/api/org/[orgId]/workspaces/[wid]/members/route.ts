@@ -56,6 +56,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!await verifyOrgAdmin(supabase, orgId, authResult.userId)) {
         return corsError(request, 'Forbidden', 403);
     }
+    if (!await verifyWorkspaceInOrg(supabase, orgId, wid)) {
+        return corsError(request, 'Workspace not found', 404);
+    }
 
     const { data: members, error } = await supabase
         .from('members')
@@ -190,6 +193,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (!await verifyOrgAdmin(supabase, orgId, authResult.userId)) {
         return corsError(request, 'Forbidden', 403);
+    }
+    if (!await verifyWorkspaceInOrg(supabase, orgId, wid)) {
+        return corsError(request, 'Workspace not found', 404);
     }
 
     const { error } = await supabase

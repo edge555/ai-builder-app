@@ -10,7 +10,6 @@ import { requireAuth, createServiceRoleSupabaseClient } from '../../../../lib/se
 import { applyRateLimit, RateLimitTier } from '../../../../lib/security';
 import { handleOptions, getCorsHeaders, corsError } from '../../../../lib/api';
 import { createLogger } from '../../../../lib/logger';
-import { createClient } from '@supabase/supabase-js';
 
 const logger = createLogger('api/org/self-provision');
 
@@ -46,6 +45,11 @@ export async function POST(request: NextRequest) {
             .eq('org_id', existingOrg.id)
             .limit(1)
             .maybeSingle();
+
+        if (!workspace?.id) {
+            logger.error('Existing org found without a workspace', { orgId: existingOrg.id, userId: authResult.userId });
+            return corsError(request, 'Existing organization is missing a workspace', 500);
+        }
 
         return new Response(JSON.stringify({ orgId: existingOrg.id, workspaceId: workspace?.id }), {
             headers: { ...getCorsHeaders(request), ...rlHeaders, 'Content-Type': 'application/json' },
@@ -83,22 +87,41 @@ export async function POST(request: NextRequest) {
 
     if (wsError || !workspace) {
         logger.error('Failed to create workspace', { error: wsError?.message });
+        await supabase.from('organizations').delete().eq('id', org.id);
         return corsError(request, 'Failed to create workspace', 500);
     }
 
-    await supabase.from('members').insert({
+    const { data: member, error: memberError } = await supabase.from('members').insert({
         workspace_id: workspace.id,
         user_id: authResult.userId,
         email: user.email ?? '',
         display_name: displayName,
         joined_at: new Date().toISOString(),
-    });
+    }).select('id').single();
+
+    if (memberError || !member) {
+        logger.error('Failed to create member', { error: memberError?.message, workspaceId: workspace.id });
+        await supabase.from('workspaces').delete().eq('id', workspace.id);
+        await supabase.from('organizations').delete().eq('id', org.id);
+        return corsError(request, 'Failed to create member', 500);
+    }
 
     // Append workspaceId to user_metadata.workspace_ids
     const existingIds: string[] = user.user_metadata?.workspace_ids ?? [];
-    await supabase.auth.admin.updateUserById(authResult.userId, {
+    const { error: metadataError } = await supabase.auth.admin.updateUserById(authResult.userId, {
         user_metadata: { ...user.user_metadata, workspace_ids: [...existingIds, workspace.id] },
     });
+    if (metadataError) {
+        logger.error('Failed to update user metadata after self-provision', {
+            error: metadataError.message,
+            userId: authResult.userId,
+            workspaceId: workspace.id,
+        });
+        await supabase.from('members').delete().eq('id', member.id);
+        await supabase.from('workspaces').delete().eq('id', workspace.id);
+        await supabase.from('organizations').delete().eq('id', org.id);
+        return corsError(request, 'Failed to finalize provisioning', 500);
+    }
 
     logger.info('Self-provision complete', { userId: authResult.userId, orgId: org.id, workspaceId: workspace.id });
 
