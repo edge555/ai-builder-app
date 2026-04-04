@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-04-04
+
+### Security
+- **X-User-Id header injection patched** — middleware now strips client-supplied `X-User-Id` from all incoming requests before any early-return path (OPTIONS, public routes, dev mode without JWT secret). Previously, an attacker could forge this header to bypass auth entirely when `SUPABASE_JWT_SECRET` was not configured.
+- **UNIQUE constraints added** — `members(workspace_id, email)` prevents duplicate invite detection code from silently never firing; `organizations(admin_user_id)` prevents concurrent self-provision from creating two orgs for the same user.
+- **HTML injection fixed in invite email** — `display_name`, workspace name, and org name are now HTML-escaped before interpolation into the invite email body.
+- **JWKS fetch checks res.ok** — `fetchJwks` now throws on non-2xx so ES256 token verification fails closed (returns null) instead of parsing an error body.
+- **nodejs runtime on org/settings route** — `crypto.ts` uses `Buffer` (Node.js builtin); added `export const runtime = 'nodejs'` to prevent Turbopack silently unregistering the route.
+
+### Fixed
+- **CORS on all auth error responses** (ISSUE-001, ISSUE-005) — `requireAuth()` and middleware 401/503 responses now include `Access-Control-Allow-Origin`.
+- **OPTIONS preflight no longer 401s** (ISSUE-005b/c) — middleware passes OPTIONS requests through without auth-checking them.
+- **ES256 JWT support** (ISSUE-006) — Supabase uses ES256; `verifySupabaseToken` now fetches keys from JWKS with a 5-minute cache.
+- **Async route params** (ISSUE-006) — Next.js 15+ made dynamic route params a Promise; all `[orgId]`, `[wid]`, `[token]`, `[pid]` handlers updated to `await params`.
+- **Node.js crypto in edge runtime** (ISSUE-007) — added `export const runtime = 'nodejs'` to routes importing from Node.js `crypto`.
+- **OnboardingPage navigation** (ISSUE-002) — replaced `navigate()` in JSX render with `<Navigate>` component.
+- **Fraunces font on admin/join headlines** (ISSUE-003) — added missing `font-family: var(--font-display)` to 24px+ headlines.
+- **CLAUDE.md route paths** (ISSUE-004) — corrected wrong URL paths in routing docs.
+
+### Tests
+- Added `crypto.test.ts` (7 tests), `workspace-resolver.test.ts` (5 tests), and 8 new tests in `auth.test.ts` covering ES256 JWKS, requireAuth X-User-Id trust, and CORS headers on error responses.
+
 ## [1.5.0] - 2026-04-04
 
 ### Added
