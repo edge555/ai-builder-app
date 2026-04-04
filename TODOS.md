@@ -90,3 +90,23 @@
 - **Why:** Performance optimization for projects with 20+ files. Currently validation runs on all files even when only 1 changed.
 - **Context:** Deferred from Phase 4 of the modification & repair pipeline plan (2026-03-21). Uses `DependencyGraph` to determine validation scope.
 - **Depends on:** None (prerequisite `DependencyGraph` extensions shipped in v1.3.0)
+
+## Blank Canvas Admin (managed platform for instructors/trainers/organizations)
+
+*Design doc locked. Architecture reviewed (/plan-eng-review 2026-04-04). Ready to implement.*
+
+### Per-Workspace Token Budget Enforcement [P2, M]
+- **What:** Add per-member daily token cap stored on the Workspace table. Enforce in `/api/generate-stream` and `/api/modify-stream` before decrypting the org API key.
+- **Why:** One active member can exhaust the org's upstream API quota for the entire class with no guard. Results in "why is everyone's generation broken?" incidents during class.
+- **Pros:** Prevents runaway usage, gives admin visibility into per-member consumption. Token counts already available in SSE complete payload via existing metrics system.
+- **Cons:** Requires token counter storage (Redis or Supabase) and a new admin UI panel.
+- **Context:** Deferred from Blank Canvas Admin v1 (2026-04-04).
+- **Depends on:** Blank Canvas Admin v1 shipped
+
+### Admin API Key Health Indicator [P2, S]
+- **What:** `OrgSettingsPage` shows API key status (valid / invalid / unknown) with a "Test connection" button that probes OpenRouter with a minimal request before storing.
+- **Why:** When the org's API key is invalid or exhausted, all 30 students fail simultaneously with no notification path to the admin.
+- **Pros:** ~2 hours of work. Prevents classroom disruption. Builds admin trust in the platform.
+- **Cons:** Adds a probe call on demand (not on hot generation path — no performance impact).
+- **Context:** Deferred from Blank Canvas Admin v1 (2026-04-04). Validation probe partially designed in design doc Open Questions #6.
+- **Depends on:** Blank Canvas Admin v1 shipped

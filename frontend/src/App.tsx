@@ -38,6 +38,19 @@ const BuilderPage = lazy(() => import('./pages/BuilderPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 
+// Admin pages
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
+const AdminWorkspaceListPage = lazy(() => import('./pages/admin/AdminWorkspaceListPage'));
+const AdminWorkspaceCreatePage = lazy(() => import('./pages/admin/AdminWorkspaceCreatePage'));
+const AdminWorkspacePage = lazy(() => import('./pages/admin/AdminWorkspacePage'));
+const OrgSettingsPage = lazy(() => import('./pages/admin/OrgSettingsPage'));
+
+// Member pages
+const MemberBuilderPage = lazy(() => import('./pages/MemberBuilderPage'));
+const MemberJoinPage = lazy(() => import('./pages/MemberJoinPage'));
+const MemberWorkspacePickerPage = lazy(() => import('./pages/MemberWorkspacePickerPage'));
+
 const appLogger = createLogger('App');
 
 /**
@@ -184,6 +197,98 @@ function AppInner() {
           <AuthGuard>
             <Suspense fallback={<PageSkeleton />}>
               <AgentSettingsPage />
+            </Suspense>
+          </AuthGuard>
+        }
+      />
+
+      {/* Onboarding — instructor self-provision */}
+      <Route
+        path="/onboarding"
+        element={
+          <Suspense fallback={<PageSkeleton />}>
+            <OnboardingPage />
+          </Suspense>
+        }
+      />
+
+      {/* Admin routes */}
+      <Route
+        path="/admin/:orgId"
+        element={
+          <AuthGuard>
+            <Suspense fallback={<PageSkeleton />}>
+              <AdminDashboardPage />
+            </Suspense>
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/:orgId/workspaces/new"
+        element={
+          <AuthGuard>
+            <Suspense fallback={<PageSkeleton />}>
+              <AdminWorkspaceCreatePage />
+            </Suspense>
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/:orgId/workspaces/:wid"
+        element={
+          <AuthGuard>
+            <Suspense fallback={<PageSkeleton />}>
+              <AdminWorkspacePage />
+            </Suspense>
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/:orgId/workspaces"
+        element={
+          <AuthGuard>
+            <Suspense fallback={<PageSkeleton />}>
+              <AdminWorkspaceListPage />
+            </Suspense>
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/:orgId/settings"
+        element={
+          <AuthGuard>
+            <Suspense fallback={<PageSkeleton />}>
+              <OrgSettingsPage />
+            </Suspense>
+          </AuthGuard>
+        }
+      />
+
+      {/* Member routes */}
+      <Route
+        path="/join/:token"
+        element={
+          <Suspense fallback={<PageSkeleton />}>
+            <MemberJoinPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/w"
+        element={
+          <AuthGuard>
+            <Suspense fallback={<PageSkeleton />}>
+              <MemberWorkspacePickerPage />
+            </Suspense>
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/w/:workspaceId"
+        element={
+          <AuthGuard>
+            <Suspense fallback={<PageSkeleton />}>
+              <MemberBuilderPage />
             </Suspense>
           </AuthGuard>
         }

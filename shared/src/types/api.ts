@@ -28,6 +28,8 @@ export interface GenerateProjectRequest {
   description: string;
   /** Optional image attachments (uploaded via /api/upload) */
   attachments?: ImageAttachment[];
+  /** Present when called from MemberBuilderPage — triggers workspace API key injection */
+  workspaceId?: string;
 }
 
 /**
@@ -62,6 +64,10 @@ export interface ModifyProjectRequest {
   runtimeError?: RuntimeError;
   /** Optional image attachments (uploaded via /api/upload) */
   attachments?: ImageAttachment[];
+  /** Present when called from MemberBuilderPage — triggers workspace API key injection */
+  workspaceId?: string;
+  /** workspace_projects.id — used for pre-generation snapshot upsert */
+  projectId?: string;
 }
 
 /**

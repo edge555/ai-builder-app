@@ -24,6 +24,8 @@ import {
   SSEEncoder,
   createStreamLifecycle,
 } from '../../../lib/streaming';
+import { requireAuth } from '../../../lib/security/auth';
+import { resolveWorkspaceProvider } from '../../../lib/security/workspace-resolver';
 
 const logger = createLogger('api/generate-stream');
 
@@ -54,8 +56,28 @@ export async function POST(request: NextRequest) {
     if (!parsed.ok) return parsed.response;
     const body: GenerateProjectRequest = parsed.data;
 
+    // Workspace mode: verify membership and resolve org API key
+    let workspaceProvider = undefined;
+    if (body.workspaceId) {
+      const authResult = await requireAuth(request);
+      if (authResult instanceof Response) return authResult;
+
+      const resolved = await resolveWorkspaceProvider(authResult.userId, body.workspaceId);
+      if (!resolved) {
+        // Supabase not configured or org has no key — fall through to default provider
+      } else if ('forbidden' in resolved) {
+        return new Response(
+          JSON.stringify({ error: 'Not a member of this workspace' }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
+      } else {
+        workspaceProvider = resolved.provider;
+      }
+    }
+
     contextLogger.info('Starting streaming generation', {
       descriptionLength: body.description.length,
+      workspaceMode: !!workspaceProvider,
     });
 
     // Create backpressure controller
@@ -80,7 +102,7 @@ export async function POST(request: NextRequest) {
         try {
 
           // Generate project with streaming callbacks
-          const generator = await createStreamingProjectGenerator();
+          const generator = await createStreamingProjectGenerator(workspaceProvider);
 
           const result = await generator.generateProjectStreaming(body.description, {
             signal: request.signal,

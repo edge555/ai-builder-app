@@ -2,6 +2,7 @@
  * Supabase JWT verification for Edge Runtime.
  * Uses Web Crypto API (no Node.js crypto dependency).
  */
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 interface JwtPayload {
     sub: string;
@@ -11,8 +12,28 @@ interface JwtPayload {
     [key: string]: unknown;
 }
 
+interface JwtHeader {
+    alg: string;
+    kid?: string;
+}
+
+// In-memory JWKS cache { [url]: { keys: JWK[], fetchedAt: number } }
+const jwksCache = new Map<string, { keys: JsonWebKey[]; fetchedAt: number }>();
+const JWKS_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function fetchJwks(jwksUrl: string): Promise<JsonWebKey[]> {
+    const cached = jwksCache.get(jwksUrl);
+    if (cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) return cached.keys;
+    const res = await fetch(jwksUrl);
+    if (!res.ok) throw new Error(`JWKS fetch failed: ${res.status}`);
+    const { keys } = await res.json() as { keys: JsonWebKey[] };
+    jwksCache.set(jwksUrl, { keys, fetchedAt: Date.now() });
+    return keys;
+}
+
 /**
  * Verifies a Supabase JWT and extracts the userId (sub claim).
+ * Supports both HS256 (legacy secret) and ES256 (new asymmetric keys via JWKS).
  * Returns null if the token is invalid or expired.
  */
 export async function verifySupabaseToken(
@@ -25,20 +46,42 @@ export async function verifySupabaseToken(
 
         const [headerB64, payloadB64, signatureB64] = parts;
 
-        // Verify signature using HMAC-SHA256
+        const header = JSON.parse(new TextDecoder().decode(base64UrlDecode(headerB64))) as JwtHeader;
         const encoder = new TextEncoder();
-        const key = await crypto.subtle.importKey(
-            'raw',
-            encoder.encode(jwtSecret),
-            { name: 'HMAC', hash: 'SHA-256' },
-            false,
-            ['verify']
-        );
-
-        const signatureBytes = base64UrlDecode(signatureB64);
         const dataBytes = encoder.encode(`${headerB64}.${payloadB64}`);
+        const signatureBytes = base64UrlDecode(signatureB64);
 
-        const valid = await crypto.subtle.verify('HMAC', key, signatureBytes as BufferSource, dataBytes as BufferSource);
+        let valid = false;
+
+        if (header.alg === 'ES256') {
+            // ES256: verify using JWKS from Supabase's well-known endpoint
+            const supabaseUrl = process.env.SUPABASE_URL;
+            if (!supabaseUrl) return null;
+            const jwksUrl = `${supabaseUrl}/auth/v1/.well-known/jwks.json`;
+            const keys = await fetchJwks(jwksUrl);
+            const jwk = header.kid ? keys.find(k => k.kid === header.kid) ?? keys[0] : keys[0];
+            if (!jwk) return null;
+            const ecKey = await crypto.subtle.importKey(
+                'jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']
+            );
+            valid = await crypto.subtle.verify(
+                { name: 'ECDSA', hash: 'SHA-256' },
+                ecKey,
+                signatureBytes as BufferSource,
+                dataBytes as BufferSource
+            );
+        } else {
+            // HS256: verify using the legacy JWT secret (UTF-8 encoded)
+            const key = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(jwtSecret),
+                { name: 'HMAC', hash: 'SHA-256' },
+                false,
+                ['verify']
+            );
+            valid = await crypto.subtle.verify('HMAC', key, signatureBytes as BufferSource, dataBytes as BufferSource);
+        }
+
         if (!valid) return null;
 
         // Decode payload
@@ -49,9 +92,7 @@ export async function verifySupabaseToken(
         const now = Math.floor(Date.now() / 1000);
         if (payload.exp && payload.exp < now) return null;
 
-        // Extract userId from sub claim
         if (!payload.sub) return null;
-
         return { userId: payload.sub };
     } catch {
         return null;
@@ -65,14 +106,26 @@ export async function verifySupabaseToken(
  * When no JWT secret is configured (dev without Supabase), returns 403
  * with a message telling the operator to set SUPABASE_JWT_SECRET.
  */
+/** Minimal edge-safe CORS headers — avoids importing zlib-dependent utils.ts */
+function corsHeaders(request: Request): Record<string, string> {
+    const allowed = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:8080').split(',').map(s => s.trim());
+    const origin = request.headers.get('origin') ?? '';
+    return { 'Access-Control-Allow-Origin': allowed.includes(origin) ? origin : allowed[0] };
+}
+
 export async function requireAuth(
     request: Request
 ): Promise<{ userId: string } | Response> {
+    // The middleware already verified the JWT and set X-User-Id — trust it.
+    const userId = request.headers.get('x-user-id');
+    if (userId) return { userId };
+
+    // Fallback for routes that bypass middleware (e.g. direct calls in tests).
     const jwtSecret = process.env.SUPABASE_JWT_SECRET;
     if (!jwtSecret) {
         return new Response(
             JSON.stringify({ error: 'Auth not configured — set SUPABASE_JWT_SECRET to enable.', configured: false }),
-            { status: 503, headers: { 'Content-Type': 'application/json' } }
+            { status: 503, headers: { ...corsHeaders(request), 'Content-Type': 'application/json' } }
         );
     }
 
@@ -80,7 +133,7 @@ export async function requireAuth(
     if (!authHeader?.startsWith('Bearer ')) {
         return new Response(
             JSON.stringify({ error: 'Missing or invalid Authorization header' }),
-            { status: 401, headers: { 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...corsHeaders(request), 'Content-Type': 'application/json' } }
         );
     }
 
@@ -90,11 +143,56 @@ export async function requireAuth(
     if (!result) {
         return new Response(
             JSON.stringify({ error: 'Invalid or expired token' }),
-            { status: 401, headers: { 'Content-Type': 'application/json' } }
+            { status: 401, headers: { ...corsHeaders(request), 'Content-Type': 'application/json' } }
         );
     }
 
     return result;
+}
+
+/**
+ * Creates a Supabase client authenticated as the requesting user.
+ * Passes the user's JWT in the Authorization header so Supabase RLS
+ * enforces policies using auth.uid() — no manual ownership checks needed.
+ *
+ * Returns null if SUPABASE_URL or SUPABASE_ANON_KEY are not configured.
+ */
+export function createUserSupabaseClient(userToken: string): SupabaseClient | null {
+    const url = process.env.SUPABASE_URL;
+    const anonKey = process.env.SUPABASE_ANON_KEY;
+    if (!url || !anonKey) return null;
+
+    return createClient(url, anonKey, {
+        global: {
+            headers: {
+                Authorization: `Bearer ${userToken}`,
+            },
+        },
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+        },
+    });
+}
+
+/**
+ * Creates a Supabase client using the service role key (bypasses RLS).
+ * Use only for server-side admin operations where RLS cannot be applied,
+ * e.g. reading org API keys on behalf of a verified member.
+ *
+ * Returns null if SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY are not configured.
+ */
+export function createServiceRoleSupabaseClient(): SupabaseClient | null {
+    const url = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !serviceKey) return null;
+
+    return createClient(url, serviceKey, {
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+        },
+    });
 }
 
 function base64UrlDecode(str: string): Uint8Array {

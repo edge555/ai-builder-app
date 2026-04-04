@@ -1,0 +1,286 @@
+.workspace-page-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.workspace-breadcrumb {
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 4px;
+}
+
+.workspace-breadcrumb a {
+    color: hsl(var(--primary));
+    text-decoration: none;
+}
+
+.workspace-breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+/* Members table */
+.member-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.member-table th {
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid hsl(var(--border));
+}
+
+.member-table td {
+    padding: 12px 12px;
+    border-bottom: 1px solid hsl(var(--border));
+    color: hsl(var(--foreground));
+    vertical-align: middle;
+}
+
+.member-table tr:last-child td {
+    border-bottom: none;
+}
+
+.member-name {
+    font-weight: 500;
+}
+
+.member-email {
+    color: hsl(var(--muted-foreground));
+}
+
+.member-date {
+    color: hsl(var(--muted-foreground));
+    font-size: 0.8125rem;
+}
+
+.member-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.member-badge--joined {
+    background: hsl(var(--success) / 0.12);
+    color: hsl(var(--success));
+}
+
+.member-badge--pending {
+    background: hsl(var(--warning) / 0.15);
+    color: hsl(38 70% 35%);
+}
+
+.member-badge--expired {
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+}
+
+.member-remove-btn {
+    padding: 4px 10px;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 120ms ease;
+}
+
+.member-remove-btn:hover:not(:disabled) {
+    border-color: hsl(var(--destructive) / 0.4);
+    color: hsl(var(--destructive));
+    background: hsl(var(--destructive) / 0.05);
+}
+
+.member-remove-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: hsl(0 0% 0% / 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 24px;
+}
+
+.modal-box {
+    width: 100%;
+    max-width: 420px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    padding: 28px 28px 24px;
+    box-shadow: var(--shadow-xl);
+}
+
+.modal-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+    margin-bottom: 6px;
+}
+
+.modal-subtitle {
+    font-size: 0.875rem;
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 20px;
+}
+
+/* Shared admin form elements (also used by other admin pages) */
+.admin-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.admin-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.admin-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+}
+
+.admin-input {
+    padding: 9px 12px;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-sm);
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font: inherit;
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 120ms ease;
+}
+
+.admin-input:focus {
+    border-color: hsl(var(--primary));
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
+}
+
+.admin-form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+.admin-primary-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 120ms ease, transform 120ms ease;
+    white-space: nowrap;
+}
+
+.admin-primary-btn:hover:not(:disabled) {
+    background: hsl(20 67% 44%);
+    transform: translateY(-1px);
+}
+
+.admin-primary-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.admin-secondary-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: hsl(var(--foreground));
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 120ms ease;
+}
+
+.admin-secondary-btn:hover {
+    background: hsl(var(--muted));
+}
+
+.admin-error {
+    font-size: 0.8125rem;
+    color: hsl(var(--destructive));
+    padding: 10px 12px;
+    background: hsl(var(--destructive) / 0.08);
+    border: 1px solid hsl(var(--destructive) / 0.2);
+    border-radius: var(--radius-sm);
+}
+
+.admin-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 32px 0;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.875rem;
+}
+
+.admin-workspace-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-workspace-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-sm);
+    background: hsl(var(--card));
+    text-decoration: none;
+    transition: border-color 120ms ease, background 120ms ease;
+}
+
+.admin-workspace-card:hover {
+    border-color: hsl(var(--primary) / 0.4);
+    background: hsl(var(--accent));
+}
+
+.admin-workspace-name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+}
+
+.admin-workspace-meta {
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-foreground));
+}

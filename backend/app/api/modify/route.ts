@@ -25,8 +25,8 @@ import { createLogger } from '../../../lib/logger';
 
 const logger = createLogger('api/modify');
 
-// Timeout for modify operations (120 seconds for AI generation)
-const MODIFY_TIMEOUT_MS = 120_000;
+// Timeout for modify operations (300 seconds — slow models process files sequentially)
+const MODIFY_TIMEOUT_MS = 300_000;
 
 /**
  * Handle OPTIONS preflight request

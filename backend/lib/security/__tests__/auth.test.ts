@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { verifySupabaseToken } from '../auth';
+import { verifySupabaseToken, requireAuth } from '../auth';
 
 // Pre-computed base64url-encoded payloads
 // {"sub":"user-123","exp":9999999999}
@@ -140,5 +140,104 @@ describe('verifySupabaseToken', () => {
 
       expect(validToken).toBe(tokenCopy);
     });
+  });
+
+  describe('ES256 path', () => {
+    // ES256 header: {"alg":"ES256","kid":"test-kid"}
+    const es256Header = 'eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3Qta2lkIn0';
+
+    beforeEach(() => {
+      // For ES256, importKey is called with jwk format, verify with ECDSA
+      mockSubtle.importKey.mockResolvedValue('mock-ec-key');
+      mockSubtle.verify.mockResolvedValue(true);
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ keys: [{ kty: 'EC', crv: 'P-256', kid: 'test-kid' }] }),
+      }));
+      vi.stubEnv('SUPABASE_URL', 'https://test.supabase.co');
+    });
+
+    it('returns null when SUPABASE_URL is not set for ES256 tokens', async () => {
+      vi.unstubAllEnvs();
+      const token = `${es256Header}.${payload1}.${fakeSignature}`;
+      const result = await verifySupabaseToken(token, 'test-secret');
+      expect(result).toBeNull();
+    });
+
+    it('fetches JWKS and verifies ES256 token successfully', async () => {
+      const token = `${es256Header}.${payload1}.${fakeSignature}`;
+      const result = await verifySupabaseToken(token, 'test-secret');
+      expect(result).toEqual({ userId: 'user-123' });
+    });
+
+    it('returns null when ES256 signature is invalid', async () => {
+      mockSubtle.verify.mockResolvedValue(false);
+      const token = `${es256Header}.${payload1}.${fakeSignature}`;
+      const result = await verifySupabaseToken(token, 'test-secret');
+      expect(result).toBeNull();
+    });
+
+    it('returns null when JWKS fetch throws', async () => {
+      vi.stubEnv('SUPABASE_URL', 'https://different-project.supabase.co');
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+      const token = `${es256Header}.${payload1}.${fakeSignature}`;
+      const result = await verifySupabaseToken(token, 'test-secret');
+      expect(result).toBeNull();
+    });
+  });
+});
+
+describe('requireAuth', () => {
+  const makeRequest = (headers: Record<string, string> = {}) =>
+    new Request('https://example.com/api/test', { headers });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('trusts X-User-Id header set by middleware (bypasses JWT verification)', async () => {
+    const request = makeRequest({ 'x-user-id': 'user-from-middleware' });
+    const result = await requireAuth(request);
+    expect(result).toEqual({ userId: 'user-from-middleware' });
+  });
+
+  it('returns 503 with CORS header when SUPABASE_JWT_SECRET is not configured', async () => {
+    vi.unstubAllEnvs();
+    const request = makeRequest({ 'origin': 'http://localhost:8080' });
+    const result = await requireAuth(request);
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(503);
+    const corsHeader = (result as Response).headers.get('Access-Control-Allow-Origin');
+    expect(corsHeader).toBeTruthy();
+  });
+
+  it('returns 401 with CORS header for missing Authorization header', async () => {
+    vi.stubEnv('SUPABASE_JWT_SECRET', 'test-secret');
+    const request = makeRequest({ 'origin': 'http://localhost:8080' });
+    const result = await requireAuth(request);
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(401);
+    const corsHeader = (result as Response).headers.get('Access-Control-Allow-Origin');
+    expect(corsHeader).toBeTruthy();
+  });
+
+  it('returns 401 with CORS header for invalid token', async () => {
+    vi.stubEnv('SUPABASE_JWT_SECRET', 'test-secret');
+    vi.stubGlobal('crypto', {
+      subtle: {
+        importKey: vi.fn().mockResolvedValue('mock-key'),
+        verify: vi.fn().mockResolvedValue(false),
+      },
+    });
+    const request = makeRequest({
+      'authorization': 'Bearer invalid.token.here',
+      'origin': 'http://localhost:8080',
+    });
+    const result = await requireAuth(request);
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(401);
+    const corsHeader = (result as Response).headers.get('Access-Control-Allow-Origin');
+    expect(corsHeader).toBeTruthy();
   });
 });

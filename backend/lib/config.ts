@@ -81,8 +81,10 @@ const envSchema = z.object({
   TRUSTED_PROXY_DEPTH: z.coerce.number().int().min(0).default(1),
   REDIS_URL: z.string().url().optional(),
   SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   SUPABASE_STORAGE_BUCKET: z.string().default('uploads'),
+  WORKSPACE_MASTER_KEY: z.string().optional(),  // base64-encoded 32 bytes for AES-256-GCM
   ENABLE_FULLSTACK_RECIPES: z
     .string()
     .transform((v) => v === 'true' || v === '1')

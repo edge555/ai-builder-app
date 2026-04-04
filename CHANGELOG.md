@@ -2,6 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-04-04
+
+### Security
+- **X-User-Id header injection patched** — middleware now strips client-supplied `X-User-Id` from all incoming requests before any early-return path (OPTIONS, public routes, dev mode without JWT secret). Previously, an attacker could forge this header to bypass auth entirely when `SUPABASE_JWT_SECRET` was not configured.
+- **UNIQUE constraints added** — `members(workspace_id, email)` prevents duplicate invite detection code from silently never firing; `organizations(admin_user_id)` prevents concurrent self-provision from creating two orgs for the same user.
+- **HTML injection fixed in invite email** — `display_name`, workspace name, and org name are now HTML-escaped before interpolation into the invite email body.
+- **JWKS fetch checks res.ok** — `fetchJwks` now throws on non-2xx so ES256 token verification fails closed (returns null) instead of parsing an error body.
+- **nodejs runtime on org/settings route** — `crypto.ts` uses `Buffer` (Node.js builtin); added `export const runtime = 'nodejs'` to prevent Turbopack silently unregistering the route.
+
+### Fixed
+- **CORS on all auth error responses** (ISSUE-001, ISSUE-005) — `requireAuth()` and middleware 401/503 responses now include `Access-Control-Allow-Origin`.
+- **OPTIONS preflight no longer 401s** (ISSUE-005b/c) — middleware passes OPTIONS requests through without auth-checking them.
+- **ES256 JWT support** (ISSUE-006) — Supabase uses ES256; `verifySupabaseToken` now fetches keys from JWKS with a 5-minute cache.
+- **Async route params** (ISSUE-006) — Next.js 15+ made dynamic route params a Promise; all `[orgId]`, `[wid]`, `[token]`, `[pid]` handlers updated to `await params`.
+- **Node.js crypto in edge runtime** (ISSUE-007) — added `export const runtime = 'nodejs'` to routes importing from Node.js `crypto`.
+- **OnboardingPage navigation** (ISSUE-002) — replaced `navigate()` in JSX render with `<Navigate>` component.
+- **Fraunces font on admin/join headlines** (ISSUE-003) — added missing `font-family: var(--font-display)` to 24px+ headlines.
+- **CLAUDE.md route paths** (ISSUE-004) — corrected wrong URL paths in routing docs.
+
+### Tests
+- Added `crypto.test.ts` (7 tests), `workspace-resolver.test.ts` (5 tests), and 8 new tests in `auth.test.ts` covering ES256 JWKS, requireAuth X-User-Id trust, and CORS headers on error responses.
+
+## [1.5.0] - 2026-04-04
+
+### Added
+- **Blank Canvas Admin** — organizations can now invite members to a shared workspace where all AI generation uses the org's own API key. Admins manage invites, monitor member projects, and configure org settings from a dedicated dashboard.
+- **WorkspaceContext** — frontend now carries workspace-scoped identity through generation and modification requests. When a user is in a workspace session, their API calls automatically use the org's encrypted API key rather than the default provider.
+- **Member pages** — four new member-facing routes: workspace picker (choose between personal and org workspace), member builder (full app builder scoped to a workspace project), member join (accept invite flow), and onboarding (first-time workspace setup).
+- **Admin pages** — dedicated admin UI: dashboard (overview of members and projects), members list (invite, remove, role management), project browser (view all member projects), org settings (rename org, rotate API key, customize labels).
+- **Invite API** (`/api/invite`) — admin issues invite tokens; members redeem them to join a workspace. Tokens are single-use and time-limited.
+- **Member project API** (`/api/member/projects`) — members save and load projects scoped to their workspace. Auto-save triggers after each successful generation or modification.
+- **Org settings API** (`/api/org/:orgId/settings`) — admins read and update org name, custom labels, and API key. Key is encrypted at rest with AES-256-GCM before storage; the plaintext never leaves the server.
+- **AES-256-GCM API key encryption** (`backend/lib/security/crypto.ts`) — org API keys encrypted with a server-side master key (`WORKSPACE_MASTER_KEY`). Decryption errors are caught and logged without propagating 500s to members.
+- **Workspace provider resolution** (`backend/lib/security/workspace-resolver.ts`) — validates membership, fetches org API key, decrypts it, and returns a workspace-scoped `AIProvider`. Falls through to default provider when Supabase is not configured or org has no key set.
+- **Database migration** (`supabase/migrations/20260404_add_blank_canvas_admin.sql`) — new tables: `organizations`, `workspaces`, `members`, `workspace_projects`, `workspace_project_snapshots`. Row-level security enforces org boundaries.
+- **Auto-save with user feedback** (`useMemberAutoSave`) — project files save to the backend after every streaming completion. Save failures now surface a toast notification so members know their changes may not be persisted.
+
+### Security
+- **IDOR fix in snapshot upsert** — `modify-stream` snapshot now validates that the client-supplied `projectId` belongs to the authenticated `workspaceId` before writing. Previously, any workspace member could overwrite another workspace's snapshot by sending an arbitrary `projectId`.
+- **Decryption error containment** — `decryptApiKey()` in workspace-resolver is now wrapped in a try-catch; corrupted or tampered ciphertext returns `null` (falls through to default provider) instead of an unhandled 500.
+- **Org name update fixed** — `UpdateSettingsSchema` was missing the `name` field; `PUT /api/org/:orgId/settings` with only `name` returned a 400 "No fields to update" error and silently dropped the change. Fixed.
+- **Dead import removed** — unused `extractBearerToken` import removed from `generate-stream/route.ts`.
+
 ## [1.4.0] - 2026-03-29
 
 ### Performance
