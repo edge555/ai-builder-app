@@ -65,6 +65,8 @@ export interface AppLayoutProps {
     initialPrompt?: string;
     /** Optional callback when user wants to return to dashboard */
     onBackToDashboard?: () => void;
+    /** Disable IndexedDB/cloud auto-save (workspace member mode uses its own save path) */
+    disableAutoSave?: boolean;
 }
 
 /**
@@ -74,7 +76,7 @@ export interface AppLayoutProps {
  *
  * Requirements: 8.1, 9.1
  */
-export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) {
+export function AppLayout({ initialPrompt, onBackToDashboard, disableAutoSave }: AppLayoutProps) {
     const navigate = useNavigate();
     const { undo, redo, submitPrompt } = useSubmitPrompt();
     const { projectState, canUndo, canRedo } = useProjectState();
@@ -83,8 +85,8 @@ export function AppLayout({ initialPrompt, onBackToDashboard }: AppLayoutProps) 
     const { messages } = useChatMessages();
     const { isLoading, loadingPhase } = useGenerationState();
 
-    // Auto-save project state and messages
-    const { isSaving, lastSavedAt } = useAutoSave(projectState, messages);
+    // Auto-save project state and messages (suppressed in workspace member mode)
+    const { isSaving, lastSavedAt } = useAutoSave(disableAutoSave ? null : projectState, messages);
 
     const initialPromptSubmittedRef = useRef(false);
 

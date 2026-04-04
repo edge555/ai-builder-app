@@ -14,6 +14,7 @@ import { config as appConfig } from '../config';
 
 
 import { useErrorAggregator } from './ErrorAggregatorContext';
+import { useWorkspace } from './WorkspaceContext';
 import {
   GenerationContext,
   GenerationStateContext,
@@ -37,6 +38,7 @@ const STREAMING_MAX_TIMEOUT_MS = 900_000; // 15 min absolute cap (safety net)
  */
 export function GenerationProvider({ children }: { children: ReactNode }) {
   const errorAggregator = useErrorAggregator();
+  const { workspaceId, projectId: workspaceProjectId } = useWorkspace();
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -148,7 +150,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'apikey': SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ description, attachments }),
+        body: JSON.stringify({ description, attachments, ...(workspaceId && { workspaceId }) }),
         signal: controller.signal,
       });
 
@@ -284,7 +286,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'apikey': SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ description, attachments }),
+        body: JSON.stringify({ description, attachments, ...(workspaceId && { workspaceId }) }),
         signal: controller.signal,
       });
 
@@ -332,7 +334,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'apikey': SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ projectState: currentState, prompt, runtimeError, shouldSkipPlanning: options?.shouldSkipPlanning, conversationHistory: options?.conversationHistory, attachments: options?.attachments }),
+        body: JSON.stringify({ projectState: currentState, prompt, runtimeError, shouldSkipPlanning: options?.shouldSkipPlanning, conversationHistory: options?.conversationHistory, attachments: options?.attachments, ...(workspaceId && { workspaceId, ...(workspaceProjectId && { projectId: workspaceProjectId }) }) }),
         signal: controller.signal,
       });
 
@@ -425,6 +427,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           conversationHistory: options?.conversationHistory,
           attachments: options?.attachments,
           ...(options?.repairAttempt && { repairAttempt: options.repairAttempt }),
+          ...(workspaceId && { workspaceId, ...(workspaceProjectId && { projectId: workspaceProjectId }) }),
         }),
         signal: controller.signal,
       });
