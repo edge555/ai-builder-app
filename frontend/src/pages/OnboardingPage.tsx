@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 import { useAuthState } from '@/context/AuthContext.context';
 import './OnboardingPage.css';
@@ -52,8 +52,7 @@ export function OnboardingPage() {
     }
 
     if (!isAuthenticated) {
-        navigate('/login', { replace: true });
-        return null;
+        return <Navigate to="/login" replace />;
     }
 
     return (
