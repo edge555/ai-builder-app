@@ -8,7 +8,7 @@
 import { NextRequest } from 'next/server';
 import { requireAuth, createServiceRoleSupabaseClient } from '../../../../lib/security/auth';
 import { applyRateLimit, RateLimitTier } from '../../../../lib/security';
-import { handleOptions, getCorsHeaders } from '../../../../lib/api';
+import { handleOptions, getCorsHeaders, corsError } from '../../../../lib/api';
 import { createLogger } from '../../../../lib/logger';
 import { createClient } from '@supabase/supabase-js';
 
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) {
-        return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Supabase not configured', 503);
     }
 
     // Idempotency: check if org already exists for this user
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: userError } = await supabase.auth.admin.getUserById(authResult.userId);
     if (userError || !user) {
         logger.error('Failed to fetch user', { error: userError?.message });
-        return new Response(JSON.stringify({ error: 'Failed to fetch user' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to fetch user', 500);
     }
 
     const displayName = user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'User';
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     if (orgError || !org) {
         logger.error('Failed to create org', { error: orgError?.message });
-        return new Response(JSON.stringify({ error: 'Failed to create organization' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to create organization', 500);
     }
 
     const { data: workspace, error: wsError } = await supabase
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     if (wsError || !workspace) {
         logger.error('Failed to create workspace', { error: wsError?.message });
-        return new Response(JSON.stringify({ error: 'Failed to create workspace' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to create workspace', 500);
     }
 
     await supabase.from('members').insert({

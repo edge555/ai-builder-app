@@ -85,6 +85,17 @@ export function getCorsHeaders(
 }
 
 /**
+ * Returns a JSON error response with CORS headers included.
+ * Use this for all early-return error responses in route handlers.
+ */
+export function corsError(request: Request, message: string, status: number, extraHeaders?: Record<string, string>): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { ...getCorsHeaders(request), ...extraHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+/**
  * Centralized error handler for API routes.
  * Converts any error into a standardized NextResponse with ErrorResponse body.
  *

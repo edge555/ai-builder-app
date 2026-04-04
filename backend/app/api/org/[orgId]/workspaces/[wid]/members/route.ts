@@ -10,7 +10,7 @@ import { createHash } from 'crypto';
 import { Resend } from 'resend';
 import { requireAuth, createServiceRoleSupabaseClient } from '../../../../../../../lib/security/auth';
 import { applyRateLimit, RateLimitTier } from '../../../../../../../lib/security';
-import { handleOptions, getCorsHeaders, parseJsonRequest } from '../../../../../../../lib/api';
+import { handleOptions, getCorsHeaders, corsError, parseJsonRequest } from '../../../../../../../lib/api';
 import { createLogger } from '../../../../../../../lib/logger';
 
 const logger = createLogger('api/org/members');
@@ -48,10 +48,10 @@ export async function GET(request: NextRequest, { params }: { params: { orgId: s
     if (authResult instanceof Response) return authResult;
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     if (!await verifyOrgAdmin(supabase, params.orgId, authResult.userId)) {
-        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Forbidden', 403);
     }
 
     const { data: members, error } = await supabase
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest, { params }: { params: { orgId: s
         .eq('workspace_id', params.wid)
         .order('created_at', { ascending: true });
 
-    if (error) return new Response(JSON.stringify({ error: 'Failed to fetch members' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    if (error) return corsError(request, 'Failed to fetch members', 500);
 
     // Compute status without exposing tokens
     const result = members.map((m: typeof members[number]) => ({
@@ -87,13 +87,13 @@ export async function POST(request: NextRequest, { params }: { params: { orgId: 
     if (!parsed.ok) return parsed.response;
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     if (!await verifyOrgAdmin(supabase, params.orgId, authResult.userId)) {
-        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Forbidden', 403);
     }
     if (!await verifyWorkspaceInOrg(supabase, params.orgId, params.wid)) {
-        return new Response(JSON.stringify({ error: 'Workspace not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Workspace not found', 404);
     }
 
     // Generate invite token: random 32-byte hex string
@@ -122,9 +122,9 @@ export async function POST(request: NextRequest, { params }: { params: { orgId: 
     if (memberError || !member) {
         logger.error('Failed to create member', { error: memberError?.message });
         if (memberError?.code === '23505') {
-            return new Response(JSON.stringify({ error: 'This email is already invited to this workspace' }), { status: 409, headers: { 'Content-Type': 'application/json' } });
+            return corsError(request, 'This email is already invited to this workspace', 409);
         }
-        return new Response(JSON.stringify({ error: 'Failed to create invite' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to create invite', 500);
     }
 
     // Send invite email via Resend
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest, { params }: { params: { orgId: 
             // Rollback: delete the member row since email failed
             await supabase.from('members').delete().eq('id', member.id);
             logger.error('Failed to send invite email', { error: emailError.message });
-            return new Response(JSON.stringify({ error: 'Failed to send invite email' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+            return corsError(request, 'Failed to send invite email', 500);
         }
     }
 
@@ -175,10 +175,10 @@ export async function DELETE(request: NextRequest, { params }: { params: { orgId
     if (!parsed.ok) return parsed.response;
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     if (!await verifyOrgAdmin(supabase, params.orgId, authResult.userId)) {
-        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Forbidden', 403);
     }
 
     const { error } = await supabase
@@ -188,7 +188,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { orgId
         .eq('workspace_id', params.wid);
 
     if (error) {
-        return new Response(JSON.stringify({ error: 'Failed to remove member' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to remove member', 500);
     }
 
     return new Response(null, {

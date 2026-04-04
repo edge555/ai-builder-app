@@ -9,7 +9,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireAuth, createServiceRoleSupabaseClient } from '../../../../lib/security/auth';
 import { applyRateLimit, RateLimitTier } from '../../../../lib/security';
-import { handleOptions, getCorsHeaders, parseJsonRequest } from '../../../../lib/api';
+import { handleOptions, getCorsHeaders, corsError, parseJsonRequest } from '../../../../lib/api';
 import { createLogger } from '../../../../lib/logger';
 
 const logger = createLogger('api/member/projects');
@@ -34,11 +34,11 @@ export async function GET(request: NextRequest) {
 
     const workspaceId = new URL(request.url).searchParams.get('workspaceId');
     if (!workspaceId) {
-        return new Response(JSON.stringify({ error: 'workspaceId query param required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'workspaceId query param required', 400);
     }
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     // Resolve member row for this user+workspace
     const { data: member } = await supabase
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
         .maybeSingle();
 
     if (!member) {
-        return new Response(JSON.stringify({ error: 'Not a member of this workspace' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Not a member of this workspace', 403);
     }
 
     const { data: projects, error } = await supabase
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
         .eq('member_id', member.id)
         .order('updated_at', { ascending: false });
 
-    if (error) return new Response(JSON.stringify({ error: 'Failed to fetch projects' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    if (error) return corsError(request, 'Failed to fetch projects', 500);
 
     return new Response(JSON.stringify(projects), {
         headers: { ...getCorsHeaders(request), ...rlHeaders, 'Content-Type': 'application/json' },
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     if (!parsed.ok) return parsed.response;
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     const { data: member } = await supabase
         .from('members')
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
     if (!member) {
-        return new Response(JSON.stringify({ error: 'Not a member of this workspace' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Not a member of this workspace', 403);
     }
 
     // Enforce 50-project limit
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
         .eq('member_id', member.id);
 
     if ((count ?? 0) >= MAX_PROJECTS_PER_MEMBER) {
-        return new Response(JSON.stringify({ error: `Project limit reached (max ${MAX_PROJECTS_PER_MEMBER})` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, `Project limit reached (max ${MAX_PROJECTS_PER_MEMBER})`, 400);
     }
 
     const { data: project, error } = await supabase
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     if (error || !project) {
         logger.error('Failed to create project', { error: error?.message });
-        return new Response(JSON.stringify({ error: 'Failed to create project' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to create project', 500);
     }
 
     return new Response(JSON.stringify(project), {

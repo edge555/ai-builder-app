@@ -7,7 +7,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireAuth, createServiceRoleSupabaseClient } from '../../../../../lib/security/auth';
 import { applyRateLimit, RateLimitTier } from '../../../../../lib/security';
-import { handleOptions, getCorsHeaders, parseJsonRequest } from '../../../../../lib/api';
+import { handleOptions, getCorsHeaders, corsError, parseJsonRequest } from '../../../../../lib/api';
 import { encryptApiKey } from '../../../../../lib/security/crypto';
 import { createLogger } from '../../../../../lib/logger';
 
@@ -37,10 +37,10 @@ export async function GET(request: NextRequest, { params }: { params: { orgId: s
     if (authResult instanceof Response) return authResult;
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     if (!await verifyOrgAdmin(supabase, params.orgId, authResult.userId)) {
-        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Forbidden', 403);
     }
 
     const { data: org, error } = await supabase
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest, { params }: { params: { orgId: s
         .eq('id', params.orgId)
         .single();
 
-    if (error || !org) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    if (error || !org) return corsError(request, 'Not found', 404);
 
     return new Response(JSON.stringify({
         name: org.name,
@@ -75,10 +75,10 @@ export async function PUT(request: NextRequest, { params }: { params: { orgId: s
     if (!parsed.ok) return parsed.response;
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     if (!await verifyOrgAdmin(supabase, params.orgId, authResult.userId)) {
-        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Forbidden', 403);
     }
 
     const updates: Record<string, unknown> = {};
@@ -88,20 +88,20 @@ export async function PUT(request: NextRequest, { params }: { params: { orgId: s
 
     if (parsed.data.api_key) {
         if (!process.env.WORKSPACE_MASTER_KEY) {
-            return new Response(JSON.stringify({ error: 'WORKSPACE_MASTER_KEY not configured on server' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+            return corsError(request, 'WORKSPACE_MASTER_KEY not configured on server', 503);
         }
         updates.api_key_encrypted = await encryptApiKey(parsed.data.api_key);
         updates.api_key_key_version = 1;
     }
 
     if (Object.keys(updates).length === 0) {
-        return new Response(JSON.stringify({ error: 'No fields to update' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'No fields to update', 400);
     }
 
     const { error } = await supabase.from('organizations').update(updates).eq('id', params.orgId);
     if (error) {
         logger.error('Failed to update org settings', { error: error.message });
-        return new Response(JSON.stringify({ error: 'Failed to update settings' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to update settings', 500);
     }
 
     return new Response(JSON.stringify({ success: true, api_key_set: !!parsed.data.api_key }), {

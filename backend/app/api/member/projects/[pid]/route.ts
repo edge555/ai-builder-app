@@ -7,7 +7,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireAuth, createServiceRoleSupabaseClient } from '../../../../../lib/security/auth';
 import { applyRateLimit, RateLimitTier } from '../../../../../lib/security';
-import { handleOptions, getCorsHeaders, parseJsonRequest } from '../../../../../lib/api';
+import { handleOptions, getCorsHeaders, corsError, parseJsonRequest } from '../../../../../lib/api';
 import { createLogger } from '../../../../../lib/logger';
 
 const logger = createLogger('api/member/projects/[pid]');
@@ -46,11 +46,11 @@ export async function GET(request: NextRequest, { params }: { params: { pid: str
     if (authResult instanceof Response) return authResult;
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     const ownership = await verifyProjectOwnership(supabase, params.pid, authResult.userId);
     if (!ownership) {
-        return new Response(JSON.stringify({ error: 'Project not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Project not found', 404);
     }
 
     const { data: project, error } = await supabase
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest, { params }: { params: { pid: str
         .eq('id', params.pid)
         .single();
 
-    if (error || !project) return new Response(JSON.stringify({ error: 'Project not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    if (error || !project) return corsError(request, 'Project not found', 404);
 
     return new Response(JSON.stringify(project), {
         headers: { ...getCorsHeaders(request), ...rlHeaders, 'Content-Type': 'application/json' },
@@ -79,11 +79,11 @@ export async function PUT(request: NextRequest, { params }: { params: { pid: str
     if (!parsed.ok) return parsed.response;
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     const ownership = await verifyProjectOwnership(supabase, params.pid, authResult.userId);
     if (!ownership) {
-        return new Response(JSON.stringify({ error: 'Project not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Project not found', 404);
     }
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -99,7 +99,7 @@ export async function PUT(request: NextRequest, { params }: { params: { pid: str
 
     if (error) {
         logger.error('Failed to save project', { error: error.message, projectId: params.pid });
-        return new Response(JSON.stringify({ error: 'Failed to save project' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to save project', 500);
     }
 
     return new Response(JSON.stringify(project), {

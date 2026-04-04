@@ -7,7 +7,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireAuth, createServiceRoleSupabaseClient } from '../../../../../lib/security/auth';
 import { applyRateLimit, RateLimitTier } from '../../../../../lib/security';
-import { handleOptions, getCorsHeaders, parseJsonRequest } from '../../../../../lib/api';
+import { handleOptions, getCorsHeaders, corsError, parseJsonRequest } from '../../../../../lib/api';
 import { createLogger } from '../../../../../lib/logger';
 
 const logger = createLogger('api/org/workspaces');
@@ -33,10 +33,10 @@ export async function GET(request: NextRequest, { params }: { params: { orgId: s
     if (authResult instanceof Response) return authResult;
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     if (!await verifyOrgAdmin(supabase, params.orgId, authResult.userId)) {
-        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Forbidden', 403);
     }
 
     const { data: workspaces, error } = await supabase
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: { orgId: s
         .order('created_at', { ascending: true });
 
     if (error) {
-        return new Response(JSON.stringify({ error: 'Failed to fetch workspaces' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to fetch workspaces', 500);
     }
 
     return new Response(JSON.stringify(workspaces), {
@@ -68,10 +68,10 @@ export async function POST(request: NextRequest, { params }: { params: { orgId: 
     if (!parsed.ok) return parsed.response;
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     if (!await verifyOrgAdmin(supabase, params.orgId, authResult.userId)) {
-        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Forbidden', 403);
     }
 
     const { data: workspace, error } = await supabase
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest, { params }: { params: { orgId: 
 
     if (error) {
         logger.error('Failed to create workspace', { error: error.message });
-        return new Response(JSON.stringify({ error: 'Failed to create workspace' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to create workspace', 500);
     }
 
     return new Response(JSON.stringify(workspace), {

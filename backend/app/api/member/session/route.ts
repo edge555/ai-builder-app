@@ -9,7 +9,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireAuth, createServiceRoleSupabaseClient } from '../../../../lib/security/auth';
 import { applyRateLimit, RateLimitTier } from '../../../../lib/security';
-import { handleOptions, getCorsHeaders, parseJsonRequest } from '../../../../lib/api';
+import { handleOptions, getCorsHeaders, corsError, parseJsonRequest } from '../../../../lib/api';
 
 const SessionSchema = z.object({
     workspaceId: z.string().uuid(),

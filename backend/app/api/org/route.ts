@@ -8,7 +8,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireAuth, createServiceRoleSupabaseClient } from '../../../lib/security/auth';
 import { applyRateLimit, RateLimitTier } from '../../../lib/security';
-import { handleOptions, getCorsHeaders, parseJsonRequest } from '../../../lib/api';
+import { handleOptions, getCorsHeaders, corsError, parseJsonRequest } from '../../../lib/api';
 import { createLogger } from '../../../lib/logger';
 
 const logger = createLogger('api/org');
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceRoleSupabaseClient();
     if (!supabase) {
-        return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Supabase not configured', 503);
     }
 
     const slug = parsed.data.slug ?? parsed.data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 100);
@@ -54,9 +54,9 @@ export async function POST(request: NextRequest) {
     if (error) {
         logger.error('Failed to create org', { error: error.message });
         if (error.code === '23505') {
-            return new Response(JSON.stringify({ error: 'An organization with this slug already exists' }), { status: 409, headers: { 'Content-Type': 'application/json' } });
+            return corsError(request, 'An organization with this slug already exists', 409);
         }
-        return new Response(JSON.stringify({ error: 'Failed to create organization' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to create organization', 500);
     }
 
     return new Response(JSON.stringify(org), {

@@ -7,7 +7,7 @@ import { NextRequest } from 'next/server';
 import { createHash } from 'crypto';
 import { requireAuth, createServiceRoleSupabaseClient } from '../../../../lib/security/auth';
 import { applyRateLimit, RateLimitTier } from '../../../../lib/security';
-import { handleOptions, getCorsHeaders } from '../../../../lib/api';
+import { handleOptions, getCorsHeaders, corsError } from '../../../../lib/api';
 import { createLogger } from '../../../../lib/logger';
 
 const logger = createLogger('api/invite');
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
     if (blocked) return blocked;
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     const tokenHash = hashToken(params.token);
 
@@ -36,13 +36,13 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
         .maybeSingle();
 
     if (error || !member) {
-        return new Response(JSON.stringify({ error: 'Invalid invite link' }), { status: 410, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Invalid invite link', 410);
     }
     if (member.joined_at) {
-        return new Response(JSON.stringify({ error: 'This invite has already been used' }), { status: 410, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'This invite has already been used', 410);
     }
     if (member.invite_token_expires_at && new Date(member.invite_token_expires_at) < new Date()) {
-        return new Response(JSON.stringify({ error: 'This invite link has expired' }), { status: 410, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'This invite link has expired', 410);
     }
 
     // Fetch workspace + org names for display
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
     if (authResult instanceof Response) return authResult;
 
     const supabase = createServiceRoleSupabaseClient();
-    if (!supabase) return new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    if (!supabase) return corsError(request, 'Supabase not configured', 503);
 
     const tokenHash = hashToken(params.token);
 
@@ -89,22 +89,22 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
         .maybeSingle();
 
     if (error || !member) {
-        return new Response(JSON.stringify({ error: 'Invalid invite link' }), { status: 410, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Invalid invite link', 410);
     }
     if (member.joined_at) {
-        return new Response(JSON.stringify({ error: 'This invite has already been used' }), { status: 410, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'This invite has already been used', 410);
     }
     if (member.invite_token_expires_at && new Date(member.invite_token_expires_at) < new Date()) {
-        return new Response(JSON.stringify({ error: 'This invite link has expired' }), { status: 410, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'This invite link has expired', 410);
     }
 
     // Verify that the authenticated user's email matches the invite email
     const { data: { user }, error: userError } = await supabase.auth.admin.getUserById(authResult.userId);
     if (userError || !user) {
-        return new Response(JSON.stringify({ error: 'Failed to verify user' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to verify user', 500);
     }
     if (user.email?.toLowerCase() !== member.email.toLowerCase()) {
-        return new Response(JSON.stringify({ error: 'This invite was sent to a different email address' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'This invite was sent to a different email address', 403);
     }
 
     // Accept invite: bind user_id, set joined_at, clear token
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
 
     if (updateError) {
         logger.error('Failed to accept invite', { error: updateError.message });
-        return new Response(JSON.stringify({ error: 'Failed to accept invite' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        return corsError(request, 'Failed to accept invite', 500);
     }
 
     // Append workspaceId to user_metadata.workspace_ids
