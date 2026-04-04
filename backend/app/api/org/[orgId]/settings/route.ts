@@ -3,6 +3,8 @@
  * PUT /api/org/:orgId/settings  — update labels and/or API key
  */
 
+export const runtime = 'nodejs';
+
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireAuth, createServiceRoleSupabaseClient } from '../../../../../lib/security/auth';
