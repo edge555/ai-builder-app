@@ -2,6 +2,7 @@ import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useProjectState, useProjectActions, useChatMessages, useGenerationActions, useToastActions } from '../../context';
+import { hybridStorageService } from '../../services/storage/HybridStorageService';
 import { useSubmitPrompt } from '../useSubmitPrompt';
 
 // Mock context hooks
@@ -15,11 +16,14 @@ vi.mock('../../context', () => ({
 
 // Mock storage service
 vi.mock('../../services/storage', () => ({
-    storageService: {
+    toStoredProject: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock('../../services/storage/HybridStorageService', () => ({
+    hybridStorageService: {
         saveProject: vi.fn().mockResolvedValue(undefined),
         setMetadata: vi.fn().mockResolvedValue(undefined),
     },
-    toStoredProject: vi.fn().mockReturnValue({}),
 }));
 
 describe('useSubmitPrompt', () => {
@@ -90,6 +94,8 @@ describe('useSubmitPrompt', () => {
             undefined,
             expect.any(Number)
         );
+        expect(hybridStorageService.saveProject).toHaveBeenCalledTimes(1);
+        expect(hybridStorageService.setMetadata).toHaveBeenCalledWith('lastOpenedProjectId', 'test-1');
         expect(mockGeneration.setIsLoading).toHaveBeenCalledWith(false);
     });
 

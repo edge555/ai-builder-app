@@ -112,7 +112,7 @@ describe('ProjectGenerator', () => {
       const result = await generator.generateProject('Create a simple app');
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Failed to parse AI response');
+      expect(result.error).toContain('parse failed');
       expect(mockAIProvider.generate).toHaveBeenCalledTimes(1);
     });
 
@@ -553,7 +553,7 @@ describe('ProjectGenerator', () => {
       const result = await generator.generateProject('Create a simple app');
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Failed to parse AI response');
+      expect(result.error).toContain('parse failed');
     });
 
     it('should handle AI response with missing files field', async () => {

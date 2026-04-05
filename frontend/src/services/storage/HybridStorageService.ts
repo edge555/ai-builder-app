@@ -54,7 +54,24 @@ class HybridStorageService {
     async getAllProjectMetadata(): Promise<ProjectMetadata[]> {
         if (this.isAuthenticated) {
             try {
-                return await cloudStorageService.getAllProjectMetadata();
+                const [cloudProjects, localProjects] = await Promise.all([
+                    cloudStorageService.getAllProjectMetadata(),
+                    storageService.getAllProjectMetadata(),
+                ]);
+
+                // Preserve local projects for authenticated users when cloud state
+                // is still empty or only partially synced.
+                const merged = new Map<string, ProjectMetadata>();
+                for (const project of localProjects) {
+                    merged.set(project.id, project);
+                }
+                for (const project of cloudProjects) {
+                    merged.set(project.id, project);
+                }
+
+                return Array.from(merged.values()).sort(
+                    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+                );
             } catch (error) {
                 logger.error('Cloud metadata fetch failed, falling back to local', { error });
             }

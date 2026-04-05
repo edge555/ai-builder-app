@@ -90,6 +90,23 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     const emittedFiles = new Set<string>();
     let warningCount = 0;
     let plannedTotal = 0;
+    const classifyGenerationErrorType = (message: string): 'ai_output' | 'validation' | 'timeout' | 'unknown' => {
+      const lower = message.toLowerCase();
+      if (lower.includes('timed out') || lower.includes('timeout')) return 'timeout';
+      if (
+        lower.includes('acceptance') ||
+        lower.includes('schema mismatch') ||
+        lower.includes('parse failed') ||
+        lower.includes('could not extract valid json') ||
+        lower.includes('generated 0/') ||
+        lower.includes('missing or invalid required scaffold files') ||
+        lower.includes('planning stage failed after retry')
+      ) {
+        return 'ai_output';
+      }
+      if (lower.includes('validation')) return 'validation';
+      return 'unknown';
+    };
 
     // Map pipeline callbacks to StreamingCallbacks
     const pipelineCallbacks: GenerationCallbacks = {
@@ -146,7 +163,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
         descriptionLength: description.length,
         emittedFilesSoFar: Array.from(emittedFiles),
       });
-      callbacks.onError?.(error);
+      callbacks.onError?.(error, { errorType: classifyGenerationErrorType(error) });
       callbacks.onStreamEnd?.({
         totalFiles: emittedFiles.size,
         successfulFiles: 0,
@@ -182,7 +199,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       contextLogger.error(error, {
         generatedFiles: pipelineResult.generatedFiles.map((file) => file.path),
       });
-      callbacks.onError?.(error, { errorCode: 'generation_acceptance_failed', errorType: 'scaffold' });
+      callbacks.onError?.(error, { errorCode: 'generation_acceptance_failed', errorType: 'ai_output' });
       callbacks.onStreamEnd?.({
         totalFiles: emittedFiles.size,
         successfulFiles: 0,

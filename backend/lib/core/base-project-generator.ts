@@ -169,7 +169,7 @@ export abstract class BaseProjectGenerator {
                 failureHistory.push({
                     attempt: buildRetryCount,
                     error: fixResponse.error || 'AI failed to generate fix',
-                    strategy: `AI generation failed when asked to fix: ${buildResult.errors.map(e => e.message).join('; ')}`,
+                    strategy: `AI generation failed when asked to fix: ${buildErrors.map(e => e.message).join('; ')}`,
                     timestamp: new Date().toISOString(),
                 });
                 continue;
@@ -227,7 +227,7 @@ export abstract class BaseProjectGenerator {
                 failureHistory.push({
                     attempt: buildRetryCount,
                     error: parseError instanceof Error ? parseError.message : 'Unknown parsing error',
-                    strategy: `AI returned unparseable response when asked to fix: ${buildResult.errors.map(e => e.message).join('; ')}`,
+                    strategy: `AI returned unparseable response when asked to fix: ${buildErrors.map(e => e.message).join('; ')}`,
                     timestamp: new Date().toISOString(),
                 });
                 continue;

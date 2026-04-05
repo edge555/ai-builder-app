@@ -143,7 +143,7 @@ describe('StreamingProjectGenerator', () => {
         const result = await generator.generateProjectStreaming('test', callbacks);
 
         expect(result.success).toBe(false);
-        expect(callbacks.onError).toHaveBeenCalledWith('Pipeline Error');
+        expect(callbacks.onError).toHaveBeenCalledWith('Pipeline Error', expect.anything());
         expect(callbacks.onStreamEnd).toHaveBeenCalledWith(expect.objectContaining({
             successfulFiles: 0,
         }));
@@ -163,7 +163,7 @@ describe('StreamingProjectGenerator', () => {
         expect(result.error).toContain('missing or invalid required scaffold files');
         expect(onError).toHaveBeenCalledWith(
             expect.stringContaining('missing or invalid required scaffold files'),
-            expect.objectContaining({ errorCode: 'generation_acceptance_failed', errorType: 'scaffold' })
+            expect.objectContaining({ errorCode: 'generation_acceptance_failed', errorType: 'ai_output' })
         );
         expect(onStreamEnd).toHaveBeenCalledWith(expect.objectContaining({ successfulFiles: 0 }));
     });
