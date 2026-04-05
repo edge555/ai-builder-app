@@ -13,7 +13,7 @@ import { ProjectOutputSchema } from './schemas';
 import { processFiles } from './file-processor';
 import { createLogger } from '../logger';
 import { createAcceptanceGate } from './acceptance-gate';
-import { parseStructuredOutput } from '../ai/structured-output';
+import { getStructuredParseError, parseStructuredOutput } from '../ai/structured-output';
 
 const logger = createLogger('BaseProjectGenerator');
 
@@ -178,12 +178,13 @@ export abstract class BaseProjectGenerator {
             try {
                 const parsedResult = parseStructuredOutput(fixResponse.content, ProjectOutputSchema, 'ProjectOutput');
                 if (!parsedResult.success) {
+                    const parseError = getStructuredParseError(parsedResult);
                     contextLogger.error('Structured parsing failed on fix response', {
-                        error: parsedResult.error,
+                        error: parseError,
                     });
                     failureHistory.push({
                         attempt: buildRetryCount,
-                        error: parsedResult.error,
+                        error: parseError,
                         strategy: 'Attempted to fix build errors but returned invalid schema',
                         timestamp: new Date().toISOString(),
                     });

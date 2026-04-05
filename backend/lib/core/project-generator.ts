@@ -16,7 +16,7 @@ import { processFiles } from './file-processor';
 import { ProjectOutputSchema } from './schemas';
 import { isSafePath } from '../utils';
 import { BaseProjectGenerator } from './base-project-generator';
-import { parseStructuredOutput } from '../ai/structured-output';
+import { getStructuredParseError, parseStructuredOutput } from '../ai/structured-output';
 
 const logger = createLogger('ProjectGenerator');
 
@@ -87,13 +87,14 @@ export class ProjectGenerator extends BaseProjectGenerator {
 
     const parsedResult = parseStructuredOutput(response.content, ProjectOutputSchema, 'ProjectOutput');
     if (!parsedResult.success) {
+      const parseError = getStructuredParseError(parsedResult);
       logger.error('Failed to parse AI output as structured project JSON', {
-        error: parsedResult.error,
+        error: parseError,
         content: response.content.substring(0, 500),
       });
       return {
         success: false,
-        error: parsedResult.error,
+        error: parseError,
       };
     }
 

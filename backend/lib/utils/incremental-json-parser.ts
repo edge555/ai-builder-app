@@ -13,6 +13,14 @@ export interface ParsedFile {
   endIndex: number;
 }
 
+export interface ParseWarning {
+  type: 'invalid_object' | 'duplicate_file';
+  message: string;
+  path?: string;
+  startIndex: number;
+  endIndex: number;
+}
+
 /**
  * Attempts to extract complete file objects from accumulated JSON text.
  * Returns an array of parsed files and the index where parsing stopped.
@@ -21,10 +29,13 @@ export interface ParsedFile {
  */
 export function parseIncrementalFiles(text: string, startFrom: number = 0): {
   files: ParsedFile[];
+  warnings: ParseWarning[];
   lastParsedIndex: number;
 } {
   const files: ParsedFile[] = [];
+  const warnings: ParseWarning[] = [];
   let currentIndex = startFrom;
+  const seenPaths = new Set<string>();
 
   // Single-pass algorithm: scan character-by-character without indexOf
   // Expected format: { "path": "...", "content": "..." }{ "path": "...", ... }
@@ -99,6 +110,18 @@ export function parseIncrementalFiles(text: string, startFrom: number = 0): {
         if (obj.files && Array.isArray(obj.files)) {
           for (const fileObj of obj.files) {
             if (fileObj.path && typeof fileObj.content === 'string') {
+              if (seenPaths.has(fileObj.path)) {
+                warnings.push({
+                  type: 'duplicate_file',
+                  message: `Duplicate streamed file ignored: ${fileObj.path}`,
+                  path: fileObj.path,
+                  startIndex: startPos,
+                  endIndex: endPos,
+                });
+                continue;
+              }
+
+              seenPaths.add(fileObj.path);
               files.push({
                 path: fileObj.path,
                 content: fileObj.content,
@@ -108,6 +131,19 @@ export function parseIncrementalFiles(text: string, startFrom: number = 0): {
             }
           }
         } else if (obj.path && typeof obj.content === 'string') {
+          if (seenPaths.has(obj.path)) {
+            warnings.push({
+              type: 'duplicate_file',
+              message: `Duplicate streamed file ignored: ${obj.path}`,
+              path: obj.path,
+              startIndex: startPos,
+              endIndex: endPos,
+            });
+            currentIndex = endPos;
+            continue;
+          }
+
+          seenPaths.add(obj.path);
           // Handle bare format: { "path": "...", "content": "..." }
           files.push({
             path: obj.path,
@@ -115,9 +151,21 @@ export function parseIncrementalFiles(text: string, startFrom: number = 0): {
             startIndex: startPos,
             endIndex: endPos,
           });
+        } else {
+          warnings.push({
+            type: 'invalid_object',
+            message: 'Skipped streamed JSON object that did not match the expected file shape',
+            startIndex: startPos,
+            endIndex: endPos,
+          });
         }
       } catch {
-        // Invalid JSON, skip this object
+        warnings.push({
+          type: 'invalid_object',
+          message: 'Skipped malformed streamed JSON object',
+          startIndex: startPos,
+          endIndex: endPos,
+        });
       }
       currentIndex = endPos;
     } else {
@@ -128,6 +176,7 @@ export function parseIncrementalFiles(text: string, startFrom: number = 0): {
 
   return {
     files,
+    warnings,
     lastParsedIndex: currentIndex,
   };
 }

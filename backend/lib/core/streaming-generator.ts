@@ -177,6 +177,15 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       planCompleted: !!pipelineResult.architecturePlan,
     });
 
+    for (const warning of pipelineResult.warnings) {
+      callbacks.onWarning?.({
+        path: '__pipeline__',
+        message: warning,
+        type: 'validation',
+      });
+      warningCount++;
+    }
+
     const hasPkgJson = pipelineResult.generatedFiles.some((f) => f.path === 'package.json');
     const mainEntry = pipelineResult.generatedFiles.find(
       (f) => f.path === 'src/main.tsx' || f.path === 'main.tsx'

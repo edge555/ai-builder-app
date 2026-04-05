@@ -31,7 +31,7 @@ import { MAX_CONTEXT_SLICES_MODIFICATION } from '../constants';
 import { selectRecipe } from './recipes/recipe-engine';
 import { extractJsonFromResponse } from '../ai/modal-response-parser';
 import { config } from '../config';
-import { parseStructuredOutput } from '../ai/structured-output';
+import { getStructuredParseError, parseStructuredOutput } from '../ai/structured-output';
 
 const logger = createLogger('PipelineOrchestrator');
 
@@ -336,7 +336,8 @@ export class PipelineOrchestrator {
 
       const parsedResult = parseStructuredOutput(response.content, IntentOutputSchema, 'IntentOutput');
       if (!parsedResult.success) {
-        throw new Error(parsedResult.error);
+        const parseError = getStructuredParseError(parsedResult);
+        throw new Error(parseError);
       }
 
       contextLogger.info('Intent stage complete', {
@@ -382,7 +383,8 @@ export class PipelineOrchestrator {
 
       const parsedResult = parseStructuredOutput(response.content, PlanOutputSchema, 'PlanOutput');
       if (!parsedResult.success) {
-        throw new Error(parsedResult.error);
+        const parseError = getStructuredParseError(parsedResult);
+        throw new Error(parseError);
       }
 
       const plan = parsedResult.data;

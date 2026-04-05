@@ -17,7 +17,7 @@ import { BuildValidator } from './build-validator';
 import { buildPhaseContext } from './batch-context-builder';
 import type { PhaseContext } from './batch-context-builder';
 import { COMPLEXITY_GATE_FILE_THRESHOLD, UI_BATCH_SPLIT_THRESHOLD } from '../constants';
-import { parseStructuredOutput } from '../ai/structured-output';
+import { getStructuredParseError, parseStructuredOutput } from '../ai/structured-output';
 
 const logger = createLogger('GenerationPipeline');
 
@@ -125,7 +125,8 @@ export class GenerationPipeline {
 
       const parsedResult = parseStructuredOutput(response.content, IntentOutputSchema, 'IntentOutput');
       if (!parsedResult.success) {
-        throw new Error(parsedResult.error);
+        const parseError = getStructuredParseError(parsedResult);
+        throw new Error(parseError);
       }
 
       intentOutput = parsedResult.data;
@@ -208,7 +209,8 @@ export class GenerationPipeline {
 
         const parsedResult = parseStructuredOutput(response.content, PlanReviewSchema, 'PlanReview');
         if (!parsedResult.success) {
-          throw new Error(parsedResult.error);
+          const parseError = getStructuredParseError(parsedResult);
+          throw new Error(parseError);
         }
 
         const reviewOutput = parsedResult.data;
@@ -657,7 +659,8 @@ export class GenerationPipeline {
 
         const parsedResult = parseStructuredOutput(response.content, ArchitecturePlanSchema, 'ArchitecturePlan');
         if (!parsedResult.success) {
-          throw new Error(parsedResult.error);
+          const parseError = getStructuredParseError(parsedResult);
+          throw new Error(parseError);
         }
 
         contextLogger.info('Enhanced Planning stage complete', {
