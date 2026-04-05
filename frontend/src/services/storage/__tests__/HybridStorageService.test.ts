@@ -116,7 +116,6 @@ describe('HybridStorageService', () => {
     expect(result).toHaveLength(2);
     expect(result.find((project) => project.id === 'shared')?.name).toBe('Newer Local Copy');
   });
-
   it('falls back to local metadata when cloud fetch fails', async () => {
     hybridStorageService.setAuthenticated('user-1');
     vi.mocked(storageService.getAllProjectMetadata).mockResolvedValue(localProjects);

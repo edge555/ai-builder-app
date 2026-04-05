@@ -44,6 +44,8 @@ export interface GenerateProjectResponse {
   version?: SerializedVersion;
   /** Error message (if unsuccessful) */
   error?: string;
+  /** Error category for retry behavior and UI messaging */
+  errorType?: ApiError['type'];
 }
 
 // ============================================================================
@@ -86,6 +88,8 @@ export interface ModifyProjectResponse {
   changeSummary?: ChangeSummary;
   /** Error message (if unsuccessful) */
   error?: string;
+  /** Error category for retry behavior and UI messaging */
+  errorType?: ApiError['type'];
   /** True when some files were modified but others had to be rolled back */
   partialSuccess?: boolean;
   /** Files that were rolled back to their pre-modification state */

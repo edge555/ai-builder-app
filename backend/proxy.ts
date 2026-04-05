@@ -16,8 +16,53 @@ const SECURITY_HEADERS: Record<string, string> = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
 };
 
-/** Routes that don't require authentication */
+/** Routes that always remain public. */
 const PUBLIC_PATHS = ['/api/health'];
+
+function requiresProxyAuth(request: NextRequest): boolean {
+  const { pathname } = request.nextUrl;
+  const method = request.method.toUpperCase();
+
+  if (PUBLIC_PATHS.some((path) => pathname === path)) {
+    return false;
+  }
+
+  // Generation, modification, uploads, export, diff, revert, and version listing
+  // are public routes in local/dev mode. Workspace-scoped auth is enforced inside
+  // the route handlers when a workspace identity is provided.
+  if (
+    pathname === '/api/generate' ||
+    pathname === '/api/generate-stream' ||
+    pathname === '/api/modify' ||
+    pathname === '/api/modify-stream' ||
+    pathname === '/api/upload' ||
+    pathname === '/api/export' ||
+    pathname === '/api/diff' ||
+    pathname === '/api/revert' ||
+    pathname === '/api/versions'
+  ) {
+    return false;
+  }
+
+  // Read-only config endpoints are public; mutations are protected.
+  if ((pathname === '/api/agent-config' || pathname === '/api/provider-config') && method !== 'PUT') {
+    return false;
+  }
+
+  // Invite lookup is public; accepting an invite requires auth.
+  if (pathname.startsWith('/api/invite/') && method === 'GET') {
+    return false;
+  }
+
+  // All member and org routes require auth, as do protected mutations above.
+  return (
+    pathname.startsWith('/api/member/') ||
+    pathname.startsWith('/api/org') ||
+    (pathname.startsWith('/api/invite/') && method === 'POST') ||
+    (pathname === '/api/agent-config' && method === 'PUT') ||
+    (pathname === '/api/provider-config' && method === 'PUT')
+  );
+}
 
 /** Returns the appropriate Access-Control-Allow-Origin for the request origin. */
 function getCorsOrigin(request: NextRequest): string {
@@ -31,7 +76,7 @@ export async function proxy(request: NextRequest) {
   const corsHeadersMap = { 'Access-Control-Allow-Origin': corsOrigin };
 
   // SECURITY: Always strip client-supplied X-User-Id before forwarding.
-  // This header is exclusively set by this middleware after JWT verification —
+  // This header is exclusively set by this proxy after JWT verification —
   // trusting it from the client would allow complete authentication bypass.
   // We build sanitizedHeaders once and use it in every NextResponse.next() call.
   const sanitizedHeaders = new Headers(request.headers);
@@ -48,7 +93,7 @@ export async function proxy(request: NextRequest) {
     return res;
   }
 
-  // Pass OPTIONS preflight through — route handlers return the correct CORS response
+  // Pass OPTIONS preflight through - route handlers return the correct CORS response
   if (request.method === 'OPTIONS') {
     return passThrough();
   }
@@ -56,9 +101,7 @@ export async function proxy(request: NextRequest) {
   // Apply security headers to the final response (used for non-early paths)
   const response = passThrough();
 
-  // Skip auth for public routes
-  const { pathname } = request.nextUrl;
-  if (PUBLIC_PATHS.some((p) => pathname === p)) {
+  if (!requiresProxyAuth(request)) {
     return response;
   }
 

@@ -80,6 +80,7 @@ describe('ModificationEngine', () => {
     };
     mockBuildValidator = {
       validate: vi.fn().mockReturnValue({ valid: true, errors: [] }),
+      validateAll: vi.fn().mockReturnValue({ valid: true, errors: [] }),
       formatErrorsForAI: vi.fn(),
       validateCrossFileReferences: vi.fn().mockReturnValue([]),
     };

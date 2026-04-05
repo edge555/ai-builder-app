@@ -25,7 +25,7 @@ export class AcceptanceGate {
   private readonly validationPipeline = new ValidationPipeline();
   private readonly buildValidator = createBuildValidator();
 
-  validateStructure(files: Record<string, string>): AcceptanceResult {
+  validate(files: Record<string, string>): AcceptanceResult {
     const validationResult = this.validationPipeline.validate(files);
     if (!validationResult.valid || !validationResult.sanitizedOutput) {
       const validationErrors = validationResult.errors ?? [];
@@ -42,22 +42,7 @@ export class AcceptanceGate {
       };
     }
 
-    return {
-      valid: true,
-      sanitizedOutput: validationResult.sanitizedOutput,
-      issues: [],
-      validationErrors: [],
-      buildErrors: [],
-    };
-  }
-
-  validate(files: Record<string, string>): AcceptanceResult {
-    const structureResult = this.validateStructure(files);
-    if (!structureResult.valid || !structureResult.sanitizedOutput) {
-      return structureResult;
-    }
-
-    const sanitizedOutput = structureResult.sanitizedOutput;
+    const sanitizedOutput = validationResult.sanitizedOutput;
     const buildResult = this.buildValidator.validateAll(sanitizedOutput);
     const crossFileErrors = this.buildValidator.validateCrossFileReferences(sanitizedOutput);
     const buildErrors = [...buildResult.errors, ...crossFileErrors];
@@ -70,7 +55,7 @@ export class AcceptanceGate {
     }
 
     return {
-      valid: buildErrors.length === 0,
+      valid: validationResult.valid && buildErrors.length === 0,
       sanitizedOutput,
       issues: [
         ...buildErrors.map((error) => ({

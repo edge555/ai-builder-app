@@ -10,6 +10,7 @@ export type ErrorType =
   | 'cancelled'
   | 'validation'
   | 'ai_output'
+  | 'state'
   | 'network'
   | 'unknown';
 
@@ -76,6 +77,9 @@ export function getUserFriendlyErrorMessage(context: ErrorContext): string {
 
     case 'ai_output':
       return `The AI generated invalid output. Please try rephrasing your request.`;
+
+    case 'state':
+      return `The project state is inconsistent. Try again or reload the project.`;
 
     case 'provider_unavailable':
       return `AI service is temporarily unavailable. Please try again in a few minutes.`;

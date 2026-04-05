@@ -140,25 +140,20 @@ describe('PhaseExecutor', () => {
     mockProvider.generateStreaming.mockRejectedValue(new Error('Network fail'));
 
     await expect(executor.executePhase(basePhaseDef, baseContext))
-      .rejects.toThrow('Scaffold phase critical failure');
+      .rejects.toThrow('scaffold phase failed after 2 attempts: Network fail');
   });
 
-  it('soft fails (returns partial results) for non-scaffold layers if max retries exceeded', async () => {
+  it('hard fails (throws) for non-scaffold layers if max retries exceeded', async () => {
     const uiPhaseDef: PhaseDefinition = { ...basePhaseDef, layer: 'ui' };
-    
-    // Provide 1 file out of 1 expected, but then network crashes or throws error
+
     mockProvider.generateStreaming.mockImplementation(async (req: AIStreamingRequest) => {
       const chunk = '{ "path": "src/ui/Button.tsx", "content": "export const Button = () => <div/>;" }';
       req.onChunk?.(chunk, chunk.length);
       throw new Error('LLM Crash');
     });
 
-    const result = await executor.executePhase(uiPhaseDef, baseContext);
-    
-    // Should salvage the parsed file
-    expect(result.files).toHaveLength(1);
-    expect(result.files[0].path).toBe('src/ui/Button.tsx');
-    expect(result.warnings[0]).toContain('LLM Crash');
+    await expect(executor.executePhase(uiPhaseDef, baseContext))
+      .rejects.toThrow('ui phase failed after 2 attempts: LLM Crash');
   });
 
   // ── Phase 5: expectedFiles override + oneshot continuation ────────────────

@@ -7,7 +7,12 @@ import { ValidationPipeline } from '../../core/validation-pipeline';
 vi.mock('../../core/build-validator');
 vi.mock('../../core/validation-pipeline');
 vi.mock('../../core/file-processor', () => ({
-    processFiles: vi.fn(files => Promise.resolve(files)),
+    processFiles: vi.fn((files: Array<{ path: string; content: string }>) =>
+        Promise.resolve({
+            files: Object.fromEntries(files.map((f: any) => [f.path, f.content])),
+            warnings: [],
+        })
+    ),
 }));
 
 // Concrete implementation for testing
@@ -35,11 +40,13 @@ describe('BaseProjectGenerator', () => {
 
         mockBuildValidator = {
             validate: vi.fn(),
+            validateAll: vi.fn().mockReturnValue({ valid: true, errors: [] }),
+            validateCrossFileReferences: vi.fn().mockReturnValue([]),
             formatErrorsForAI: vi.fn().mockReturnValue('Formatted errors'),
         };
 
         mockValidationPipeline = {
-            validate: vi.fn(),
+            validate: vi.fn().mockReturnValue({ valid: true, sanitizedOutput: {}, errors: [] }),
         };
 
         mockPromptProvider = {
@@ -73,20 +80,20 @@ describe('BaseProjectGenerator', () => {
         const prompt = 'build a todo app';
 
         it('should return files immediately if build is valid', async () => {
-            mockBuildValidator.validate.mockReturnValue({ valid: true, errors: [] });
+            // validateAll default is already { valid: true, errors: [] } — no extra mock needed
 
             const result = await generator.testRunBuildFixLoop(initialFiles, 'generation', prompt);
 
             expect(result).toEqual(initialFiles);
-            expect(mockBuildValidator.validate).toHaveBeenCalledTimes(1);
+            expect(mockBuildValidator.validateAll).toHaveBeenCalledTimes(1);
             expect(mockAIProvider.generate).not.toHaveBeenCalled();
         });
 
         it('should retry and succeed when AI fixes the errors', async () => {
-            // Initial validation fails
-            mockBuildValidator.validate
-                .mockReturnValueOnce({ valid: false, errors: [{ message: 'Missing dep', file: 'App.tsx' }] })
-                .mockReturnValueOnce({ valid: true, errors: [] }); // Succeeds after fix
+            // Initial acceptance check fails (build error), subsequent checks succeed
+            mockBuildValidator.validateAll
+                .mockReturnValueOnce({ valid: false, errors: [{ message: 'Missing dep', file: 'App.tsx', type: 'missing_dependency', severity: 'fixable' }] });
+            // Default mockReturnValue({ valid: true, errors: [] }) applies for calls 2 & 3
 
             mockBuildValidator.formatErrorsForAI.mockReturnValue('Formatted errors');
 
@@ -99,7 +106,7 @@ describe('BaseProjectGenerator', () => {
                 })
             });
 
-            // Syntax validation succeeds
+            // Validation pipeline returns fixed content as sanitizedOutput
             mockValidationPipeline.validate.mockReturnValue({
                 valid: true,
                 sanitizedOutput: { 'App.tsx': 'fixed content' },
@@ -110,14 +117,15 @@ describe('BaseProjectGenerator', () => {
 
             expect(result).toEqual({ 'App.tsx': 'fixed content' });
             expect(mockAIProvider.generate).toHaveBeenCalledTimes(1);
-            expect(mockBuildValidator.validate).toHaveBeenCalledTimes(2);
+            // initial + revalidation after fix + post-fix re-check
+            expect(mockBuildValidator.validateAll).toHaveBeenCalledTimes(3);
         });
 
         it('should accumulate failure history across retries', async () => {
-            // Fails 3 times then we stop (maxBuildRetries is 3)
-            mockBuildValidator.validate.mockReturnValue({
+            // Always fails — acceptance gate never passes (maxBuildRetries is 3)
+            mockBuildValidator.validateAll.mockReturnValue({
                 valid: false,
-                errors: [{ message: 'Build error', file: 'index.ts' }]
+                errors: [{ message: 'Build error', file: 'index.ts', type: 'missing_dependency', severity: 'fixable' }]
             });
 
             mockAIProvider.generate.mockResolvedValue({
@@ -136,8 +144,8 @@ describe('BaseProjectGenerator', () => {
 
             const result = await generator.testRunBuildFixLoop(initialFiles, 'generation', prompt);
 
-            // Should return the last modified files after 3 retries
-            expect(result).toEqual({ 'index.ts': 'attempt' });
+            // revalidation always fails so currentFiles is never updated — returns original files
+            expect(result).toEqual(initialFiles);
             expect(mockAIProvider.generate).toHaveBeenCalledTimes(3);
 
             // Verify that failure history is passed to next AI call
@@ -147,9 +155,9 @@ describe('BaseProjectGenerator', () => {
         });
 
         it('should retry all attempts and return original files if AI keeps returning invalid JSON', async () => {
-            mockBuildValidator.validate.mockReturnValue({
+            mockBuildValidator.validateAll.mockReturnValue({
                 valid: false,
-                errors: [{ message: 'Error', file: 'f.ts' }]
+                errors: [{ message: 'Error', file: 'f.ts', type: 'missing_dependency', severity: 'fixable' }]
             });
 
             mockAIProvider.generate.mockResolvedValue({

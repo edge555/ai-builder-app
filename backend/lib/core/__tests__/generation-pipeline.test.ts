@@ -6,15 +6,10 @@ import { IPromptProvider } from '../prompts/prompt-provider';
 const mocks = vi.hoisted(() => ({
   executePhase: vi.fn(),
   selectRecipe: vi.fn(),
-  buildHeuristicPlan: vi.fn(),
 }));
 
 vi.mock('../recipes/recipe-engine', () => ({
   selectRecipe: mocks.selectRecipe,
-}));
-
-vi.mock('../heuristic-plan-builder', () => ({
-  buildHeuristicPlan: mocks.buildHeuristicPlan,
 }));
 
 vi.mock('../phase-executor', () => ({
@@ -65,12 +60,11 @@ describe('GenerationPipeline (Phase 5)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Return a realistic result: at least the files expected by the phase plan.
-    // For 'oneshot', expectedFiles overrides the layer filter (no files have layer 'oneshot').
-    // For multi-phase layers, filter by layer as before.
+    // Return a realistic result: at least the files explicitly expected for the phase.
     mocks.executePhase.mockImplementation(async (phaseDef: any) => {
-      const files = phaseDef.layer === 'oneshot'
-        ? (phaseDef.expectedFiles ?? []).map((p: string) => ({ path: p, content: `// ${p}` }))
+      const expectedFiles = phaseDef.expectedFiles ?? [];
+      const files = expectedFiles.length > 0
+        ? expectedFiles.map((p: string) => ({ path: p, content: `// ${p}` }))
         : (phaseDef.plan?.files ?? [])
             .filter((f: any) => f.layer === phaseDef.layer)
             .map((f: any) => ({ path: f.path, content: `// ${f.path}` }));
@@ -107,11 +101,6 @@ describe('GenerationPipeline (Phase 5)', () => {
     );
 
     mocks.selectRecipe.mockReturnValue({ id: 'react-spa', name: 'SPA' } as any);
-    mocks.buildHeuristicPlan.mockReturnValue({
-      files: [{ path: 'fallback.ts', purpose: 'fallback', layer: 'ui', exports: [], imports: [] }],
-      components: [], dependencies: [], routing: [], typeContracts: [], cssVariables: [],
-      stateShape: { contexts: [], hooks: [] }
-    });
   });
 
   // ── Early stages (Tasks 5.1–5.2) ───────────────────────────────────────────
@@ -129,26 +118,26 @@ describe('GenerationPipeline (Phase 5)', () => {
     expect(result.architecturePlan?.files).toHaveLength(1);
   });
 
-  it('falls back to heuristic plan if AI planning stage fails', async () => {
+  it('retries planning once and then fails if the planning stage keeps failing', async () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
     mockPlanningProvider.generate.mockRejectedValue(new Error('LLM Timeout'));
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    const result = await pipeline.runGeneration('make a simple app');
-
-    expect(mocks.buildHeuristicPlan).toHaveBeenCalled();
-    expect(result.architecturePlan?.files[0].path).toBe('fallback.ts');
+    await expect(pipeline.runGeneration('make a simple app')).rejects.toThrow(
+      'Planning stage failed after retry: LLM Timeout'
+    );
+    expect(mockPlanningProvider.generate).toHaveBeenCalledTimes(2);
   });
 
-  it('handles invalid JSON from planner by triggering fallback', async () => {
+  it('retries planning once and then fails on invalid planner JSON', async () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: '{ "files": "not an array" }' });
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    const result = await pipeline.runGeneration('make a simple app');
-
-    expect(mocks.buildHeuristicPlan).toHaveBeenCalled();
-    expect(result.architecturePlan?.files[0].path).toBe('fallback.ts');
+    await expect(pipeline.runGeneration('make a simple app')).rejects.toThrow(
+      'Planning stage failed after retry: ArchitecturePlan schema mismatch:'
+    );
+    expect(mockPlanningProvider.generate).toHaveBeenCalledTimes(2);
   });
 
   // ── Plan Review (Task 5.3) ──────────────────────────────────────────────────
