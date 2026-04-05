@@ -55,12 +55,11 @@ describe('PhaseExecutor', () => {
       getPlanReviewPrompt: vi.fn(),
       getExecutionGenerationSystemPrompt: vi.fn(),
       getExecutionModificationSystemPrompt: vi.fn(),
-      getReviewSystemPrompt: vi.fn(),
       getBugfixSystemPrompt: vi.fn(),
       getPhasePrompt: vi.fn().mockReturnValue('mocked system prompt'),
       tokenBudgets: {
         intent: 100, planning: 100, executionGeneration: 100,
-        executionModification: 100, review: 100, bugfix: 100,
+        executionModification: 100, bugfix: 100,
         architecturePlanning: 100, planReview: 100,
         scaffold: 2000, logic: 2000, ui: 2000, integration: 2000, oneshot: 2000
       }
@@ -72,6 +71,7 @@ describe('PhaseExecutor', () => {
       validateServerClientBoundaries: vi.fn(),
       validatePrismaSchema: vi.fn(),
       validateAppRouterConventions: vi.fn(),
+      validateCrossFileReferences: vi.fn().mockReturnValue([]),
       validateAll: vi.fn()
     };
 
@@ -101,6 +101,41 @@ describe('PhaseExecutor', () => {
     
     // Complete markers sent at the end
     expect(onFileStream).toHaveBeenCalledWith(expect.objectContaining({ path: 'src/types.ts' }), true);
+  });
+
+  it('surfaces parser warnings from malformed streamed objects', async () => {
+    mockProvider.generateStreaming.mockImplementation(async (req: AIStreamingRequest) => {
+      const chunk = '{ "path": "src/types.ts", "content": "export type User = {}" }'
+        + '{ "path": "src/main.ts", "content": bad-json }';
+      req.onChunk?.(chunk, chunk.length);
+      return { success: true };
+    });
+
+    const onWarning = vi.fn();
+    const result = await executor.executePhase(basePhaseDef, baseContext, { onWarning });
+
+    expect(result.files).toHaveLength(1);
+    expect(onWarning).toHaveBeenCalledWith(expect.stringContaining('Skipped malformed streamed JSON object'));
+    expect(result.warnings).toContainEqual(expect.stringContaining('Skipped malformed streamed JSON object'));
+  });
+
+  it('does not repeat the same parser warning across subsequent chunks', async () => {
+    mockProvider.generateStreaming
+      .mockImplementationOnce(async (req: AIStreamingRequest) => {
+        const chunk1 = '{ "path": "src/main.ts", "content": bad-json }';
+        const chunk2 = '{ "path": "src/types.ts", "content": "export type User = {}" }';
+        req.onChunk?.(chunk1, chunk1.length);
+        req.onChunk?.(chunk2, chunk1.length + chunk2.length);
+        return { success: true };
+      })
+      .mockResolvedValue({ success: true }); // Continuations: no chunks emitted
+
+    const onWarning = vi.fn();
+    const result = await executor.executePhase(basePhaseDef, baseContext, { onWarning });
+
+    expect(result.files).toHaveLength(1);
+    expect(onWarning).toHaveBeenCalledTimes(1);
+    expect(result.warnings.filter((warning) => warning.includes('Skipped malformed streamed JSON object'))).toHaveLength(1);
   });
 
   it('retries on syntax error and succeeds', async () => {
