@@ -91,6 +91,12 @@ export const MAX_CONTINUATION_ROUNDS = 2;
 // If a UI phase plans >12 files, split into sub-batches
 export const UI_BATCH_SPLIT_THRESHOLD = 12;
 
+// Modification routing: projects with ≤ this many files use faster direct/scoped routes
+export const SMALL_PROJECT_FILE_THRESHOLD = 12;
+
+// Modification routing: prompts longer than this are assumed too complex for the direct route
+export const SIMPLE_PROMPT_MAX_LENGTH = 220;
+
 // Complexity gate: <=10 files → one-shot, >10 → multi-phase
 export const COMPLEXITY_GATE_FILE_THRESHOLD = 10;
 
