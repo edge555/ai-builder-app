@@ -31,6 +31,7 @@ import { MAX_CONTEXT_SLICES_MODIFICATION } from '../constants';
 import { selectRecipe } from './recipes/recipe-engine';
 import { extractJsonFromResponse } from '../ai/modal-response-parser';
 import { config } from '../config';
+import { parseStructuredOutput } from '../ai/structured-output';
 
 const logger = createLogger('PipelineOrchestrator');
 
@@ -333,20 +334,18 @@ export class PipelineOrchestrator {
         throw new Error(response.error ?? 'Intent stage returned empty content');
       }
 
-      const parsed = JSON.parse(response.content);
-      const zodResult = IntentOutputSchema.safeParse(parsed);
-
-      if (!zodResult.success) {
-        throw new Error(`Intent schema mismatch: ${zodResult.error.message}`);
+      const parsedResult = parseStructuredOutput(response.content, IntentOutputSchema, 'IntentOutput');
+      if (!parsedResult.success) {
+        throw new Error(parsedResult.error);
       }
 
       contextLogger.info('Intent stage complete', {
-        complexity: zodResult.data.complexity,
-        features: zodResult.data.features ?? [],
+        complexity: parsedResult.data.complexity,
+        features: parsedResult.data.features ?? [],
         durationMs: Date.now() - stageStartMs,
       });
       callbacks.onStageComplete?.('intent');
-      return zodResult.data;
+      return parsedResult.data;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       contextLogger.warn('Intent stage failed (degraded)', { error: message });
@@ -381,14 +380,12 @@ export class PipelineOrchestrator {
         throw new Error(response.error ?? 'Planning stage returned empty content');
       }
 
-      const parsed = JSON.parse(response.content);
-      const zodResult = PlanOutputSchema.safeParse(parsed);
-
-      if (!zodResult.success) {
-        throw new Error(`Plan schema mismatch: ${zodResult.error.message}`);
+      const parsedResult = parseStructuredOutput(response.content, PlanOutputSchema, 'PlanOutput');
+      if (!parsedResult.success) {
+        throw new Error(parsedResult.error);
       }
 
-      const plan = zodResult.data;
+      const plan = parsedResult.data;
       contextLogger.info('Planning stage complete', {
         fileCount: plan.files.length,
         depCount: plan.dependencies.length,

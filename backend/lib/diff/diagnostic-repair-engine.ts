@@ -14,6 +14,7 @@
 import type { ProjectState, RepairAttempt } from '@ai-app-builder/shared';
 import type { AIProvider } from '../ai';
 import type { BuildValidator, BuildError, BuildValidationResult } from '../core/build-validator';
+import type { AcceptanceGate } from '../core/acceptance-gate';
 import { tryDeterministicFixes } from './deterministic-fixes';
 import { getModificationPrompt, MODIFICATION_OUTPUT_SCHEMA } from './prompts/modification-prompt';
 import { buildFixPrompt } from '../core/prompts/build-fix-prompt';
@@ -22,6 +23,7 @@ import { ModificationOutputSchema } from '../core/schemas';
 import { applyEdits } from './edit-applicator';
 import { getMaxOutputTokens } from '../config';
 import { createLogger } from '../logger';
+import { parseStructuredOutput } from '../ai/structured-output';
 
 const logger = createLogger('DiagnosticRepairEngine');
 
@@ -78,6 +80,7 @@ export interface RepairRequest {
   shouldIncludeDesignSystem: boolean;
   aiProvider: AIProvider;
   buildValidator: BuildValidator;
+  acceptanceGate: AcceptanceGate;
   /** Pre-modification file contents for rollback */
   checkpoint?: Record<string, string>;
   requestId?: string;
@@ -108,7 +111,7 @@ export class DiagnosticRepairEngine {
   async repair(request: RepairRequest): Promise<RepairResult> {
     const {
       projectState, updatedFiles, prompt, shouldIncludeDesignSystem,
-      aiProvider, buildValidator, checkpoint, requestId,
+      aiProvider, buildValidator, acceptanceGate, checkpoint, requestId,
     } = request;
 
     const mutableFiles = { ...updatedFiles };
@@ -117,8 +120,12 @@ export class DiagnosticRepairEngine {
     const failureHistory: RepairAttempt[] = [];
 
     // Initial validation
-    let buildResult = buildValidator.validate(tempFiles);
-    if (buildResult.valid) {
+    let acceptanceResult = acceptanceGate.validate(tempFiles);
+    let buildResult: BuildValidationResult = {
+      valid: acceptanceResult.buildErrors.length === 0,
+      errors: acceptanceResult.buildErrors,
+    };
+    if (acceptanceResult.valid) {
       return {
         updatedFiles: mutableFiles,
         success: true,
@@ -151,14 +158,18 @@ export class DiagnosticRepairEngine {
       const { fixed, fileChanges } = tryDeterministicFixes(fixableErrors, tempFiles);
       if (fixed.length > 0) {
         applyChanges(fileChanges, mutableFiles, tempFiles);
-        buildResult = buildValidator.validate(tempFiles);
+        acceptanceResult = acceptanceGate.validate(tempFiles);
+        buildResult = {
+          valid: acceptanceResult.buildErrors.length === 0,
+          errors: acceptanceResult.buildErrors,
+        };
 
         logger.info('Repair engine: deterministic fixes applied', {
           fixedCount: fixed.length,
-          remainingErrors: buildResult.errors.length,
+          remainingIssues: acceptanceResult.issues.length,
         });
 
-        if (buildResult.valid) {
+        if (acceptanceResult.valid) {
           return {
             updatedFiles: mutableFiles,
             success: true,
@@ -180,8 +191,12 @@ export class DiagnosticRepairEngine {
     totalAICalls++;
 
     if (targetedResult.applied) {
-      buildResult = buildValidator.validate(tempFiles);
-      if (buildResult.valid) {
+      acceptanceResult = acceptanceGate.validate(tempFiles);
+      buildResult = {
+        valid: acceptanceResult.buildErrors.length === 0,
+        errors: acceptanceResult.buildErrors,
+      };
+      if (acceptanceResult.valid) {
         return {
           updatedFiles: mutableFiles,
           success: true,
@@ -194,7 +209,7 @@ export class DiagnosticRepairEngine {
 
       failureHistory.push({
         attempt: 1,
-        error: buildResult.errors.map(e => e.message).join('; '),
+        error: acceptanceResult.issues.map(e => e.message).join('; '),
         strategy: 'Targeted AI repair (temp 0.2, broken files only)',
         timestamp: new Date().toISOString(),
       });
@@ -209,8 +224,12 @@ export class DiagnosticRepairEngine {
     totalAICalls++;
 
     if (broadResult.applied) {
-      buildResult = buildValidator.validate(tempFiles);
-      if (buildResult.valid) {
+      acceptanceResult = acceptanceGate.validate(tempFiles);
+      buildResult = {
+        valid: acceptanceResult.buildErrors.length === 0,
+        errors: acceptanceResult.buildErrors,
+      };
+      if (acceptanceResult.valid) {
         return {
           updatedFiles: mutableFiles,
           success: true,
@@ -226,7 +245,11 @@ export class DiagnosticRepairEngine {
     const rolledBackFiles: string[] = [];
 
     if (checkpoint) {
-      const brokenFiles = new Set(buildResult.errors.map(e => e.file));
+      const brokenFiles = new Set(
+        acceptanceResult.issues
+          .map((issue) => issue.file)
+          .filter((file): file is string => typeof file === 'string')
+      );
       for (const brokenFile of brokenFiles) {
         if (checkpoint[brokenFile] !== undefined) {
           mutableFiles[brokenFile] = checkpoint[brokenFile];
@@ -242,7 +265,7 @@ export class DiagnosticRepairEngine {
     logger.warn('Repair engine: exhausted all levels', {
       totalAICalls,
       rolledBackFiles,
-      remainingErrors: buildResult.errors.length,
+      remainingIssues: acceptanceResult.issues.length,
       partialSuccess: hasPartialSuccess,
     });
 
@@ -335,23 +358,15 @@ export class DiagnosticRepairEngine {
     mutableFiles: Record<string, string | null>,
     tempFiles: Record<string, string>,
   ): { applied: boolean } {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      logger.error('Repair engine: failed to parse AI response JSON');
-      return { applied: false };
-    }
-
-    const zodResult = ModificationOutputSchema.safeParse(parsed);
-    if (!zodResult.success) {
-      logger.error('Repair engine: AI response failed schema validation', {
-        errors: zodResult.error.issues,
+    const parsedResult = parseStructuredOutput(content, ModificationOutputSchema, 'ModificationOutput');
+    if (!parsedResult.success) {
+      logger.error('Repair engine: AI response failed structured parsing', {
+        error: parsedResult.error,
       });
       return { applied: false };
     }
 
-    const output = zodResult.data;
+    const output = parsedResult.data;
     if (!output.files || !Array.isArray(output.files)) {
       return { applied: false };
     }

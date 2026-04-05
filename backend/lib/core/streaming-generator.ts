@@ -11,7 +11,6 @@ import { createPromptProvider } from './prompts/prompt-provider-factory';
 import { getEffectiveProvider } from '../ai/provider-config-store';
 import { processFiles } from './file-processor';
 import { createLogger } from '../logger';
-import { parseIncrementalFiles, estimateTotalFiles } from '../utils/incremental-json-parser';
 import { BaseProjectGenerator } from './base-project-generator';
 import type { PipelineCallbacks, PipelineStage } from './pipeline-orchestrator';
 import { createGenerationPipeline } from './pipeline-factory';
@@ -88,9 +87,6 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
 
     callbacks.onStart?.();
 
-    // Track parsed files for incremental emission during streaming
-    let accumulatedText = '';
-    let lastParsedIndex = 0;
     const emittedFiles = new Set<string>();
     let warningCount = 0;
     let plannedTotal = 0;
@@ -166,56 +162,34 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       planCompleted: !!pipelineResult.architecturePlan,
     });
 
-    // Safety net: if package.json was not generated, inject a minimal default.
-    // The scaffold prompt already mandates it, but AI can still omit it.
-    const hasPkgJson = pipelineResult.generatedFiles.some(f => f.path === 'package.json');
-    if (!hasPkgJson) {
-      const plannedDeps = pipelineResult.architecturePlan?.dependencies ?? ['react', 'react-dom'];
-      const dependencies: Record<string, string> = {};
-      for (const dep of plannedDeps) {
-        dependencies[dep] = 'latest'; // file-processor will pin to known versions
-      }
-      pipelineResult.generatedFiles.push({
-        path: 'package.json',
-        content: JSON.stringify({
-          name: 'generated-app',
-          version: '0.1.0',
-          private: true,
-          type: 'module',
-          dependencies,
-        }, null, 2),
-      });
-      contextLogger.warn('Injected fallback package.json — scaffold phase did not generate one', {
-        plannedDeps,
-      });
-    }
-
-    // Safety net: if main.tsx is missing or is a scaffold placeholder, inject the canonical entry point.
-    // The scaffold prompt mandates the correct content, but AI may still generate a placeholder.
-    const mainTsxPath = pipelineResult.generatedFiles.find(
-      f => f.path === 'src/main.tsx' || f.path === 'main.tsx'
+    const hasPkgJson = pipelineResult.generatedFiles.some((f) => f.path === 'package.json');
+    const mainEntry = pipelineResult.generatedFiles.find(
+      (f) => f.path === 'src/main.tsx' || f.path === 'main.tsx'
     );
-    const mainTsxContent = mainTsxPath?.content ?? '';
-    const isPlaceholder = !mainTsxContent.includes('import App') || mainTsxContent.includes('Subsequent phases');
-    if (isPlaceholder) {
-      const canonicalMain = `import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-import './index.css';
+    const mainTsxContent = mainEntry?.content ?? '';
+    const mainIsInvalid =
+      !mainEntry ||
+      !mainTsxContent.includes("import App from './App'") ||
+      !mainTsxContent.includes("import './index.css'") ||
+      !mainTsxContent.includes('ReactDOM.createRoot');
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
-`;
-      if (mainTsxPath) {
-        mainTsxPath.content = canonicalMain;
-        contextLogger.warn('Replaced placeholder main.tsx with canonical App entry point');
-      } else {
-        pipelineResult.generatedFiles.unshift({ path: 'src/main.tsx', content: canonicalMain });
-        contextLogger.warn('Injected missing main.tsx with canonical App entry point');
-      }
+    if (!hasPkgJson || mainIsInvalid) {
+      const missingArtifacts = [
+        !hasPkgJson ? 'package.json' : null,
+        mainIsInvalid ? 'src/main.tsx' : null,
+      ].filter(Boolean);
+      const error = `Generation failed acceptance: missing or invalid required scaffold files (${missingArtifacts.join(', ')})`;
+      contextLogger.error(error, {
+        generatedFiles: pipelineResult.generatedFiles.map((file) => file.path),
+      });
+      callbacks.onError?.(error, { errorCode: 'generation_acceptance_failed', errorType: 'scaffold' });
+      callbacks.onStreamEnd?.({
+        totalFiles: emittedFiles.size,
+        successfulFiles: 0,
+        failedFiles: emittedFiles.size,
+        warnings: warningCount,
+      });
+      return { success: false, error };
     }
 
     // Process files: sanitize paths, normalize newlines, format with Prettier
@@ -231,44 +205,24 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       warningCount++;
     }
 
-    // Drop files with syntax errors before build-fix — partial output is better than total failure.
-    // Per-phase PhaseExecutor already validates syntax; this is a final safety net.
     contextLogger.debug('Checking for syntax errors before build-fix', { files: Object.keys(prefixedFiles) });
-    const syntaxCheckResult = this.buildValidator.validate(prefixedFiles);
-    const brokenFiles = new Set(
-      syntaxCheckResult.errors
-        .filter(e => e.type === 'syntax_error')
-        .map(e => e.file)
-        .filter(Boolean)
-    );
-
-    if (brokenFiles.size > 0 && brokenFiles.size >= Object.keys(prefixedFiles).length) {
-      // All (or only) files are broken — hard fail rather than delivering nothing
-      contextLogger.error('All generated files have syntax errors — aborting before build-fix', {
-        brokenFiles: Array.from(brokenFiles),
+    const acceptanceResult = this.acceptanceGate.validate(prefixedFiles);
+    if (!acceptanceResult.valid || !acceptanceResult.sanitizedOutput) {
+      const error = `Generation failed acceptance: ${acceptanceResult.issues
+        .map((issue) => `${issue.file ?? 'unknown'}: ${issue.message}`)
+        .join('; ')}`;
+      contextLogger.error('Generated files failed acceptance before build-fix', {
+        issueCount: acceptanceResult.issues.length,
+        issues: acceptanceResult.issues,
       });
-      return { success: false, error: 'Generation produced no valid files (all have syntax errors)' };
-    }
-
-    if (brokenFiles.size > 0 && brokenFiles.size < Object.keys(prefixedFiles).length) {
-      contextLogger.warn('Dropping files with syntax errors instead of failing', {
-        droppedFiles: Array.from(brokenFiles),
-        syntaxErrorCount: syntaxCheckResult.errors.filter(e => e.type === 'syntax_error').length,
-        remainingFiles: Object.keys(prefixedFiles).filter(p => !brokenFiles.has(p)),
+      callbacks.onError?.(error, { errorCode: 'generation_acceptance_failed', errorType: 'validation' });
+      callbacks.onStreamEnd?.({
+        totalFiles: Object.keys(prefixedFiles).length,
+        successfulFiles: 0,
+        failedFiles: Object.keys(prefixedFiles).length,
+        warnings: warningCount,
       });
-      for (const brokenPath of brokenFiles) {
-        delete prefixedFiles[brokenPath];
-        const fileErrors = syntaxCheckResult.errors
-          .filter(e => e.file === brokenPath && e.type === 'syntax_error')
-          .map(e => e.message)
-          .join('; ');
-        callbacks.onWarning?.({
-          path: brokenPath,
-          message: `File dropped due to syntax errors: ${fileErrors}`,
-          type: 'validation',
-        });
-        warningCount++;
-      }
+      return { success: false, error };
     }
 
     // If aborted, skip build-fix and downstream work
@@ -281,7 +235,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     }
 
     // Build validation with auto-retry using the injected bugfix provider
-    const filesToBuildFix = prefixedFiles;
+    const filesToBuildFix = acceptanceResult.sanitizedOutput;
     const finalFiles = await this.runBuildFixLoop(
       filesToBuildFix,
       description,

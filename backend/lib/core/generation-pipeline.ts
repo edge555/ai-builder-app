@@ -12,12 +12,12 @@ import { toSimpleJsonSchema } from './zod-to-json-schema';
 import { createLogger } from '../logger';
 import { selectRecipe } from './recipes/recipe-engine';
 import { config } from '../config';
-import { buildHeuristicPlan } from './heuristic-plan-builder';
 import { PhaseExecutor, type PhaseDefinition, type PhaseCallbacks } from './phase-executor';
 import { BuildValidator } from './build-validator';
 import { buildPhaseContext } from './batch-context-builder';
 import type { PhaseContext } from './batch-context-builder';
 import { COMPLEXITY_GATE_FILE_THRESHOLD, UI_BATCH_SPLIT_THRESHOLD } from '../constants';
+import { parseStructuredOutput } from '../ai/structured-output';
 
 const logger = createLogger('GenerationPipeline');
 
@@ -123,14 +123,12 @@ export class GenerationPipeline {
         throw new Error(response.error ?? 'Intent stage returned empty content');
       }
 
-      const parsed = JSON.parse(response.content);
-      const zodResult = IntentOutputSchema.safeParse(parsed);
-
-      if (!zodResult.success) {
-        throw new Error(`Intent schema mismatch: ${zodResult.error.message}`);
+      const parsedResult = parseStructuredOutput(response.content, IntentOutputSchema, 'IntentOutput');
+      if (!parsedResult.success) {
+        throw new Error(parsedResult.error);
       }
 
-      intentOutput = zodResult.data;
+      intentOutput = parsedResult.data;
       contextLogger.info('Intent stage complete', {
         complexity: intentOutput.complexity,
         durationMs: Date.now() - intentStageStartMs,
@@ -173,47 +171,14 @@ export class GenerationPipeline {
     this.promptProvider.setRecipe?.(recipe);
 
     // ── Await planning result ─────────────────────────────────────────────────
-    let architecturePlan: ArchitecturePlan | null = null;
-    let _planRawContent: string | undefined;
-    try {
-      const response = await planningPromise;
-
-      _planRawContent = response.content ?? undefined;
-
-      if (!response.success || !response.content) {
-        throw new Error(response.error ?? 'Planning stage AI call failed');
-      }
-
-      const parsed = JSON.parse(response.content);
-      const zodResult = ArchitecturePlanSchema.safeParse(parsed);
-
-      if (!zodResult.success) {
-        throw new Error(`ArchitecturePlan schema mismatch: ${zodResult.error.message}`);
-      }
-
-      architecturePlan = zodResult.data;
-      contextLogger.info('Enhanced Planning stage complete', {
-        fileCount: architecturePlan.files.length,
-        layers: [...new Set(architecturePlan.files.map(f => f.layer))],
-        filePaths: architecturePlan.files.map(f => f.path),
-        dependencies: architecturePlan.dependencies,
-        durationMs: Date.now() - planningStageStartMs,
-      });
-      callbacks.onStageComplete?.('planning');
-
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      contextLogger.warn('Planning stage failed. Falling back to heuristic plan.', {
-        error: message,
-        stack: err instanceof Error ? err.stack : undefined,
-        responsePreview: _planRawContent ? _planRawContent.substring(0, 800) : undefined,
-        intentComplexity: intentOutput?.complexity,
-      });
-      callbacks.onStageFailed?.('planning', `Using heuristic fallback: ${message}`);
-
-      // Fallback
-      architecturePlan = buildHeuristicPlan(intentOutput, userPrompt);
-    }
+    let architecturePlan = await this.resolveArchitecturePlan(
+      userPrompt,
+      intentOutput,
+      planningPromise,
+      callbacks,
+      contextLogger,
+      planningStageStartMs
+    );
 
     if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
 
@@ -241,14 +206,12 @@ export class GenerationPipeline {
           throw new Error(response.error ?? 'Plan review stage AI call failed');
         }
 
-        const parsed = JSON.parse(response.content);
-        const zodResult = PlanReviewSchema.safeParse(parsed);
-
-        if (!zodResult.success) {
-          throw new Error(`PlanReview schema mismatch: ${zodResult.error.message}`);
+        const parsedResult = parseStructuredOutput(response.content, PlanReviewSchema, 'PlanReview');
+        if (!parsedResult.success) {
+          throw new Error(parsedResult.error);
         }
 
-        const reviewOutput = zodResult.data;
+        const reviewOutput = parsedResult.data;
 
         if (!reviewOutput.valid || reviewOutput.issues.length > 0) {
           contextLogger.warn('Plan Review found issues', {
@@ -499,6 +462,7 @@ export class GenerationPipeline {
           plan,
           userPrompt,
           recipe,
+          expectedFiles: batchFiles.map((file) => file.path),
         };
 
         const phaseCallbacks: PhaseCallbacks = {
@@ -539,23 +503,27 @@ export class GenerationPipeline {
             contextLogger.error(msg, { expectedFiles: batchFiles.map(f => f.path) });
             throw new Error(msg);
           }
+
+          if (result.files.length !== batchFiles.length) {
+            const generatedPaths = new Set(result.files.map((file) => file.path));
+            const missingPaths = batchFiles
+              .map((file) => file.path)
+              .filter((path) => !generatedPaths.has(path));
+            const msg = `Phase ${phase.layer} generated ${result.files.length}/${batchFiles.length} expected files`;
+            contextLogger.error(msg, { expectedFiles: batchFiles.map(f => f.path), missingPaths });
+            throw new Error(`${msg}. Missing: ${missingPaths.join(', ')}`);
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           contextLogger.error(`Phase execution failed`, { layer: phase.layer, error: message });
-
-          // Scaffold failure is fatal
-          if (phase.layer === 'scaffold') {
-            throw err;
-          }
 
           // Client cancellation should propagate immediately
           if (callbacks.signal?.aborted) {
             throw err;
           }
 
-          // Other phases: record warning, continue
-          allWarnings.push(`Phase ${phase.layer} failed: ${message}`);
           callbacks.onStageFailed?.(phase.layer, message);
+          throw err;
         }
       }
 
@@ -653,5 +621,70 @@ export class GenerationPipeline {
     const SYSTEM_PROMPT_BASELINE_TOKENS = 4000;
     const stringifiedPlan = JSON.stringify(plan, null, 2);
     return SYSTEM_PROMPT_BASELINE_TOKENS + Math.floor(stringifiedPlan.length / 4);
+  }
+
+  private async resolveArchitecturePlan(
+    userPrompt: string,
+    intentOutput: IntentOutput | null,
+    initialPlanningPromise: Promise<{ success: boolean; content?: string | null; error?: string | null }>,
+    callbacks: PipelineCallbacks,
+    contextLogger: typeof logger,
+    planningStageStartMs: number
+  ): Promise<ArchitecturePlan> {
+    let lastError: unknown;
+    let lastRawContent: string | undefined;
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const response = attempt === 1
+          ? await initialPlanningPromise
+          : await this.planningProvider.generate({
+              prompt: userPrompt,
+              systemInstruction:
+                `${this.promptProvider.getArchitecturePlanningPrompt(userPrompt, intentOutput)}\n\n` +
+                'RETRY REQUIREMENT: Return a single valid ArchitecturePlan JSON object only. ' +
+                'Do not omit required arrays. Do not add prose or markdown fences.',
+              maxOutputTokens: this.promptProvider.tokenBudgets.architecturePlanning,
+              responseSchema: ARCHITECTURE_PLAN_JSON_SCHEMA,
+              signal: callbacks.signal,
+            });
+
+        lastRawContent = response.content ?? undefined;
+
+        if (!response.success || !response.content) {
+          throw new Error(response.error ?? 'Planning stage AI call failed');
+        }
+
+        const parsedResult = parseStructuredOutput(response.content, ArchitecturePlanSchema, 'ArchitecturePlan');
+        if (!parsedResult.success) {
+          throw new Error(parsedResult.error);
+        }
+
+        contextLogger.info('Enhanced Planning stage complete', {
+          attempt,
+          fileCount: parsedResult.data.files.length,
+          layers: [...new Set(parsedResult.data.files.map(f => f.layer))],
+          filePaths: parsedResult.data.files.map(f => f.path),
+          dependencies: parsedResult.data.dependencies,
+          durationMs: Date.now() - planningStageStartMs,
+        });
+        callbacks.onStageComplete?.('planning');
+        return parsedResult.data;
+      } catch (err) {
+        lastError = err;
+        const message = err instanceof Error ? err.message : String(err);
+        contextLogger.warn('Planning stage attempt failed', {
+          attempt,
+          error: message,
+          stack: err instanceof Error ? err.stack : undefined,
+          responsePreview: lastRawContent ? lastRawContent.substring(0, 800) : undefined,
+          intentComplexity: intentOutput?.complexity,
+        });
+      }
+    }
+
+    const finalMessage = lastError instanceof Error ? lastError.message : String(lastError);
+    callbacks.onStageFailed?.('planning', finalMessage);
+    throw new Error(`Planning stage failed after retry: ${finalMessage}`);
   }
 }

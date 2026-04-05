@@ -47,6 +47,7 @@ import { createPipelineOrchestrator } from '../core/pipeline-factory';
 import { indexProject } from '../analysis/file-index';
 import { createDependencyGraph } from '../analysis/dependency-graph';
 import { analyzeImpact } from '../analysis/impact-analyzer';
+import { createAcceptanceGate } from '../core/acceptance-gate';
 
 const logger = createLogger('ModificationEngine');
 
@@ -71,6 +72,7 @@ export class ModificationEngine {
   private readonly filePlanner: FilePlanner;
   private readonly buildValidator: BuildValidator;
   private readonly repairEngine: DiagnosticRepairEngine;
+  private readonly acceptanceGate = createAcceptanceGate();
 
   constructor(
     private readonly pipeline: PipelineOrchestrator,
@@ -132,7 +134,7 @@ export class ModificationEngine {
       // Step 1: Select code slices
       onProgress?.('planning', 'Analyzing project and planning changes...');
       const fileCount = Object.keys(projectState.files).length;
-      const skipFilePlanner = options?.shouldSkipPlanning || fileCount <= 8 || !!options?.errorContext;
+      const skipFilePlanner = !!options?.errorContext;
       const { slices, category } = await this.selectCodeSlices(
         projectState, prompt, skipFilePlanner, options?.errorContext
       );
@@ -251,26 +253,12 @@ export class ModificationEngine {
         ...updatedFiles,
       };
 
-      // Step 6.5: Cross-file reference validation
-      const mergedFilesOnly: Record<string, string> = {};
-      for (const [path, content] of Object.entries(mergedForValidation)) {
-        if (content !== null) mergedFilesOnly[path] = content;
-      }
-      const crossFileErrors = this.buildValidator.validateCrossFileReferences(mergedFilesOnly);
-      if (crossFileErrors.length > 0) {
-        contextLogger.warn('Cross-file validation found issues', {
-          errorCount: crossFileErrors.length,
-          errors: crossFileErrors.map(e => ({ message: e.message, file: e.file })),
-        });
-        // Don't fail here — feed these errors into the build-fix loop downstream
-      }
-
       const validationResult = await this.validateModifiedFiles(mergedForValidation);
       if (!validationResult.valid) {
         return {
           success: false,
-          error: 'AI output failed validation',
-          validationErrors: validationResult.errors,
+          error: 'AI output failed acceptance',
+          validationErrors: validationResult.validationErrors,
         };
       }
 
@@ -283,6 +271,7 @@ export class ModificationEngine {
         shouldIncludeDesignSystem,
         aiProvider: this.bugfixProvider,
         buildValidator: this.buildValidator,
+        acceptanceGate: this.acceptanceGate,
         checkpoint: checkpointMgr.rollbackAll(),
         requestId,
       });
@@ -556,14 +545,19 @@ export class ModificationEngine {
    */
   private async validateModifiedFiles(
     updatedFiles: Record<string, string | null>
-  ): Promise<{ valid: boolean; errors: any[] }> {
+  ): Promise<{ valid: boolean; validationErrors: any[]; issues: any[] }> {
     const filesToValidate: Record<string, string> = {};
     for (const [path, content] of Object.entries(updatedFiles)) {
       if (content !== null) {
         filesToValidate[path] = content;
       }
     }
-    return this.validationPipeline.validate(filesToValidate);
+    const acceptanceResult = this.acceptanceGate.validate(filesToValidate);
+    return {
+      valid: acceptanceResult.valid,
+      validationErrors: acceptanceResult.validationErrors,
+      issues: acceptanceResult.issues,
+    };
   }
 }
 
@@ -572,9 +566,7 @@ export class ModificationEngine {
  *
  * Rules:
  * - errorContext present (repair mode) → skip both
- * - <=2 primary files → skip both (fast path: execution only)
- * - >2 primary files AND >8 project files → run both
- * - >2 primary files AND <=8 project files (small project) → skip both
+ * - all normal modification requests → run both
  */
 export function classifyModificationComplexity(
   slices: CodeSlice[],
@@ -587,19 +579,8 @@ export function classifyModificationComplexity(
   }
 
   const primaryCount = slices.filter(s => s.relevance === 'primary').length;
-
-  if (primaryCount <= 2) {
-    logger.info('Complexity: skip both (<=2 primary files)', { primaryCount });
-    return { skipIntent: true, skipPlanning: true };
-  }
-
-  if (projectFileCount > 8) {
-    logger.info('Complexity: run both (>2 primary, large project)', { primaryCount, projectFileCount });
-    return { skipIntent: false, skipPlanning: false };
-  }
-
-  logger.info('Complexity: skip both (>2 primary, small project)', { primaryCount, projectFileCount });
-  return { skipIntent: true, skipPlanning: true };
+  logger.info('Complexity: run both for standard modification flow', { primaryCount, projectFileCount });
+  return { skipIntent: false, skipPlanning: false };
 }
 
 /**
