@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ChatMessage } from '../components/ChatInterface';
 import { useProjectState, useProjectActions, useChatMessages, useGenerationActions, useToastActions } from '../context';
-import { storageService, toStoredProject } from '../services/storage';
-import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError, extractRetryAfterSeconds } from '../utils/error-messages';
+import { toStoredProject } from '../services/storage';
+import { hybridStorageService } from '../services/storage/HybridStorageService';
+import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError, extractRetryAfterSeconds, type ErrorType } from '../utils/error-messages';
 import { createLogger } from '../utils/logger';
 
 const DEFAULT_RATE_LIMIT_WAIT_MS = 30_000;
@@ -190,8 +191,8 @@ export function useSubmitPrompt() {
                         try {
                             const completeMessages = [...chatMessages.messages, userMessage, assistantMessage];
                             const storedProject = toStoredProject(result.projectState, completeMessages);
-                            await storageService.saveProject(storedProject);
-                            await storageService.setMetadata('lastOpenedProjectId', result.projectState.id);
+                            await hybridStorageService.saveProject(storedProject);
+                            await hybridStorageService.setMetadata('lastOpenedProjectId', result.projectState.id);
                         } catch (saveError) {
                             submitLogger.error('Failed to save project after generation', { error: saveError });
                             // Continue anyway - auto-save will retry
@@ -203,7 +204,7 @@ export function useSubmitPrompt() {
                     } else {
                         // Record failure
                         const errorMsg = result.error || 'Failed to generate project';
-                        const errorType = detectErrorType(errorMsg);
+                        const errorType = (result.errorType as ErrorType | undefined) ?? detectErrorType(errorMsg);
 
                         // Don't show error message for user-initiated cancellation
                         if (errorType === 'cancelled') {
@@ -271,7 +272,7 @@ export function useSubmitPrompt() {
                     } else {
                         // Record failure
                         const errorMsg = result.error || 'Failed to modify project';
-                        const errorType = detectErrorType(errorMsg);
+                        const errorType = (result.errorType as ErrorType | undefined) ?? detectErrorType(errorMsg);
 
                         // Don't show error message for user-initiated cancellation
                         if (errorType === 'cancelled') {

@@ -2,11 +2,8 @@
  * Tests for classifyModificationComplexity
  *
  * Covers:
- * - <=2 primary files → skip both (fast path)
+ * - normal modification requests always run intent + planning
  * - errorContext present → skip both (repair mode)
- * - >2 primary + >8 project files → run both (standard path)
- * - >2 primary + <=8 project files → skip both (small project)
- * - 0 primary files edge case
  */
 
 import { describe, it, expect } from 'vitest';
@@ -32,19 +29,19 @@ const ERROR_CONTEXT: ErrorContext = {
 };
 
 describe('classifyModificationComplexity', () => {
-  it('skips both when primary file count is 0 (edge case)', () => {
+  it('runs both when primary file count is 0 (edge case)', () => {
     const result = classifyModificationComplexity(makeSlices(0), 10);
-    expect(result).toEqual({ skipIntent: true, skipPlanning: true });
+    expect(result).toEqual({ skipIntent: false, skipPlanning: false });
   });
 
-  it('skips both when primary file count is 1', () => {
+  it('runs both when primary file count is 1', () => {
     const result = classifyModificationComplexity(makeSlices(1), 10);
-    expect(result).toEqual({ skipIntent: true, skipPlanning: true });
+    expect(result).toEqual({ skipIntent: false, skipPlanning: false });
   });
 
-  it('skips both when primary file count is 2 (boundary)', () => {
+  it('runs both when primary file count is 2 (boundary)', () => {
     const result = classifyModificationComplexity(makeSlices(2), 10);
-    expect(result).toEqual({ skipIntent: true, skipPlanning: true });
+    expect(result).toEqual({ skipIntent: false, skipPlanning: false });
   });
 
   it('skips both when errorContext is present (repair mode)', () => {
@@ -67,19 +64,18 @@ describe('classifyModificationComplexity', () => {
     expect(result).toEqual({ skipIntent: false, skipPlanning: false });
   });
 
-  it('skips both when >2 primary files AND <=8 project files (small project)', () => {
+  it('still runs both when >2 primary files AND <=8 project files (small project)', () => {
     const result = classifyModificationComplexity(makeSlices(3), 8);
-    expect(result).toEqual({ skipIntent: true, skipPlanning: true });
+    expect(result).toEqual({ skipIntent: false, skipPlanning: false });
   });
 
-  it('skips both when >2 primary + exactly 8 project files (boundary)', () => {
+  it('still runs both when >2 primary + exactly 8 project files (boundary)', () => {
     const result = classifyModificationComplexity(makeSlices(4), 8);
-    expect(result).toEqual({ skipIntent: true, skipPlanning: true });
+    expect(result).toEqual({ skipIntent: false, skipPlanning: false });
   });
 
-  it('context slices do not affect primary count check', () => {
-    // 2 primary + 8 context = still <=2 primary → skip both
+  it('context slices do not change the standard run-both behavior', () => {
     const result = classifyModificationComplexity(makeSlices(2, 8), 20);
-    expect(result).toEqual({ skipIntent: true, skipPlanning: true });
+    expect(result).toEqual({ skipIntent: false, skipPlanning: false });
   });
 });

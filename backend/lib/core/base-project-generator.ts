@@ -12,6 +12,8 @@ import { PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt-utils';
 import { ProjectOutputSchema } from './schemas';
 import { processFiles } from './file-processor';
 import { createLogger } from '../logger';
+import { createAcceptanceGate } from './acceptance-gate';
+import { parseStructuredOutput } from '../ai/structured-output';
 
 const logger = createLogger('BaseProjectGenerator');
 
@@ -24,6 +26,7 @@ export abstract class BaseProjectGenerator {
     protected readonly promptProvider: IPromptProvider;
     protected readonly validationPipeline: ValidationPipeline;
     protected readonly buildValidator: BuildValidator;
+    protected readonly acceptanceGate = createAcceptanceGate();
     protected readonly maxBuildRetries = 3;
 
     constructor(bugfixProvider: AIProvider, promptProvider: IPromptProvider) {
@@ -91,13 +94,21 @@ export abstract class BaseProjectGenerator {
     ): Promise<Record<string, string>> {
         const contextLogger = requestId ? logger.withRequestId(requestId) : logger;
         let currentFiles = files;
-        let buildResult = this.buildValidator.validate(currentFiles);
+        let acceptanceResult = this.acceptanceGate.validate(currentFiles);
         let buildRetryCount = 0;
         const failureHistory: RepairAttempt[] = [];
 
-        while (!buildResult.valid && buildRetryCount < this.maxBuildRetries) {
-            const fixableErrors = buildResult.errors.filter(e => e.severity === 'fixable');
-            const unfixableErrors = buildResult.errors.filter(e => e.severity === 'unfixable');
+        while (!acceptanceResult.valid && buildRetryCount < this.maxBuildRetries) {
+            const buildErrors = acceptanceResult.buildErrors;
+            const fixableErrors = buildErrors.filter(e => e.severity === 'fixable');
+            const unfixableErrors = buildErrors.filter(e => e.severity === 'unfixable');
+
+            if (buildErrors.length === 0) {
+                contextLogger.warn('Acceptance gate failed before build-fix loop on non-build validation issues', {
+                    issues: acceptanceResult.issues,
+                });
+                break;
+            }
 
             if (unfixableErrors.length > 0 && fixableErrors.length === 0) {
                 contextLogger.warn('All build errors are unfixable, skipping retry loop', {
@@ -116,10 +127,10 @@ export abstract class BaseProjectGenerator {
             contextLogger.info('Build validation retry', {
                 attempt: buildRetryCount,
                 maxRetries: this.maxBuildRetries,
-                errors: buildResult.errors.map(e => e.message),
+                errors: buildErrors.map(e => e.message),
             });
 
-            const errorContext = this.buildValidator.formatErrorsForAI(buildResult.errors);
+            const errorContext = this.buildValidator.formatErrorsForAI(buildErrors);
 
             // Convert RepairAttempt[] to string[] for getBugfixSystemPrompt
             const failureHistoryStrings = failureHistory.map(a =>
@@ -134,7 +145,7 @@ export abstract class BaseProjectGenerator {
             contextLogger.info('Sending build fix request to bugfix provider', {
                 attempt: buildRetryCount,
                 systemInstructionLength: fixSystemInstruction.length,
-                errorCount: buildResult.errors.length,
+                errorCount: buildErrors.length,
                 hasFailureHistory: failureHistory.length > 0,
             });
 
@@ -158,55 +169,55 @@ export abstract class BaseProjectGenerator {
                 failureHistory.push({
                     attempt: buildRetryCount,
                     error: fixResponse.error || 'AI failed to generate fix',
-                    strategy: `AI generation failed when asked to fix: ${buildResult.errors.map(e => e.message).join('; ')}`,
+                    strategy: `AI generation failed when asked to fix: ${buildErrors.map(e => e.message).join('; ')}`,
                     timestamp: new Date().toISOString(),
                 });
                 continue;
             }
 
             try {
-                const parsedData = JSON.parse(fixResponse.content);
-                const zodResult = ProjectOutputSchema.safeParse(parsedData);
-
-                if (!zodResult.success) {
-                    contextLogger.error('Zod validation failed on fix response', {
-                        errors: zodResult.error.issues,
+                const parsedResult = parseStructuredOutput(fixResponse.content, ProjectOutputSchema, 'ProjectOutput');
+                if (!parsedResult.success) {
+                    contextLogger.error('Structured parsing failed on fix response', {
+                        error: parsedResult.error,
                     });
                     failureHistory.push({
                         attempt: buildRetryCount,
-                        error: `Schema validation failed: ${zodResult.error.message}`,
+                        error: parsedResult.error,
                         strategy: 'Attempted to fix build errors but returned invalid schema',
                         timestamp: new Date().toISOString(),
                     });
                     continue;
                 }
 
-                const fixedOutput = zodResult.data;
+                const fixedOutput = parsedResult.data;
                 const processResult = await processFiles(fixedOutput.files || [], { addFrontendPrefix: false });
                 const fixedFiles = processResult.files;
 
-                const revalidation = this.validationPipeline.validate(fixedFiles);
-                if (!revalidation.valid) {
-                    contextLogger.error('Fixed code failed syntax validation');
+                const revalidation = this.acceptanceGate.validate(fixedFiles);
+                if (!revalidation.valid || !revalidation.sanitizedOutput) {
+                    contextLogger.error('Fixed code failed acceptance validation', {
+                        issues: revalidation.issues,
+                    });
                     failureHistory.push({
                         attempt: buildRetryCount,
-                        error: `Syntax validation failed: ${revalidation.errors.map(e => e.message).join(', ')}`,
-                        strategy: 'Attempted to fix build errors but introduced syntax errors',
+                        error: `Acceptance validation failed: ${revalidation.issues.map(e => e.message).join(', ')}`,
+                        strategy: 'Attempted to fix build errors but returned code that still failed acceptance',
                         timestamp: new Date().toISOString(),
                     });
                     continue;
                 }
 
-                currentFiles = revalidation.sanitizedOutput!;
-                const previousErrors = buildResult.errors.map(e => e.message).join('; ');
-                buildResult = this.buildValidator.validate(currentFiles);
+                currentFiles = revalidation.sanitizedOutput;
+                const previousErrors = buildErrors.map(e => e.message).join('; ');
+                acceptanceResult = this.acceptanceGate.validate(currentFiles);
 
-                if (buildResult.valid) {
+                if (acceptanceResult.valid) {
                     contextLogger.info('Build errors fixed successfully');
                 } else {
                     failureHistory.push({
                         attempt: buildRetryCount,
-                        error: buildResult.errors.map(e => e.message).join('; '),
+                        error: acceptanceResult.issues.map(e => e.message).join('; '),
                         strategy: `Tried to fix: ${previousErrors}`,
                         timestamp: new Date().toISOString(),
                     });
@@ -216,16 +227,16 @@ export abstract class BaseProjectGenerator {
                 failureHistory.push({
                     attempt: buildRetryCount,
                     error: parseError instanceof Error ? parseError.message : 'Unknown parsing error',
-                    strategy: `AI returned unparseable response when asked to fix: ${buildResult.errors.map(e => e.message).join('; ')}`,
+                    strategy: `AI returned unparseable response when asked to fix: ${buildErrors.map(e => e.message).join('; ')}`,
                     timestamp: new Date().toISOString(),
                 });
                 continue;
             }
         }
 
-        if (!buildResult.valid) {
+        if (!acceptanceResult.valid) {
             contextLogger.warn('Build warnings after retries', {
-                errors: buildResult.errors.map(e => ({ message: e.message, file: e.file })),
+                errors: acceptanceResult.issues,
                 totalAttempts: buildRetryCount,
             });
         }

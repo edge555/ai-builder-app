@@ -9,7 +9,8 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "eval": "vitest run lib/core/__tests__/eval/"
+    "eval": "vitest run lib/core/__tests__/eval/",
+    "eval:live": "node -e \"process.env.RUN_LIVE_EVAL='true'; const { spawnSync } = require('child_process'); const result = spawnSync('npx vitest run lib/core/__tests__/eval/live-eval.test.ts', { stdio: 'inherit', env: process.env, shell: true }); process.exit(result.status ?? 1);\""
   },
   "dependencies": {
     "@ai-app-builder/shared": "*",

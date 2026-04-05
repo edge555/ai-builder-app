@@ -6,7 +6,7 @@ import type { GenerateProjectResponse } from '@ai-app-builder/shared/types';
 export interface StreamErrorData {
     error: string;
     errorCode?: string;
-    errorType?: 'timeout' | 'rate_limit' | 'api_error' | 'cancelled' | 'unknown';
+    errorType?: 'timeout' | 'rate_limit' | 'api_error' | 'cancelled' | 'unknown' | 'ai_output' | 'validation' | 'state';
     partialContent?: string;
 }
 
@@ -173,7 +173,7 @@ export async function parseSSEStream(
                                 errorType: data.errorType,
                                 partialContent: data.partialContent,
                             };
-                            result = { success: false, error: data.error };
+                            result = { success: false, error: data.error, errorType: data.errorType };
                             handlers.onError?.(errorData);
                             break;
                     }

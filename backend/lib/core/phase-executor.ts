@@ -289,20 +289,7 @@ DO NOT repeat files you have already generated.`;
         });
 
         if (attempt === maxAttempts) {
-            // Hard fail vs soft fail decision
-            if (layer === 'scaffold') {
-                throw new Error(`Scaffold phase critical failure: ${lastErrorFeedback}`);
-            } else {
-                // Soft fail: return whatever we salvaged
-                logger.warn(`Returning partial results for ${layer} phase after max retries`, {
-                  layer,
-                  salvaged: Array.from(generatedFiles.keys()),
-                });
-                return {
-                    files: Array.from(generatedFiles.values()),
-                    warnings: [`Phase failed but returning partial output: ${lastErrorFeedback}`],
-                };
-            }
+            throw new Error(`${layer} phase failed after ${maxAttempts} attempts: ${lastErrorFeedback}`);
         }
 
         attempt++;

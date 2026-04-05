@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.0] - 2026-04-05
+
+### Added
+- **AcceptanceGate** — new abstraction (`backend/lib/core/acceptance-gate.ts`) that consolidates `ValidationPipeline.validate()` + `BuildValidator.validateAll()` + `BuildValidator.validateCrossFileReferences()` into a single `validate(files): AcceptanceResult` call. All generation and repair paths now flow through a single acceptance boundary.
+- **Eval harness** — deterministic benchmark suite (`backend/lib/core/__tests__/eval/`) with fixtures, eval cases, and a harness that runs generation and modification scenarios against the acceptance gate without live AI calls. Covers generation pattern matching, cross-file reference checks, and modification scope isolation.
+- **Live eval suite** — `eval:live` backend script exercises the full generation pipeline against real AI providers, reporting acceptance-gate pass rates and timing metrics.
+- **Planning retry** — `GenerationPipeline.resolveArchitecturePlan()` retries planning once on schema parse failure before propagating the error. The retry prompt includes a strict "JSON only" instruction to recover from verbose AI responses.
+- **Phase file-count enforcement** — multi-phase generation now throws immediately if a phase returns fewer files than planned, preventing silent partial output from reaching the acceptance gate.
+- **`parseStructuredOutput` utility** — centralized JSON extraction + Zod validation with consistent error labels (`'${label} parse failed'`, `'${label} schema mismatch'`).
+- **`state` error type** — new frontend error type for project-state inconsistency, with user-facing message and recovery suggestion.
+- **Hybrid storage for generation saves** — `useSubmitPrompt` now writes through `hybridStorageService` (local + cloud) instead of the local-only `storageService`, so projects appear in the gallery immediately after generation for authenticated users.
+- **Gallery re-sync on return** — `AppInner` re-fetches project metadata whenever the user navigates back to `/`, ensuring the gallery reflects projects saved during workspace sessions.
+- **`HybridStorageService.getAllProjectMetadata` merge** — authenticated users now see both local and cloud projects merged by ID, newest-first, preventing cloud-sync lag from hiding unsyced local projects.
+
+### Changed
+- **All phase failures are now hard-fail** — previously non-scaffold phases recorded a warning and continued; they now throw immediately. A partial multi-phase output is no longer accepted.
+- **Planning fallback removed** — heuristic plan fallback on planning failure has been removed. Planning failures now propagate as errors (with one retry).
+- **`errorType` propagated through SSE** — `parseSSEStream` now includes `errorType` in the returned result object, and `useSubmitPrompt` prefers the server-supplied `errorType` over client-side detection.
+- **`DiagnosticRepairEngine` uses `AcceptanceGate`** — repair engine receives an `AcceptanceGate` via `RepairRequest` instead of calling `buildValidator.validate()` directly.
+
+### Fixed
+- **Test suite alignment** — 22 in-branch test failures resolved: updated mocks to match `AcceptanceGate` interface (`validateAll` / `validateCrossFileReferences`), fixed `processFiles` mock shape, corrected phase-executor error message format, and aligned `errorType` assertion.
+
 ## [1.6.0] - 2026-04-04
 
 ### Security

@@ -101,6 +101,20 @@ describe('hasDeterministicFix', () => {
 
 // ─── Task 2.2: Batched Repair Engine ───────────────────────────────────────
 
+// Helper to build AcceptanceResult-shaped objects for mockAcceptanceGate
+function makeAcceptanceSuccess() {
+  return { valid: true, buildErrors: [], issues: [], validationErrors: [], sanitizedOutput: {} };
+}
+function makeAcceptanceFailure(errors: BuildError[]) {
+  return {
+    valid: false,
+    buildErrors: errors,
+    issues: errors.map(e => ({ message: e.message, file: e.file })),
+    validationErrors: [],
+    sanitizedOutput: {},
+  };
+}
+
 describe('DiagnosticRepairEngine', () => {
   let engine: DiagnosticRepairEngine;
   let mockProjectState: ProjectState;
@@ -110,6 +124,7 @@ describe('DiagnosticRepairEngine', () => {
     formatErrorsForAI: ReturnType<typeof vi.fn>;
     validateCrossFileReferences: ReturnType<typeof vi.fn>;
   };
+  let mockAcceptanceGate: { validate: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -135,6 +150,10 @@ describe('DiagnosticRepairEngine', () => {
       validateCrossFileReferences: vi.fn().mockReturnValue([]),
     };
 
+    mockAcceptanceGate = {
+      validate: vi.fn().mockReturnValue(makeAcceptanceSuccess()),
+    };
+
     mockAIProvider = {
       generate: vi.fn(),
       generateStreaming: vi.fn(),
@@ -142,7 +161,7 @@ describe('DiagnosticRepairEngine', () => {
   });
 
   it('should return success when no errors exist', async () => {
-    mockBuildValidator.validate.mockReturnValue({ valid: true, errors: [] });
+    // mockAcceptanceGate.validate default is already makeAcceptanceSuccess()
 
     const result = await engine.repair({
       projectState: mockProjectState,
@@ -151,6 +170,7 @@ describe('DiagnosticRepairEngine', () => {
       shouldIncludeDesignSystem: false,
       aiProvider: mockAIProvider,
       buildValidator: mockBuildValidator as any,
+      acceptanceGate: mockAcceptanceGate as any,
     });
 
     expect(result.success).toBe(true);
@@ -159,17 +179,14 @@ describe('DiagnosticRepairEngine', () => {
   });
 
   it('should fix errors deterministically without AI calls', async () => {
-    // First validate: has errors
-    mockBuildValidator.validate
-      .mockReturnValueOnce({
-        valid: false,
-        errors: [makeError({
-          type: 'missing_dependency',
-          message: "Package 'zustand' is imported but not in package.json",
-        })],
-      })
-      // After deterministic fix: clean
-      .mockReturnValueOnce({ valid: true, errors: [] });
+    const depError = makeError({
+      type: 'missing_dependency',
+      message: "Package 'zustand' is imported but not in package.json",
+    });
+    // First validate: has errors; after deterministic fix: clean
+    mockAcceptanceGate.validate
+      .mockReturnValueOnce(makeAcceptanceFailure([depError]))
+      .mockReturnValueOnce(makeAcceptanceSuccess());
 
     const result = await engine.repair({
       projectState: mockProjectState,
@@ -180,6 +197,7 @@ describe('DiagnosticRepairEngine', () => {
       shouldIncludeDesignSystem: false,
       aiProvider: mockAIProvider,
       buildValidator: mockBuildValidator as any,
+      acceptanceGate: mockAcceptanceGate as any,
     });
 
     expect(result.success).toBe(true);
@@ -192,17 +210,11 @@ describe('DiagnosticRepairEngine', () => {
     // "Unexpected token" doesn't match deterministic fix patterns, so
     // tryDeterministicFixes returns fixed=[] and no re-validate happens.
     // Flow: initial validate (errors) → targeted AI → validate (clean)
-    mockBuildValidator.validate
-      .mockReturnValueOnce({
-        valid: false,
-        errors: [makeError({
-          type: 'syntax_error',
-          message: 'Unexpected token',
-          severity: 'fixable',
-        })],
-      })
+    const syntaxErr = makeError({ type: 'syntax_error', message: 'Unexpected token', severity: 'fixable' });
+    mockAcceptanceGate.validate
+      .mockReturnValueOnce(makeAcceptanceFailure([syntaxErr]))
       // After targeted AI: clean
-      .mockReturnValueOnce({ valid: true, errors: [] });
+      .mockReturnValueOnce(makeAcceptanceSuccess());
 
     mockAIProvider.generate = vi.fn().mockResolvedValue({
       success: true,
@@ -222,6 +234,7 @@ describe('DiagnosticRepairEngine', () => {
       shouldIncludeDesignSystem: false,
       aiProvider: mockAIProvider,
       buildValidator: mockBuildValidator as any,
+      acceptanceGate: mockAcceptanceGate as any,
     });
 
     expect(result.success).toBe(true);
@@ -244,10 +257,10 @@ describe('DiagnosticRepairEngine', () => {
 
     // "Complex syntax issue" doesn't match deterministic fix patterns
     // Flow: initial (errors) → targeted AI validate (errors) → broad AI validate (clean)
-    mockBuildValidator.validate
-      .mockReturnValueOnce({ valid: false, errors: [persistentError] })
-      .mockReturnValueOnce({ valid: false, errors: [persistentError] })
-      .mockReturnValueOnce({ valid: true, errors: [] });
+    mockAcceptanceGate.validate
+      .mockReturnValueOnce(makeAcceptanceFailure([persistentError]))
+      .mockReturnValueOnce(makeAcceptanceFailure([persistentError]))
+      .mockReturnValueOnce(makeAcceptanceSuccess());
 
     // Targeted AI: returns something but doesn't fix it
     // Broad AI: fixes it
@@ -280,6 +293,7 @@ describe('DiagnosticRepairEngine', () => {
       shouldIncludeDesignSystem: false,
       aiProvider: mockAIProvider,
       buildValidator: mockBuildValidator as any,
+      acceptanceGate: mockAcceptanceGate as any,
     });
 
     expect(result.success).toBe(true);
@@ -300,10 +314,7 @@ describe('DiagnosticRepairEngine', () => {
       file: 'src/App.tsx',
     });
 
-    mockBuildValidator.validate.mockReturnValue({
-      valid: false,
-      errors: [persistentError],
-    });
+    mockAcceptanceGate.validate.mockReturnValue(makeAcceptanceFailure([persistentError]));
 
     // Both AI calls fail to fix
     mockAIProvider.generate = vi.fn().mockResolvedValue({
@@ -331,6 +342,7 @@ describe('DiagnosticRepairEngine', () => {
       shouldIncludeDesignSystem: false,
       aiProvider: mockAIProvider,
       buildValidator: mockBuildValidator as any,
+      acceptanceGate: mockAcceptanceGate as any,
       checkpoint,
     });
 
@@ -347,10 +359,9 @@ describe('DiagnosticRepairEngine', () => {
   });
 
   it('should handle AI returning invalid JSON gracefully', async () => {
-    mockBuildValidator.validate.mockReturnValue({
-      valid: false,
-      errors: [makeError({ type: 'syntax_error', message: 'error', severity: 'fixable' })],
-    });
+    mockAcceptanceGate.validate.mockReturnValue(
+      makeAcceptanceFailure([makeError({ type: 'syntax_error', message: 'error', severity: 'fixable' })])
+    );
 
     mockAIProvider.generate = vi.fn().mockResolvedValue({
       success: true,
@@ -364,6 +375,7 @@ describe('DiagnosticRepairEngine', () => {
       shouldIncludeDesignSystem: false,
       aiProvider: mockAIProvider,
       buildValidator: mockBuildValidator as any,
+      acceptanceGate: mockAcceptanceGate as any,
     });
 
     expect(result.success).toBe(false);
@@ -372,10 +384,9 @@ describe('DiagnosticRepairEngine', () => {
   });
 
   it('should handle AI call failure gracefully', async () => {
-    mockBuildValidator.validate.mockReturnValue({
-      valid: false,
-      errors: [makeError({ type: 'syntax_error', message: 'error', severity: 'fixable' })],
-    });
+    mockAcceptanceGate.validate.mockReturnValue(
+      makeAcceptanceFailure([makeError({ type: 'syntax_error', message: 'error', severity: 'fixable' })])
+    );
 
     mockAIProvider.generate = vi.fn().mockResolvedValue({
       success: false,
@@ -389,6 +400,7 @@ describe('DiagnosticRepairEngine', () => {
       shouldIncludeDesignSystem: false,
       aiProvider: mockAIProvider,
       buildValidator: mockBuildValidator as any,
+      acceptanceGate: mockAcceptanceGate as any,
     });
 
     expect(result.success).toBe(false);
@@ -404,9 +416,9 @@ describe('DiagnosticRepairEngine', () => {
 
     // "Unexpected token" doesn't match deterministic fix patterns
     // Flow: initial (errors) → targeted AI → validate (clean)
-    mockBuildValidator.validate
-      .mockReturnValueOnce({ valid: false, errors })
-      .mockReturnValueOnce({ valid: true, errors: [] });
+    mockAcceptanceGate.validate
+      .mockReturnValueOnce(makeAcceptanceFailure(errors))
+      .mockReturnValueOnce(makeAcceptanceSuccess());
 
     mockBuildValidator.formatErrorsForAI.mockReturnValue(
       'ERROR: Unexpected token in App\n  File: src/App.tsx\nERROR: Unexpected token in Page\n  File: src/Page.tsx\n'
@@ -432,6 +444,7 @@ describe('DiagnosticRepairEngine', () => {
       shouldIncludeDesignSystem: false,
       aiProvider: mockAIProvider,
       buildValidator: mockBuildValidator as any,
+      acceptanceGate: mockAcceptanceGate as any,
     });
 
     // formatErrorsForAI should have been called with ALL remaining errors (batched)

@@ -17,7 +17,7 @@
  * @requires @/utils/logger - Structured logging
  */
 import { lazy, Suspense, useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 
 import { PageSkeleton } from '@/components/PageSkeleton/PageSkeleton';
 import { storageService, type ProjectMetadata } from '@/services/storage';
@@ -72,6 +72,7 @@ function App() {
  * Wires auth state changes to hybridStorageService and manages the project list.
  */
 function AppInner() {
+  const location = useLocation();
   const { user, isLoading: isAuthLoading } = useAuthState();
   const [isInitializing, setIsInitializing] = useState(true);
   const [savedProjects, setSavedProjects] = useState<ProjectMetadata[]>([]);
@@ -136,6 +137,12 @@ function AppInner() {
       appLogger.error('Failed to refresh project list', { error });
     }
   };
+
+  // Re-sync gallery state whenever the user returns to the welcome page.
+  useEffect(() => {
+    if (isInitializing || isAuthLoading || location.pathname !== '/') return;
+    refreshProjectList();
+  }, [location.pathname, user?.id, isInitializing, isAuthLoading]);
 
   if (isInitializing) {
     return (

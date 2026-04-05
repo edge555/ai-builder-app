@@ -16,6 +16,7 @@ import { processFiles } from './file-processor';
 import { ProjectOutputSchema } from './schemas';
 import { isSafePath } from '../utils';
 import { BaseProjectGenerator } from './base-project-generator';
+import { parseStructuredOutput } from '../ai/structured-output';
 
 const logger = createLogger('ProjectGenerator');
 
@@ -84,34 +85,19 @@ export class ProjectGenerator extends BaseProjectGenerator {
       };
     }
 
-    let parsedData: unknown;
-    try {
-      parsedData = JSON.parse(response.content);
-    } catch (e) {
-      logger.error('Failed to parse AI output as JSON', {
-        error: e instanceof Error ? e.message : String(e),
+    const parsedResult = parseStructuredOutput(response.content, ProjectOutputSchema, 'ProjectOutput');
+    if (!parsedResult.success) {
+      logger.error('Failed to parse AI output as structured project JSON', {
+        error: parsedResult.error,
         content: response.content.substring(0, 500),
       });
       return {
         success: false,
-        error: `Failed to parse AI response: ${e instanceof Error ? e.message : 'Invalid JSON'}`,
+        error: parsedResult.error,
       };
     }
 
-    const zodResult = ProjectOutputSchema.safeParse(parsedData);
-
-    if (!zodResult.success) {
-      logger.error('Zod validation failed', {
-        errors: zodResult.error.issues,
-        content: response.content.substring(0, 500),
-      });
-      return {
-        success: false,
-        error: `Invalid AI response structure: ${zodResult.error.message}`,
-      };
-    }
-
-    const parsedOutput = zodResult.data;
+    const parsedOutput = parsedResult.data;
     const files = parsedOutput.files;
 
     for (const file of files) {
@@ -135,18 +121,18 @@ export class ProjectGenerator extends BaseProjectGenerator {
     }
 
     logger.debug('Validating files', { files: Object.keys(prefixedFiles) });
-    const validationResult = this.validationPipeline.validate(prefixedFiles);
-    if (!validationResult.valid) {
-      logger.error('Validation errors', { errors: validationResult.errors });
+    const acceptanceResult = this.acceptanceGate.validate(prefixedFiles);
+    if (!acceptanceResult.valid || !acceptanceResult.sanitizedOutput) {
+      logger.error('Acceptance errors', { issues: acceptanceResult.issues });
       return {
         success: false,
-        error: 'AI output failed validation',
-        validationErrors: validationResult.errors,
+        error: 'AI output failed acceptance',
+        validationErrors: acceptanceResult.validationErrors,
       };
     }
 
     const finalFiles = await this.runBuildFixLoop(
-      validationResult.sanitizedOutput!,
+      acceptanceResult.sanitizedOutput,
       description
     );
 
