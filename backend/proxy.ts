@@ -26,7 +26,7 @@ function getCorsOrigin(request: NextRequest): string {
   return allowed.includes(origin) ? origin : allowed[0];
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const corsOrigin = getCorsOrigin(request);
   const corsHeadersMap = { 'Access-Control-Allow-Origin': corsOrigin };
 

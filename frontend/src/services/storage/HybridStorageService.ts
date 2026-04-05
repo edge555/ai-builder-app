@@ -13,6 +13,11 @@ const logger = createLogger('HybridStorage');
 class HybridStorageService {
     private userId: string | null = null;
 
+    private getUpdatedAtTime(project: ProjectMetadata): number {
+        const timestamp = new Date(project.updatedAt).getTime();
+        return Number.isFinite(timestamp) ? timestamp : 0;
+    }
+
     private get isAuthenticated(): boolean {
         return this.userId !== null;
     }
@@ -54,7 +59,24 @@ class HybridStorageService {
     async getAllProjectMetadata(): Promise<ProjectMetadata[]> {
         if (this.isAuthenticated) {
             try {
-                return await cloudStorageService.getAllProjectMetadata();
+                const [cloudProjects, localProjects] = await Promise.all([
+                    cloudStorageService.getAllProjectMetadata(),
+                    storageService.getAllProjectMetadata(),
+                ]);
+
+                // Preserve local projects for authenticated users when cloud state
+                // is still empty or only partially synced.
+                const merged = new Map<string, ProjectMetadata>();
+                for (const project of [...localProjects, ...cloudProjects]) {
+                    const existing = merged.get(project.id);
+                    if (!existing || this.getUpdatedAtTime(project) >= this.getUpdatedAtTime(existing)) {
+                        merged.set(project.id, project);
+                    }
+                }
+
+                return Array.from(merged.values()).sort(
+                    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+                );
             } catch (error) {
                 logger.error('Cloud metadata fetch failed, falling back to local', { error });
             }

@@ -20,6 +20,18 @@ import type { PipelineCallbacks as GenerationCallbacks, PhaseProgressData, Phase
 
 const logger = createLogger('StreamingGenerator');
 
+const APP_IMPORT_PATTERN = /import\s+App\s+from\s+['"]\.\/App(?:\.[^'"]+)?['"]/;
+const INDEX_CSS_IMPORT_PATTERN = /import\s+['"]\.\/index\.css['"]/;
+const CREATE_ROOT_PATTERN = /(?:ReactDOM\.)?createRoot\s*\(/;
+
+function hasValidMainEntrypoint(content: string): boolean {
+  return (
+    APP_IMPORT_PATTERN.test(content) &&
+    INDEX_CSS_IMPORT_PATTERN.test(content) &&
+    CREATE_ROOT_PATTERN.test(content)
+  );
+}
+
 /**
  * Callback for streaming events.
  */
@@ -168,7 +180,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
 
     // Safety net: if package.json was not generated, inject a minimal default.
     // The scaffold prompt already mandates it, but AI can still omit it.
-    const hasPkgJson = pipelineResult.generatedFiles.some(f => f.path === 'package.json');
+    const hasPkgJson = pipelineResult.generatedFiles.some((f) => f.path === 'package.json');
     if (!hasPkgJson) {
       const plannedDeps = pipelineResult.architecturePlan?.dependencies ?? ['react', 'react-dom'];
       const dependencies: Record<string, string> = {};
@@ -193,11 +205,12 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     // Safety net: if main.tsx is missing or is a scaffold placeholder, inject the canonical entry point.
     // The scaffold prompt mandates the correct content, but AI may still generate a placeholder.
     const mainTsxPath = pipelineResult.generatedFiles.find(
-      f => f.path === 'src/main.tsx' || f.path === 'main.tsx'
+      (f) => f.path === 'src/main.tsx' || f.path === 'main.tsx'
     );
     const mainTsxContent = mainTsxPath?.content ?? '';
-    const isPlaceholder = !mainTsxContent.includes('import App') || mainTsxContent.includes('Subsequent phases');
-    if (isPlaceholder) {
+    const mainIsInvalid = !mainTsxPath || !hasValidMainEntrypoint(mainTsxContent);
+    const isPlaceholder = mainTsxContent.includes('Subsequent phases');
+    if (mainIsInvalid || isPlaceholder) {
       const canonicalMain = `import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';

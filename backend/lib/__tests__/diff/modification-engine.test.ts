@@ -200,6 +200,35 @@ describe('ModificationEngine', () => {
       expect(result.changeSummary?.filesAdded).toBe(1);
     });
 
+    it('keeps diagnostic repair reachable for fixable build errors', async () => {
+      const appContent = 'export default function App() { return <div />; }';
+      const projectState = createProjectState({ 'src/App.tsx': appContent });
+      const finalFiles = [{ path: 'src/App.tsx', content: appContent }];
+
+      mockPipeline.runModificationPipeline.mockResolvedValue(makePipelineResult(finalFiles));
+      mockValidationPipeline.validate.mockReturnValue({
+        valid: true,
+        sanitizedOutput: { 'src/App.tsx': appContent },
+        errors: [],
+      });
+      mockBuildValidator.validateAll.mockImplementation(() => {
+        throw new Error('build validation should not run before repair');
+      });
+      mockRepairEngine.repair.mockResolvedValue({
+        updatedFiles: { 'src/App.tsx': `${appContent}\n// repaired` },
+        success: true,
+        partialSuccess: false,
+        rolledBackFiles: [],
+        repairLevel: 'deterministic',
+        totalAICalls: 0,
+      });
+
+      const result = await engine.modifyProject(projectState, 'Add an import that needs repair');
+
+      expect(result.success).toBe(true);
+      expect(mockRepairEngine.repair).toHaveBeenCalledTimes(1);
+    });
+
     it('should handle deleting files', async () => {
       const appContent = 'export default function App() { return <div />; }';
       const projectState = createProjectState({
