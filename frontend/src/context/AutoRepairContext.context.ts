@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react';
 
 /**
  * Auto-repair context value.
- * Coordinates between PreviewErrorContext and GenerationContext for unified auto-repair.
+ * Coordinates preview error detection with the generation repair action.
  */
 export interface AutoRepairContextValue {
     /**
