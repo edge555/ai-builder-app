@@ -26,14 +26,6 @@
 - **Context:** Builds on unified pipeline. Session stores conversation + tool registry per project.
 - **Depends on:** Unified pipeline, WebContainers (tools need execution environment)
 
-### GenerationContext Decomposition [P1, M]
-- **What:** Split the 701-line `GenerationContext.tsx` into 3 layers: `StreamingContext` (SSE transport + connection), `GenerationApiService` (API calls + retry, plain class not React context), `GenerationUiContext` (thin state for UI rendering).
-- **Why:** GenerationContext handles 5 responsibilities in one file. Every new feature (agent sessions, tool use) will make it larger. The decomposition aligns with the agentic architecture — StreamingContext becomes the transport layer for agent sessions.
-- **Pros:** Reduces re-render blast radius, testable service layer, cleaner separation, scales with features.
-- **Cons:** Requires updating all consumers (ChatInterface, AppLayout, AutoRepairProvider).
-- **Context:** Currently the largest frontend file. File: `frontend/src/context/GenerationContext.tsx`.
-- **Depends on:** None (can be done independently)
-
 ## Test Coverage Gaps
 
 ### Incremental JSON Parser Test Suite [P1, M]
@@ -112,6 +104,10 @@
 - **Depends on:** Blank Canvas Admin v1 shipped
 
 ## Completed
+
+### GenerationContext Decomposition [v1.8.1 — 2026-04-07]
+- **What was done:** Split the 701-line `GenerationContext.tsx` into `generationApiService.ts` (API calls + streaming), `repairService.ts` (auto-repair retry logic), `streamingTransport.ts` (SSE lifecycle + snapshot normalization), and `types.ts`. Provider reduced to ~185 lines owning only UI state. Two bugs fixed in the process: unconditional `onStreamingChange(false)` race and repair dedup blocking all retries after the first. Unit tests added for all three service modules.
+- **Completed:** v1.8.1 (2026-04-07)
 
 ### Incremental JSON Parser — SSE Warning Events [v1.8.0 — 2026-04-06]
 - **What was done:** Added `ParseWarning` type, duplicate file detection (`seenPaths`), and invalid object detection to `incremental-json-parser.ts`. `streaming-generator.ts` now forwards pipeline warnings via `callbacks.onWarning`. Partial completion — comprehensive parser-specific test file still TODO.
