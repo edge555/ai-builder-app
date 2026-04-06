@@ -6,10 +6,10 @@ import { createBuildValidator } from './build-validator';
 
 const logger = createLogger('AcceptanceGate');
 const PLACEHOLDER_PATTERNS = [
-  /subsequent phases/i,
+  /\/\/.*subsequent phases/i,
   /todo:\s*implement/i,
   /replace this stub/i,
-  /implement this file/i,
+  /\/\/.*implement this file/i,
 ];
 
 export interface AcceptanceIssue {

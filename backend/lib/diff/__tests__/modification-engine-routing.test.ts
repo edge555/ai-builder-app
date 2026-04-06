@@ -108,7 +108,7 @@ describe('ModificationEngine Routing', () => {
     expect(pipelineMock.runOrderedModificationPipeline).not.toHaveBeenCalled();
   });
 
-  it('rejects scoped edits that touch unexpected files', async () => {
+  it('degrades scoped edits that touch unexpected files to full mode (no longer hard-rejects)', async () => {
     const projectState: ProjectState = {
       files: {
         'src/App.tsx': 'old app',
@@ -133,8 +133,9 @@ describe('ModificationEngine Routing', () => {
 
     const result = await engine.modifyProject(projectState, 'change the app heading');
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('unexpected files');
+    // Scoped mode detects unexpected file → retries with _forceFullRouting=true → succeeds
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
   });
 
   it('does NOT reject unexpected files when routing mode is full', async () => {
@@ -165,6 +166,7 @@ describe('ModificationEngine Routing', () => {
     );
 
     // full mode: enforceTargetedChanges=false → unexpected files are allowed
+    expect(result.success).toBe(true);
     expect(result.error ?? '').not.toContain('unexpected files');
   });
 

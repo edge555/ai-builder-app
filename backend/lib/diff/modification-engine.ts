@@ -65,7 +65,7 @@ export type ModificationPhase =
 
 export type OnProgressCallback = (phase: ModificationPhase, label: string) => void;
 
-interface ModificationRoutingDecision {
+export interface ModificationRoutingDecision {
   skipIntent: boolean;
   skipPlanning: boolean;
   preferHeuristicSelection: boolean;
@@ -111,6 +111,7 @@ export class ModificationEngine {
       onProgress?: OnProgressCallback;
       onPipelineStage?: (data: { stage: PipelineStage; label: string; status: 'start' | 'complete' | 'degraded' }) => void;
       conversationHistory?: ConversationTurn[];
+      _forceFullRouting?: boolean;
     }
   ): Promise<ModificationResult> {
     if (!prompt || prompt.trim() === '') {
@@ -168,12 +169,9 @@ export class ModificationEngine {
       });
 
       // Step 2.5: Classify complexity to decide whether to run intent/planning stages
-      const routingDecision = classifyModificationComplexity(
-        slices,
-        fileCount,
-        options?.errorContext,
-        prompt
-      );
+      const routingDecision = options?._forceFullRouting
+        ? { skipIntent: false, skipPlanning: false, preferHeuristicSelection: false, enforceTargetedChanges: false, mode: 'full' as const }
+        : classifyModificationComplexity(slices, fileCount, options?.errorContext, prompt);
       const explicitOverride = options?.shouldSkipPlanning === true;
       const skipPlanning = explicitOverride || routingDecision.skipPlanning;
       const skipIntent = routingDecision.skipIntent;
@@ -184,6 +182,7 @@ export class ModificationEngine {
         preferHeuristicSelection: selectionStrategy.preferHeuristicSelection,
         enforceTargetedChanges: routingDecision.enforceTargetedChanges,
         explicitSkipPlanning: explicitOverride,
+        forcedFullRouting: options?._forceFullRouting ?? false,
       });
 
       // Step 3: Build pipeline callbacks
@@ -262,15 +261,12 @@ export class ModificationEngine {
       if (routingDecision.enforceTargetedChanges) {
         const unexpectedFiles = this.findUnexpectedChangedFiles(changedPaths, slices, prompt, projectState.files);
         if (unexpectedFiles.length > 0) {
-          contextLogger.warn('Rejecting scoped modification that changed unexpected files', {
+          contextLogger.warn('Scoped modification touched unexpected files — degrading to full routing', {
             mode: routingDecision.mode,
             changedPaths,
             unexpectedFiles,
           });
-          return {
-            success: false,
-            error: `Scoped modification touched unexpected files: ${unexpectedFiles.join(', ')}`,
-          };
+          return this.modifyProject(projectState, prompt, { ...options, _forceFullRouting: true }, onProgress);
         }
       }
 

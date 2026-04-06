@@ -28,12 +28,22 @@ describe('AcceptanceGate', () => {
     // Note: placeholder text in string literals to avoid the forbidden `// TODO` pattern validator
     { desc: 'todo: implement', content: 'export default function App() { return "todo: implement this"; }' },
     { desc: 'replace this stub', content: 'export default function App() { return "replace this stub"; }' },
-    { desc: 'implement this file', content: 'export default function App() { return "implement this file"; }' },
+    // implement this file pattern is comment-anchored — must appear after //
+    { desc: 'implement this file (comment)', content: 'export default function App() {\n  // implement this file\n  return null;\n}' },
   ])('rejects "$desc" placeholder in src/App.tsx', ({ content }) => {
     const gate = new AcceptanceGate();
     const result = gate.validate({ 'src/App.tsx': content, 'package.json': '{"name":"app","dependencies":{}}' });
     expect(result.valid).toBe(false);
     expect(result.issues).toContainEqual(expect.objectContaining({ type: 'placeholder_content', file: 'src/App.tsx' }));
+  });
+
+  it('does not reject "implement this file" in a string literal (not a comment)', () => {
+    const gate = new AcceptanceGate();
+    const result = gate.validate({
+      'src/App.tsx': 'export default function App() { return <p>Use this to implement this file-based routing</p>; }',
+      'package.json': '{"name":"app","description":"implement this file-based routing","dependencies":{}}',
+    });
+    expect(result.valid).toBe(true);
   });
 
   it('does not reject placeholder text in non-critical files', () => {
@@ -44,6 +54,36 @@ describe('AcceptanceGate', () => {
       'package.json': '{"name":"app","dependencies":{}}',
     });
     expect(result.valid).toBe(true);
+  });
+
+  describe('lightValidate', () => {
+    it('passes structurally valid files', () => {
+      const gate = new AcceptanceGate();
+      const result = gate.lightValidate({
+        'src/App.tsx': 'export default function App() { return <div>hello</div>; }',
+        'package.json': '{"name":"app","dependencies":{}}',
+      });
+      expect(result.valid).toBe(true);
+    });
+
+    it('rejects placeholder content in critical files', () => {
+      const gate = new AcceptanceGate();
+      const result = gate.lightValidate({
+        'src/App.tsx': 'export default function App() {\n  // implement this file\n  return null;\n}',
+        'package.json': '{"name":"app","dependencies":{}}',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({ type: 'placeholder_content', file: 'src/App.tsx' }));
+    });
+
+    it('returns a valid AcceptanceResult shape', () => {
+      const gate = new AcceptanceGate();
+      const result = gate.lightValidate({
+        'src/App.tsx': 'export default function App() { return null; }',
+        'package.json': '{"name":"app","dependencies":{}}',
+      });
+      expect(result).toMatchObject({ valid: expect.any(Boolean), issues: expect.any(Array), validationErrors: expect.any(Array), buildErrors: expect.any(Array) });
+    });
   });
 
   it('does not reject legitimate JSX placeholder attributes', () => {

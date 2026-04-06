@@ -88,14 +88,16 @@ describe('classifyModificationComplexity', () => {
     expect(result).toMatchObject({ skipIntent: false, skipPlanning: false, mode: 'full' });
   });
 
-  it('returns full mode for an empty prompt', () => {
+  it('returns scoped mode for an empty prompt (no simple verb → not direct)', () => {
     const result = classifyModificationComplexity(makeSlices(1), 5, undefined, '');
+    expect(result.mode).toBe('scoped');
     expect(result.mode).not.toBe('direct');
   });
 
-  it('returns full mode for a prompt longer than SIMPLE_PROMPT_MAX_LENGTH', () => {
+  it('returns scoped mode for a prompt longer than SIMPLE_PROMPT_MAX_LENGTH (over length limit → not direct)', () => {
     const longPrompt = 'change ' + 'x'.repeat(215);
     const result = classifyModificationComplexity(makeSlices(1), 5, undefined, longPrompt);
+    expect(result.mode).toBe('scoped');
     expect(result.mode).not.toBe('direct');
   });
 
