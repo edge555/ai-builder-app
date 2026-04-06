@@ -23,7 +23,7 @@ import { ModificationOutputSchema } from '../core/schemas';
 import { applyEdits } from './edit-applicator';
 import { getMaxOutputTokens } from '../config';
 import { createLogger } from '../logger';
-import { parseStructuredOutput } from '../ai/structured-output';
+import { getStructuredParseError, parseStructuredOutput } from '../ai/structured-output';
 
 const logger = createLogger('DiagnosticRepairEngine');
 
@@ -360,8 +360,9 @@ export class DiagnosticRepairEngine {
   ): { applied: boolean } {
     const parsedResult = parseStructuredOutput(content, ModificationOutputSchema, 'ModificationOutput');
     if (!parsedResult.success) {
+      const parseError = getStructuredParseError(parsedResult);
       logger.error('Repair engine: AI response failed structured parsing', {
-        error: parsedResult.error,
+        error: parseError,
       });
       return { applied: false };
     }

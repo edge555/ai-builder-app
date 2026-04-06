@@ -178,10 +178,16 @@ export function useSubmitPrompt() {
 
                     generation.setLoadingPhase('validating');
                     if (result.success && result.projectState) {
-                        setProjectState(result.projectState, false);
+                        const uniqueProjectName = await hybridStorageService.getUniqueProjectName(result.projectState.name);
+                        const projectStateWithUniqueName = {
+                            ...result.projectState,
+                            name: uniqueProjectName,
+                        };
 
-                        const fileCount = Object.keys(result.projectState.files).length;
-                        const successMessage = getGenerationSuccessMessage(result.projectState.name, fileCount);
+                        setProjectState(projectStateWithUniqueName, false);
+
+                        const fileCount = Object.keys(projectStateWithUniqueName.files).length;
+                        const successMessage = getGenerationSuccessMessage(projectStateWithUniqueName.name, fileCount);
 
                         // Create assistant message and store reference
                         const assistantMessage = chatMessages.addAssistantMessage(successMessage, undefined, undefined, Date.now() - operationStartMs);
@@ -190,9 +196,9 @@ export function useSubmitPrompt() {
                         // Build from current state + the two messages we just added (state hasn't updated yet)
                         try {
                             const completeMessages = [...chatMessages.messages, userMessage, assistantMessage];
-                            const storedProject = toStoredProject(result.projectState, completeMessages);
+                            const storedProject = toStoredProject(projectStateWithUniqueName, completeMessages);
                             await hybridStorageService.saveProject(storedProject);
-                            await hybridStorageService.setMetadata('lastOpenedProjectId', result.projectState.id);
+                            await hybridStorageService.setMetadata('lastOpenedProjectId', projectStateWithUniqueName.id);
                         } catch (saveError) {
                             submitLogger.error('Failed to save project after generation', { error: saveError });
                             // Continue anyway - auto-save will retry

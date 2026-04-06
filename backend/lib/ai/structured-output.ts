@@ -13,6 +13,10 @@ export interface StructuredParseFailure {
 
 export type StructuredParseResult<T> = StructuredParseSuccess<T> | StructuredParseFailure;
 
+export function getStructuredParseError<T>(result: StructuredParseResult<T>): string {
+  return 'error' in result ? result.error : 'Structured parse failed';
+}
+
 export function parseStructuredOutput<T>(
   rawContent: string,
   schema: ZodType<T>,

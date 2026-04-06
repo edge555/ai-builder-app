@@ -7,9 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "eval": "vitest run lib/core/__tests__/eval/",
+    "test": "vitest run --config vitest.config.mjs",
+    "test:watch": "vitest --config vitest.config.mjs",
+    "eval": "vitest run --config vitest.config.mjs lib/core/__tests__/eval/",
     "eval:live": "node -e \"process.env.RUN_LIVE_EVAL='true'; const { spawnSync } = require('child_process'); const result = spawnSync('npx vitest run lib/core/__tests__/eval/live-eval.test.ts', { stdio: 'inherit', env: process.env, shell: true }); process.exit(result.status ?? 1);\""
   },
   "dependencies": {

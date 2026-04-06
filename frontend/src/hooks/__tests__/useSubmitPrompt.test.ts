@@ -21,6 +21,7 @@ vi.mock('../../services/storage', () => ({
 
 vi.mock('../../services/storage/HybridStorageService', () => ({
     hybridStorageService: {
+        getUniqueProjectName: vi.fn().mockImplementation(async (name: string) => name),
         saveProject: vi.fn().mockResolvedValue(undefined),
         setMetadata: vi.fn().mockResolvedValue(undefined),
     },
@@ -84,6 +85,7 @@ describe('useSubmitPrompt', () => {
         expect(mockChatMessages.addUserMessage).toHaveBeenCalledWith(prompt);
         expect(mockGeneration.setIsLoading).toHaveBeenCalledWith(true);
         expect(mockGeneration.setLoadingPhase).toHaveBeenCalledWith('generating');
+        expect(hybridStorageService.getUniqueProjectName).toHaveBeenCalledWith('test-app');
         expect(mockProjectActions.setProjectState).toHaveBeenCalledWith(
             expect.objectContaining({ name: 'test-app' }),
             false
@@ -219,5 +221,31 @@ describe('useSubmitPrompt', () => {
         await act(async () => {
             await firstPromise!;
         });
+    });
+
+    it('should save a unique generated name when the original collides', async () => {
+        const { result } = renderHook(() => useSubmitPrompt());
+        const prompt = 'build a calculator';
+
+        vi.mocked(hybridStorageService.getUniqueProjectName).mockResolvedValue('Bright Calc Lab');
+        mockGeneration.generateProjectStreaming.mockResolvedValue({
+            success: true,
+            projectState: { id: 'test-3', name: 'Quick Calc Studio', files: { 'App.tsx': 'code' } },
+        });
+
+        await act(async () => {
+            await result.current.submitPrompt(prompt);
+        });
+
+        expect(mockProjectActions.setProjectState).toHaveBeenCalledWith(
+            expect.objectContaining({ name: 'Bright Calc Lab' }),
+            false
+        );
+        expect(mockChatMessages.addAssistantMessage).toHaveBeenCalledWith(
+            expect.stringContaining('Bright Calc Lab'),
+            undefined,
+            undefined,
+            expect.any(Number)
+        );
     });
 });

@@ -249,7 +249,7 @@ Multi-provider architecture with runtime switching:
 - **OpenRouter** (default): OpenAI-compatible API with retry/backoff, structured output, SSE streaming
 - **Modal**: Self-hosted models with per-task endpoint resolution via `ModalPipelineFactory` (resolves `MODAL_<TASK>_URL` → `MODAL_DEFAULT_URL`)
 - **`GenerationPipeline`** (new projects): intent resolves → planning fires immediately (overlapped with synchronous recipe selection <1ms) → complexity gate (≤10 files → `executeOneShot()` single AI call, plan review skipped; >10 files → `executeMultiPhase()` with plan review + phase batching + cross-phase summary cache to avoid re-summarizing scaffold files)
-- **`PipelineOrchestrator`** (modifications only): 3-stage pipeline (Intent → Planning → Execution); intent/planning skipped automatically for simple edits via `classifyModificationComplexity`; Execution is hard-fail, Intent/Planning degrade gracefully
+- **`PipelineOrchestrator`** (modifications only): 3-stage pipeline (Intent → Planning → Execution); `classifyModificationComplexity` returns a 4-mode `ModificationRoutingDecision` (`repair | direct | scoped | full`) to decide which stages to skip and whether to enforce targeted-change scope. Scoped/direct mode degrades to full routing when unexpected files are detected. Execution is hard-fail, Intent/Planning degrade gracefully
 - **`IPromptProvider`**: Abstracts system prompts, token budgets, and multi-phase prompt methods; `UnifiedPromptProvider` implements it for both providers via `PromptProviderConfig` (token budget overrides + verbose guidance flag)
 - **Recipe Engine**: Pluggable generation recipes (React SPA, Next.js + Prisma, Next.js + Supabase Auth) with per-phase prompt fragments
 - **`AgentRouter`** (OpenRouter only): Task-specific routing with `FallbackAIProvider` (tries models in priority order)
@@ -290,7 +290,7 @@ Multi-provider architecture with runtime switching:
 
 - **IndexedDB** via `StorageService`: Local-first project persistence (files, chat, versions, metadata)
 - **Cloud storage** via `CloudStorageService`: Supabase-backed sync for authenticated users
-- **HybridStorageService**: Fallback layer (local → cloud) for seamless offline/online experience
+- **HybridStorageService**: Fallback layer (local → cloud) for seamless offline/online experience; includes `getUniqueProjectName()` which deduplicates 3-word project names by cycling through DESCRIPTOR/SUFFIX word lists
 - **Modular stores**: project-store, chat-store, metadata-store, template-store
 - **Auto-save** with debouncing; **write coalescing** prevents race conditions (latest wins)
 - CRUD: create, read, update, delete, rename, duplicate projects

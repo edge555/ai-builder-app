@@ -17,6 +17,20 @@ import { PHASE_EXECUTION_TIMEOUT } from '../constants';
 
 const logger = createLogger('PhaseExecutor');
 
+/** Drain warnings from a parse result into accumulatedWarnings and the callback. Returns the new lastParsedIndex. */
+function applyParseWarnings(
+  parseResult: ReturnType<typeof parseIncrementalFiles>,
+  lastParsedIndex: number,
+  accumulatedWarnings: string[],
+  onWarning?: (msg: string) => void,
+): number {
+  for (const warning of parseResult.warnings) {
+    accumulatedWarnings.push(warning.message);
+    onWarning?.(warning.message);
+  }
+  return Math.max(lastParsedIndex, parseResult.lastParsedIndex);
+}
+
 export interface PhaseDefinition {
   layer: ExecutionLayer;
   plan: ArchitecturePlan;
@@ -107,6 +121,7 @@ export class PhaseExecutor {
               callbacks?.onProgress?.(totalLength);
 
               const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
+              lastParsedIndex = applyParseWarnings(parseResult, lastParsedIndex, accumulatedWarnings, callbacks?.onWarning);
               if (parseResult.files.length > 0) {
                 for (const file of parseResult.files) {
                   if (!generatedFiles.has(file.path)) {
@@ -117,7 +132,6 @@ export class PhaseExecutor {
                     generatedFiles.set(file.path, { path: file.path, content: file.content });
                   }
                 }
-                lastParsedIndex = parseResult.lastParsedIndex;
               }
             },
           });
@@ -182,6 +196,7 @@ DO NOT repeat files you have already generated.`;
                 callbacks?.onProgress?.(totalLength);
 
                 const parseResult = parseIncrementalFiles(accumulatedText, lastParsedIndex);
+                lastParsedIndex = applyParseWarnings(parseResult, lastParsedIndex, accumulatedWarnings, callbacks?.onWarning);
                 if (parseResult.files.length > 0) {
                   for (const file of parseResult.files) {
                     // Only accept files that were actually missing
@@ -190,7 +205,6 @@ DO NOT repeat files you have already generated.`;
                       callbacks?.onFileStream?.(file, false);
                     }
                   }
-                  lastParsedIndex = parseResult.lastParsedIndex;
                 }
               },
             });

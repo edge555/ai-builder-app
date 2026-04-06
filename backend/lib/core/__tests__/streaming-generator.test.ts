@@ -230,6 +230,22 @@ describe('StreamingProjectGenerator', () => {
         expect(onPipelineStage).toHaveBeenCalledWith({ stage: 'intent', label: 'timeout', status: 'degraded' });
     });
 
+    it('emits pipeline warnings before processing generated files', async () => {
+        mockPipeline.runGeneration.mockResolvedValue({
+            ...makeGenerationResult(),
+            warnings: ['Skipped malformed streamed JSON object'],
+        });
+
+        const onWarning = vi.fn();
+        await generator.generateProjectStreaming('test', { onWarning });
+
+        expect(onWarning).toHaveBeenCalledWith(expect.objectContaining({
+            path: '__pipeline__',
+            type: 'validation',
+            message: 'Skipped malformed streamed JSON object',
+        }));
+    });
+
     it('calls onProgress and onFileStream during execution', async () => {
         const mockFile = { path: 'src/App.tsx', content: 'export default function App() { return null; }' };
 

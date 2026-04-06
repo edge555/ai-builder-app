@@ -31,7 +31,7 @@ import {
   createFilePlanner,
   TokenBudgetManager,
 } from '../analysis';
-import { getTokenBudget } from '../constants';
+import { getTokenBudget, SMALL_PROJECT_FILE_THRESHOLD, SIMPLE_PROMPT_MAX_LENGTH } from '../constants';
 import { buildSlicesFromFiles, buildReplaceFileRetryPrompt } from './prompt-builder';
 import { selectRepairFiles, type ErrorContext } from './repair-file-selector';
 import type { FailedFileEdit } from './file-edit-applicator';
@@ -52,6 +52,8 @@ import { createAcceptanceGate } from '../core/acceptance-gate';
 const logger = createLogger('ModificationEngine');
 
 const DESIGN_SYSTEM_CATEGORIES = new Set(['ui', 'style', 'mixed']);
+const SIMPLE_MODIFICATION_VERBS = /\b(change|update|rename|fix|adjust|tweak|set|replace|remove|delete|add|move)\b/i;
+const COMPLEX_MODIFICATION_CUES = /\b(refactor|rewrite|restructure|architecture|migrate|overhaul|across the app|entire app|all pages|multiple pages|state management|authentication|database|api layer)\b/i;
 
 export type ModificationPhase =
   | 'intent'
@@ -62,6 +64,14 @@ export type ModificationPhase =
   | 'build-fixing';
 
 export type OnProgressCallback = (phase: ModificationPhase, label: string) => void;
+
+export interface ModificationRoutingDecision {
+  skipIntent: boolean;
+  skipPlanning: boolean;
+  preferHeuristicSelection: boolean;
+  enforceTargetedChanges: boolean;
+  mode: 'repair' | 'direct' | 'scoped' | 'full';
+}
 
 /**
  * Modification Engine service for modifying existing projects.
@@ -101,6 +111,7 @@ export class ModificationEngine {
       onProgress?: OnProgressCallback;
       onPipelineStage?: (data: { stage: PipelineStage; label: string; status: 'start' | 'complete' | 'degraded' }) => void;
       conversationHistory?: ConversationTurn[];
+      _forceFullRouting?: boolean;
     }
   ): Promise<ModificationResult> {
     if (!prompt || prompt.trim() === '') {
@@ -134,9 +145,17 @@ export class ModificationEngine {
       // Step 1: Select code slices
       onProgress?.('planning', 'Analyzing project and planning changes...');
       const fileCount = Object.keys(projectState.files).length;
-      const skipFilePlanner = !!options?.errorContext;
+      const selectionStrategy = determineSelectionStrategy(
+        prompt,
+        fileCount,
+        options?.errorContext,
+        options?.shouldSkipPlanning
+      );
       const { slices, category } = await this.selectCodeSlices(
-        projectState, prompt, skipFilePlanner, options?.errorContext
+        projectState,
+        prompt,
+        selectionStrategy.preferHeuristicSelection,
+        options?.errorContext
       );
 
       // Step 2: Determine design system inclusion
@@ -150,11 +169,21 @@ export class ModificationEngine {
       });
 
       // Step 2.5: Classify complexity to decide whether to run intent/planning stages
-      const { skipIntent, skipPlanning } = classifyModificationComplexity(
-        slices,
-        fileCount,
-        options?.errorContext
-      );
+      const routingDecision = options?._forceFullRouting
+        ? { skipIntent: false, skipPlanning: false, preferHeuristicSelection: false, enforceTargetedChanges: false, mode: 'full' as const }
+        : classifyModificationComplexity(slices, fileCount, options?.errorContext, prompt);
+      const explicitOverride = options?.shouldSkipPlanning === true;
+      const skipPlanning = explicitOverride || routingDecision.skipPlanning;
+      const skipIntent = routingDecision.skipIntent;
+      contextLogger.info('Modification routing decision', {
+        mode: routingDecision.mode,
+        skipIntent,
+        skipPlanning,
+        preferHeuristicSelection: selectionStrategy.preferHeuristicSelection,
+        enforceTargetedChanges: routingDecision.enforceTargetedChanges,
+        explicitSkipPlanning: explicitOverride,
+        forcedFullRouting: options?._forceFullRouting ?? false,
+      });
 
       // Step 3: Build pipeline callbacks
       const pipelineCallbacks: PipelineCallbacks = {
@@ -201,7 +230,7 @@ export class ModificationEngine {
           const validationResult = await this.validateModifiedFiles(tempFiles);
           return {
             valid: validationResult.valid,
-            errorText: validationResult.errors.map(e => e.message).join(', ')
+            errorText: validationResult.validationErrors.map(e => e.message).join(', ')
           };
         };
 
@@ -227,6 +256,19 @@ export class ModificationEngine {
         pipelineResult,
         { userPrompt: prompt, designSystem: shouldIncludeDesignSystem }
       );
+      // updatedFiles already includes deleted paths (as null values) — no need to spread deletedFiles
+      const changedPaths = Object.keys(updatedFiles);
+      if (routingDecision.enforceTargetedChanges) {
+        const unexpectedFiles = this.findUnexpectedChangedFiles(changedPaths, slices, prompt, projectState.files);
+        if (unexpectedFiles.length > 0) {
+          contextLogger.warn('Scoped modification touched unexpected files — degrading to full routing', {
+            mode: routingDecision.mode,
+            changedPaths,
+            unexpectedFiles,
+          });
+          return this.modifyProject(projectState, prompt, { ...options, _forceFullRouting: true }, onProgress);
+        }
+      }
 
       // Step 5.5: Diff size guard — auto-convert modify ops that changed >90% of a file
       for (const [path, content] of Object.entries(updatedFiles)) {
@@ -552,12 +594,35 @@ export class ModificationEngine {
         filesToValidate[path] = content;
       }
     }
-    const acceptanceResult = this.acceptanceGate.validate(filesToValidate);
+    // Use light validation (structural + placeholder only) — build errors are handled
+    // downstream by DiagnosticRepairEngine, not rejected outright here.
+    const acceptanceResult = this.acceptanceGate.lightValidate(filesToValidate);
     return {
       valid: acceptanceResult.valid,
       validationErrors: acceptanceResult.validationErrors,
       issues: acceptanceResult.issues,
     };
+  }
+
+  private findUnexpectedChangedFiles(
+    changedPaths: string[],
+    slices: CodeSlice[],
+    prompt: string,
+    originalFiles: Record<string, string>
+  ): string[] {
+    const allowedPaths = new Set(slices.map((slice) => slice.filePath));
+
+    return changedPaths.filter((path) => {
+      if (allowedPaths.has(path)) {
+        return false;
+      }
+
+      if (isAllowedSupportFile(path, prompt, originalFiles)) {
+        return false;
+      }
+
+      return true;
+    });
   }
 }
 
@@ -572,15 +637,105 @@ export function classifyModificationComplexity(
   slices: CodeSlice[],
   projectFileCount: number,
   errorContext?: ErrorContext,
-): { skipIntent: boolean; skipPlanning: boolean } {
+  prompt: string = '',
+): ModificationRoutingDecision {
   if (errorContext) {
     logger.info('Complexity: skip both (repair mode)');
-    return { skipIntent: true, skipPlanning: true };
+    return {
+      skipIntent: true,
+      skipPlanning: true,
+      preferHeuristicSelection: true,
+      enforceTargetedChanges: false,
+      mode: 'repair',
+    };
   }
 
   const primaryCount = slices.filter(s => s.relevance === 'primary').length;
-  logger.info('Complexity: run both for standard modification flow', { primaryCount, projectFileCount });
-  return { skipIntent: false, skipPlanning: false };
+  const simplePrompt = isLikelySimpleModificationPrompt(prompt);
+
+  if (primaryCount > 0 && primaryCount <= 2 && simplePrompt && projectFileCount <= SMALL_PROJECT_FILE_THRESHOLD) {
+    logger.info('Complexity: direct route for simple scoped modification', { primaryCount, projectFileCount });
+    return {
+      skipIntent: true,
+      skipPlanning: true,
+      preferHeuristicSelection: projectFileCount <= SMALL_PROJECT_FILE_THRESHOLD,
+      enforceTargetedChanges: true,
+      mode: 'direct',
+    };
+  }
+
+  if (primaryCount > 0 && primaryCount <= 2 && projectFileCount <= SMALL_PROJECT_FILE_THRESHOLD && !COMPLEX_MODIFICATION_CUES.test(prompt)) {
+    logger.info('Complexity: scoped route for small modification', { primaryCount, projectFileCount });
+    return {
+      skipIntent: true,
+      skipPlanning: false,
+      preferHeuristicSelection: false,
+      enforceTargetedChanges: true,
+      mode: 'scoped',
+    };
+  }
+
+  logger.info('Complexity: full route for standard modification flow', { primaryCount, projectFileCount });
+  return {
+    skipIntent: false,
+    skipPlanning: false,
+    preferHeuristicSelection: false,
+    enforceTargetedChanges: false,
+    mode: 'full',
+  };
+}
+
+function determineSelectionStrategy(
+  prompt: string,
+  projectFileCount: number,
+  errorContext?: ErrorContext,
+  shouldSkipPlanning?: boolean
+): Pick<ModificationRoutingDecision, 'preferHeuristicSelection'> {
+  if (errorContext || shouldSkipPlanning) {
+    return { preferHeuristicSelection: true };
+  }
+
+  if (projectFileCount <= SMALL_PROJECT_FILE_THRESHOLD && isLikelySimpleModificationPrompt(prompt)) {
+    return { preferHeuristicSelection: true };
+  }
+
+  return { preferHeuristicSelection: false };
+}
+
+function isLikelySimpleModificationPrompt(prompt: string): boolean {
+  const normalized = prompt.trim();
+  if (normalized.length === 0 || normalized.length > SIMPLE_PROMPT_MAX_LENGTH) {
+    return false;
+  }
+
+  if (COMPLEX_MODIFICATION_CUES.test(normalized)) {
+    return false;
+  }
+
+  return SIMPLE_MODIFICATION_VERBS.test(normalized);
+}
+
+function isAllowedSupportFile(path: string, prompt: string, originalFiles?: Record<string, string>): boolean {
+  if (path === 'package.json') {
+    return true;
+  }
+
+  // Allow NEW source files the AI creates that weren't in the original project
+  // (e.g. "add dark mode" creates src/theme.css, "add a Button component" creates src/Button.tsx).
+  // Existing files being unexpectedly modified are NOT allowed via this path.
+  if (/\.(ts|tsx|css|scss|js|jsx)$/.test(path) && !path.includes('node_modules')) {
+    if (originalFiles) {
+      return !(path in originalFiles); // only new files are allowed
+    }
+    return true; // no originalFiles context — allow (backward compat)
+  }
+
+  const normalized = prompt.toLowerCase();
+  if ((path === 'package-lock.json' || path.endsWith('/package-lock.json')) && /\b(package|dependency|install|library)\b/.test(normalized)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

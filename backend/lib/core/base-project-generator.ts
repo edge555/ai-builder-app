@@ -6,6 +6,7 @@
 import type { FileDiff, RepairAttempt } from '@ai-app-builder/shared';
 import type { AIProvider } from '../ai';
 import type { IPromptProvider } from './prompts/prompt-provider';
+import type { IntentOutput } from './schemas';
 import { ValidationPipeline } from './validation-pipeline';
 import { BuildValidator, createBuildValidator } from './build-validator';
 import { PROJECT_OUTPUT_SCHEMA } from './prompts/generation-prompt-utils';
@@ -13,9 +14,40 @@ import { ProjectOutputSchema } from './schemas';
 import { processFiles } from './file-processor';
 import { createLogger } from '../logger';
 import { createAcceptanceGate } from './acceptance-gate';
-import { parseStructuredOutput } from '../ai/structured-output';
+import { getStructuredParseError, parseStructuredOutput } from '../ai/structured-output';
 
 const logger = createLogger('BaseProjectGenerator');
+
+const TITLE_STOP_WORDS = new Set([
+    'a', 'an', 'and', 'app', 'application', 'build', 'builder', 'create', 'dashboard',
+    'for', 'generate', 'make', 'new', 'page', 'please', 'project', 'simple', 'site',
+    'the', 'tool', 'website', 'with',
+]);
+
+const DESCRIPTOR_WORDS = [
+    'Bright', 'Clever', 'Fresh', 'Modern', 'Quick', 'Sharp', 'Smart', 'Swift',
+];
+
+const SUFFIX_WORDS = [
+    'Board', 'Desk', 'Forge', 'Hub', 'Lab', 'Studio', 'Works', 'Workshop',
+];
+
+const DOMAIN_KEYWORDS: Array<{ pattern: RegExp; word: string }> = [
+    { pattern: /\bcalculator|calc|math|equation|arithmetic\b/i, word: 'Calc' },
+    { pattern: /\bbudget|expense|finance|accounting|invoice\b/i, word: 'Budget' },
+    { pattern: /\btodo|task|kanban|planner|productivity\b/i, word: 'Task' },
+    { pattern: /\brecipe|meal|kitchen|food|restaurant\b/i, word: 'Recipe' },
+    { pattern: /\bportfolio|resume|cv|showcase\b/i, word: 'Portfolio' },
+    { pattern: /\bdashboard|analytics|metrics|report\b/i, word: 'Dashboard' },
+    { pattern: /\bchat|message|messaging|conversation\b/i, word: 'Chat' },
+    { pattern: /\bnote|notes|journal|writing|editor\b/i, word: 'Notes' },
+    { pattern: /\bshop|store|commerce|product|catalog\b/i, word: 'Store' },
+    { pattern: /\btravel|trip|itinerary|hotel|booking\b/i, word: 'Travel' },
+    { pattern: /\bfitness|workout|health|gym|exercise\b/i, word: 'Fitness' },
+    { pattern: /\bweather|forecast|climate\b/i, word: 'Weather' },
+    { pattern: /\bquiz|exam|learning|course|education\b/i, word: 'Learning' },
+    { pattern: /\bblog|article|content|cms\b/i, word: 'Content' },
+];
 
 /**
  * Abstract base class for project generators.
@@ -39,18 +71,67 @@ export abstract class BaseProjectGenerator {
     /**
      * Extracts a project name from the description.
      */
-    protected extractProjectName(description: string): string {
-        const words = description
-            .replace(/[^a-zA-Z0-9\s]/g, '')
-            .split(/\s+/)
-            .filter(w => w.length > 0)
-            .slice(0, 3);
+    protected extractProjectName(description: string, intentOutput?: IntentOutput | null): string {
+        const contextText = [
+            intentOutput?.clarifiedGoal ?? '',
+            ...(intentOutput?.features ?? []),
+            description,
+        ].join(' ');
 
-        if (words.length === 0) {
-            return 'new-project';
+        const domainWord = this.extractDomainWord(contextText);
+        const seed = this.computeSeed(`${description}|${intentOutput?.clarifiedGoal ?? ''}|${(intentOutput?.features ?? []).join('|')}`);
+
+        const descriptor = this.pickWord(DESCRIPTOR_WORDS, seed);
+        const suffix = this.pickWord(SUFFIX_WORDS, seed + domainWord.length);
+
+        return [descriptor, domainWord, suffix].join(' ');
+    }
+
+    private extractDomainWord(contextText: string): string {
+        for (const keyword of DOMAIN_KEYWORDS) {
+            if (keyword.pattern.test(contextText)) {
+                return keyword.word;
+            }
         }
 
-        return words.join('-').toLowerCase();
+        const tokens = this.extractCandidateTokens(contextText);
+        if (tokens.length > 0) {
+            return this.toTitleWord(tokens[0]);
+        }
+
+        return 'Project';
+    }
+
+    private extractCandidateTokens(text: string): string[] {
+        const sanitized = text
+            .replace(/[^a-zA-Z0-9\s]/g, ' ')
+            .split(/\s+/)
+            .map((token) => token.trim().toLowerCase())
+            .filter((token) => token.length >= 3)
+            .filter((token) => !TITLE_STOP_WORDS.has(token));
+
+        return Array.from(new Set(sanitized.map((token) => this.toTitleWord(token))));
+    }
+
+    private toTitleWord(token: string): string {
+        const cleaned = token.replace(/[^a-zA-Z0-9]/g, '');
+        if (!cleaned) {
+            return 'Project';
+        }
+
+        return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+    }
+
+    private computeSeed(value: string): number {
+        let hash = 0;
+        for (let i = 0; i < value.length; i++) {
+            hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+        }
+        return hash;
+    }
+
+    private pickWord(words: string[], seed: number): string {
+        return words[seed % words.length];
     }
 
     /**
@@ -178,12 +259,13 @@ export abstract class BaseProjectGenerator {
             try {
                 const parsedResult = parseStructuredOutput(fixResponse.content, ProjectOutputSchema, 'ProjectOutput');
                 if (!parsedResult.success) {
+                    const parseError = getStructuredParseError(parsedResult);
                     contextLogger.error('Structured parsing failed on fix response', {
-                        error: parsedResult.error,
+                        error: parseError,
                     });
                     failureHistory.push({
                         attempt: buildRetryCount,
-                        error: parsedResult.error,
+                        error: parseError,
                         strategy: 'Attempted to fix build errors but returned invalid schema',
                         timestamp: new Date().toISOString(),
                     });

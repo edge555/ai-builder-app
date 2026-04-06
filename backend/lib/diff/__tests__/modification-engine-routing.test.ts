@@ -108,6 +108,68 @@ describe('ModificationEngine Routing', () => {
     expect(pipelineMock.runOrderedModificationPipeline).not.toHaveBeenCalled();
   });
 
+  it('degrades scoped edits that touch unexpected files to full mode (no longer hard-rejects)', async () => {
+    const projectState: ProjectState = {
+      files: {
+        'src/App.tsx': 'old app',
+        'src/Button.tsx': 'old button',
+        'src/utils.ts': 'old util',
+      },
+    } as unknown as ProjectState;
+
+    (engine as any).selectCodeSlices = vi.fn().mockResolvedValue({
+      slices: [
+        { filePath: 'src/App.tsx', content: 'old app', relevance: 'primary' },
+      ],
+      category: 'logic',
+    });
+
+    pipelineMock.runModificationPipeline.mockResolvedValue({
+      finalFiles: [
+        { path: 'src/utils.ts', content: 'changed util' },
+      ],
+      executorFiles: [],
+    });
+
+    const result = await engine.modifyProject(projectState, 'change the app heading');
+
+    // Scoped mode detects unexpected file → retries with _forceFullRouting=true → succeeds
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it('does NOT reject unexpected files when routing mode is full', async () => {
+    // Large project + complex prompt → full mode → enforceTargetedChanges=false
+    const projectState: ProjectState = {
+      files: Object.fromEntries(
+        Array.from({ length: 20 }, (_, i) => [`src/File${i}.tsx`, `content ${i}`])
+      ),
+    } as unknown as ProjectState;
+
+    (engine as any).selectCodeSlices = vi.fn().mockResolvedValue({
+      slices: Array.from({ length: 6 }, (_, i) => ({
+        filePath: `src/File${i}.tsx`,
+        content: `content ${i}`,
+        relevance: 'primary',
+      })),
+      category: 'logic',
+    });
+
+    pipelineMock.runOrderedModificationPipeline.mockResolvedValue({
+      finalFiles: [{ path: 'src/File19.tsx', content: 'changed' }],
+      executorFiles: [],
+    });
+
+    const result = await engine.modifyProject(
+      projectState,
+      'refactor the authentication architecture',
+    );
+
+    // full mode: enforceTargetedChanges=false → unexpected files are allowed
+    expect(result.success).toBe(true);
+    expect(result.error ?? '').not.toContain('unexpected files');
+  });
+
   it('routes to ordered execution pipeline when filesToModify > 3', async () => {
     const projectState: ProjectState = {
       files: {
@@ -122,6 +184,30 @@ describe('ModificationEngine Routing', () => {
 
     expect(pipelineMock.runOrderedModificationPipeline).toHaveBeenCalled();
     expect(pipelineMock.runModificationPipeline).not.toHaveBeenCalled();
+  });
+
+  it('preserves explicit shouldSkipPlanning override', async () => {
+    const projectState: ProjectState = {
+      files: {
+        'src/App.tsx': 'content A',
+        'src/Form.tsx': 'content B',
+      },
+    } as unknown as ProjectState;
+
+    await engine.modifyProject(projectState, 'refactor the authentication architecture', {
+      shouldSkipPlanning: true,
+    });
+
+    expect(pipelineMock.runModificationPipeline).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      expect.any(Array),
+      expect.any(Object),
+      expect.objectContaining({
+        skipIntent: false,
+        skipPlanning: true,
+      })
+    );
   });
 
   describe('replace_file fallback', () => {
