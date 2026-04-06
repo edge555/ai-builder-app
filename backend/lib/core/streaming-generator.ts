@@ -273,7 +273,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
 
     const projectState: ProjectState = {
       id: projectId,
-      name: this.extractProjectName(description),
+      name: this.extractProjectName(description, pipelineResult.intentOutput),
       description,
       files: finalFiles,
       createdAt: now,

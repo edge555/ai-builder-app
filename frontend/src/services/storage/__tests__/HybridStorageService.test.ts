@@ -146,6 +146,108 @@ describe('HybridStorageService', () => {
     expect(result).toEqual(localProjects);
   });
 
+  it('returns the original generated name when unused', async () => {
+    vi.mocked(storageService.getAllProjectMetadata).mockResolvedValue(localProjects);
+
+    const result = await hybridStorageService.getUniqueProjectName('Quick Calc Studio');
+
+    expect(result).toBe('Quick Calc Studio');
+  });
+
+  it('changes the descriptor when the generated name already exists', async () => {
+    vi.mocked(storageService.getAllProjectMetadata).mockResolvedValue([
+      ...localProjects,
+      {
+        id: 'calc-1',
+        name: 'Quick Calc Studio',
+        description: '',
+        currentVersionId: 'v1',
+        createdAt: '2026-04-05T12:00:00.000Z',
+        updatedAt: '2026-04-05T12:00:00.000Z',
+        fileCount: 2,
+        thumbnailFiles: ['src/App.tsx'],
+      },
+    ]);
+
+    const result = await hybridStorageService.getUniqueProjectName('Quick Calc Studio');
+
+    expect(result).not.toBe('Quick Calc Studio');
+    expect(result.split(' ')).toHaveLength(3);
+    expect(result).toContain('Calc');
+    expect(result.endsWith('Studio')).toBe(true);
+  });
+
+  it('compares generated names case-insensitively', async () => {
+    vi.mocked(storageService.getAllProjectMetadata).mockResolvedValue([
+      ...localProjects,
+      {
+        id: 'calc-2',
+        name: 'quick calc studio',
+        description: '',
+        currentVersionId: 'v1',
+        createdAt: '2026-04-05T12:00:00.000Z',
+        updatedAt: '2026-04-05T12:00:00.000Z',
+        fileCount: 2,
+        thumbnailFiles: ['src/App.tsx'],
+      },
+    ]);
+
+    const result = await hybridStorageService.getUniqueProjectName('Quick Calc Studio');
+
+    expect(result).not.toBe('Quick Calc Studio');
+  });
+
+  it('falls back to a numeric suffix after exhausting curated variants', async () => {
+    const collidingNames: ProjectMetadata[] = [];
+    const descriptors = ['Bright', 'Clever', 'Fresh', 'Modern', 'Quick', 'Sharp', 'Smart', 'Swift'];
+    const suffixes = ['Board', 'Desk', 'Forge', 'Hub', 'Lab', 'Studio', 'Works', 'Workshop'];
+
+    descriptors.forEach((descriptor, index) => {
+      collidingNames.push({
+        id: `descriptor-${index}`,
+        name: `${descriptor} Calc Studio`,
+        description: '',
+        currentVersionId: `vd-${index}`,
+        createdAt: '2026-04-05T12:00:00.000Z',
+        updatedAt: '2026-04-05T12:00:00.000Z',
+        fileCount: 1,
+        thumbnailFiles: ['src/App.tsx'],
+      });
+    });
+
+    suffixes.forEach((suffix, index) => {
+      collidingNames.push({
+        id: `suffix-${index}`,
+        name: `Quick Calc ${suffix}`,
+        description: '',
+        currentVersionId: `vs-${index}`,
+        createdAt: '2026-04-05T12:00:00.000Z',
+        updatedAt: '2026-04-05T12:00:00.000Z',
+        fileCount: 1,
+        thumbnailFiles: ['src/App.tsx'],
+      });
+    });
+
+    vi.mocked(storageService.getAllProjectMetadata).mockResolvedValue([
+      ...localProjects,
+      ...collidingNames,
+      {
+        id: 'numeric-1',
+        name: 'Quick Calc Studio 2',
+        description: '',
+        currentVersionId: 'vn-1',
+        createdAt: '2026-04-05T12:00:00.000Z',
+        updatedAt: '2026-04-05T12:00:00.000Z',
+        fileCount: 1,
+        thumbnailFiles: ['src/App.tsx'],
+      },
+    ]);
+
+    const result = await hybridStorageService.getUniqueProjectName('Quick Calc Studio');
+
+    expect(result).toBe('Quick Calc Studio 3');
+  });
+
   it('saves locally and to cloud when authenticated', async () => {
     hybridStorageService.setAuthenticated('user-1');
     const project = {

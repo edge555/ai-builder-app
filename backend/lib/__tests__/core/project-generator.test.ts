@@ -274,6 +274,8 @@ describe('ProjectGenerator', () => {
 
       expect(result.success).toBe(true);
       expect(result.projectState?.name).toBeDefined();
+      expect(result.projectState?.name.split(' ')).toHaveLength(3);
+      expect(result.projectState?.name).toContain('Task');
     });
 
     it('should handle project with multiple files', async () => {

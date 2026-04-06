@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BaseProjectGenerator } from '../../core/base-project-generator';
 import { createBuildValidator } from '../../core/build-validator';
 import { ValidationPipeline } from '../../core/validation-pipeline';
+import type { IntentOutput } from '../../core/schemas';
 
 // Mock dependencies
 vi.mock('../../core/build-validator');
@@ -20,6 +21,10 @@ class TestProjectGenerator extends BaseProjectGenerator {
     // Expose protected method for testing
     public async testRunBuildFixLoop(files: Record<string, string>, mode: any, prompt: string) {
         return this.runBuildFixLoop(files, mode, prompt);
+    }
+
+    public testExtractProjectName(description: string, intentOutput?: IntentOutput | null) {
+        return this.extractProjectName(description, intentOutput);
     }
 }
 
@@ -169,6 +174,44 @@ describe('BaseProjectGenerator', () => {
 
             expect(result).toEqual(initialFiles);
             expect(mockAIProvider.generate).toHaveBeenCalledTimes(3);
+        });
+    });
+
+    describe('extractProjectName', () => {
+        it('returns a readable three-word title instead of a prompt slice', () => {
+            const result = generator.testExtractProjectName('build a simple calculator');
+
+            expect(result.split(' ')).toHaveLength(3);
+            expect(result).toContain('Calc');
+            expect(result.toLowerCase()).not.toContain('build');
+            expect(result.toLowerCase()).not.toContain('simple');
+        });
+
+        it('uses intent context when available', () => {
+            const result = generator.testExtractProjectName('make something for expenses', {
+                clarifiedGoal: 'Create a budget dashboard for monthly expenses',
+                complexity: 'medium',
+                features: ['expense tracking', 'budget categories', 'spending trends'],
+                technicalApproach: 'React SPA',
+                projectType: 'spa',
+            });
+
+            expect(result.split(' ')).toHaveLength(3);
+            expect(result).toContain('Budget');
+        });
+
+        it('falls back safely for empty prompts', () => {
+            const result = generator.testExtractProjectName('');
+
+            expect(result.split(' ')).toHaveLength(3);
+            expect(result).toContain('Project');
+        });
+
+        it('keeps portfolio prompts context-aware', () => {
+            const result = generator.testExtractProjectName('create a modern portfolio website');
+
+            expect(result.split(' ')).toHaveLength(3);
+            expect(result).toContain('Portfolio');
         });
     });
 });

@@ -12,6 +12,8 @@ const logger = createLogger('HybridStorage');
  */
 class HybridStorageService {
     private userId: string | null = null;
+    private readonly namingDescriptors = ['Bright', 'Clever', 'Fresh', 'Modern', 'Quick', 'Sharp', 'Smart', 'Swift'];
+    private readonly namingSuffixes = ['Board', 'Desk', 'Forge', 'Hub', 'Lab', 'Studio', 'Works', 'Workshop'];
 
     private getUpdatedAtTime(project: ProjectMetadata): number {
         const timestamp = new Date(project.updatedAt).getTime();
@@ -82,6 +84,53 @@ class HybridStorageService {
             }
         }
         return storageService.getAllProjectMetadata();
+    }
+
+    async getUniqueProjectName(baseName: string): Promise<string> {
+        const trimmedBaseName = baseName.trim().replace(/\s+/g, ' ');
+        const fallbackBaseName = trimmedBaseName || 'Fresh Project Studio';
+        const existingProjects = await this.getAllProjectMetadata();
+        const existingNames = new Set(existingProjects.map((project) => project.name.trim().toLowerCase()));
+
+        if (!existingNames.has(fallbackBaseName.toLowerCase())) {
+            return fallbackBaseName;
+        }
+
+        const words = fallbackBaseName.split(' ').filter(Boolean);
+        const [originalDescriptor, originalDomain = 'Project', originalSuffix = 'Studio'] = [
+            words[0] || 'Fresh',
+            words[1] || 'Project',
+            words[2] || 'Studio',
+        ];
+
+        for (const descriptor of this.namingDescriptors) {
+            if (descriptor === originalDescriptor) {
+                continue;
+            }
+
+            const candidate = `${descriptor} ${originalDomain} ${originalSuffix}`;
+            if (!existingNames.has(candidate.toLowerCase())) {
+                return candidate;
+            }
+        }
+
+        for (const suffix of this.namingSuffixes) {
+            if (suffix === originalSuffix) {
+                continue;
+            }
+
+            const candidate = `${originalDescriptor} ${originalDomain} ${suffix}`;
+            if (!existingNames.has(candidate.toLowerCase())) {
+                return candidate;
+            }
+        }
+
+        let suffixNumber = 2;
+        while (existingNames.has(`${fallbackBaseName} ${suffixNumber}`.toLowerCase())) {
+            suffixNumber++;
+        }
+
+        return `${fallbackBaseName} ${suffixNumber}`;
     }
 
     async deleteProject(id: string): Promise<void> {
