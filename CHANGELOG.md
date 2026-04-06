@@ -2,16 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.6.1] - 2026-04-06
+## [1.8.0] - 2026-04-06
 
 ### Added
 - **`AcceptanceGate.lightValidate()`** — new light-weight variant that runs structural + placeholder checks without build validation. `ModificationEngine` now uses this for pre-repair acceptance, letting `DiagnosticRepairEngine` own build validation in its repair loop.
 - **4-mode modification routing** — `classifyModificationComplexity` now returns one of four explicit modes (`repair | direct | scoped | full`) with named constants (`SMALL_PROJECT_FILE_THRESHOLD = 12`, `SIMPLE_PROMPT_MAX_LENGTH = 220`) in `constants.ts`.
 - **`COMPLEX_MODIFICATION_CUES` guard** — scoped routing now requires the prompt to be free of complexity cue words (refactor, rewrite, architecture, migrate, etc.), preventing AI-heavy modifications from being under-planned.
-- **New test files** — `acceptance-gate.test.ts` (placeholder detection, legitimate JSX attributes), `modification-engine-complexity.test.ts` (routing boundary cases), `modification-engine-routing.test.ts` (pipeline dispatch and targeted-change enforcement), `vitest.config.mjs`.
+- **`ModificationRoutingDecision` exported** — the routing decision interface is now part of the public API so callers can type the result of `classifyModificationComplexity`.
+- **New test files** — `acceptance-gate.test.ts` (placeholder detection, `lightValidate`, false-positive guard), `modification-engine-complexity.test.ts` (routing boundary cases), `modification-engine-routing.test.ts` (pipeline dispatch and full-mode degradation), `vitest.config.mjs`.
 
 ### Fixed
 - **Scoped modification false rejection** — `changedPaths` was built with `Object.keys(deletedFiles)` where `deletedFiles` is `string[]`, producing array indices (`'0'`) as unexpected file paths. Now uses `Object.keys(updatedFiles)` only (deleted files are already included as null-value keys).
+- **Scoped mode now degrades to full mode** — when a scoped or direct modification touches files outside the selected slices, instead of returning `success: false`, the engine retries with full routing (`_forceFullRouting: true`). Silent failures are eliminated.
+- **`PLACEHOLDER_PATTERNS` false positives** — `/implement this file/i` and `/subsequent phases/i` patterns are now comment-anchored (`\/\/.*`) so they only fire on JS/TS comment lines, not on string values or JSX content in user apps.
 - **`isAllowedSupportFile` over-permissive** — previously allowed any `.ts/.tsx/.css` file through the targeted-change guard, including existing files being unexpectedly modified. Now only permits newly-created files (not present in the original project).
 - **`shouldSkipPlanning` no longer forces `skipIntent`** — explicit planning-skip override is now independent of the intent stage, so intent can still run when planning is skipped.
 - **`applyParseWarnings` deduplication** — phase executor continuation calls no longer re-emit the same malformed-JSON warning from a prior chunk.

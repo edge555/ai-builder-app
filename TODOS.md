@@ -110,3 +110,9 @@
 - **Cons:** Adds a probe call on demand (not on hot generation path — no performance impact).
 - **Context:** Deferred from Blank Canvas Admin v1 (2026-04-04). Validation probe partially designed in design doc Open Questions #6.
 - **Depends on:** Blank Canvas Admin v1 shipped
+
+## Completed
+
+### Incremental JSON Parser — SSE Warning Events [v1.8.0 — 2026-04-06]
+- **What was done:** Added `ParseWarning` type, duplicate file detection (`seenPaths`), and invalid object detection to `incremental-json-parser.ts`. `streaming-generator.ts` now forwards pipeline warnings via `callbacks.onWarning`. Partial completion — comprehensive parser-specific test file still TODO.
+- **Completed:** v1.8.0 (2026-04-06)
