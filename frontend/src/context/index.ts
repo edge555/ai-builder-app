@@ -8,6 +8,7 @@ export * from './ChatMessagesContext.context';
 
 export { GenerationProvider } from './GenerationContext';
 export * from './GenerationContext.context';
+export type * from './generation/types';
 
 export { AutoRepairProvider } from './AutoRepairContext';
 export * from './AutoRepairContext.context';

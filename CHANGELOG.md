@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.1] - 2026-04-07
+
+### Changed
+- **GenerationContext refactor** — extracted streaming transport, API service, and repair logic into dedicated modules under `frontend/src/context/generation/`. The React provider now owns only UI state; transport and retry logic live in `generationApiService`, `repairService`, and `streamingTransport`.
+- **`StreamingState` re-exported** — backward-compatible type alias preserved in `GenerationContext.context.ts` so existing consumers (`ChatInterface`, `StreamingIndicator`) require no changes.
+
+### Fixed
+- **`onStreamingChange(false)` race** — the streaming-change callback was called unconditionally in the `finally` block of `runStreamingRequest`, which could flip `isStreaming` to `false` while a second stream was still running. Now only fires when the finishing session is the current active session.
+- **Repair deduplication blocking retries** — `lastRepairErrorKey` was never reset between attempts, capping the 5-attempt repair loop at 1 in practice. Key is now cleared in `finally` so each completed attempt allows the next one to run.
+
 ## [1.8.0] - 2026-04-06
 
 ### Added

@@ -65,6 +65,9 @@ frontend/src/
 │   └── ...            # StreamingIndicator, QuickActions, StatusIndicator, PanelToggle,
 │                      #   TemplateGrid, ConfirmDialog, ErrorBoundary, UndoRedoButtons, etc.
 ├── context/           # React Context providers (split state/actions pattern)
+│   ├── generation/    # GenerationContext service modules: generationApiService (API calls +
+│   │                  #   streaming), repairService (auto-repair retry), streamingTransport
+│   │                  #   (SSE lifecycle + snapshot normalization), types
 │   └── AuthContext, ProjectContext, GenerationContext, ChatMessagesContext,
 │       PreviewErrorContext, AutoRepairContext, ErrorAggregatorContext, ToastContext,
 │       WorkspaceContext (workspace-scoped identity + AI provider injection)

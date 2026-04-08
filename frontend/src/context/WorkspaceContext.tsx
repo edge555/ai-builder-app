@@ -1,6 +1,6 @@
 /**
  * WorkspaceContext
- * Provides workspaceId and projectId to GenerationContext so workspace API keys
+ * Provides workspaceId and projectId to generation services so workspace API keys
  * are injected into all generate/modify requests when in member builder mode.
  * Null values mean the standard (non-workspace) API key path is used.
  */

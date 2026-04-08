@@ -11,7 +11,7 @@ const repairLogger = createLogger('AutoRepair');
 
 /**
  * Provider for unified auto-repair coordination.
- * Bridges PreviewErrorContext (error detection) and GenerationContext (repair execution).
+ * Bridges preview error detection with the generation repair action.
  */
 export function AutoRepairProvider({ children }: { children: ReactNode }) {
   // Split state and actions to reduce re-renders
@@ -203,5 +203,4 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
     </AutoRepairContext.Provider>
   );
 }
-
 
