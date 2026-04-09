@@ -17,6 +17,7 @@ Generate full React web applications from natural language prompts. Describe wha
 - **Fullstack recipes** — Next.js + Prisma and Next.js + Supabase Auth generation (feature-flagged)
 - **Fullstack export** — ZIP with context-aware README, Docker Compose, .env.example
 - **Blank Canvas Admin** — invite members to a shared org workspace where all AI generation uses the org's own API key; admin dashboard for members, projects, and settings
+- **Classroom/beginner mode** — workspace-level flag constrains generation to 4-6 file React SPAs with no network calls and at least 2 event handlers; deterministic planning bypasses AI latency for the 5 common classroom prompt types (counter, todo, quiz, form, calculator)
 
 ## Architecture
 
