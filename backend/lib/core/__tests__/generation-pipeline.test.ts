@@ -118,26 +118,61 @@ describe('GenerationPipeline (Phase 5)', () => {
     expect(result.architecturePlan?.files).toHaveLength(1);
   });
 
-  it('retries planning once and then fails if the planning stage keeps failing', async () => {
+  it('retries planning once and then falls back to heuristic plan if planning keeps failing', async () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
     mockPlanningProvider.generate.mockRejectedValue(new Error('LLM Timeout'));
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    await expect(pipeline.runGeneration('make a simple app')).rejects.toThrow(
-      'Planning stage failed after retry: LLM Timeout'
-    );
+    const result = await pipeline.runGeneration('make a simple app');
+
+    expect(result.architecturePlan?.files.length).toBeGreaterThanOrEqual(4);
     expect(mockPlanningProvider.generate).toHaveBeenCalledTimes(2);
   });
 
-  it('retries planning once and then fails on invalid planner JSON', async () => {
+  it('retries planning once and then falls back on invalid planner JSON', async () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: '{ "files": "not an array" }' });
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    await expect(pipeline.runGeneration('make a simple app')).rejects.toThrow(
-      'Planning stage failed after retry: ArchitecturePlan schema mismatch:'
-    );
+    const result = await pipeline.runGeneration('make a simple app');
+    expect(result.architecturePlan?.files.length).toBeGreaterThanOrEqual(4);
     expect(mockPlanningProvider.generate).toHaveBeenCalledTimes(2);
+  });
+
+  it('planner failure fallback preserves non-beginner fullstack recipe architecture', async () => {
+    mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
+    mockPlanningProvider.generate.mockRejectedValue(new Error('planner timeout'));
+    mocks.selectRecipe.mockReturnValue({
+      id: 'nextjs-prisma',
+      name: 'Next.js + Prisma',
+      defaultDependencies: ['next', 'react', 'react-dom', 'prisma', '@prisma/client'],
+    } as any);
+
+    const result = await pipeline.runGeneration('build a fullstack inventory app');
+    const filePaths = result.architecturePlan?.files.map((file) => file.path) ?? [];
+
+    expect(filePaths).toContain('app/page.tsx');
+    expect(filePaths).toContain('prisma/schema.prisma');
+    expect(filePaths).not.toContain('src/main.tsx');
+  });
+
+  it('beginnerMode bypasses AI planning and forces beginner recipe selection', async () => {
+    mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
+    mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
+
+    mocks.selectRecipe.mockReturnValue({ id: 'react-spa-beginner', name: 'Beginner' } as any);
+
+    const result = await pipeline.runGeneration('make a counter app', {}, { beginnerMode: true });
+
+    expect(mockPlanningProvider.generate).not.toHaveBeenCalled();
+    expect(mocks.selectRecipe).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ beginnerMode: true }),
+      expect.any(String)
+    );
+    expect(result.selectedRecipeId).toBe('react-spa-beginner');
+    expect(result.architecturePlan?.files.length).toBeGreaterThanOrEqual(4);
+    expect(result.architecturePlan?.files.length).toBeLessThanOrEqual(6);
   });
 
   // ── Plan Review (Task 5.3) ──────────────────────────────────────────────────

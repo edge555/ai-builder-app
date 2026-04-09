@@ -40,7 +40,7 @@ export interface StreamingCallbacks {
   onFile?: (data: { path: string; content: string; index: number; total: number; status: 'complete' | 'partial' }) => void;
   onWarning?: (data: { path: string; message: string; type: 'formatting' | 'validation' }) => void;
   onStreamEnd?: (summary: { totalFiles: number; successfulFiles: number; failedFiles: number; warnings: number }) => void;
-  onComplete?: (result: { projectState: ProjectState; version: Version }) => void;
+  onComplete?: (result: { projectState: ProjectState; version: Version; selectedRecipeId: string | null }) => void;
   onError?: (error: string, errorData?: { errorCode?: string; errorType?: string; partialContent?: string }) => void;
   onHeartbeat?: () => void;
   onPipelineStage?: (data: { stage: PipelineStage; label: string; status: 'start' | 'complete' | 'degraded' }) => void;
@@ -70,7 +70,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
   async generateProjectStreaming(
     description: string,
     callbacks: StreamingCallbacks,
-    options?: { requestId?: string }
+    options?: { requestId?: string; beginnerMode?: boolean }
   ): Promise<StreamingGenerationResult> {
     if (!description || description.trim() === '') {
       return {
@@ -151,7 +151,10 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       pipelineResult = await this.pipeline.runGeneration(
         description,
         pipelineCallbacks,
-        { requestId: options?.requestId }
+        {
+          requestId: options?.requestId,
+          beginnerMode: options?.beginnerMode,
+        }
       );
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Pipeline execution failed';
@@ -226,7 +229,9 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     }
 
     contextLogger.debug('Checking for syntax errors before build-fix', { files: Object.keys(prefixedFiles) });
-    const acceptanceResult = this.acceptanceGate.validate(prefixedFiles);
+    const acceptanceResult = this.acceptanceGate.validate(prefixedFiles, {
+      beginnerMode: options?.beginnerMode,
+    });
     if (!acceptanceResult.valid || !acceptanceResult.sanitizedOutput) {
       const error = `Generation failed acceptance: ${acceptanceResult.issues
         .map((issue) => `${issue.file ?? 'unknown'}: ${issue.message}`)
@@ -303,7 +308,11 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       });
     }
 
-    callbacks.onComplete?.({ projectState, version });
+    callbacks.onComplete?.({
+      projectState,
+      version,
+      selectedRecipeId: pipelineResult.selectedRecipeId,
+    });
     callbacks.onStreamEnd?.({
       totalFiles: fileEntries.length,
       successfulFiles: fileEntries.length,

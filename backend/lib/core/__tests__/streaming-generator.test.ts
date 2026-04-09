@@ -29,6 +29,7 @@ const makeGenerationResult = (files = [
 ]) => ({
     intentOutput: null,
     architecturePlan: null,
+    selectedRecipeId: 'react-spa',
     complexityRoute: 'one-shot',
     generatedFiles: files,
     warnings: [],
@@ -351,6 +352,18 @@ describe('StreamingProjectGenerator', () => {
             'test',
             expect.any(Object),
             expect.objectContaining({ requestId: 'req-123' })
+        );
+    });
+
+    it('passes beginnerMode to pipeline and acceptance gate context', async () => {
+        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
+
+        await generator.generateProjectStreaming('test', {}, { beginnerMode: true });
+
+        expect(mockPipeline.runGeneration).toHaveBeenCalledWith(
+            'test',
+            expect.any(Object),
+            expect.objectContaining({ beginnerMode: true })
         );
     });
 });
