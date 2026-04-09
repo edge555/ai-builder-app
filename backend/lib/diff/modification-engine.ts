@@ -266,7 +266,7 @@ export class ModificationEngine {
             changedPaths,
             unexpectedFiles,
           });
-          return this.modifyProject(projectState, prompt, { ...options, _forceFullRouting: true }, onProgress);
+          return this.modifyProject(projectState, prompt, { ...options, _forceFullRouting: true });
         }
       }
 

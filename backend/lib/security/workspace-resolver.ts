@@ -22,6 +22,7 @@ const logger = createLogger('workspace-resolver');
 export interface WorkspaceResolveResult {
     provider: AIProvider;
     memberId: string;
+    beginnerMode: boolean;
 }
 
 /**
@@ -66,7 +67,7 @@ export async function resolveWorkspaceProvider(
     // 2. Fetch org API key via workspace → org lookup
     const { data: workspace, error: wsError } = await supabase
         .from('workspaces')
-        .select('org_id')
+        .select('org_id, beginner_mode')
         .eq('id', workspaceId)
         .single();
 
@@ -102,7 +103,11 @@ export async function resolveWorkspaceProvider(
     const provider = createWorkspaceProvider(apiKey);
 
     logger.info('Workspace provider resolved', { workspaceId, memberId: member.id });
-    return { provider, memberId: member.id };
+    return {
+        provider,
+        memberId: member.id,
+        beginnerMode: workspace.beginner_mode ?? false,
+    };
 }
 
 /**
