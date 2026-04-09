@@ -97,4 +97,109 @@ describe('AcceptanceGate', () => {
 
     expect(result.valid).toBe(true);
   });
+
+  describe('beginner mode constraints', () => {
+    function beginnerBaseFiles(): Record<string, string> {
+      return {
+        'package.json': '{"name":"app","dependencies":{"react":"18.0.0","react-dom":"18.0.0"}}',
+        'src/main.tsx': 'import React from "react"; import ReactDOM from "react-dom/client"; import App from "./App"; import "./index.css"; ReactDOM.createRoot(document.getElementById("root")!).render(<App />);',
+        'src/index.css': ':root { color: #111; }',
+        'src/App.tsx': 'import { useState } from "react"; export default function App() { const [n, setN] = useState(0); return <button onClick={() => setN(n + 1)}>Add</button>; }',
+        'src/components/Counter.tsx': 'import { useState } from "react"; export function Counter() { const [n, setN] = useState(0); return <input onChange={() => setN(n + 1)} value={n} />; }',
+      };
+    }
+
+    it('passes beginner 5-file app with 2+ handlers', () => {
+      const gate = new AcceptanceGate();
+      const result = gate.validate(beginnerBaseFiles(), { beginnerMode: true });
+      expect(result.valid).toBe(true);
+    });
+
+    it('fails beginner 7-file app', () => {
+      const gate = new AcceptanceGate();
+      const files = beginnerBaseFiles();
+      files['src/components/Extra1.tsx'] = 'export const Extra1 = () => null;';
+      files['src/components/Extra2.tsx'] = 'export const Extra2 = () => null;';
+      const result = gate.validate(files, { beginnerMode: true });
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        type: 'beginner_constraint',
+        message: expect.stringContaining('requires 4-6 files'),
+      }));
+    });
+
+    it('fails beginner 3-file app', () => {
+      const gate = new AcceptanceGate();
+      const result = gate.validate({
+        'package.json': '{"name":"app","dependencies":{}}',
+        'src/main.tsx': 'import App from "./App";',
+        'src/App.tsx': 'export default function App() { return <button onClick={() => {}}>x</button>; }',
+      }, { beginnerMode: true });
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        type: 'beginner_constraint',
+        message: expect.stringContaining('requires 4-6 files'),
+      }));
+    });
+
+    it('fails beginner app with fetch() in component', () => {
+      const gate = new AcceptanceGate();
+      const files = beginnerBaseFiles();
+      files['src/components/Counter.tsx'] = 'export function Counter() { fetch("/api"); return null; }';
+      const result = gate.validate(files, { beginnerMode: true });
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        type: 'beginner_constraint',
+        message: 'fetch/axios not allowed in beginner mode',
+      }));
+    });
+
+    it('fails beginner app with axios import', () => {
+      const gate = new AcceptanceGate();
+      const files = beginnerBaseFiles();
+      files['src/components/Counter.tsx'] = 'import axios from "axios"; export function Counter() { return null; }';
+      const result = gate.validate(files, { beginnerMode: true });
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        type: 'beginner_constraint',
+        message: 'fetch/axios not allowed in beginner mode',
+      }));
+    });
+
+    it('fails beginner app with 1 event handler', () => {
+      const gate = new AcceptanceGate();
+      const files = beginnerBaseFiles();
+      files['src/components/Counter.tsx'] = 'export function Counter() { return <div>No handlers</div>; }';
+      const result = gate.validate(files, { beginnerMode: true });
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        type: 'beginner_constraint',
+        message: 'Beginner mode requires 2 event handlers',
+      }));
+    });
+
+    it('passes beginner app when fetch() appears in comment only', () => {
+      const gate = new AcceptanceGate();
+      const files = beginnerBaseFiles();
+      files['src/components/Counter.tsx'] = [
+        'export function Counter() {',
+        '  // fetch("/api")',
+        '  return <input onChange={() => {}} />;',
+        '}',
+      ].join('\n');
+      const result = gate.validate(files, { beginnerMode: true });
+      expect(result.valid).toBe(true);
+    });
+
+    it('passes non-beginner 10-file app with fetch()', () => {
+      const gate = new AcceptanceGate();
+      const files = beginnerBaseFiles();
+      for (let i = 0; i < 5; i++) {
+        files[`src/components/Extra${i}.tsx`] = `export function Extra${i}() { return <button onClick={() => {}}>ok</button>; }`;
+      }
+      files['src/components/Counter.tsx'] = 'export function Counter() { fetch(\"/api\"); return <button onClick={() => {}}>Go</button>; }';
+      const result = gate.validate(files);
+      expect(result.valid).toBe(true);
+    });
+  });
 });
