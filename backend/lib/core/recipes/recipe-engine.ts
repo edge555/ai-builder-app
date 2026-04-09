@@ -173,8 +173,17 @@ export function composeExecutionPrompt(
     ? 'You are a SENIOR React architect generating production-quality, modular React applications.\nCRITICAL: NEVER put everything in App.tsx — use proper component separation.'
     : `You are a SENIOR full-stack developer generating production-quality ${recipe.name} applications.\nCRITICAL: Follow the file structure and patterns exactly as specified.`;
 
+  const OUTPUT_FORMAT = `=== OUTPUT FORMAT (CRITICAL — READ FIRST) ===
+Your ENTIRE response MUST be a single valid JSON object — nothing else before or after it.
+Format: { "files": [ { "path": "relative/file/path", "content": "complete file content" }, ... ] }
+- Do NOT use markdown code fences (\`\`\`). Output raw JSON only.
+- File content is a JSON string: escape backslashes (\\\\), double-quotes (\\"), newlines (\\n).
+- Template literals \${...} must be escaped as \\\${...} inside JSON strings.
+- No trailing commas. All property names must use double-quotes.`;
+
   const parts = [
     preamble,
+    OUTPUT_FORMAT,
     intentBlock,
     planBlock,
     recipe.fileStructure,

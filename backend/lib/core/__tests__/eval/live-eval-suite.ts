@@ -71,6 +71,43 @@ export const DEFAULT_LIVE_GENERATION_CASES: Array<Omit<GenerationEvalCase, 'outp
     requiredPatterns: ['button'],
     forbiddenPatterns: ['TODO', 'FIXME'],
   },
+
+  // ── Classroom baseline prompts (beginner, as typed by students) ──
+  {
+    id: 'classroom-counter',
+    prompt: 'make a counter app',
+    referencePromptId: 'classroom-counter',
+    requiredPatterns: ['useState', 'onClick'],
+    forbiddenPatterns: ['TODO', 'FIXME', 'fetch('],
+  },
+  {
+    id: 'classroom-todo',
+    prompt: 'make a todo app',
+    referencePromptId: 'classroom-todo',
+    requiredPatterns: ['useState', 'onClick'],
+    forbiddenPatterns: ['TODO', 'FIXME'],
+  },
+  {
+    id: 'classroom-quiz',
+    prompt: 'build a quiz app',
+    referencePromptId: 'classroom-quiz',
+    requiredPatterns: ['useState', 'onClick'],
+    forbiddenPatterns: ['TODO', 'FIXME', 'fetch('],
+  },
+  {
+    id: 'classroom-form-tracker',
+    prompt: 'create a simple form that lets me add items to a list',
+    referencePromptId: 'classroom-form-tracker',
+    requiredPatterns: ['useState', 'onSubmit'],
+    forbiddenPatterns: ['TODO', 'FIXME', 'fetch('],
+  },
+  {
+    id: 'classroom-calculator',
+    prompt: 'build a calculator',
+    referencePromptId: 'classroom-calculator',
+    requiredPatterns: ['useState', 'onClick'],
+    forbiddenPatterns: ['TODO', 'FIXME', 'fetch('],
+  },
 ];
 
 export const DEFAULT_LIVE_MODIFICATION_CASES: LiveModificationEvalSpec[] = [
