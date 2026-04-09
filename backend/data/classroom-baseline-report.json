@@ -1,0 +1,283 @@
+{
+  "startedAt": "2026-04-09T13:01:35.467Z",
+  "finishedAt": "2026-04-09T13:40:34.669Z",
+  "generation": [
+    {
+      "caseId": "classroom-counter",
+      "passed": false,
+      "durationMs": 410147,
+      "generatedFileCount": 0,
+      "complexityRoute": null,
+      "error": "oneshot phase failed after 2 attempts: One-shot phase failed: No files generated successfully"
+    },
+    {
+      "caseId": "classroom-todo",
+      "passed": false,
+      "durationMs": 175117,
+      "generatedFileCount": 11,
+      "complexityRoute": "multi-phase",
+      "evaluation": {
+        "caseId": "classroom-todo",
+        "passed": false,
+        "acceptancePassed": true,
+        "runtimePassed": true,
+        "scoreResult": {
+          "promptId": "classroom-todo",
+          "description": "Classroom beginner: todo",
+          "passed": true,
+          "score": 85,
+          "maxScore": 100,
+          "checks": [
+            {
+              "name": "file-count-range",
+              "passed": false,
+              "weight": 15,
+              "detail": "Got 11 files, expected 3-10"
+            },
+            {
+              "name": "required-files",
+              "passed": true,
+              "weight": 20,
+              "detail": "All 2 required files present"
+            },
+            {
+              "name": "required-patterns",
+              "passed": true,
+              "weight": 20,
+              "detail": "All 2 patterns found"
+            },
+            {
+              "name": "no-forbidden-patterns",
+              "passed": true,
+              "weight": 10,
+              "detail": "No forbidden patterns found"
+            },
+            {
+              "name": "has-css",
+              "passed": true,
+              "weight": 10,
+              "detail": "CSS files present with content"
+            },
+            {
+              "name": "no-todos",
+              "passed": true,
+              "weight": 10,
+              "detail": "No TODO/FIXME comments"
+            },
+            {
+              "name": "valid-package-json",
+              "passed": true,
+              "weight": 10,
+              "detail": "Valid package.json"
+            },
+            {
+              "name": "no-empty-files",
+              "passed": true,
+              "weight": 5,
+              "detail": "No empty files"
+            }
+          ]
+        },
+        "runtimeSmoke": {
+          "passed": true,
+          "framework": "vite-react",
+          "issues": [],
+          "interactionSignals": [
+            "button",
+            "form",
+            "input",
+            "onSubmit",
+            "onChange",
+            "onClick"
+          ]
+        },
+        "issues": [
+          "Found forbidden pattern: TODO"
+        ]
+      }
+    },
+    {
+      "caseId": "classroom-quiz",
+      "passed": false,
+      "durationMs": 1118842,
+      "generatedFileCount": 0,
+      "complexityRoute": null,
+      "error": "oneshot phase failed after 2 attempts: One-shot phase failed: No files generated successfully"
+    },
+    {
+      "caseId": "classroom-form-tracker",
+      "passed": false,
+      "durationMs": 424499,
+      "generatedFileCount": 15,
+      "complexityRoute": "one-shot",
+      "evaluation": {
+        "caseId": "classroom-form-tracker",
+        "passed": false,
+        "acceptancePassed": false,
+        "runtimePassed": true,
+        "scoreResult": {
+          "promptId": "classroom-form-tracker",
+          "description": "Classroom beginner: form + list tracker",
+          "passed": true,
+          "score": 85,
+          "maxScore": 100,
+          "checks": [
+            {
+              "name": "file-count-range",
+              "passed": false,
+              "weight": 15,
+              "detail": "Got 15 files, expected 3-10"
+            },
+            {
+              "name": "required-files",
+              "passed": true,
+              "weight": 20,
+              "detail": "All 2 required files present"
+            },
+            {
+              "name": "required-patterns",
+              "passed": true,
+              "weight": 20,
+              "detail": "All 2 patterns found"
+            },
+            {
+              "name": "no-forbidden-patterns",
+              "passed": true,
+              "weight": 10,
+              "detail": "No forbidden patterns found"
+            },
+            {
+              "name": "has-css",
+              "passed": true,
+              "weight": 10,
+              "detail": "CSS files present with content"
+            },
+            {
+              "name": "no-todos",
+              "passed": true,
+              "weight": 10,
+              "detail": "No TODO/FIXME comments"
+            },
+            {
+              "name": "valid-package-json",
+              "passed": true,
+              "weight": 10,
+              "detail": "Valid package.json"
+            },
+            {
+              "name": "no-empty-files",
+              "passed": true,
+              "weight": 5,
+              "detail": "No empty files"
+            }
+          ]
+        },
+        "runtimeSmoke": {
+          "passed": true,
+          "framework": "vite-react",
+          "issues": [],
+          "interactionSignals": [
+            "button",
+            "form",
+            "input",
+            "onSubmit",
+            "onChange",
+            "onClick"
+          ]
+        },
+        "issues": [
+          "Cannot find module '../types'"
+        ]
+      }
+    },
+    {
+      "caseId": "classroom-calculator",
+      "passed": true,
+      "durationMs": 210575,
+      "generatedFileCount": 12,
+      "complexityRoute": "one-shot",
+      "evaluation": {
+        "caseId": "classroom-calculator",
+        "passed": true,
+        "acceptancePassed": true,
+        "runtimePassed": true,
+        "scoreResult": {
+          "promptId": "classroom-calculator",
+          "description": "Classroom beginner: calculator",
+          "passed": true,
+          "score": 85,
+          "maxScore": 100,
+          "checks": [
+            {
+              "name": "file-count-range",
+              "passed": false,
+              "weight": 15,
+              "detail": "Got 12 files, expected 3-10"
+            },
+            {
+              "name": "required-files",
+              "passed": true,
+              "weight": 20,
+              "detail": "All 2 required files present"
+            },
+            {
+              "name": "required-patterns",
+              "passed": true,
+              "weight": 20,
+              "detail": "All 2 patterns found"
+            },
+            {
+              "name": "no-forbidden-patterns",
+              "passed": true,
+              "weight": 10,
+              "detail": "No forbidden patterns found"
+            },
+            {
+              "name": "has-css",
+              "passed": true,
+              "weight": 10,
+              "detail": "CSS files present with content"
+            },
+            {
+              "name": "no-todos",
+              "passed": true,
+              "weight": 10,
+              "detail": "No TODO/FIXME comments"
+            },
+            {
+              "name": "valid-package-json",
+              "passed": true,
+              "weight": 10,
+              "detail": "Valid package.json"
+            },
+            {
+              "name": "no-empty-files",
+              "passed": true,
+              "weight": 5,
+              "detail": "No empty files"
+            }
+          ]
+        },
+        "runtimeSmoke": {
+          "passed": true,
+          "framework": "vite-react",
+          "issues": [],
+          "interactionSignals": [
+            "onClick",
+            "button"
+          ]
+        },
+        "issues": []
+      }
+    }
+  ],
+  "modification": [],
+  "summary": {
+    "generationPassed": 1,
+    "generationTotal": 5,
+    "modificationPassed": 0,
+    "modificationTotal": 0,
+    "totalPassed": 1,
+    "totalCases": 5
+  }
+}

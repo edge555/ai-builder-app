@@ -1,0 +1,78 @@
+{
+  "startedAt": "2026-04-09T12:35:57.542Z",
+  "finishedAt": "2026-04-09T12:42:49.021Z",
+  "generation": [
+    {
+      "caseId": "live-beginner-counter",
+      "passed": false,
+      "durationMs": 52432,
+      "generatedFileCount": 0,
+      "complexityRoute": null,
+      "error": "Planning stage failed after retry: OpenRouter request failed: HTTP 401"
+    },
+    {
+      "caseId": "live-beginner-landing",
+      "passed": false,
+      "durationMs": 50761,
+      "generatedFileCount": 0,
+      "complexityRoute": null,
+      "error": "Planning stage failed after retry: OpenRouter request failed: HTTP 401"
+    },
+    {
+      "caseId": "classroom-counter",
+      "passed": false,
+      "durationMs": 51148,
+      "generatedFileCount": 0,
+      "complexityRoute": null,
+      "error": "Planning stage failed after retry: OpenRouter request failed: HTTP 401"
+    },
+    {
+      "caseId": "classroom-todo",
+      "passed": false,
+      "durationMs": 51917,
+      "generatedFileCount": 0,
+      "complexityRoute": null,
+      "error": "Planning stage failed after retry: OpenRouter request failed: HTTP 401"
+    },
+    {
+      "caseId": "classroom-quiz",
+      "passed": false,
+      "durationMs": 51486,
+      "generatedFileCount": 0,
+      "complexityRoute": null,
+      "error": "Planning stage failed after retry: OpenRouter request failed: HTTP 401"
+    },
+    {
+      "caseId": "classroom-form-tracker",
+      "passed": false,
+      "durationMs": 53014,
+      "generatedFileCount": 0,
+      "complexityRoute": null,
+      "error": "Planning stage failed after retry: OpenRouter request failed: HTTP 401"
+    },
+    {
+      "caseId": "classroom-calculator",
+      "passed": false,
+      "durationMs": 50271,
+      "generatedFileCount": 0,
+      "complexityRoute": null,
+      "error": "Planning stage failed after retry: OpenRouter request failed: HTTP 401"
+    }
+  ],
+  "modification": [
+    {
+      "caseId": "live-mod-counter-reset",
+      "passed": false,
+      "durationMs": 50424,
+      "error": "Planning stage failed after retry: OpenRouter request failed: HTTP 401"
+    }
+  ],
+  "summary": {
+    "generationPassed": 0,
+    "generationTotal": 7,
+    "modificationPassed": 0,
+    "modificationTotal": 1,
+    "totalPassed": 0,
+    "totalCases": 8
+  }
+}
