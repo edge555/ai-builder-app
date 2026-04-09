@@ -36,9 +36,13 @@ export interface GenerationRecipe {
    */
   promptFragments: string[];
   /** File-structure guidance text injected into the execution prompt. */
-  fileStructure: string;
-  /** Which validator IDs to run on generated output. */
-  validationRules: string[];
+  fileStructure: string | string[];
+  /** Which validator IDs/rules to run on generated output. */
+  validationRules: string[] | {
+    maxFiles: number;
+    minFiles: number;
+    forbiddenPatterns: string[];
+  };
   /** Preview strategy for the frontend. */
   previewStrategy: 'sandpack' | 'export-only';
   /** npm packages always included in generated package.json. */
@@ -219,6 +223,33 @@ const NEXTJS_SUPABASE_AUTH: GenerationRecipe = {
   },
 };
 
+/**
+ * React SPA beginner recipe — constrained classroom-safe generation.
+ */
+const REACT_SPA_BEGINNER: GenerationRecipe = {
+  id: 'react-spa-beginner',
+  name: 'React SPA (Beginner)',
+  promptFragments: [
+    'COMMON_REACT_PATTERNS',
+    'SYNTAX_INTEGRITY_RULES',
+    'BEGINNER_MODE_CONSTRAINTS',
+  ],
+  fileStructure: [
+    'package.json',
+    'src/main.tsx',
+    'src/index.css',
+    'src/App.tsx',
+    'src/components/[AppName].tsx',
+  ],
+  validationRules: {
+    maxFiles: 6,
+    minFiles: 4,
+    forbiddenPatterns: ['fetch(', 'axios'],
+  },
+  previewStrategy: 'sandpack',
+  defaultDependencies: ['react', 'react-dom'],
+};
+
 // ─── Registration ────────────────────────────────────────────────────────────
 
 function registerRecipe(recipe: GenerationRecipe): void {
@@ -229,6 +260,7 @@ function registerRecipe(recipe: GenerationRecipe): void {
 registerRecipe(REACT_SPA);
 registerRecipe(NEXTJS_PRISMA);
 registerRecipe(NEXTJS_SUPABASE_AUTH);
+registerRecipe(REACT_SPA_BEGINNER);
 
 // ─── Lookup Functions ────────────────────────────────────────────────────────
 
