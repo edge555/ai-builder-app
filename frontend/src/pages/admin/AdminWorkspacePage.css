@@ -20,6 +20,91 @@
     text-decoration: underline;
 }
 
+.workspace-settings-card {
+    margin-bottom: 24px;
+    padding: 16px;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-sm);
+    background: hsl(var(--card));
+}
+
+.workspace-settings-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.workspace-settings-card__title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    margin-bottom: 4px;
+}
+
+.workspace-settings-card__description {
+    color: hsl(var(--muted-foreground));
+    font-size: 0.8125rem;
+    line-height: 1.4;
+}
+
+.workspace-settings-card__status {
+    margin-top: 10px;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.8125rem;
+}
+
+.workspace-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.workspace-toggle input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+}
+
+.workspace-toggle__track {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--muted));
+    padding: 2px;
+    display: inline-flex;
+    align-items: center;
+    transition: background 140ms ease, border-color 140ms ease;
+}
+
+.workspace-toggle__thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 10px;
+    background: hsl(var(--card));
+    box-shadow: 0 1px 2px hsl(0 0% 0% / 0.2);
+    transform: translateX(0);
+    transition: transform 140ms ease;
+}
+
+.workspace-toggle input:checked + .workspace-toggle__track {
+    background: hsl(var(--primary) / 0.22);
+    border-color: hsl(var(--primary) / 0.6);
+}
+
+.workspace-toggle input:checked + .workspace-toggle__track .workspace-toggle__thumb {
+    transform: translateX(20px);
+}
+
+.workspace-toggle input:disabled + .workspace-toggle__track {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 /* Members table */
 .member-table {
     width: 100%;
@@ -49,6 +134,10 @@
     border-bottom: none;
 }
 
+.member-table--metrics {
+    margin-top: 8px;
+}
+
 .member-name {
     font-weight: 500;
 }
@@ -60,6 +149,11 @@
 .member-date {
     color: hsl(var(--muted-foreground));
     font-size: 0.8125rem;
+}
+
+.member-id-cell {
+    font-family: 'Geist Mono', 'Fira Code', monospace;
+    color: hsl(var(--muted-foreground));
 }
 
 .member-badge {
@@ -283,4 +377,25 @@
 .admin-workspace-meta {
     font-size: 0.8125rem;
     color: hsl(var(--muted-foreground));
+}
+
+.workspace-metrics-section {
+    margin-top: 28px;
+}
+
+.workspace-metrics-section__title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    margin-bottom: 10px;
+}
+
+.workspace-metrics-section__status {
+    color: hsl(var(--muted-foreground));
+    font-size: 0.875rem;
+}
+
+.workspace-metrics-section__error {
+    color: hsl(var(--destructive));
+    font-size: 0.875rem;
 }

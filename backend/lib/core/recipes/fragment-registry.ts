@@ -64,3 +64,9 @@ addFragment('NEXTJS_API_PATTERNS', NEXTJS_API_PATTERNS);
 addFragment('DATABASE_SCHEMA_GUIDANCE', DATABASE_SCHEMA_GUIDANCE);
 addFragment('AUTH_SCAFFOLDING_GUIDANCE', AUTH_SCAFFOLDING_GUIDANCE);
 addFragment('FULLSTACK_STRUCTURE', FULLSTACK_STRUCTURE);
+addFragment(
+  'BEGINNER_MODE_CONSTRAINTS',
+  `CONSTRAINTS: max 6 files, no fetch() or axios, no external APIs,
+local state only with useState, minimum 2 event handlers (onClick/onChange/onSubmit),
+hardcode all sample data inline`
+);

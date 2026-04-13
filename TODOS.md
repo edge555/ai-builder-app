@@ -90,10 +90,26 @@
 ### Per-Workspace Token Budget Enforcement [P2, M]
 - **What:** Add per-member daily token cap stored on the Workspace table. Enforce in `/api/generate-stream` and `/api/modify-stream` before decrypting the org API key.
 - **Why:** One active member can exhaust the org's upstream API quota for the entire class with no guard. Results in "why is everyone's generation broken?" incidents during class.
-- **Pros:** Prevents runaway usage, gives admin visibility into per-member consumption. Token counts already available in SSE complete payload via existing metrics system.
+- **Pros:** Prevents runaway usage, gives admin visibility into per-member consumption. Token counts tracked via `generation_events.token_count` (populated by the token count TODO above).
 - **Cons:** Requires token counter storage (Redis or Supabase) and a new admin UI panel.
 - **Context:** Deferred from Blank Canvas Admin v1 (2026-04-04).
 - **Depends on:** Blank Canvas Admin v1 shipped
+
+### Per-Generation Token Counts in generation_events [P3, S]
+- **What:** Populate `token_count` column (currently NULL) with actual input+output tokens per generation event.
+- **Why:** Token visibility panel in AdminWorkspacePage shows `--` until this is done. Blocked on providers exposing per-generation token totals.
+- **Pros:** Completes the metrics panel. Enables token-budget enforcement feature downstream.
+- **Cons:** Requires AI provider interface change — `generate()` response needs to expose token counts. Not all OpenRouter models return usage data consistently.
+- **Context:** Deferred from Beginner Mode sprint (2026-04-09). `token_count` column already exists in `generation_events` table, stored as NULL for now.
+- **Depends on:** Unified Pipeline Architecture TODO (single token accumulation point), provider token exposure in `ai-provider.ts` interface
+
+### beginnerMode enforcement in /generate (non-streaming) route [P3, XS]
+- **What:** Mirror the workspace resolver + beginnerMode wiring from `/api/generate-stream` into `/api/generate` (the non-streaming route).
+- **Why:** `/generate` is a secondary code path. If a workspace member calls it directly, beginnerMode is bypassed silently.
+- **Pros:** Complete enforcement parity. ~20 lines of code.
+- **Cons:** Low priority — the product UI always uses `/generate-stream`. `/generate` is only reachable via direct API call.
+- **Context:** Deferred from Beginner Mode sprint (2026-04-09). Codex outside-voice review flagged this during /plan-eng-review.
+- **Depends on:** Beginner Mode sprint shipped
 
 ### Admin API Key Health Indicator [P2, S]
 - **What:** `OrgSettingsPage` shows API key status (valid / invalid / unknown) with a "Test connection" button that probes OpenRouter with a minimal request before storing.
@@ -102,6 +118,32 @@
 - **Cons:** Adds a probe call on demand (not on hot generation path — no performance impact).
 - **Context:** Deferred from Blank Canvas Admin v1 (2026-04-04). Validation probe partially designed in design doc Open Questions #6.
 - **Depends on:** Blank Canvas Admin v1 shipped
+
+## WebContainers Phase 2 (deferred from /plan-eng-review 2026-04-08)
+
+### Vendor Bundle Caching [P2, M]
+- **What:** After a successful npm install inside WebContainers, snapshot the `node_modules` filesystem tree in memory. On subsequent boots for the same project, restore the snapshot before spawning `npm install` (which then becomes a fast no-op check). Reduces warm boot from 5-15s to ~2s.
+- **Why:** Students regenerating mid-session wait 5-15s per regeneration. The vendor set rarely changes between edits. Caching makes the second and all subsequent boots feel instant.
+- **Pros:** Massive UX improvement for classroom sessions. No server cost — all client-side memory. Zero API changes.
+- **Cons:** Memory footprint per project (node_modules can be 50-100MB in the browser filesystem). Need eviction strategy for multiple open projects.
+- **Context:** Deferred from WebContainers migration Phase 1. Phase 1 accepts cold-boot latency (~15s) and defers caching. WebContainers `wc.fs` has snapshot/restore capabilities. Implementation point: `PreviewPanel.tsx` boot lifecycle.
+- **Depends on:** WebContainers Phase 1 migration shipped and validated in production
+
+### Remove Sandpack + StackBlitz SDK [P2, XS]
+- **What:** Remove `@codesandbox/sandpack-react` and `@stackblitz/sdk` from `frontend/package.json` after WebContainers migration validates in production. Both packages become dead code post-migration.
+- **Why:** Dead dependencies add ~500KB to the frontend bundle and create security surface area for no benefit.
+- **Pros:** Bundle size reduction. Cleaner dependency tree.
+- **Cons:** None after Phase 1 validates.
+- **Context:** Cannot remove before validation — kept as a rollback option in case WebContainers has unexpected production issues. Remove only after successful classroom pilot confirms stability.
+- **Depends on:** WebContainers Phase 1 shipped + classroom pilot completed (Success Criterion #3)
+
+### COOP/COEP Audit for Cross-Origin Resources [P1, S — pre-deploy gate]
+- **What:** Before enabling `Cross-Origin-Embedder-Policy: require-corp` in the production Vercel/Netlify config, audit every external resource loaded by the frontend (Google Fonts, CDN images, any third-party embeds). Any resource missing `Cross-Origin-Resource-Policy` headers will silently fail to load under COEP.
+- **Why:** COEP `require-corp` breaks any cross-origin resource that hasn't opted in. If this audit is skipped, fonts and images may disappear silently in production with no visible error in the console.
+- **Pros:** Prevents silent production breakage. ~30-minute one-time audit. Can use browser DevTools Network tab to scan for cross-origin resources.
+- **Cons:** Small manual effort required.
+- **Context:** This is a **pre-deployment gate** — must be done BEFORE enabling COEP headers in the production hosting config (Vercel `vercel.json` or Netlify `_headers`). The Vite dev server COEP header (for local development) can be added safely first. The production header requires this audit.
+- **Depends on:** None (independent audit step before WebContainers production deployment)
 
 ## Completed
 

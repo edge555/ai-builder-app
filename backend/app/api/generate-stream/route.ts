@@ -24,7 +24,7 @@ import {
   SSEEncoder,
   createStreamLifecycle,
 } from '../../../lib/streaming';
-import { requireAuth } from '../../../lib/security/auth';
+import { requireAuth, createServiceRoleSupabaseClient } from '../../../lib/security/auth';
 import { resolveWorkspaceProvider } from '../../../lib/security/workspace-resolver';
 
 const logger = createLogger('api/generate-stream');
@@ -58,6 +58,8 @@ export async function POST(request: NextRequest) {
 
     // Workspace mode: verify membership and resolve org API key
     let workspaceProvider = undefined;
+    let memberId: string | undefined;
+    let beginnerMode = false;
     if (body.workspaceId) {
       const authResult = await requireAuth(request);
       if (authResult instanceof Response) return authResult;
@@ -71,9 +73,17 @@ export async function POST(request: NextRequest) {
           { status: 403, headers: { 'Content-Type': 'application/json' } }
         );
       } else {
-        workspaceProvider = resolved.provider;
+        const {
+          provider: resolvedWorkspaceProvider,
+          memberId: resolvedMemberId,
+          beginnerMode: resolvedBeginnerMode,
+        } = resolved;
+        workspaceProvider = resolvedWorkspaceProvider;
+        memberId = resolvedMemberId;
+        beginnerMode = resolvedBeginnerMode;
       }
     }
+    const supabaseServiceClient = createServiceRoleSupabaseClient();
 
     contextLogger.info('Starting streaming generation', {
       descriptionLength: body.description.length,
@@ -159,6 +169,7 @@ export async function POST(request: NextRequest) {
             },
 
             onComplete: (data) => {
+              const selectedRecipe = data.selectedRecipeId ? { id: data.selectedRecipeId } : null;
               const response = {
                 success: true,
                 projectState: serializeProjectState(data.projectState),
@@ -171,6 +182,17 @@ export async function POST(request: NextRequest) {
                 response,
                 EventPriority.CRITICAL
               );
+
+              if (body.workspaceId && memberId) {
+                supabaseServiceClient?.from('generation_events').insert({
+                  workspace_id: body.workspaceId,
+                  member_id: memberId,
+                  timestamp: new Date().toISOString(),
+                  token_count: null,
+                  repair_triggered: false,
+                  recipe: selectedRecipe?.id ?? null,
+                }).then(() => {}, () => {});
+              }
             },
 
             onPipelineStage: (data) => {
@@ -220,7 +242,7 @@ export async function POST(request: NextRequest) {
               // Additional heartbeat callback if needed
               encoder.enqueueHeartbeat(controller);
             },
-          }, { requestId });
+          }, { requestId, beginnerMode });
 
           // If already aborted, skip final messages
           if (isComplete()) return;

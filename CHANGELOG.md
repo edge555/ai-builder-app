@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.9.0] - 2026-04-09
+
+### Added
+- **Beginner/classroom-safe generation mode** — workspaces can now enable `beginner_mode`, which constrains generated output to 4-6 file React SPAs with no `fetch()`/`axios` calls and at least two event handlers. `AcceptanceGate.validate()` enforces these constraints and rejects non-compliant output.
+- **`HeuristicPlanBuilder`** — deterministic fallback plan for beginner mode. Recognises keyword clusters (counter, todo, quiz, form, calculator) and produces a 5-file plan with the correct component stub; falls back to a safe 4-file generic plan. Eliminates AI planning latency for the classroom path.
+- **`react-spa-beginner` recipe** — new pluggable generation recipe with prompt fragments that explicitly prohibit network calls and guide the model toward simple state-only patterns. Automatically selected when `beginnerMode` is `true`, overriding intent-based recipe selection.
+- **Admin workspace API endpoints** — `GET /api/org/:orgId/workspaces/:wid` (workspace detail) and `PATCH /api/org/:orgId/workspaces/:wid` (update name or `beginner_mode`). Both require org-admin auth and double-check IDOR (`org_id` cross-reference).
+- **Admin workspace metrics endpoint** — `GET /api/org/:orgId/workspaces/:wid/metrics` returns per-member generation event counts and repair-trigger rates for the admin dashboard.
+- **Admin UI: beginner mode toggle** — `AdminWorkspacePage` now shows a "Classroom (beginner) mode" toggle that calls the new PATCH endpoint. Visual indicator appears on enabled workspaces.
+- **Supabase migration** — `20260409_beginner_mode.sql` adds `beginner_mode boolean NOT NULL DEFAULT false` to the `workspaces` table.
+- **Classroom eval infrastructure** — `classroom-baseline.test.ts`, `live-eval-suite.ts`, and `reference-prompts.ts` provide a repeatable eval harness for the 5 classroom prompt types. Baseline report committed at 40% pass rate (pre JSON-format fix).
+
+### Changed
+- **`WorkspaceResolveResult`** now includes `beginnerMode: boolean`, propagated through `resolveWorkspaceProvider` → `generate-stream` route → `generateProjectStreaming` → `runGeneration` → `selectRecipe` and `AcceptanceGate.validate()`.
+- **`HeuristicPlanBuilder` wired up** — `generation-pipeline.ts` now calls `buildHeuristicPlan()` when in beginner mode (bypasses AI planning entirely) and as the fallback when `resolveArchitecturePlan()` throws.
+- **JSON output format enforced** — `PhaseExecutor` system prompts now explicitly require JSON output with no markdown fences. Fixes the root cause of the 40% classroom baseline failure rate where Gemini/minimax returned markdown code blocks the incremental JSON parser could not parse.
+- **`SupabaseJwk` type** — `auth.ts` uses a more specific `SupabaseJwk` type (extends `JsonWebKey` with optional `kid`) for `jwksCache` and `fetchJwks`, eliminating implicit `any` casts in the JWKS verification path.
+
+### Fixed
+- **`lightValidate` available in PATCH handler** — `ModificationEngine` previously lacked a pre-repair validation shortcut. `AcceptanceGate.lightValidate()` (structural + placeholder, no build validation) is now exposed and used by the modification pipeline.
+
 ## [1.8.1] - 2026-04-07
 
 ### Changed

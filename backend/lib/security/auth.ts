@@ -17,16 +17,18 @@ interface JwtHeader {
     kid?: string;
 }
 
+type SupabaseJwk = JsonWebKey & { kid?: string };
+
 // In-memory JWKS cache { [url]: { keys: JWK[], fetchedAt: number } }
-const jwksCache = new Map<string, { keys: JsonWebKey[]; fetchedAt: number }>();
+const jwksCache = new Map<string, { keys: SupabaseJwk[]; fetchedAt: number }>();
 const JWKS_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-async function fetchJwks(jwksUrl: string): Promise<JsonWebKey[]> {
+async function fetchJwks(jwksUrl: string): Promise<SupabaseJwk[]> {
     const cached = jwksCache.get(jwksUrl);
     if (cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) return cached.keys;
     const res = await fetch(jwksUrl);
     if (!res.ok) throw new Error(`JWKS fetch failed: ${res.status}`);
-    const { keys } = await res.json() as { keys: JsonWebKey[] };
+    const { keys } = await res.json() as { keys: SupabaseJwk[] };
     jwksCache.set(jwksUrl, { keys, fetchedAt: Date.now() });
     return keys;
 }

@@ -18,6 +18,8 @@ import { buildPhaseContext } from './batch-context-builder';
 import type { PhaseContext } from './batch-context-builder';
 import { COMPLEXITY_GATE_FILE_THRESHOLD, UI_BATCH_SPLIT_THRESHOLD } from '../constants';
 import { getStructuredParseError, parseStructuredOutput } from '../ai/structured-output';
+import { buildHeuristicPlan } from './heuristic-plan-builder';
+import type { GenerationRecipe } from './recipes/recipe-types';
 
 const logger = createLogger('GenerationPipeline');
 
@@ -60,9 +62,15 @@ export interface MergedPhase {
 export interface GenerationResult {
   intentOutput: IntentOutput | null;
   architecturePlan: ArchitecturePlan | null;
+  selectedRecipeId: string | null;
   complexityRoute: 'one-shot' | 'multi-phase' | null;
   generatedFiles: GeneratedFile[];
   warnings: string[];
+}
+
+export interface GenerationPipelineOptions {
+  requestId?: string;
+  beginnerMode?: boolean;
 }
 
 export class GenerationPipeline {
@@ -91,7 +99,7 @@ export class GenerationPipeline {
   async runGeneration(
     userPrompt: string,
     callbacks: PipelineCallbacks = {},
-    options?: { requestId?: string }
+    options?: GenerationPipelineOptions
   ): Promise<GenerationResult> {
     const contextLogger = options?.requestId ? logger.withRequestId(options.requestId) : logger;
 
@@ -154,32 +162,40 @@ export class GenerationPipeline {
     callbacks.onStageStart?.('planning', 'Drafting architecture plan…');
     const planningStageStartMs = Date.now();
     contextLogger.debug('Enhanced Planning stage start');
-
-    const planSystemPrompt = this.promptProvider.getArchitecturePlanningPrompt(userPrompt, intentOutput);
-    const planningPromise = this.planningProvider.generate({
-      prompt: userPrompt,
-      systemInstruction: planSystemPrompt,
-      maxOutputTokens: this.promptProvider.tokenBudgets.architecturePlanning,
-      responseSchema: ARCHITECTURE_PLAN_JSON_SCHEMA,
-      signal: callbacks.signal,
-    });
+    const planningPromise = options?.beginnerMode
+      ? null
+      : this.planningProvider.generate({
+          prompt: userPrompt,
+          systemInstruction: this.promptProvider.getArchitecturePlanningPrompt(userPrompt, intentOutput),
+          maxOutputTokens: this.promptProvider.tokenBudgets.architecturePlanning,
+          responseSchema: ARCHITECTURE_PLAN_JSON_SCHEMA,
+          signal: callbacks.signal,
+        });
 
     // ── Recipe Selection (runs while planning is in flight) ────────────────────
     const recipe = selectRecipe(intentOutput, {
       fullstackEnabled: config.recipes.fullstackEnabled,
+      beginnerMode: options?.beginnerMode,
     }, userPrompt);
     contextLogger.info('Recipe selected', { recipeId: recipe.id });
     this.promptProvider.setRecipe?.(recipe);
 
     // ── Await planning result ─────────────────────────────────────────────────
-    let architecturePlan = await this.resolveArchitecturePlan(
-      userPrompt,
-      intentOutput,
-      planningPromise,
-      callbacks,
-      contextLogger,
-      planningStageStartMs
-    );
+    let architecturePlan: ArchitecturePlan;
+    if (options?.beginnerMode) {
+      architecturePlan = buildHeuristicPlan(intentOutput, userPrompt, recipe);
+      callbacks.onStageComplete?.('planning');
+    } else {
+      architecturePlan = await this.resolveArchitecturePlan(
+        userPrompt,
+        intentOutput,
+        planningPromise!,
+        callbacks,
+        contextLogger,
+        planningStageStartMs,
+        recipe
+      );
+    }
 
     if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
 
@@ -297,6 +313,7 @@ export class GenerationPipeline {
     return {
       intentOutput,
       architecturePlan,
+      selectedRecipeId: recipe.id,
       complexityRoute,
       generatedFiles: allGeneratedFiles,
       warnings: allWarnings,
@@ -631,7 +648,8 @@ export class GenerationPipeline {
     initialPlanningPromise: Promise<{ success: boolean; content?: string | null; error?: string | null }>,
     callbacks: PipelineCallbacks,
     contextLogger: typeof logger,
-    planningStageStartMs: number
+    planningStageStartMs: number,
+    selectedRecipe: GenerationRecipe
   ): Promise<ArchitecturePlan> {
     let lastError: unknown;
     let lastRawContent: string | undefined;
@@ -688,6 +706,10 @@ export class GenerationPipeline {
 
     const finalMessage = lastError instanceof Error ? lastError.message : String(lastError);
     callbacks.onStageFailed?.('planning', finalMessage);
-    throw new Error(`Planning stage failed after retry: ${finalMessage}`);
+    contextLogger.warn('Planning stage failed after retry, falling back to heuristic plan', {
+      error: finalMessage,
+      recipeId: selectedRecipe.id,
+    });
+    return buildHeuristicPlan(intentOutput, userPrompt, selectedRecipe);
   }
 }

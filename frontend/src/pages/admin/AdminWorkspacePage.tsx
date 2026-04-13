@@ -1,5 +1,5 @@
 /**
- * AdminWorkspacePage — /admin/:orgId/workspaces/:wid
+ * AdminWorkspacePage - /admin/:orgId/workspaces/:wid
  * Members list with invite modal and remove action.
  */
 
@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 import { useAuthState } from '@/context/AuthContext.context';
+import { useToastActions } from '@/context/ToastContext';
 import { AdminLayout } from './AdminLayout';
 import './AdminWorkspacePage.css';
 
@@ -19,10 +20,63 @@ interface Member {
     status: 'joined' | 'pending' | 'expired';
 }
 
+interface WorkspaceDetails {
+    id: string;
+    name: string;
+    beginner_mode: boolean;
+    created_at: string;
+}
+
+interface MemberMetricsRow {
+    memberId: string;
+    totalGenerations: number;
+    repairCount: number;
+    lastActive: string;
+}
+
+const RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+
+function formatRelativeTime(value: string): string {
+    const time = new Date(value);
+    if (Number.isNaN(time.getTime())) return 'Unknown';
+
+    const diffMs = time.getTime() - Date.now();
+    const minutes = Math.round(diffMs / 60000);
+    if (Math.abs(minutes) < 60) return RELATIVE_TIME_FORMATTER.format(minutes, 'minute');
+
+    const hours = Math.round(minutes / 60);
+    if (Math.abs(hours) < 24) return RELATIVE_TIME_FORMATTER.format(hours, 'hour');
+
+    const days = Math.round(hours / 24);
+    if (Math.abs(days) < 30) return RELATIVE_TIME_FORMATTER.format(days, 'day');
+
+    const months = Math.round(days / 30);
+    if (Math.abs(months) < 12) return RELATIVE_TIME_FORMATTER.format(months, 'month');
+
+    const years = Math.round(months / 12);
+    return RELATIVE_TIME_FORMATTER.format(years, 'year');
+}
+
+function truncateMemberId(id: string): string {
+    if (id.length <= 14) return id;
+    return `${id.slice(0, 8)}...${id.slice(-4)}`;
+}
+
 export function AdminWorkspacePage() {
     const { orgId, wid } = useParams<{ orgId: string; wid: string }>();
     const { session } = useAuthState();
+    const { addToast } = useToastActions();
+
     const [members, setMembers] = useState<Member[]>([]);
+    const [workspaceDetails, setWorkspaceDetails] = useState<WorkspaceDetails | null>(null);
+    const [beginnerMode, setBeginnerMode] = useState(false);
+    const [isSavingBeginnerMode, setIsSavingBeginnerMode] = useState(false);
+    const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(true);
+
+    const [metricsRows, setMetricsRows] = useState<MemberMetricsRow[]>([]);
+    const [isMetricsLoading, setIsMetricsLoading] = useState(true);
+    const [metricsError, setMetricsError] = useState<string | null>(null);
+
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showInviteModal, setShowInviteModal] = useState(false);
@@ -35,6 +89,8 @@ export function AdminWorkspacePage() {
     useEffect(() => {
         if (!session || !orgId || !wid) return;
         loadMembers();
+        loadWorkspaceDetails();
+        loadMetrics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session?.accessToken, orgId, wid]);
 
@@ -54,6 +110,87 @@ export function AdminWorkspacePage() {
             setError(e instanceof Error ? e.message : 'Failed to load members');
         } finally {
             setIsLoading(false);
+        }
+    }
+
+    async function loadWorkspaceDetails() {
+        setIsWorkspaceLoading(true);
+        try {
+            const res = await fetch(`${FUNCTIONS_BASE_URL}/org/${orgId}/workspaces/${wid}`, {
+                headers: {
+                    'Authorization': `Bearer ${session!.accessToken}`,
+                    'apikey': SUPABASE_ANON_KEY,
+                },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json() as WorkspaceDetails;
+            setWorkspaceDetails(data);
+            setBeginnerMode(data.beginner_mode);
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Failed to load workspace settings';
+            setError(message);
+        } finally {
+            setIsWorkspaceLoading(false);
+        }
+    }
+
+    async function loadMetrics() {
+        setIsMetricsLoading(true);
+        setMetricsError(null);
+        try {
+            const res = await fetch(`${FUNCTIONS_BASE_URL}/org/${orgId}/workspaces/${wid}/metrics`, {
+                headers: {
+                    'Authorization': `Bearer ${session!.accessToken}`,
+                    'apikey': SUPABASE_ANON_KEY,
+                },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            setMetricsRows(await res.json() as MemberMetricsRow[]);
+        } catch (e) {
+            setMetricsError(e instanceof Error ? e.message : 'Failed to load metrics');
+        } finally {
+            setIsMetricsLoading(false);
+        }
+    }
+
+    async function handleBeginnerModeToggle(nextValue: boolean) {
+        if (!session || !orgId || !wid || isSavingBeginnerMode) return;
+
+        const previousValue = beginnerMode;
+        setBeginnerMode(nextValue);
+        setIsSavingBeginnerMode(true);
+
+        try {
+            const res = await fetch(`${FUNCTIONS_BASE_URL}/org/${orgId}/workspaces/${wid}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.accessToken}`,
+                    'apikey': SUPABASE_ANON_KEY,
+                },
+                body: JSON.stringify({ beginner_mode: nextValue }),
+            });
+
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error ?? `HTTP ${res.status}`);
+            }
+
+            const updated = await res.json() as WorkspaceDetails;
+            setWorkspaceDetails(updated);
+            setBeginnerMode(updated.beginner_mode);
+            addToast({
+                type: 'success',
+                message: `Beginner Mode ${updated.beginner_mode ? 'enabled' : 'disabled'}.`,
+            });
+        } catch (e) {
+            setBeginnerMode(previousValue);
+            addToast({
+                type: 'error',
+                message: e instanceof Error ? e.message : 'Failed to update Beginner Mode.',
+            });
+        } finally {
+            setIsSavingBeginnerMode(false);
         }
     }
 
@@ -137,8 +274,36 @@ export function AdminWorkspacePage() {
                     </div>
                 </div>
 
-                {isLoading && <p style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.875rem' }}>Loading…</p>}
+                {isLoading && <p style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.875rem' }}>Loading...</p>}
                 {error && <p style={{ color: 'hsl(var(--destructive))', fontSize: '0.875rem' }}>{error}</p>}
+
+                <section className="workspace-settings-card">
+                    <div className="workspace-settings-card__header">
+                        <div>
+                            <h2 className="workspace-settings-card__title">Beginner Mode</h2>
+                            <p className="workspace-settings-card__description">
+                                Restricts app generation to classroom-safe patterns (4-6 files, no fetch/axios)
+                            </p>
+                        </div>
+                        <label className="workspace-toggle" aria-label="Toggle Beginner Mode">
+                            <input
+                                type="checkbox"
+                                checked={beginnerMode}
+                                disabled={isSavingBeginnerMode || isWorkspaceLoading}
+                                onChange={(event) => handleBeginnerModeToggle(event.target.checked)}
+                            />
+                            <span className="workspace-toggle__track">
+                                <span className="workspace-toggle__thumb" />
+                            </span>
+                        </label>
+                    </div>
+                    {isSavingBeginnerMode && <p className="workspace-settings-card__status">Saving...</p>}
+                    {!isSavingBeginnerMode && workspaceDetails && (
+                        <p className="workspace-settings-card__status">
+                            Current mode: {workspaceDetails.beginner_mode ? 'Beginner' : 'Standard'}
+                        </p>
+                    )}
+                </section>
 
                 {!isLoading && members.length === 0 && (
                     <div className="admin-empty">
@@ -173,7 +338,7 @@ export function AdminWorkspacePage() {
                                             disabled={removingId === m.id}
                                             aria-label={`Remove ${m.display_name}`}
                                         >
-                                            {removingId === m.id ? '…' : 'Remove'}
+                                            {removingId === m.id ? '...' : 'Remove'}
                                         </button>
                                     </td>
                                 </tr>
@@ -181,6 +346,41 @@ export function AdminWorkspacePage() {
                         </tbody>
                     </table>
                 )}
+
+                <section className="workspace-metrics-section">
+                    <h2 className="workspace-metrics-section__title">Instructor Metrics</h2>
+                    {isMetricsLoading && (
+                        <p className="workspace-metrics-section__status">Loading metrics...</p>
+                    )}
+                    {metricsError && (
+                        <p className="workspace-metrics-section__error">{metricsError}</p>
+                    )}
+                    {!isMetricsLoading && !metricsError && metricsRows.length === 0 && (
+                        <p className="workspace-metrics-section__status">No generations recorded yet</p>
+                    )}
+                    {!isMetricsLoading && !metricsError && metricsRows.length > 0 && (
+                        <table className="member-table member-table--metrics">
+                            <thead>
+                                <tr>
+                                    <th>Member ID</th>
+                                    <th>Generations</th>
+                                    <th>Repairs</th>
+                                    <th>Last Active</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {metricsRows.map((row) => (
+                                    <tr key={row.memberId}>
+                                        <td className="member-id-cell" title={row.memberId}>{truncateMemberId(row.memberId)}</td>
+                                        <td>{row.totalGenerations}</td>
+                                        <td>{row.repairCount}</td>
+                                        <td>{formatRelativeTime(row.lastActive)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </section>
             </div>
 
             {showInviteModal && (
@@ -232,7 +432,7 @@ export function AdminWorkspacePage() {
                                     className="admin-primary-btn"
                                     disabled={isInviting}
                                 >
-                                    {isInviting ? 'Sending…' : 'Send invite'}
+                                    {isInviting ? 'Sending...' : 'Send invite'}
                                 </button>
                             </div>
                         </form>

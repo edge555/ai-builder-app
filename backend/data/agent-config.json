@@ -39,8 +39,8 @@
       "taskType": "execution",
       "models": [
         {
-          "id": "minimax/minimax-m2.5",
-          "label": "MiniMax M2.5",
+          "id": "google/gemini-2.5-flash",
+          "label": "Gemini 2.5 Flash",
           "active": true,
           "priority": 0
         },
@@ -51,8 +51,8 @@
           "priority": 1
         },
         {
-          "id": "google/gemini-2.5-flash",
-          "label": "Gemini 2.5 Flash",
+          "id": "minimax/minimax-m2.5",
+          "label": "MiniMax M2.5",
           "active": true,
           "priority": 2
         }

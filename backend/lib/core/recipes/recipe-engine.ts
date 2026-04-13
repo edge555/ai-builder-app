@@ -46,6 +46,8 @@ const PROJECT_TYPE_TO_RECIPE: Record<string, string> = {
 export interface RecipeSelectorOptions {
   /** When false, always returns react-spa regardless of intent. */
   fullstackEnabled: boolean;
+  /** When true, force beginner-safe SPA recipe regardless of intent. */
+  beginnerMode?: boolean;
 }
 
 /**
@@ -92,6 +94,10 @@ export function selectRecipe(
   options: RecipeSelectorOptions,
   userPrompt?: string
 ): GenerationRecipe {
+  if (options.beginnerMode) {
+    return getRecipe('react-spa-beginner') ?? getDefaultRecipe();
+  }
+
   if (!options.fullstackEnabled || !intent) {
     return getDefaultRecipe();
   }
@@ -168,8 +174,12 @@ export function composeExecutionPrompt(
     }
   }
 
+  const fileStructureBlock = Array.isArray(recipe.fileStructure)
+    ? `=== PROJECT STRUCTURE ===\n- ${recipe.fileStructure.join('\n- ')}`
+    : recipe.fileStructure;
+
   // Preamble
-  const preamble = recipe.id === 'react-spa'
+  const preamble = recipe.id.startsWith('react-spa')
     ? 'You are a SENIOR React architect generating production-quality, modular React applications.\nCRITICAL: NEVER put everything in App.tsx — use proper component separation.'
     : `You are a SENIOR full-stack developer generating production-quality ${recipe.name} applications.\nCRITICAL: Follow the file structure and patterns exactly as specified.`;
 
@@ -186,7 +196,7 @@ Format: { "files": [ { "path": "relative/file/path", "content": "complete file c
     OUTPUT_FORMAT,
     intentBlock,
     planBlock,
-    recipe.fileStructure,
+    fileStructureBlock,
     '\n=== COMPONENT RULES ===',
     '- Single responsibility, under 80 lines each. Split if larger.',
     '- UI components = pure presentation via props. Containers = state + data flow. Hooks = reusable logic.',
@@ -195,7 +205,7 @@ Format: { "files": [ { "path": "relative/file/path", "content": "complete file c
     ...fragmentSections,
     useDesignSystem ? `${DESIGN_SYSTEM_CONSTANTS}\n` : '',
     // CSS best practices (only for SPA — fullstack recipes have their own patterns)
-    recipe.id === 'react-spa' ? CSS_BEST_PRACTICES : '',
+    recipe.id.startsWith('react-spa') ? CSS_BEST_PRACTICES : '',
     getOutputBudgetGuidance(MAX_OUTPUT_TOKENS_GENERATION),
     getQualityBarReference(complexity),
     wrapUserInput(userPrompt),
