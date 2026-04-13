@@ -33,6 +33,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
   const [repairPhase, setRepairPhase] = useState<RepairPhase>('idle');
   const [isAutoRepairing, setIsAutoRepairing] = useState(false);
   const [repairAttempts, setRepairAttempts] = useState(0);
+  const [repairExplanation, setRepairExplanation] = useState<string | null>(null);
 
   const lastErrorRef = useRef<string | null>(null);
   const autoRepairTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -133,6 +134,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     setCurrentError(null);
     setErrorQueue([]);
     setAggregatedErrors(null);
+    setRepairExplanation(null);
     lastErrorRef.current = null;
     errorAggregator.clear();
 
@@ -149,6 +151,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     setIsAutoRepairing(true);
     setRepairAttempts(prev => prev + 1);
     setRepairPhase('repairing');
+    setRepairExplanation(null);
   }, []);
 
   /**
@@ -177,6 +180,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
         // Will retry on next error detection
         setRepairPhase('detecting');
       }
+      setRepairExplanation(null);
     }
   }, []);
 
@@ -192,6 +196,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
       clearTimeout(autoRepairTimeoutRef.current);
       autoRepairTimeoutRef.current = null;
     }
+    setRepairExplanation(null);
   }, []);
 
   /**
@@ -221,6 +226,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     isAutoRepairing,
     repairAttempts,
     maxRepairAttempts: MAX_REPAIR_ATTEMPTS,
+    repairExplanation,
   }), [
     currentError,
     errorQueue,
@@ -228,6 +234,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     repairPhase,
     isAutoRepairing,
     repairAttempts,
+    repairExplanation,
   ]);
 
   const actionsValue = useMemo<PreviewErrorActions>(() => ({
@@ -241,6 +248,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     shouldAutoRepair,
     setRepairPhase,
     dismissRepairStatus,
+    setRepairExplanation,
   }), [
     reportError,
     reportAggregatedErrors,
@@ -251,6 +259,7 @@ export function PreviewErrorProvider({ children }: { children: React.ReactNode }
     resetRepairAttempts,
     shouldAutoRepair,
     dismissRepairStatus,
+    setRepairExplanation,
   ]);
 
   // Combined value for backward compatibility

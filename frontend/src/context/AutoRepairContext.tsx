@@ -66,18 +66,20 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
       );
 
       generationActions.autoRepair(errorToRepair, projectState, previewErrorState.aggregatedErrors)
-        .then(success => {
-          if (success) {
+        .then(result => {
+          if (result.success) {
             // Repair succeeded
+            previewErrorActions.setRepairExplanation(result.explanation ?? null);
             previewErrorActions.completeAutoRepair(true);
             generationActions.resetAutoRepair();
 
             // Add assistant message
             chatMessages.addAssistantMessage(
-              `✅ Auto-repair successful: Fixed ${errorToRepair.type.toLowerCase().replace('_', ' ')} in ${errorToRepair.filePath || 'the application'}.`
+              `✅ Auto-repair successful: ${result.explanation ?? `Fixed ${errorToRepair.type.toLowerCase().replace('_', ' ')} in ${errorToRepair.filePath || 'the application'}.`}`
             );
           } else {
             // Repair failed
+            previewErrorActions.setRepairExplanation(null);
             previewErrorActions.completeAutoRepair(false);
 
             // Suggest revert after final attempt
@@ -92,6 +94,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
         .catch(error => {
           // Handle unexpected errors during auto-repair
           repairLogger.error('Auto-repair failed', { error: error instanceof Error ? error.message : String(error) });
+          previewErrorActions.setRepairExplanation(null);
           previewErrorActions.completeAutoRepair(false);
           chatMessages.addAssistantMessage(
             `❌ Auto-repair encountered an error: ${error.message || 'Unknown error'}`
@@ -103,6 +106,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
         });
     } else {
       // No error or project to repair
+      previewErrorActions.setRepairExplanation(null);
       previewErrorActions.completeAutoRepair(false);
       isEvaluatingRef.current = false;
     }
@@ -120,6 +124,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
     // Stable actions (wrapped in useCallback)
     previewErrorActions.startAutoRepair,
     previewErrorActions.completeAutoRepair,
+    previewErrorActions.setRepairExplanation,
     generationActions.autoRepair,
     generationActions.resetAutoRepair,
     chatMessages.addAssistantMessage,
@@ -152,14 +157,17 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
       );
 
       const success = await generationActions.autoRepair(errorToRepair, projectState, previewErrorState.aggregatedErrors);
+      const wasSuccessful = success.success;
 
-      if (success) {
+      if (wasSuccessful) {
+        previewErrorActions.setRepairExplanation(success.explanation ?? null);
         previewErrorActions.completeAutoRepair(true);
         generationActions.resetAutoRepair();
         chatMessages.addAssistantMessage(
-          `✅ Auto-repair successful: Fixed ${errorToRepair.type.toLowerCase().replace('_', ' ')} in ${errorToRepair.filePath || 'the application'}.`
+          `✅ Auto-repair successful: ${success.explanation ?? `Fixed ${errorToRepair.type.toLowerCase().replace('_', ' ')} in ${errorToRepair.filePath || 'the application'}.`}`
         );
       } else {
+        previewErrorActions.setRepairExplanation(null);
         previewErrorActions.completeAutoRepair(false);
         const isLastAttempt = generationState.autoRepairAttempt + 1 >= previewErrorState.maxRepairAttempts;
         if (isLastAttempt) {
@@ -169,10 +177,11 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      return success;
+      return wasSuccessful;
     } catch (error) {
       // Handle unexpected errors during manual repair
       repairLogger.error('Manual auto-repair failed', { error: error instanceof Error ? error.message : String(error) });
+      previewErrorActions.setRepairExplanation(null);
       previewErrorActions.completeAutoRepair(false);
       chatMessages.addAssistantMessage(
         `❌ Auto-repair encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -186,6 +195,7 @@ export function AutoRepairProvider({ children }: { children: ReactNode }) {
     previewErrorState.maxRepairAttempts,
     previewErrorActions.startAutoRepair,
     previewErrorActions.completeAutoRepair,
+    previewErrorActions.setRepairExplanation,
     generationState.autoRepairAttempt,
     generationActions.autoRepair,
     generationActions.resetAutoRepair,

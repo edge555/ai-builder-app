@@ -22,6 +22,8 @@ export interface PreviewErrorState {
     repairAttempts: number;
     /** Maximum repair attempts allowed */
     maxRepairAttempts: number;
+    /** One-line human-readable explanation of the last successful repair */
+    repairExplanation: string | null;
 }
 
 /**
@@ -48,6 +50,8 @@ export interface PreviewErrorActions {
     setRepairPhase: (phase: RepairPhase) => void;
     /** Dismiss the repair status */
     dismissRepairStatus: () => void;
+    /** Set one-line explanation for the current/last successful repair */
+    setRepairExplanation: (explanation: string | null) => void;
 }
 
 export type PreviewErrorContextValue = PreviewErrorState & PreviewErrorActions;
@@ -80,4 +84,3 @@ export function usePreviewErrorActions(): PreviewErrorActions {
     }
     return context;
 }
-

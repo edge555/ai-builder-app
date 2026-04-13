@@ -9,6 +9,16 @@ vi.mock('../../../lib/core/streaming-generator', () => ({
     createStreamingProjectGenerator: vi.fn(),
 }));
 
+vi.mock('../../../lib/security', () => ({
+    applyRateLimit: vi.fn(async () => ({ blocked: null, headers: {} })),
+    RateLimitTier: {
+        HIGH_COST: 'HIGH_COST',
+        MEDIUM_COST: 'MEDIUM_COST',
+        LOW_COST: 'LOW_COST',
+        CONFIG: 'CONFIG',
+    },
+}));
+
 describe('POST /api/generate-stream', () => {
     let mockGenerator: any;
 
@@ -52,6 +62,7 @@ describe('POST /api/generate-stream', () => {
         const controller = new AbortController();
         const request = new NextRequest('http://localhost/api/generate-stream', {
             method: 'POST',
+            headers: { origin: 'http://localhost:8080' },
             body: JSON.stringify({ description: 'A test project' }),
             signal: controller.signal,
         });
@@ -73,12 +84,7 @@ describe('POST /api/generate-stream', () => {
         expect(done).toBe(true);
 
         // Verify generator received the signal
-        expect(mockGenerator.generateProjectStreaming).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({
-                signal: expect.any(AbortSignal),
-            })
-        );
+        expect(mockGenerator.generateProjectStreaming).toHaveBeenCalled();
 
         // Verify the signal passed to generator is aborted
         const callArgs = mockGenerator.generateProjectStreaming.mock.calls[0];
@@ -90,6 +96,7 @@ describe('POST /api/generate-stream', () => {
         const controller = new AbortController();
         const request = new NextRequest('http://localhost/api/generate-stream', {
             method: 'POST',
+            headers: { origin: 'http://localhost:8080' },
             body: JSON.stringify({ description: 'Test' }),
             signal: controller.signal,
         });

@@ -10,10 +10,12 @@ import { NextRequest } from 'next/server';
 import type { GenerateProjectResponse } from '@ai-app-builder/shared';
 import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import { serializeProjectState, serializeVersion, GenerateProjectRequestSchema } from '@ai-app-builder/shared';
-import { createProjectGenerator } from '../../../lib/core';
+import { createStreamingProjectGenerator } from '../../../lib/core/streaming-generator';
 import { getCorsHeaders, handleOptions, handleError, AppError, gzipJson, parseJsonRequest } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
+import { requireAuth } from '../../../lib/security/auth';
+import { resolveWorkspaceProvider } from '../../../lib/security/workspace-resolver';
 
 const logger = createLogger('api/generate');
 
@@ -40,14 +42,47 @@ export async function POST(request: NextRequest): Promise<Response> {
     const parsed = await parseJsonRequest(request, GenerateProjectRequestSchema);
     if (!parsed.ok) return parsed.response;
     const validatedRequest = parsed.data;
+    let workspaceProvider = undefined;
+    let beginnerMode = false;
+
+    if (validatedRequest.workspaceId) {
+      const authResult = await requireAuth(request);
+      if (authResult instanceof Response) return authResult;
+
+      const resolved = await resolveWorkspaceProvider(authResult.userId, validatedRequest.workspaceId);
+      if (!resolved) {
+        // Supabase not configured or org has no key - fall through to default provider
+      } else if ('forbidden' in resolved) {
+        return new Response(
+          JSON.stringify({ error: 'Not a member of this workspace' }),
+          {
+            status: 403,
+            headers: {
+              ...getCorsHeaders(request),
+              ...rlHeaders,
+              'Content-Type': 'application/json',
+              'X-Request-Id': requestId,
+            }
+          }
+        );
+      } else {
+        workspaceProvider = resolved.provider;
+        beginnerMode = resolved.beginnerMode;
+      }
+    }
 
     contextLogger.info('Generating project', {
       descriptionLength: validatedRequest.description.length,
+      workspaceMode: !!workspaceProvider,
     });
 
-    // Generate project
-    const generator = await createProjectGenerator();
-    const result = await generator.generateProject(validatedRequest.description, { requestId });
+    // Generate project using the same pipeline/beginnerMode path as generate-stream
+    const generator = await createStreamingProjectGenerator(workspaceProvider);
+    const result = await generator.generateProjectStreaming(
+      validatedRequest.description,
+      { signal: request.signal },
+      { requestId, beginnerMode }
+    );
 
     if (!result.success) {
       if (result.validationErrors) {

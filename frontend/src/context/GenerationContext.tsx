@@ -111,9 +111,9 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     runtimeError: RuntimeError,
     projectState: SerializedProjectState | null,
     aggregatedErrors?: AggregatedErrors | null
-  ): Promise<boolean> => {
+  ) => {
     if (isAutoRepairingRef.current) {
-      return false;
+      return { success: false, error: 'Repair already in progress' };
     }
 
     const result = await repairService.runRepair({
@@ -132,7 +132,13 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       genLogger.error('Repair failed', { error: result.error });
     }
 
-    return result.success;
+    return {
+      success: result.success,
+      partialSuccess: result.partialSuccess,
+      rolledBackFiles: result.rolledBackFiles,
+      explanation: result.explanation,
+      error: result.error,
+    };
   }, [repairService]);
 
   const stateValue = useMemo<GenerationStateValue>(() => ({

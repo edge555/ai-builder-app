@@ -4,7 +4,7 @@ const pool = process.env.VITEST_POOL ?? 'forks';
 
 export default defineConfig({
   test: {
-    include: ['lib/**/*.test.ts'],
+    include: ['lib/**/*.test.ts', 'app/api/__tests__/**/*.test.ts'],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',

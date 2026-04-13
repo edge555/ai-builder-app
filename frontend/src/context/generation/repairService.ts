@@ -9,6 +9,27 @@ import type {
 
 const DEFAULT_MAX_ATTEMPTS = 5;
 
+function toSentence(text: string): string {
+    const trimmed = text.trim().replace(/\s+/g, ' ');
+    if (!trimmed) return '';
+    return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function summarizeRepair(
+    changeSummary: { description?: string } | undefined,
+    filePath?: string | null
+): string | undefined {
+    if (changeSummary?.description && changeSummary.description.trim().length > 0) {
+        return toSentence(`Fixed: ${changeSummary.description}`);
+    }
+
+    if (filePath) {
+        return `Fixed: Resolved an issue in ${filePath}.`;
+    }
+
+    return 'Fixed: Applied automatic code corrections.';
+}
+
 export interface RepairService {
     reset: () => void;
     runRepair: (options: RepairExecutionOptions) => Promise<RepairExecutionResult>;
@@ -110,6 +131,7 @@ export function createRepairService({
                         attempt,
                         partialSuccess: result.partialSuccess,
                         rolledBackFiles: result.rolledBackFiles,
+                        explanation: summarizeRepair(result.changeSummary, runtimeError.filePath),
                     };
                 }
 

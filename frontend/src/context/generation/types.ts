@@ -77,6 +77,7 @@ export interface RepairExecutionResult {
     partialSuccess?: boolean;
     rolledBackFiles?: string[];
     error?: string;
+    explanation?: string;
 }
 
 export interface OperationResult<TResponse extends GenerateProjectResponse | ModifyProjectResponse> {

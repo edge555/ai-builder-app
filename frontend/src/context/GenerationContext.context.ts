@@ -5,6 +5,14 @@ import { createContext, useContext } from 'react';
 import type { LoadingPhase } from '../components/ChatInterface';
 import type { ModifyProjectOptions, ModifyProjectStreamingOptions, StreamSnapshot } from './generation/types';
 
+export interface AutoRepairResult {
+    success: boolean;
+    partialSuccess?: boolean;
+    rolledBackFiles?: string[];
+    explanation?: string;
+    error?: string;
+}
+
 /**
  * Read-only generation state.
  * Components subscribing to this context will only re-render when state changes.
@@ -28,7 +36,7 @@ export interface GenerationActionsValue {
     generateProjectStreaming: (description: string, attachments?: ImageAttachment[]) => Promise<GenerateProjectResponse>;
     modifyProject: (currentState: SerializedProjectState, prompt: string, runtimeError?: RuntimeError, options?: ModifyProjectOptions) => Promise<ModifyProjectResponse>;
     modifyProjectStreaming: (currentState: SerializedProjectState, prompt: string, runtimeError?: RuntimeError, options?: ModifyProjectStreamingOptions) => Promise<ModifyProjectResponse>;
-    autoRepair: (runtimeError: RuntimeError, projectState: SerializedProjectState | null, aggregatedErrors?: AggregatedErrors | null) => Promise<boolean>;
+    autoRepair: (runtimeError: RuntimeError, projectState: SerializedProjectState | null, aggregatedErrors?: AggregatedErrors | null) => Promise<AutoRepairResult>;
     resetAutoRepair: () => void;
     setIsLoading: (loading: boolean) => void;
     setLoadingPhase: (phase: LoadingPhase) => void;

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET, PUT, OPTIONS } from '../provider-config/route';
+import { requireAuth } from '../../../lib/security/auth';
 
 // Mock the security module
 vi.mock('../../../lib/security', () => ({
@@ -10,6 +11,10 @@ vi.mock('../../../lib/security', () => ({
         CONFIG: 'CONFIG',
         HIGH_COST: 'HIGH_COST',
     },
+}));
+
+vi.mock('../../../lib/security/auth', () => ({
+    requireAuth: vi.fn(),
 }));
 
 // Mock the API utilities
@@ -60,6 +65,7 @@ describe('Provider Config API Endpoint', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(requireAuth).mockResolvedValue({ userId: 'test-user' } as never);
     });
 
     describe('OPTIONS /api/provider-config', () => {
@@ -107,7 +113,7 @@ describe('Provider Config API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            vi.mocked(applyRateLimit).mockResolvedValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: rateLimitResponse, headers: {} });
 
             const request = new NextRequest('http://localhost/api/provider-config', {
                 method: 'GET',
@@ -278,7 +284,7 @@ describe('Provider Config API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            vi.mocked(applyRateLimit).mockResolvedValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: rateLimitResponse, headers: {} });
 
             const requestBody = { aiProvider: 'openrouter' };
             const request = new NextRequest('http://localhost/api/provider-config', {
@@ -307,3 +313,4 @@ describe('Provider Config API Endpoint', () => {
         });
     });
 });
+

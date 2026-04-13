@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCorsHeaders, handleOptions, handleError, parseJsonRequest, withRouteContext } from '../../../lib/api';
 import { load, save } from '../../../lib/ai/agent-config-store';
-import { applyRateLimit, RateLimitTier, requireAuth } from '../../../lib/security';
+import { applyRateLimit, RateLimitTier } from '../../../lib/security';
+import { requireAuth } from '../../../lib/security/auth';
 
 export async function OPTIONS() {
   return handleOptions();

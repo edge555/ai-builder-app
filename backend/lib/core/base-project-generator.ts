@@ -1,6 +1,6 @@
 /**
  * Base Project Generator
- * Contains shared functionality between ProjectGenerator and StreamingProjectGenerator.
+ * Contains shared functionality for generation flows.
  */
 
 import type { FileDiff, RepairAttempt } from '@ai-app-builder/shared';
@@ -51,7 +51,7 @@ const DOMAIN_KEYWORDS: Array<{ pattern: RegExp; word: string }> = [
 
 /**
  * Abstract base class for project generators.
- * Contains shared logic for both streaming and non-streaming generation.
+ * Contains shared logic for streaming generation and repair workflows.
  */
 export abstract class BaseProjectGenerator {
     protected readonly bugfixProvider: AIProvider;

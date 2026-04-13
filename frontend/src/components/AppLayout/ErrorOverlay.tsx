@@ -21,6 +21,7 @@ export function ErrorOverlay() {
     maxRepairAttempts,
     aggregatedErrors,
     errorQueue,
+    repairExplanation,
   } = usePreviewErrorState();
 
   const { dismissRepairStatus, resetRepairAttempts, setRepairPhase } = usePreviewErrorActions();
@@ -62,6 +63,17 @@ export function ErrorOverlay() {
         onRevert={handleRevert}
         onViewDetails={() => setShowDetails(prev => !prev)}
       />
+
+      {repairPhase === 'success' && repairExplanation && (
+        <div className="error-overlay-details">
+          <div className="error-overlay-details-body">
+            <div className="error-overlay-detail-section">
+              <span className="error-overlay-detail-label">What was fixed</span>
+              <p className="error-overlay-detail-message error-overlay-detail-message--success">{repairExplanation}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDetails && repairPhase === 'failed' && (
         <div className="error-overlay-details">

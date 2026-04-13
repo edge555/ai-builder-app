@@ -331,7 +331,7 @@ describe('Revert API Endpoint', () => {
         it('should return rate limit response when rate limited', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const rateLimitResponse = new Response('Too Many Requests', { status: 429 });
-            vi.mocked(applyRateLimit).mockResolvedValue(rateLimitResponse);
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: rateLimitResponse, headers: {} });
 
             const request = new NextRequest('http://localhost/api/revert', {
                 method: 'POST',
@@ -418,3 +418,4 @@ describe('Revert API Endpoint', () => {
         });
     });
 });
+

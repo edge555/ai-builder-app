@@ -78,6 +78,10 @@
   word-break: break-word;
 }
 
+.error-overlay-detail-message--success {
+  color: var(--color-success, #2f855a);
+}
+
 .error-overlay-detail-stack {
   margin: 0;
   font-family: var(--font-mono, monospace);

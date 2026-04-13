@@ -42,29 +42,9 @@ export function usePreviewErrorHandlers() {
     actions.setRepairPhase(phase);
   }, [actions]);
 
-  const startAutoRepair = useCallback(() => {
-    actions.startAutoRepair();
-  }, [actions]);
-
-  const completeAutoRepair = useCallback((success: boolean) => {
-    actions.completeAutoRepair(success);
-  }, [actions]);
-
-  const shouldAutoRepair = useCallback(() => {
-    return actions.shouldAutoRepair();
-  }, [actions]);
-
   // Getter functions for state values (using refs)
   const getRepairPhase = useCallback(() => {
     return stateRef.current.repairPhase;
-  }, []);
-
-  const getAggregatedErrors = useCallback(() => {
-    return stateRef.current.aggregatedErrors;
-  }, []);
-
-  const getIsAutoRepairing = useCallback(() => {
-    return stateRef.current.isAutoRepairing;
   }, []);
 
   return {
@@ -73,13 +53,8 @@ export function usePreviewErrorHandlers() {
     reportAggregatedErrors,
     clearAllErrors,
     setRepairPhase,
-    startAutoRepair,
-    completeAutoRepair,
-    shouldAutoRepair,
 
     // Getter functions for state (returns current value without subscribing)
     getRepairPhase,
-    getAggregatedErrors,
-    getIsAutoRepairing,
   };
 }

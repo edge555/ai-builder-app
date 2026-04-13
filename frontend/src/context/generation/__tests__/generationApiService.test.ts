@@ -210,7 +210,7 @@ describe('generationApiService', () => {
             body: { getReader: () => ({}) },
         });
 
-        (parseSSEStream as any).mockImplementation(async (_reader: unknown, _handlers: unknown, signal?: AbortSignal) => {
+        (parseSSEStream as any).mockImplementation(async (_reader: unknown, _handlers: unknown) => {
             return new Promise<never>((_resolve, reject) => {
                 // Simulate abort
                 setTimeout(() => reject(Object.assign(new Error('AbortError'), { name: 'AbortError' })), 50);

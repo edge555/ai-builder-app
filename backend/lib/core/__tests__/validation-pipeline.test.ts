@@ -22,6 +22,8 @@ vi.mock('../validators', () => ({
   validateFilePaths: vi.fn(),
   detectForbiddenPatterns: vi.fn(),
   validateSyntax: vi.fn(),
+  validateCssSyntax: vi.fn(),
+  validateCssClassConsistency: vi.fn(),
   validateProjectQuality: vi.fn(),
   validateFileSizes: vi.fn(),
   validateProjectStructure: vi.fn(),
@@ -33,6 +35,8 @@ import {
   validateFilePaths,
   detectForbiddenPatterns,
   validateSyntax,
+  validateCssSyntax,
+  validateCssClassConsistency,
   validateProjectQuality,
   validateFileSizes,
   validateProjectStructure,
@@ -44,6 +48,8 @@ describe('ValidationPipeline class', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(validateCssSyntax).mockReturnValue([]);
+    vi.mocked(validateCssClassConsistency).mockReturnValue([]);
     pipeline = new ValidationPipeline();
   });
 
@@ -57,7 +63,9 @@ describe('ValidationPipeline class', () => {
       vi.mocked(validateFileSizes).mockReturnValue([]);
       vi.mocked(detectForbiddenPatterns).mockReturnValue([]);
       vi.mocked(validateSyntax).mockReturnValue([]);
+      vi.mocked(validateCssSyntax).mockReturnValue([]);
       vi.mocked(validateProjectQuality).mockReturnValue([]);
+      vi.mocked(validateCssClassConsistency).mockReturnValue([]);
 
       // Act
       const result = pipeline.validate(aiOutput);
@@ -76,7 +84,9 @@ describe('ValidationPipeline class', () => {
       vi.mocked(validateFileSizes).mockReturnValue([]);
       vi.mocked(detectForbiddenPatterns).mockReturnValue([]);
       vi.mocked(validateSyntax).mockReturnValue([]);
+      vi.mocked(validateCssSyntax).mockReturnValue([]);
       vi.mocked(validateProjectQuality).mockReturnValue([]);
+      vi.mocked(validateCssClassConsistency).mockReturnValue([]);
 
       // Act
       pipeline.validate(aiOutput);
@@ -88,7 +98,9 @@ describe('ValidationPipeline class', () => {
       expect(validateFileSizes).toHaveBeenCalled();
       expect(detectForbiddenPatterns).toHaveBeenCalled();
       expect(validateSyntax).toHaveBeenCalled();
+      expect(validateCssSyntax).toHaveBeenCalled();
       expect(validateProjectQuality).toHaveBeenCalled();
+      expect(validateCssClassConsistency).toHaveBeenCalled();
 
       // Check order
       const calls = [
@@ -98,7 +110,9 @@ describe('ValidationPipeline class', () => {
         validateFileSizes,
         detectForbiddenPatterns,
         validateSyntax,
+        validateCssSyntax,
         validateProjectQuality,
+        validateCssClassConsistency,
       ];
       for (let i = 1; i < calls.length; i++) {
         const prevCallOrder = vi.mocked(calls[i - 1]).mock.invocationCallOrder[0];
@@ -135,7 +149,9 @@ describe('ValidationPipeline class', () => {
       vi.mocked(validateFileSizes).mockReturnValue([]);
       vi.mocked(detectForbiddenPatterns).mockReturnValue([]);
       vi.mocked(validateSyntax).mockReturnValue([]);
+      vi.mocked(validateCssSyntax).mockReturnValue([]);
       vi.mocked(validateProjectQuality).mockReturnValue(warnings);
+      vi.mocked(validateCssClassConsistency).mockReturnValue([]);
 
       // Act
       const result = pipeline.validate(aiOutput);
@@ -144,6 +160,34 @@ describe('ValidationPipeline class', () => {
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
       expect(result.warnings).toEqual(warnings);
+    });
+
+    it('should include CSS class consistency warnings in final warnings', () => {
+      // Arrange
+      const aiOutput = { 'file.ts': 'content' };
+      const qualityWarnings = [
+        { type: 'architecture_warning', message: 'Quality warning 1' },
+      ] as ReturnType<typeof validateProjectQuality>;
+      const cssWarnings = [
+        { type: 'styling_warning', message: 'className "missing" was not found in CSS selectors' },
+      ] as ReturnType<typeof validateCssClassConsistency>;
+      vi.mocked(validateJsonStructure).mockReturnValue([]);
+      vi.mocked(validateProjectStructure).mockReturnValue([]);
+      vi.mocked(validateFilePaths).mockReturnValue([]);
+      vi.mocked(validateFileSizes).mockReturnValue([]);
+      vi.mocked(detectForbiddenPatterns).mockReturnValue([]);
+      vi.mocked(validateSyntax).mockReturnValue([]);
+      vi.mocked(validateCssSyntax).mockReturnValue([]);
+      vi.mocked(validateProjectQuality).mockReturnValue(qualityWarnings);
+      vi.mocked(validateCssClassConsistency).mockReturnValue(cssWarnings);
+
+      // Act
+      const result = pipeline.validate(aiOutput);
+
+      // Assert
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+      expect(result.warnings).toEqual([...qualityWarnings, ...cssWarnings]);
     });
   });
 

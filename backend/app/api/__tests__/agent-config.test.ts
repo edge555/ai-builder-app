@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET, PUT, OPTIONS } from '../agent-config/route';
+import { requireAuth } from '../../../lib/security/auth';
 
 // Mock the security module
 vi.mock('../../../lib/security', () => ({
@@ -10,6 +11,10 @@ vi.mock('../../../lib/security', () => ({
         CONFIG: 'CONFIG',
         HIGH_COST: 'HIGH_COST',
     },
+}));
+
+vi.mock('../../../lib/security/auth', () => ({
+    requireAuth: vi.fn(),
 }));
 
 // Mock the API utilities
@@ -87,6 +92,7 @@ describe('Agent Config API Endpoint', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(requireAuth).mockResolvedValue({ userId: 'test-user' } as never);
     });
 
     describe('OPTIONS /api/agent-config', () => {

@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { getCorsHeaders, handleOptions, handleError, parseJsonRequest, withRouteContext } from '../../../lib/api';
 import { getProviderConfigWithSource, saveProvider } from '../../../lib/ai/provider-config-store';
 import { resetProviderSingletons } from '../../../lib/ai/ai-provider-factory';
-import { applyRateLimit, RateLimitTier, requireAuth } from '../../../lib/security';
+import { applyRateLimit, RateLimitTier } from '../../../lib/security';
+import { requireAuth } from '../../../lib/security/auth';
 
 export async function OPTIONS() {
   return handleOptions();

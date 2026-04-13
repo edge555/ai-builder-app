@@ -11,6 +11,8 @@ import {
   validateFilePaths,
   detectForbiddenPatterns,
   validateSyntax,
+  validateCssSyntax,
+  validateCssClassConsistency,
   validateProjectQuality,
   validateFileSizes,
   validateProjectStructure,
@@ -50,6 +52,7 @@ function validate(aiOutput: unknown): ValidationResult {
 
   // Step 4: Validate syntax
   errors.push(...validateSyntax(files));
+  errors.push(...validateCssSyntax(files));
 
   if (errors.length > 0) {
     return {
@@ -58,8 +61,11 @@ function validate(aiOutput: unknown): ValidationResult {
     };
   }
 
-  // Step 5: Check project quality (architecture + styling, non-blocking warnings)
-  const qualityWarnings = validateProjectQuality(files);
+  // Step 5: Check project quality (architecture + styling + CSS class consistency, non-blocking warnings)
+  const qualityWarnings = [
+    ...validateProjectQuality(files),
+    ...validateCssClassConsistency(files),
+  ];
   if (qualityWarnings.length > 0) {
     logger.info('=== PROJECT QUALITY WARNINGS ===');
     for (const warning of qualityWarnings) {

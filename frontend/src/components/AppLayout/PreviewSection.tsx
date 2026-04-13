@@ -1,7 +1,7 @@
 import type { RuntimeError } from '@ai-app-builder/shared/types';
-import { useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useEffect, useCallback, lazy, Suspense } from 'react';
 
-import { useProjectState, useGenerationState, useGenerationActions } from '@/context';
+import { useProjectState, useGenerationState, useGenerationActions, useAutoRepair } from '@/context';
 import { usePreviewErrorHandlers } from '@/hooks/usePreviewErrorHandlers';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 import { createLogger } from '@/utils/logger';
@@ -27,16 +27,11 @@ export interface PreviewSectionProps {
 export function PreviewSection({ activePanel }: PreviewSectionProps) {
   const { projectState } = useProjectState();
   const { isLoading, loadingPhase, isAutoRepairing } = useGenerationState();
-  const { autoRepair, resetAutoRepair } = useGenerationActions();
+  const { resetAutoRepair } = useGenerationActions();
+  const { triggerAutoRepair } = useAutoRepair();
 
   // Use the new handler hook that doesn't cause re-renders on state changes
   const errorHandlers = usePreviewErrorHandlers();
-
-  // Store project state in ref for use in callbacks
-  const projectStateRef = useRef(projectState);
-  useEffect(() => {
-    projectStateRef.current = projectState;
-  }, [projectState]);
 
   // Reset auto-repair attempts when project state changes successfully
   useEffect(() => {
@@ -59,21 +54,13 @@ export function PreviewSection({ activePanel }: PreviewSectionProps) {
     errorHandlers.reportAggregatedErrors(errors);
   }, [errorHandlers]);
 
-  const handleAutoRepair = useCallback(async (runtimeError: RuntimeError) => {
-    if (!errorHandlers.shouldAutoRepair()) {
-      return;
-    }
-
-    errorHandlers.startAutoRepair();
-
+  const handleAutoRepair = useCallback(async (_runtimeError: RuntimeError) => {
     try {
-      const success = await autoRepair(runtimeError, projectStateRef.current);
-      errorHandlers.completeAutoRepair(success);
+      await triggerAutoRepair();
     } catch (error) {
-      logger.error('Auto-repair failed', { error });
-      errorHandlers.completeAutoRepair(false);
+      logger.error('Auto-repair trigger failed', { error });
     }
-  }, [autoRepair, errorHandlers]);
+  }, [triggerAutoRepair]);
 
   const handleBundlerIdle = useCallback(() => {
     // Only clear when no repair is pending or in-flight.
@@ -85,20 +72,6 @@ export function PreviewSection({ activePanel }: PreviewSectionProps) {
       errorHandlers.clearAllErrors();
     }
   }, [errorHandlers]);
-
-  // Auto-trigger repair when errors are ready and repair phase is 'repairing'
-  useEffect(() => {
-    const repairPhase = errorHandlers.getRepairPhase();
-    const aggregatedErrors = errorHandlers.getAggregatedErrors();
-    const isAutoRepairingCurrent = errorHandlers.getIsAutoRepairing();
-
-    if (repairPhase === 'repairing' && aggregatedErrors && aggregatedErrors.totalCount > 0 && !isAutoRepairingCurrent) {
-      const firstError = aggregatedErrors.errors[0];
-      if (firstError) {
-        handleAutoRepair(firstError);
-      }
-    }
-  }, [errorHandlers, handleAutoRepair]);
 
   // Determine if auto-repair button should be available
   const canAutoRepair = projectState !== null;

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 import { ZodError } from 'zod';
-import { handleError } from '../../api/utils';
+import { handleError } from '../../../lib/api/utils';
 
 // Mock next/server
 vi.mock('next/server', () => ({
@@ -16,7 +16,7 @@ vi.mock('next/server', () => ({
 }));
 
 // Mock logger
-vi.mock('../../logger', () => ({
+vi.mock('../../../lib/logger', () => ({
     createLogger: () => ({
         error: vi.fn(),
         info: vi.fn(),
