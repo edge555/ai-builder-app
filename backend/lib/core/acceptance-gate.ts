@@ -107,15 +107,37 @@ export class AcceptanceGate {
       };
       const fileIndex = indexProject(projectState);
       const dependencyGraph = createDependencyGraph(fileIndex);
-      const affectedPaths = dependencyGraph
+      // Include both dependents (files that import the changed files) and
+      // dependencies (files that the changed files import) so the build
+      // validator can resolve all referenced modules.
+      const dependents = dependencyGraph
         .getAffectedFiles(existingChanged)
         .filter((path) => path in files);
+      const dependencies = existingChanged.flatMap((p) =>
+        dependencyGraph.getDependencies(p).filter((dep) => dep in files)
+      );
+      const affectedSet = new Set([...dependents, ...dependencies]);
+      const affectedPaths = Array.from(affectedSet);
 
       if (affectedPaths.length === 0) {
         return files;
       }
 
-      return Object.fromEntries(affectedPaths.map((path) => [path, files[path]]));
+      const scopedFiles = Object.fromEntries(affectedPaths.map((path) => [path, files[path]]));
+
+      // Always include package.json if any scoped file imports an external package.
+      // The build validator needs it to verify dependency declarations.
+      if ('package.json' in files && !('package.json' in scopedFiles)) {
+        const hasExternalImport = existingChanged.some((path) => {
+          const content = files[path] ?? '';
+          return /from ['"][^./]/.test(content) || /require\(['"][^./]/.test(content);
+        });
+        if (hasExternalImport) {
+          scopedFiles['package.json'] = files['package.json'];
+        }
+      }
+
+      return scopedFiles;
     } catch (error) {
       logger.warn('Acceptance scope resolution failed; using full-file validation scope', {
         error: error instanceof Error ? error.message : String(error),

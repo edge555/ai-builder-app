@@ -163,15 +163,18 @@ describe('generationApiService', () => {
 
         const snapshots: string[] = [];
         const service = createGenerationApiService({
-            requestContext: { workspaceId: null, projectId: null },
+            requestContext: { workspaceId: 'ws-1', projectId: 'proj-1' },
             onStreamSnapshot: s => snapshots.push(s.phase),
             onStreamingChange: vi.fn(),
         });
 
         const result = await service.generateProjectStreaming('simple page');
 
-        const [url] = (fetch as any).mock.calls[0];
+        const [url, options] = (fetch as any).mock.calls[0];
+        const body = JSON.parse(options.body);
         expect(url).toContain('/generate-stream');
+        expect(body.workspaceId).toBe('ws-1');
+        expect(body.projectId).toBe('proj-1');
         expect(result.success).toBe(true);
         expect(snapshots).toContain('connecting');
         expect(snapshots[snapshots.length - 1]).toBe('complete');

@@ -92,6 +92,7 @@ export const GenerateProjectRequestSchema = z.object({
     description: z.string().min(1, 'Project description is required').max(50000, 'Project description is too long (max 50,000 characters)'),
     attachments: z.array(ImageAttachmentSchema).max(5, 'Maximum 5 image attachments').optional(),
     workspaceId: z.string().uuid().optional(),  // present when called from MemberBuilderPage
+    projectId: z.string().uuid().optional(),    // optional existing workspace_projects.id for session continuity
 });
 
 /**

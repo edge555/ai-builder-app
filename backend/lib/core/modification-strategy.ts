@@ -13,7 +13,7 @@ import { toSimpleJsonSchema } from './zod-to-json-schema';
 import { createLogger } from '../logger';
 import type { CodeSlice } from '../analysis/file-planner/types';
 import { getFileOutline } from '../analysis/slice-selector';
-import { addLineNumbers } from '../diff/prompt-builder';
+import { addLineNumbers, formatConversationContext } from '../diff/prompt-builder';
 import { buildProjectMap } from '../analysis/project-map';
 import { MAX_CONTEXT_SLICES_MODIFICATION } from '../constants';
 import { extractJsonFromResponse } from '../ai/modal-response-parser';
@@ -21,6 +21,7 @@ import { getStructuredParseError, parseStructuredOutput } from '../ai/structured
 import type { IPipelineStrategy } from './pipeline-strategy';
 import type { UnifiedPipelineCallbacks } from './pipeline-shared';
 import type { ProjectState } from '@ai-app-builder/shared';
+import type { ConversationTurn } from '@ai-app-builder/shared';
 
 const logger = createLogger('ModificationStrategy');
 
@@ -132,6 +133,7 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
     const planOutput = planContext && planContext.files.length > 0 ? planContext : null;
     const designSystem = options?.['designSystem'] as boolean ?? false;
     const requestId = options?.['requestId'] as string | undefined;
+    const conversationHistory = options?.['conversationHistoryPrefix'] as ConversationTurn[] | undefined;
     const contextLogger = requestId ? logger.withRequestId(requestId) : logger;
 
     if (this.tiers && this.validateFile) {
@@ -141,7 +143,8 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
         planOutput,
         callbacks,
         contextLogger,
-        designSystem
+        designSystem,
+        conversationHistory
       );
     }
 
@@ -151,7 +154,8 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
       planOutput,
       callbacks,
       contextLogger,
-      designSystem
+      designSystem,
+      conversationHistory
     );
   }
 
@@ -164,6 +168,7 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
     callbacks: UnifiedPipelineCallbacks,
     contextLogger: ReturnType<typeof logger.withRequestId>,
     designSystem: boolean,
+    conversationHistory?: ConversationTurn[],
   ): Promise<PipelineResult> {
     callbacks.onStageStart?.('execution', 'Applying modifications…');
     const stageStartMs = Date.now();
@@ -173,7 +178,12 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
       designSystem,
     });
 
-    const modificationUserPrompt = this.buildModificationUserPrompt(userPrompt, this.fileSlices, this.currentFiles);
+    const modificationUserPrompt = this.buildModificationUserPrompt(
+      userPrompt,
+      this.fileSlices,
+      this.currentFiles,
+      conversationHistory
+    );
 
     const response = await this.executionProvider.generateStreaming({
       prompt: modificationUserPrompt,
@@ -214,6 +224,7 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
     callbacks: UnifiedPipelineCallbacks,
     contextLogger: ReturnType<typeof logger.withRequestId>,
     designSystem: boolean,
+    conversationHistory?: ConversationTurn[],
   ): Promise<PipelineResult> {
     const tiers = this.tiers!;
     const validateFile = this.validateFile!;
@@ -235,7 +246,8 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
           accumulatedChanges,
           validateFile,
           callbacks,
-          designSystem
+          designSystem,
+          conversationHistory
         );
       });
 
@@ -266,11 +278,18 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
     validateFile: (path: string, content: string) => Promise<{ valid: boolean; errorText?: string }>,
     callbacks: UnifiedPipelineCallbacks,
     designSystem: boolean,
+    conversationHistory: ConversationTurn[] | undefined,
     attempt: number = 1
   ): Promise<{ filePath: string; content: string } | null> {
     if (callbacks.signal?.aborted) return null;
 
-    const prompt = this.buildFocusedPrompt(targetFilePath, userPrompt, currentFiles, accumulatedChanges);
+    const prompt = this.buildFocusedPrompt(
+      targetFilePath,
+      userPrompt,
+      currentFiles,
+      accumulatedChanges,
+      conversationHistory
+    );
     const systemInstruction = this.promptProvider.getExecutionModificationSystemPrompt(
       userPrompt,
       null,
@@ -289,7 +308,7 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
     if (!response.success || !response.content) {
       if (attempt === 1) {
         logger.warn(`Execution failed for ${targetFilePath}, retrying...`);
-        return this.processFileWithRetry(targetFilePath, userPrompt, currentFiles, accumulatedChanges, validateFile, callbacks, designSystem, 2);
+        return this.processFileWithRetry(targetFilePath, userPrompt, currentFiles, accumulatedChanges, validateFile, callbacks, designSystem, conversationHistory, 2);
       }
       return null;
     }
@@ -299,7 +318,7 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
 
     if (!targetFileGen) {
       if (attempt === 1) {
-        return this.processFileWithRetry(targetFilePath, userPrompt, currentFiles, accumulatedChanges, validateFile, callbacks, designSystem, 2);
+        return this.processFileWithRetry(targetFilePath, userPrompt, currentFiles, accumulatedChanges, validateFile, callbacks, designSystem, conversationHistory, 2);
       }
       return null;
     }
@@ -309,7 +328,7 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
     if (!validation.valid) {
       if (attempt === 1) {
         logger.warn(`Validation failed for ${targetFilePath}, retrying...`, { error: validation.errorText });
-        return this.processFileWithRetry(targetFilePath, userPrompt, currentFiles, accumulatedChanges, validateFile, callbacks, designSystem, 2);
+        return this.processFileWithRetry(targetFilePath, userPrompt, currentFiles, accumulatedChanges, validateFile, callbacks, designSystem, conversationHistory, 2);
       }
     }
 
@@ -320,9 +339,15 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
     targetFilePath: string,
     userPrompt: string,
     currentFiles: Record<string, string>,
-    accumulatedChanges: Map<string, string>
+    accumulatedChanges: Map<string, string>,
+    conversationHistory?: ConversationTurn[]
   ): string {
-    const lines: string[] = [`User Request: ${userPrompt}\n`];
+    const lines: string[] = [];
+    const conversationContext = formatConversationContext(conversationHistory);
+    if (conversationContext) {
+      lines.push(`${conversationContext}\n`);
+    }
+    lines.push(`User Request: ${userPrompt}\n`);
     lines.push('=== TARGET FILE (modify this full file) ===\n');
     const targetContent = accumulatedChanges.get(targetFilePath) ?? currentFiles[targetFilePath] ?? '';
     lines.push(`--- ${targetFilePath} ---\n${addLineNumbers(targetContent)}\n`);
@@ -343,11 +368,20 @@ export class ModificationStrategy implements IPipelineStrategy<PlanOutput, Pipel
 
   // ─── Prompt Builders ──────────────────────────────────────────────────────
 
-  private buildModificationUserPrompt(userPrompt: string, slices: CodeSlice[], currentFiles: Record<string, string>): string {
+  private buildModificationUserPrompt(
+    userPrompt: string,
+    slices: CodeSlice[],
+    currentFiles: Record<string, string>,
+    conversationHistory?: ConversationTurn[]
+  ): string {
     const primarySlices = slices.filter((s) => s.relevance === 'primary');
     const contextSlices = slices.filter((s) => s.relevance === 'context');
 
     const lines: string[] = [];
+    const conversationContext = formatConversationContext(conversationHistory);
+    if (conversationContext) {
+      lines.push(`${conversationContext}\n`);
+    }
 
     const projectMap = buildProjectMap({ files: currentFiles } as ProjectState);
     if (projectMap) {

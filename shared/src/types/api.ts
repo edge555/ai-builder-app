@@ -30,6 +30,8 @@ export interface GenerateProjectRequest {
   attachments?: ImageAttachment[];
   /** Present when called from MemberBuilderPage — triggers workspace API key injection */
   workspaceId?: string;
+  /** Optional existing workspace project id used for per-project session continuity. */
+  projectId?: string;
 }
 
 /**

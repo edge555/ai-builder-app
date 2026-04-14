@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Modify Project Streaming API Endpoint
  * POST /api/modify-stream
  *
@@ -14,6 +14,7 @@ import {
   serializeVersion,
   deserializeProjectState,
   ModifyProjectRequestSchema,
+  type ConversationTurn,
 } from '@ai-app-builder/shared';
 import { createModificationEngine, type ModificationPhase } from '../../../lib/diff';
 import { handleOptions, getCorsHeaders, parseJsonRequest } from '../../../lib/api';
@@ -25,9 +26,9 @@ import {
   SSEEncoder,
   createStreamLifecycle,
 } from '../../../lib/streaming';
-import { requireAuth } from '../../../lib/security/auth';
-import { resolveWorkspaceProvider } from '../../../lib/security/workspace-resolver';
+import { resolveWorkspaceRequestContext } from '../../../lib/security/workspace-request-context';
 import { createServiceRoleSupabaseClient } from '../../../lib/security/auth';
+import { appendTurn, getLastKTurns, getOrCreateSession } from '../../../lib/session-service';
 
 const logger = createLogger('api/modify-stream');
 
@@ -39,6 +40,26 @@ const STREAM_TIMEOUT_MS = 960000; // 16 minutes
  */
 export async function OPTIONS() {
   return handleOptions();
+}
+
+function getChangedFilesFromResult(result: {
+  diffs?: Array<{ filePath: string }>;
+  changeSummary?: { affectedFiles?: string[] };
+}): string[] {
+  const fromDiffs = (result.diffs ?? []).map((diff) => diff.filePath).filter(Boolean);
+  if (fromDiffs.length > 0) return Array.from(new Set(fromDiffs));
+  return Array.from(new Set(result.changeSummary?.affectedFiles ?? []));
+}
+
+function buildModificationAssistantSynopsis(
+  result: { changeSummary?: { description?: string } },
+  changedFiles: string[]
+): string {
+  const base = result.changeSummary?.description?.trim() || 'Applied requested project modifications';
+  const withFiles = changedFiles.length > 0
+    ? `${base}. Files: ${changedFiles.join(', ')}`
+    : base;
+  return withFiles.slice(0, 200);
 }
 
 export async function POST(request: NextRequest) {
@@ -57,53 +78,56 @@ export async function POST(request: NextRequest) {
     if (!parsed.ok) return parsed.response;
     const body = parsed.data;
 
-    // Workspace mode: verify membership and resolve org API key
-    let workspaceProvider = undefined;
-    if (body.workspaceId) {
-      const authResult = await requireAuth(request);
-      if (authResult instanceof Response) return authResult;
+    const workspaceCtx = await resolveWorkspaceRequestContext(request, body.workspaceId);
+    if (workspaceCtx.authResponse) return workspaceCtx.authResponse;
+    if (workspaceCtx.forbidden) {
+      return new Response(
+        JSON.stringify({ error: 'Not a member of this workspace' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
 
-      const resolved = await resolveWorkspaceProvider(authResult.userId, body.workspaceId);
-      if (!resolved) {
-        // Not configured or no key — fall through to default provider
-      } else if ('forbidden' in resolved) {
-        return new Response(
-          JSON.stringify({ error: 'Not a member of this workspace' }),
-          { status: 403, headers: { 'Content-Type': 'application/json' } }
-        );
-      } else {
-        workspaceProvider = resolved.provider;
+    const workspaceProvider = workspaceCtx.workspaceProvider;
+    const memberId = workspaceCtx.memberId;
 
-        // Fire-and-forget: snapshot current project state BEFORE generation starts.
-        // Enables CheckpointManager rollback on auto-repair failure.
-        // If snapshot fails, log and continue — generation must not be blocked.
-        if (body.projectId) {
-          const supabase = createServiceRoleSupabaseClient();
-          if (supabase) {
-            // Verify project belongs to this workspace before writing snapshot (IDOR guard).
-            supabase
-              .from('workspace_projects')
-              .select('id')
-              .eq('id', body.projectId)
-              .eq('workspace_id', body.workspaceId!)
-              .maybeSingle()
-              .then(({ data: project, error: lookupErr }) => {
-                if (lookupErr || !project) {
-                  if (lookupErr) contextLogger.warn('ProjectSnapshot ownership check failed', { error: lookupErr.message });
-                  return; // Skip snapshot — project not in this workspace
-                }
-                const filesJson = Object.fromEntries(
-                  Object.entries(body.projectState.files).map(([path, content]) => [path, { code: content }])
-                );
-                return supabase
-                  .from('workspace_project_snapshots')
-                  .upsert({ project_id: body.projectId, files_json: filesJson }, { onConflict: 'project_id' })
-                  .then(({ error }) => {
-                    if (error) contextLogger.warn('ProjectSnapshot upsert failed (non-blocking)', { error: error.message });
-                  });
+    // Fire-and-forget: snapshot current project state BEFORE generation starts.
+    // Enables CheckpointManager rollback on auto-repair failure.
+    if (body.workspaceId && body.projectId) {
+      const supabase = createServiceRoleSupabaseClient();
+      if (supabase) {
+        // Verify project belongs to this workspace before writing snapshot (IDOR guard).
+        supabase
+          .from('workspace_projects')
+          .select('id')
+          .eq('id', body.projectId)
+          .eq('workspace_id', body.workspaceId)
+          .maybeSingle()
+          .then(({ data: project, error: lookupErr }) => {
+            if (lookupErr || !project) {
+              if (lookupErr) contextLogger.warn('ProjectSnapshot ownership check failed', { error: lookupErr.message });
+              return;
+            }
+            const filesJson = Object.fromEntries(
+              Object.entries(body.projectState.files).map(([path, content]) => [path, { code: content }])
+            );
+            return supabase
+              .from('workspace_project_snapshots')
+              .upsert({ project_id: body.projectId, files_json: filesJson }, { onConflict: 'project_id' })
+              .then(({ error }) => {
+                if (error) contextLogger.warn('ProjectSnapshot upsert failed (non-blocking)', { error: error.message });
               });
-          }
-        }
+          });
+      }
+    }
+
+    let sessionId: string | null = null;
+    let conversationHistoryPrefix: ConversationTurn[] = [];
+    if (body.workspaceId && body.projectId && memberId) {
+      sessionId = await getOrCreateSession(body.workspaceId, body.projectId, memberId);
+      if (sessionId) {
+        const turns = await getLastKTurns(sessionId);
+        conversationHistoryPrefix = turns.map((turn) => ({ role: turn.role, content: turn.content }));
+        appendTurn(sessionId, 'user', body.prompt);
       }
     }
 
@@ -111,11 +135,16 @@ export async function POST(request: NextRequest) {
       promptLength: body.prompt.length,
       shouldSkipPlanning: body.shouldSkipPlanning,
       workspaceMode: !!workspaceProvider,
+      hasServerHistory: conversationHistoryPrefix.length > 0,
     });
 
     // Deserialize project state
     const projectState = deserializeProjectState(body.projectState);
-    const { shouldSkipPlanning, errorContext, conversationHistory } = body;
+    const { shouldSkipPlanning, errorContext } = body;
+    const conversationHistory: ConversationTurn[] = [
+      ...conversationHistoryPrefix,
+      ...(body.conversationHistory ?? []),
+    ];
 
     // Create backpressure controller
     const backpressure = new BackpressureController({
@@ -186,6 +215,12 @@ export async function POST(request: NextRequest) {
             );
             safeClose();
             return;
+          }
+
+          if (sessionId) {
+            const changedFiles = getChangedFilesFromResult(result);
+            const synopsis = buildModificationAssistantSynopsis(result, changedFiles);
+            appendTurn(sessionId, 'assistant', synopsis, { filesAffected: changedFiles });
           }
 
           // Emit each modified file as a separate SSE event
@@ -296,3 +331,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
