@@ -1,13 +1,14 @@
 /**
- * @module core/generation-pipeline
- * @description The main orchestrator that replaces the legacy Generation path.
- * It manages Intent, Planning, Multi-Phase Execution, Review, and BugFix.
+ * @module core/generation-strategy
+ * @description GenerationStrategy — IPipelineStrategy implementation for new project generation.
+ * Contains all logic from GenerationPipeline except the intent stage boilerplate
+ * (which is now in pipeline-shared.ts).
  */
 
 import type { AIProvider } from '../ai/ai-provider';
 import type { IPromptProvider, ArchitecturePlan } from './prompts/prompt-provider';
 import type { IntentOutput, PlanReviewOutput, PlannedFile, GeneratedFile, PhaseLayer } from './schemas';
-import { IntentOutputSchema, ArchitecturePlanSchema, PlanReviewSchema, PlannedFileSchema } from './schemas';
+import { ArchitecturePlanSchema, PlanReviewSchema, PlannedFileSchema } from './schemas';
 import { toSimpleJsonSchema } from './zod-to-json-schema';
 import { createLogger } from '../logger';
 import { selectRecipe } from './recipes/recipe-engine';
@@ -20,10 +21,11 @@ import { COMPLEXITY_GATE_FILE_THRESHOLD, UI_BATCH_SPLIT_THRESHOLD } from '../con
 import { getStructuredParseError, parseStructuredOutput } from '../ai/structured-output';
 import { buildHeuristicPlan } from './heuristic-plan-builder';
 import type { GenerationRecipe } from './recipes/recipe-types';
+import type { IPipelineStrategy } from './pipeline-strategy';
+import type { UnifiedPipelineCallbacks } from './pipeline-shared';
 
-const logger = createLogger('GenerationPipeline');
+const logger = createLogger('GenerationStrategy');
 
-const INTENT_JSON_SCHEMA = toSimpleJsonSchema(IntentOutputSchema);
 const ARCHITECTURE_PLAN_JSON_SCHEMA = toSimpleJsonSchema(ArchitecturePlanSchema);
 const PLAN_REVIEW_JSON_SCHEMA = toSimpleJsonSchema(PlanReviewSchema);
 
@@ -42,17 +44,6 @@ export interface PhaseCompleteData {
   totalPlanned: number;
 }
 
-export interface PipelineCallbacks {
-  onStageStart?: (stage: string, label: string) => void;
-  onStageComplete?: (stage: string) => void;
-  onStageFailed?: (stage: string, error: string) => void;
-  onProgress?: (accumulatedLength: number) => void;
-  onFileStream?: (file: GeneratedFile, isComplete: boolean) => void;
-  onPhaseStart?: (data: PhaseProgressData) => void;
-  onPhaseComplete?: (data: PhaseCompleteData) => void;
-  signal?: AbortSignal;
-}
-
 /** Describes a merged execution phase with its file list. */
 export interface MergedPhase {
   layer: PhaseLayer;
@@ -68,23 +59,26 @@ export interface GenerationResult {
   warnings: string[];
 }
 
-export interface GenerationPipelineOptions {
+export interface GenerationStrategyOptions {
   requestId?: string;
   beginnerMode?: boolean;
 }
 
-export class GenerationPipeline {
+export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, GenerationResult> {
   private readonly phaseExecutor: PhaseExecutor;
 
+  /** Exposed so that createStreamingProjectGenerator can access the bugfix provider. */
+  readonly bugfixProvider: AIProvider;
+
   constructor(
-    private readonly intentProvider: AIProvider,
     private readonly planningProvider: AIProvider,
     private readonly executionProvider: AIProvider,
     private readonly reviewProvider: AIProvider,
-    readonly bugfixProvider: AIProvider,
+    bugfixProvider: AIProvider,
     private readonly promptProvider: IPromptProvider,
     buildValidator?: BuildValidator
   ) {
+    this.bugfixProvider = bugfixProvider;
     this.phaseExecutor = new PhaseExecutor(
       this.executionProvider,
       this.promptProvider,
@@ -92,103 +86,57 @@ export class GenerationPipeline {
     );
   }
 
-  /**
-   * Main entry point for the new multi-phase generation pipeline.
-   * Orchestrates the 5 main stages of generation.
-   */
-  async runGeneration(
+  planningLabel(_intentOutput: unknown): string {
+    return 'Drafting architecture plan…';
+  }
+
+  canSkipPlanning(): boolean {
+    return false;
+  }
+
+  async runPlanning(
     userPrompt: string,
-    callbacks: PipelineCallbacks = {},
-    options?: GenerationPipelineOptions
-  ): Promise<GenerationResult> {
-    const contextLogger = options?.requestId ? logger.withRequestId(options.requestId) : logger;
-
-    const pipelineStartMs = Date.now();
-    contextLogger.info('[GEN-PIPELINE] start', {
-      promptPreview: userPrompt.slice(0, 150),
-      promptLength: userPrompt.length,
-    });
-
-    // ── Task 5.1: Intent Stage ────────────────────────────────────────────────
-    callbacks.onStageStart?.('intent', 'Analyzing your request…');
-    const intentStageStartMs = Date.now();
-    contextLogger.debug('Intent stage start');
-
-    let intentOutput: IntentOutput | null = null;
-    let _intentRawContent: string | undefined;
-    try {
-      const response = await this.intentProvider.generate({
-        prompt: userPrompt,
-        systemInstruction: this.promptProvider.getIntentSystemPrompt(),
-        maxOutputTokens: this.promptProvider.tokenBudgets.intent,
-        responseSchema: INTENT_JSON_SCHEMA,
-        signal: callbacks.signal,
-      });
-
-      _intentRawContent = response.content ?? undefined;
-
-      if (!response.success || !response.content) {
-        throw new Error(response.error ?? 'Intent stage returned empty content');
-      }
-
-      const parsedResult = parseStructuredOutput(response.content, IntentOutputSchema, 'IntentOutput');
-      if (!parsedResult.success) {
-        const parseError = getStructuredParseError(parsedResult);
-        throw new Error(parseError);
-      }
-
-      intentOutput = parsedResult.data;
-      contextLogger.info('Intent stage complete', {
-        complexity: intentOutput.complexity,
-        durationMs: Date.now() - intentStageStartMs,
-      });
-      callbacks.onStageComplete?.('intent');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      contextLogger.warn('Intent stage failed (degraded)', {
-        error: message,
-        stack: err instanceof Error ? err.stack : undefined,
-        responsePreview: _intentRawContent ? _intentRawContent.substring(0, 800) : undefined,
-        promptLength: userPrompt.length,
-      });
-      callbacks.onStageFailed?.('intent', message);
-    }
-
-    if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
-
-    // ── Task 5.2: Planning Stage — fired immediately after intent resolves ─────
-    // Fire the planning AI call before recipe selection to minimise latency.
-    // Recipe selection is synchronous (<1ms) and completes long before planning finishes.
-    callbacks.onStageStart?.('planning', 'Drafting architecture plan…');
+    intentOutput: unknown,
+    callbacks: UnifiedPipelineCallbacks,
+    options?: Record<string, unknown>,
+  ): Promise<ArchitecturePlan> {
+    const typedIntentOutput = intentOutput as IntentOutput | null;
+    const beginnerMode = options?.['beginnerMode'] as boolean | undefined;
+    const requestId = options?.['requestId'] as string | undefined;
+    const contextLogger = requestId ? logger.withRequestId(requestId) : logger;
     const planningStageStartMs = Date.now();
+
+    callbacks.onStageStart?.('planning', 'Drafting architecture plan…');
     contextLogger.debug('Enhanced Planning stage start');
-    const planningPromise = options?.beginnerMode
+
+    // Fire the planning AI call before recipe selection to minimise latency.
+    const planningPromise = beginnerMode
       ? null
       : this.planningProvider.generate({
           prompt: userPrompt,
-          systemInstruction: this.promptProvider.getArchitecturePlanningPrompt(userPrompt, intentOutput),
+          systemInstruction: this.promptProvider.getArchitecturePlanningPrompt(userPrompt, typedIntentOutput),
           maxOutputTokens: this.promptProvider.tokenBudgets.architecturePlanning,
           responseSchema: ARCHITECTURE_PLAN_JSON_SCHEMA,
           signal: callbacks.signal,
         });
 
-    // ── Recipe Selection (runs while planning is in flight) ────────────────────
-    const recipe = selectRecipe(intentOutput, {
+    // Recipe selection (runs while planning is in flight — synchronous, <1ms)
+    const recipe = selectRecipe(typedIntentOutput, {
       fullstackEnabled: config.recipes.fullstackEnabled,
-      beginnerMode: options?.beginnerMode,
+      beginnerMode,
     }, userPrompt);
     contextLogger.info('Recipe selected', { recipeId: recipe.id });
     this.promptProvider.setRecipe?.(recipe);
 
-    // ── Await planning result ─────────────────────────────────────────────────
+    // Await planning result
     let architecturePlan: ArchitecturePlan;
-    if (options?.beginnerMode) {
-      architecturePlan = buildHeuristicPlan(intentOutput, userPrompt, recipe);
+    if (beginnerMode) {
+      architecturePlan = buildHeuristicPlan(typedIntentOutput, userPrompt, recipe);
       callbacks.onStageComplete?.('planning');
     } else {
       architecturePlan = await this.resolveArchitecturePlan(
         userPrompt,
-        intentOutput,
+        typedIntentOutput,
         planningPromise!,
         callbacks,
         contextLogger,
@@ -197,9 +145,25 @@ export class GenerationPipeline {
       );
     }
 
-    if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
+    return architecturePlan;
+  }
 
-    // ── Task 5.3: Plan Review Stage ───────────────────────────────────────────
+  async runExecution(
+    userPrompt: string,
+    intentOutput: unknown,
+    planContext: ArchitecturePlan | null,
+    callbacks: UnifiedPipelineCallbacks,
+    options?: Record<string, unknown>,
+  ): Promise<GenerationResult> {
+    const typedIntentOutput = intentOutput as IntentOutput | null;
+    const requestId = options?.['requestId'] as string | undefined;
+    const contextLogger = requestId ? logger.withRequestId(requestId) : logger;
+
+    // planContext should always be present for generation; but guard defensively
+    const architecturePlan = planContext!;
+
+    // ── Plan Review Stage ─────────────────────────────────────────────────────
+    let reviewedPlan = architecturePlan;
     if (architecturePlan.files.length > COMPLEXITY_GATE_FILE_THRESHOLD) {
       callbacks.onStageStart?.('review', 'Reviewing architecture plan…');
       const reviewStageStartMs = Date.now();
@@ -236,7 +200,7 @@ export class GenerationPipeline {
             issues: reviewOutput.issues.length,
             durationMs: Date.now() - reviewStageStartMs,
           });
-          architecturePlan = this.applyPlanCorrections(architecturePlan, reviewOutput);
+          reviewedPlan = this.applyPlanCorrections(architecturePlan, reviewOutput);
         } else {
           contextLogger.info('Plan Review found no issues', { durationMs: Date.now() - reviewStageStartMs });
         }
@@ -262,26 +226,29 @@ export class GenerationPipeline {
 
     if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
 
-    // ── Task 5.4: Complexity Gate ─────────────────────────────────────────────
-    const isMultiPhase = this.shouldUseMultiPhase(architecturePlan);
+    // ── Complexity Gate ───────────────────────────────────────────────────────
+    const isMultiPhase = this.shouldUseMultiPhase(reviewedPlan);
     const complexityRoute = isMultiPhase ? 'multi-phase' : 'one-shot';
-    
-    contextLogger.info(`Complexity Gate routing`, { route: complexityRoute });
+    contextLogger.info('Complexity Gate routing', { route: complexityRoute });
 
-    // ── Task 5.6: Multi-Phase Execution Loop ──────────────────────────────────
     let allGeneratedFiles: GeneratedFile[] = [];
     const allWarnings: string[] = [];
 
+    // Need to retrieve recipe from planning options — it was stored via setRecipe on the promptProvider.
+    // We rebuild the recipe reference by re-selecting (same deterministic logic, <1ms).
+    const recipe = selectRecipe(typedIntentOutput, {
+      fullstackEnabled: config.recipes.fullstackEnabled,
+    }, userPrompt);
+
     if (complexityRoute === 'multi-phase') {
-      // ── Task 5.5: Phase Merge Logic ─────────────────────────────────────────
-      const mergedPhases = this.mergePhases(architecturePlan);
+      const mergedPhases = this.mergePhases(reviewedPlan);
       contextLogger.info('Phases after merge', {
         phases: mergedPhases.map(p => ({ layer: p.layer, fileCount: p.files.length }))
       });
 
       const result = await this.executeMultiPhase(
         mergedPhases,
-        architecturePlan,
+        reviewedPlan,
         userPrompt,
         recipe,
         callbacks,
@@ -291,7 +258,7 @@ export class GenerationPipeline {
       allWarnings.push(...result.warnings);
     } else {
       const result = await this.executeOneShot(
-        architecturePlan,
+        reviewedPlan,
         userPrompt,
         recipe,
         callbacks,
@@ -301,18 +268,9 @@ export class GenerationPipeline {
       allWarnings.push(...result.warnings);
     }
 
-    contextLogger.info('[GEN-PIPELINE] complete', {
-      durationMs: Date.now() - pipelineStartMs,
-      complexityRoute,
-      fileCount: allGeneratedFiles.length,
-      filePaths: allGeneratedFiles.map(f => f.path),
-      warningCount: allWarnings.length,
-      intentComplexity: intentOutput?.complexity ?? 'unknown',
-    });
-
     return {
-      intentOutput,
-      architecturePlan,
+      intentOutput: typedIntentOutput,
+      architecturePlan: reviewedPlan,
       selectedRecipeId: recipe.id,
       complexityRoute,
       generatedFiles: allGeneratedFiles,
@@ -320,11 +278,8 @@ export class GenerationPipeline {
     };
   }
 
-  // ─── Private Helpers ────────────────────────────────────────────────────────
+  // ─── Private Helpers ──────────────────────────────────────────────────────
 
-  /**
-   * Applies auto-corrections supplied by the AI Plan Reviewer.
-   */
   private applyPlanCorrections(plan: ArchitecturePlan, review: PlanReviewOutput): ArchitecturePlan {
     const newPlan = { ...plan };
     let files = [...newPlan.files];
@@ -346,7 +301,6 @@ export class GenerationPipeline {
     }
 
     if (review.corrections.filesToAdd.length > 0) {
-      // Validate added files through the same schema used for planned files
       for (const file of review.corrections.filesToAdd) {
         const result = PlannedFileSchema.safeParse(file);
         if (result.success) {
@@ -364,15 +318,6 @@ export class GenerationPipeline {
     return newPlan;
   }
 
-  /**
-   * Task 5.5: Phase merge logic.
-   * Consolidates sparse layers into larger phases to reduce AI call overhead.
-   *
-   * Rules:
-   * - If logic layer has <=1 file, merge those files into the UI phase.
-   * - If integration layer has <=1 file, merge those files into the UI phase.
-   * - Scaffold is never merged (it always runs first).
-   */
   private mergePhases(plan: ArchitecturePlan): MergedPhase[] {
     const layerOrder: PhaseLayer[] = ['scaffold', 'logic', 'ui', 'integration'];
     const filesByLayer = new Map<PhaseLayer, PlannedFile[]>();
@@ -383,16 +328,13 @@ export class GenerationPipeline {
 
     const phases: MergedPhase[] = [];
 
-    // Scaffold is always its own phase
     const scaffoldFiles = filesByLayer.get('scaffold') || [];
     if (scaffoldFiles.length > 0) {
       phases.push({ layer: 'scaffold', files: scaffoldFiles });
     }
 
-    // Collect UI files first
     const uiFiles = [...(filesByLayer.get('ui') || [])];
 
-    // Merge logic into UI if <=1 file
     const logicFiles = filesByLayer.get('logic') || [];
     if (logicFiles.length <= 1) {
       uiFiles.push(...logicFiles);
@@ -400,7 +342,6 @@ export class GenerationPipeline {
       phases.push({ layer: 'logic', files: logicFiles });
     }
 
-    // Merge integration into UI if <=1 file
     const integrationFiles = filesByLayer.get('integration') || [];
     if (integrationFiles.length <= 1) {
       uiFiles.push(...integrationFiles);
@@ -408,35 +349,26 @@ export class GenerationPipeline {
       phases.push({ layer: 'integration', files: integrationFiles });
     }
 
-    // UI phase (potentially with merged files)
     if (uiFiles.length > 0) {
       phases.push({ layer: 'ui', files: uiFiles });
     }
 
-    // Sort into canonical order: scaffold -> logic -> ui -> integration
     phases.sort((a, b) => layerOrder.indexOf(a.layer) - layerOrder.indexOf(b.layer));
 
     return phases;
   }
 
-  /**
-   * Task 5.6: Multi-phase execution loop.
-   * Executes each phase via PhaseExecutor, building inter-phase context and
-   * splitting large UI phases into sub-batches.
-   */
   private async executeMultiPhase(
     mergedPhases: MergedPhase[],
     plan: ArchitecturePlan,
     userPrompt: string,
-    recipe: any,
-    callbacks: PipelineCallbacks,
-    contextLogger: any
+    recipe: GenerationRecipe,
+    callbacks: UnifiedPipelineCallbacks,
+    contextLogger: ReturnType<typeof logger.withRequestId>
   ): Promise<{ files: GeneratedFile[]; warnings: string[] }> {
     const allFiles: GeneratedFile[] = [];
     const allWarnings: string[] = [];
-    // Accumulated map of path -> content for inter-phase context
     const generatedFilesMap = new Map<string, string>();
-    // Shared summary cache — avoids re-summarizing scaffold files on every phase
     const summaryCache = new Map<string, import('./batch-context-builder').FileSummary>();
     const totalPlanned = mergedPhases.reduce((sum, p) => sum + p.files.length, 0);
 
@@ -451,9 +383,8 @@ export class GenerationPipeline {
         totalPhases: mergedPhases.length,
         filesInPhase: phase.files.length,
       });
-      contextLogger.info(`Starting phase execution`, { layer: phase.layer, fileCount: phase.files.length });
+      contextLogger.info('Starting phase execution', { layer: phase.layer, fileCount: phase.files.length });
 
-      // Split UI phase into sub-batches if needed
       const batches: PlannedFile[][] = [];
       if (phase.layer === 'ui' && phase.files.length > UI_BATCH_SPLIT_THRESHOLD) {
         for (let i = 0; i < phase.files.length; i += UI_BATCH_SPLIT_THRESHOLD) {
@@ -467,7 +398,6 @@ export class GenerationPipeline {
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const batchFiles = batches[batchIndex];
 
-        // Build inter-phase context from previously generated files
         const context = buildPhaseContext(
           phase.layer,
           plan,
@@ -492,31 +422,22 @@ export class GenerationPipeline {
         };
 
         try {
-          const result = await this.phaseExecutor.executePhase(
-            phaseDef,
-            context,
-            phaseCallbacks
-          );
+          const result = await this.phaseExecutor.executePhase(phaseDef, context, phaseCallbacks);
 
-          // Accumulate results
           for (const file of result.files) {
             allFiles.push(file);
             generatedFilesMap.set(file.path, file.content);
-            // Invalidate stale cache entry if this file was regenerated in a later phase
             summaryCache.delete(file.path);
           }
           allWarnings.push(...result.warnings);
 
-          contextLogger.info(`Phase batch complete`, {
+          contextLogger.info('Phase batch complete', {
             layer: phase.layer,
             batch: `${batchIndex + 1}/${batches.length}`,
             filesGenerated: result.files.length,
             warnings: result.warnings.length,
           });
 
-          // Hard-fail if a non-scaffold phase generated 0 out of N expected files.
-          // A project missing its entire UI or integration layer is worse than a
-          // clear error the user can retry.
           if (result.files.length === 0 && batchFiles.length > 0) {
             const msg = `Phase ${phase.layer} generated 0/${batchFiles.length} expected files`;
             contextLogger.error(msg, { expectedFiles: batchFiles.map(f => f.path) });
@@ -534,9 +455,8 @@ export class GenerationPipeline {
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          contextLogger.error(`Phase execution failed`, { layer: phase.layer, error: message });
+          contextLogger.error('Phase execution failed', { layer: phase.layer, error: message });
 
-          // Client cancellation should propagate immediately
           if (callbacks.signal?.aborted) {
             throw err;
           }
@@ -559,17 +479,12 @@ export class GenerationPipeline {
     return { files: allFiles, warnings: allWarnings };
   }
 
-  /**
-   * True one-shot execution path for simple projects (≤10 files).
-   * Issues a single AI call with the full-app generation prompt instead of
-   * running scaffold + UI as two sequential calls.
-   */
   private async executeOneShot(
     plan: ArchitecturePlan,
     userPrompt: string,
-    recipe: any,
-    callbacks: PipelineCallbacks,
-    contextLogger: any
+    recipe: GenerationRecipe,
+    callbacks: UnifiedPipelineCallbacks,
+    contextLogger: ReturnType<typeof logger.withRequestId>
   ): Promise<{ files: GeneratedFile[]; warnings: string[] }> {
     callbacks.onStageStart?.('oneshot', 'Generating application…');
     callbacks.onPhaseStart?.({
@@ -620,22 +535,15 @@ export class GenerationPipeline {
     return { files: result.files, warnings: allWarnings };
   }
 
-  /**
-   * Complexity gate determining if the application should be built one-shot or multi-phase.
-   */
   private shouldUseMultiPhase(plan: ArchitecturePlan): boolean {
     if (plan.files.length > COMPLEXITY_GATE_FILE_THRESHOLD) {
       return true;
     }
     const estimatedInputTokens = this.estimateOneShotInputTokens(plan);
-    // 80k tokens ≈ 80% of a 100k context window
     const TOKEN_THRESHOLD = 80_000;
     return estimatedInputTokens > TOKEN_THRESHOLD;
   }
 
-  /**
-   * Roughly estimates the input tokens required for single-shot generation.
-   */
   private estimateOneShotInputTokens(plan: ArchitecturePlan): number {
     const SYSTEM_PROMPT_BASELINE_TOKENS = 4000;
     const stringifiedPlan = JSON.stringify(plan, null, 2);
@@ -646,8 +554,8 @@ export class GenerationPipeline {
     userPrompt: string,
     intentOutput: IntentOutput | null,
     initialPlanningPromise: Promise<{ success: boolean; content?: string | null; error?: string | null }>,
-    callbacks: PipelineCallbacks,
-    contextLogger: typeof logger,
+    callbacks: UnifiedPipelineCallbacks,
+    contextLogger: ReturnType<typeof logger.withRequestId>,
     planningStageStartMs: number,
     selectedRecipe: GenerationRecipe
   ): Promise<ArchitecturePlan> {

@@ -12,10 +12,13 @@ import { getEffectiveProvider } from '../ai/provider-config-store';
 import { processFiles } from './file-processor';
 import { createLogger } from '../logger';
 import { BaseProjectGenerator } from './base-project-generator';
-import type { PipelineCallbacks, PipelineStage } from './pipeline-orchestrator';
+import type { PipelineStage } from './pipeline-shared';
 import { createGenerationPipeline } from './pipeline-factory';
-import { GenerationPipeline, GenerationResult } from './generation-pipeline';
-import type { PipelineCallbacks as GenerationCallbacks, PhaseProgressData, PhaseCompleteData } from './generation-pipeline';
+import type { UnifiedPipeline } from './unified-pipeline';
+import type { ArchitecturePlan } from './prompts/prompt-provider';
+import { GenerationStrategy } from './generation-strategy';
+import type { GenerationResult, PhaseProgressData, PhaseCompleteData } from './generation-strategy';
+import type { UnifiedPipelineCallbacks } from './pipeline-shared';
 
 const logger = createLogger('StreamingGenerator');
 
@@ -60,7 +63,7 @@ export type StreamingGenerationResult = OperationResult;
  */
 export class StreamingProjectGenerator extends BaseProjectGenerator {
   constructor(
-    private readonly pipeline: GenerationPipeline,
+    private readonly pipeline: UnifiedPipeline<ArchitecturePlan, GenerationResult>,
     bugfixProvider: AIProvider,
     promptProvider: IPromptProvider
   ) {
@@ -108,7 +111,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       return 'unknown';
     };
 
-    const pipelineCallbacks: GenerationCallbacks = {
+    const pipelineCallbacks: UnifiedPipelineCallbacks = {
       onStageStart: (stage, label) => {
         contextLogger.debug('Pipeline stage start', { stage, label });
         callbacks.onPipelineStage?.({ stage: stage as PipelineStage, label, status: 'start' });
@@ -335,10 +338,12 @@ export async function createStreamingProjectGenerator(overrideProvider?: AIProvi
   if (overrideProvider) {
     const providerName = await getEffectiveProvider();
     const promptProvider = createPromptProvider(providerName);
-    const pipeline = new GenerationPipeline(
+    const strategy = new GenerationStrategy(
       overrideProvider, overrideProvider, overrideProvider,
-      overrideProvider, overrideProvider, promptProvider
+      overrideProvider, promptProvider
     );
+    const { UnifiedPipeline } = await import('./unified-pipeline');
+    const pipeline = new UnifiedPipeline(overrideProvider, promptProvider, strategy);
     return new StreamingProjectGenerator(pipeline, overrideProvider, promptProvider);
   }
   const [pipeline, providerName] = await Promise.all([
@@ -346,5 +351,7 @@ export async function createStreamingProjectGenerator(overrideProvider?: AIProvi
     getEffectiveProvider(),
   ]);
   const promptProvider = createPromptProvider(providerName);
-  return new StreamingProjectGenerator(pipeline, pipeline.bugfixProvider, promptProvider);
+  // Access the bugfix provider through the strategy (exposed as public field)
+  const strategy = pipeline.strategy as GenerationStrategy;
+  return new StreamingProjectGenerator(pipeline, strategy.bugfixProvider, promptProvider);
 }

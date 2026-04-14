@@ -25,7 +25,10 @@ vi.mock('../build-validator', () => ({
   },
 }));
 
-import { GenerationPipeline } from '../generation-pipeline';
+import { GenerationStrategy } from '../generation-strategy';
+import { UnifiedPipeline } from '../unified-pipeline';
+import type { ArchitecturePlan } from '../prompts/prompt-provider';
+import type { GenerationResult } from '../generation-strategy';
 
 describe('GenerationPipeline (Phase 5)', () => {
   let mockIntentProvider: import('vitest').Mocked<AIProvider>;
@@ -34,7 +37,7 @@ describe('GenerationPipeline (Phase 5)', () => {
   let mockReviewProvider: import('vitest').Mocked<AIProvider>;
   let mockBugfixProvider: import('vitest').Mocked<AIProvider>;
   let mockPromptProvider: import('vitest').Mocked<IPromptProvider>;
-  let pipeline: GenerationPipeline;
+  let pipeline: UnifiedPipeline<ArchitecturePlan, GenerationResult>;
 
   const validIntentJson = JSON.stringify({
     clarifiedGoal: 'make a simple app',
@@ -88,17 +91,18 @@ describe('GenerationPipeline (Phase 5)', () => {
       getBugfixSystemPrompt: vi.fn(),
       getPhasePrompt: vi.fn(),
       tokenBudgets: {
-        intent: 100, planning: 100, executionGeneration: 100, 
+        intent: 100, planning: 100, executionGeneration: 100,
         executionModification: 100, review: 100, bugfix: 100,
         architecturePlanning: 8192, planReview: 4096,
         scaffold: 2000, logic: 2000, ui: 2000, integration: 2000, oneshot: 2000
       }
     };
 
-    pipeline = new GenerationPipeline(
-      mockIntentProvider, mockPlanningProvider, mockExecutionProvider,
+    const strategy = new GenerationStrategy(
+      mockPlanningProvider, mockExecutionProvider,
       mockReviewProvider, mockBugfixProvider, mockPromptProvider
     );
+    pipeline = new UnifiedPipeline(mockIntentProvider, mockPromptProvider, strategy);
 
     mocks.selectRecipe.mockReturnValue({ id: 'react-spa', name: 'SPA' } as any);
   });
@@ -109,7 +113,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson });
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    const result = await pipeline.runGeneration('make a simple app');
+    const result = await pipeline.run('make a simple app');
 
     expect(mockIntentProvider.generate).toHaveBeenCalledTimes(1);
     expect(mocks.selectRecipe).toHaveBeenCalled();
@@ -123,7 +127,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockPlanningProvider.generate.mockRejectedValue(new Error('LLM Timeout'));
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    const result = await pipeline.runGeneration('make a simple app');
+    const result = await pipeline.run('make a simple app');
 
     expect(result.architecturePlan?.files.length).toBeGreaterThanOrEqual(4);
     expect(mockPlanningProvider.generate).toHaveBeenCalledTimes(2);
@@ -134,7 +138,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: '{ "files": "not an array" }' });
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    const result = await pipeline.runGeneration('make a simple app');
+    const result = await pipeline.run('make a simple app');
     expect(result.architecturePlan?.files.length).toBeGreaterThanOrEqual(4);
     expect(mockPlanningProvider.generate).toHaveBeenCalledTimes(2);
   });
@@ -148,7 +152,7 @@ describe('GenerationPipeline (Phase 5)', () => {
       defaultDependencies: ['next', 'react', 'react-dom', 'prisma', '@prisma/client'],
     } as any);
 
-    const result = await pipeline.runGeneration('build a fullstack inventory app');
+    const result = await pipeline.run('build a fullstack inventory app');
     const filePaths = result.architecturePlan?.files.map((file) => file.path) ?? [];
 
     expect(filePaths).toContain('app/page.tsx');
@@ -162,7 +166,7 @@ describe('GenerationPipeline (Phase 5)', () => {
 
     mocks.selectRecipe.mockReturnValue({ id: 'react-spa-beginner', name: 'Beginner' } as any);
 
-    const result = await pipeline.runGeneration('make a counter app', {}, { beginnerMode: true });
+    const result = await pipeline.run('make a counter app', {}, { beginnerMode: true });
 
     expect(mockPlanningProvider.generate).not.toHaveBeenCalled();
     expect(mocks.selectRecipe).toHaveBeenCalledWith(
@@ -201,7 +205,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     });
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: reviewJson });
 
-    const result = await pipeline.runGeneration('make a simple app');
+    const result = await pipeline.run('make a simple app');
 
     expect(mockReviewProvider.generate).toHaveBeenCalledTimes(1);
     expect(result.architecturePlan?.files.some(f => f.path === 'src/types.ts')).toBe(true);
@@ -213,7 +217,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: largePlanJson });
     mockReviewProvider.generate.mockRejectedValue(new Error('Review Timeout'));
 
-    const result = await pipeline.runGeneration('make a simple app');
+    const result = await pipeline.run('make a simple app');
 
     expect(result.architecturePlan?.files).toHaveLength(11);
   });
@@ -222,7 +226,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson }); // 1 file
 
-    await pipeline.runGeneration('make a simple app');
+    await pipeline.run('make a simple app');
 
     expect(mockReviewProvider.generate).not.toHaveBeenCalled();
   });
@@ -232,7 +236,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: largePlanJson }); // 11 files
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    await pipeline.runGeneration('make a complex app');
+    await pipeline.run('make a complex app');
 
     expect(mockReviewProvider.generate).toHaveBeenCalledTimes(1);
   });
@@ -244,7 +248,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     const stageStarts: string[] = [];
     const stageCompletes: string[] = [];
 
-    await pipeline.runGeneration('simple app', {
+    await pipeline.run('simple app', {
       onStageStart: (stage) => stageStarts.push(stage),
       onStageComplete: (stage) => stageCompletes.push(stage),
     });
@@ -263,7 +267,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson });
 
-    await pipeline.runGeneration('test intent to planning');
+    await pipeline.run('test intent to planning');
 
     expect(mockPromptProvider.getArchitecturePlanningPrompt).toHaveBeenCalledWith(
       'test intent to planning',
@@ -280,8 +284,8 @@ describe('GenerationPipeline (Phase 5)', () => {
     });
 
     await expect(
-      pipeline.runGeneration('test abort', { signal: controller.signal })
-    ).rejects.toThrow('Generation cancelled by client');
+      pipeline.run('test abort', { signal: controller.signal })
+    ).rejects.toThrow('Pipeline cancelled by client');
 
     expect(mockPlanningProvider.generate).not.toHaveBeenCalled();
   });
@@ -292,7 +296,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson });
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    const result = await pipeline.runGeneration('make a simple app');
+    const result = await pipeline.run('make a simple app');
     expect(result.complexityRoute).toBe('one-shot');
   });
 
@@ -308,7 +312,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: JSON.stringify(largePlan) });
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    const result = await pipeline.runGeneration('huge app');
+    const result = await pipeline.run('huge app');
     expect(result.complexityRoute).toBe('multi-phase');
   });
 
@@ -330,7 +334,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: JSON.stringify(plan) });
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    await pipeline.runGeneration('test merge');
+    await pipeline.run('test merge');
 
     const executedLayers = mocks.executePhase.mock.calls.map((call: any[]) => call[0].layer);
     expect(executedLayers).toContain('scaffold');
@@ -356,7 +360,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: JSON.stringify(plan) });
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    await pipeline.runGeneration('test separate');
+    await pipeline.run('test separate');
 
     const executedLayers = mocks.executePhase.mock.calls.map((call: any[]) => call[0].layer);
     expect(executedLayers).toContain('logic'); // kept separate
@@ -367,7 +371,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: validPlanJson }); // 1 file
 
-    await pipeline.runGeneration('simple app');
+    await pipeline.run('simple app');
 
     expect(mocks.executePhase).toHaveBeenCalledTimes(1);
     expect(mocks.executePhase).toHaveBeenCalledWith(
@@ -382,7 +386,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: largePlanJson }); // 11 files
     mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
 
-    const result = await pipeline.runGeneration('complex app');
+    const result = await pipeline.run('complex app');
 
     const calledLayers = mocks.executePhase.mock.calls.map((c: any[]) => c[0].layer);
     expect(calledLayers).not.toContain('oneshot');
@@ -401,7 +405,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     };
     mockPlanningProvider.generate.mockResolvedValue({ success: true, content: JSON.stringify(plan) });
 
-    await pipeline.runGeneration('simple app');
+    await pipeline.run('simple app');
 
     expect(mocks.executePhase).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -435,7 +439,7 @@ describe('GenerationPipeline (Phase 5)', () => {
       warnings: [],
     });
 
-    const result = await pipeline.runGeneration('test execution');
+    const result = await pipeline.run('test execution');
 
     expect(mocks.executePhase).toHaveBeenCalledTimes(1);
     expect(result.generatedFiles).toHaveLength(2);
@@ -449,7 +453,7 @@ describe('GenerationPipeline (Phase 5)', () => {
     const stageStarts: string[] = [];
     const stageCompletes: string[] = [];
 
-    await pipeline.runGeneration('test events', {
+    await pipeline.run('test events', {
       onStageStart: (stage) => stageStarts.push(stage),
       onStageComplete: (stage) => stageCompletes.push(stage),
     });

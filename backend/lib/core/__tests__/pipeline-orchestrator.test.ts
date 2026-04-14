@@ -1,5 +1,5 @@
 /**
- * Tests for PipelineOrchestrator
+ * Tests for ModificationStrategy (via UnifiedPipeline)
  *
  * Covers:
  * - Graceful degradation: intent/planning failures → null output, pipeline continues
@@ -9,10 +9,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PipelineOrchestrator } from '../pipeline-orchestrator';
-import type { PipelineCallbacks, GeneratedFile } from '../pipeline-orchestrator';
+import { ModificationStrategy } from '../modification-strategy';
+import type { PipelineResult } from '../modification-strategy';
+import { UnifiedPipeline } from '../unified-pipeline';
+import type { UnifiedPipelineCallbacks } from '../pipeline-shared';
 import type { AIProvider, AIResponse } from '../../ai/ai-provider';
 import type { IPromptProvider } from '../prompts/prompt-provider';
+import type { PlanOutput } from '../schemas';
 
 vi.mock('../../logger', () => ({
   createLogger: vi.fn(() => {
@@ -44,7 +47,7 @@ const PLAN_JSON = {
   routing:      [],
 };
 
-const DEFAULT_FILES: GeneratedFile[] = [
+const DEFAULT_FILES = [
   { path: 'src/App.tsx',   content: 'export default function App() { return null; }' },
   { path: 'src/index.css', content: '* { margin: 0; }' },
 ];
@@ -67,7 +70,7 @@ const planOk   = (): AIResponse => ok(PLAN_JSON);
 
 // ─── Test Setup ───────────────────────────────────────────────────────────────
 
-let orchestrator: PipelineOrchestrator;
+let orchestrator: UnifiedPipeline<PlanOutput, PipelineResult>;
 let mockIntent:    AIProvider;
 let mockPlanning:  AIProvider;
 let mockExecution: AIProvider;
@@ -104,6 +107,28 @@ function makePromptProvider(): IPromptProvider {
   };
 }
 
+function makeOrchestrator(
+  intentProvider: AIProvider,
+  planningProvider: AIProvider,
+  executionProvider: AIProvider,
+  promptProvider: IPromptProvider,
+  currentFiles: Record<string, string> = {},
+  fileSlices: any[] = [],
+  tiers?: string[][],
+  validateFile?: (path: string, content: string) => Promise<{ valid: boolean; errorText?: string }>,
+): UnifiedPipeline<PlanOutput, PipelineResult> {
+  const strategy = new ModificationStrategy(
+    planningProvider,
+    executionProvider,
+    promptProvider,
+    currentFiles,
+    fileSlices,
+    tiers,
+    validateFile,
+  );
+  return new UnifiedPipeline<PlanOutput, PipelineResult>(intentProvider, promptProvider, strategy);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 
@@ -117,13 +142,21 @@ beforeEach(() => {
   vi.mocked(mockPlanning.generate).mockResolvedValue(planOk());
   vi.mocked(mockExecution.generateStreaming).mockResolvedValue(executionOk());
 
-  orchestrator = new PipelineOrchestrator(
-    mockIntent,
-    mockPlanning,
-    mockExecution,
-    mockPrompts,
-  );
+  orchestrator = makeOrchestrator(mockIntent, mockPlanning, mockExecution, mockPrompts);
 });
+
+// Helper that mirrors the old runModificationPipeline signature for test brevity
+function runModPipeline(
+  prompt: string,
+  currentFiles: Record<string, string>,
+  fileSlices: any[],
+  callbacks: UnifiedPipelineCallbacks,
+  options?: { skipIntent?: boolean; skipPlanning?: boolean },
+): Promise<PipelineResult> {
+  // Construct a fresh orchestrator per call (as the new design requires)
+  const o = makeOrchestrator(mockIntent, mockPlanning, mockExecution, mockPrompts, currentFiles, fileSlices);
+  return o.run(prompt, callbacks, options);
+}
 
 // ─── Stage: Intent (graceful degradation) ─────────────────────────────────────
 
@@ -131,7 +164,7 @@ describe('intent stage graceful degradation', () => {
   it('sets intentOutput to null when provider returns failure', async () => {
     vi.mocked(mockIntent.generate).mockResolvedValue(fail('Network timeout'));
 
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
+    const result = await runModPipeline('build a counter', {}, [], {});
 
     expect(result.intentOutput).toBeNull();
   });
@@ -139,7 +172,7 @@ describe('intent stage graceful degradation', () => {
   it('sets intentOutput to null when provider throws', async () => {
     vi.mocked(mockIntent.generate).mockRejectedValue(new Error('Connection refused'));
 
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
+    const result = await runModPipeline('build a counter', {}, [], {});
 
     expect(result.intentOutput).toBeNull();
   });
@@ -147,7 +180,7 @@ describe('intent stage graceful degradation', () => {
   it('sets intentOutput to null when provider returns invalid JSON', async () => {
     vi.mocked(mockIntent.generate).mockResolvedValue({ success: true, content: 'not-json' });
 
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
+    const result = await runModPipeline('build a counter', {}, [], {});
 
     expect(result.intentOutput).toBeNull();
   });
@@ -155,7 +188,7 @@ describe('intent stage graceful degradation', () => {
   it('continues to planning stage after intent failure', async () => {
     vi.mocked(mockIntent.generate).mockResolvedValue(fail());
 
-    await orchestrator.runModificationPipeline('build a counter', {}, [], {});
+    await runModPipeline('build a counter', {}, [], {});
 
     expect(mockPlanning.generate).toHaveBeenCalled();
   });
@@ -163,7 +196,7 @@ describe('intent stage graceful degradation', () => {
   it('still produces executorFiles after intent failure', async () => {
     vi.mocked(mockIntent.generate).mockResolvedValue(fail());
 
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
+    const result = await runModPipeline('build a counter', {}, [], {});
 
     expect(result.executorFiles).toEqual(DEFAULT_FILES);
   });
@@ -172,7 +205,7 @@ describe('intent stage graceful degradation', () => {
     vi.mocked(mockIntent.generate).mockResolvedValue(fail('API error'));
     const onStageFailed = vi.fn();
 
-    await orchestrator.runModificationPipeline('build a counter', {}, [], { onStageFailed });
+    await runModPipeline('build a counter', {}, [], { onStageFailed });
 
     expect(onStageFailed).toHaveBeenCalledWith('intent', expect.any(String));
   });
@@ -181,7 +214,7 @@ describe('intent stage graceful degradation', () => {
     vi.mocked(mockIntent.generate).mockResolvedValue(fail());
     const onStageComplete = vi.fn();
 
-    await orchestrator.runModificationPipeline('build a counter', {}, [], { onStageComplete });
+    await runModPipeline('build a counter', {}, [], { onStageComplete });
 
     expect(onStageComplete).not.toHaveBeenCalledWith('intent');
   });
@@ -193,7 +226,7 @@ describe('planning stage graceful degradation', () => {
   it('sets planOutput to null when provider returns failure', async () => {
     vi.mocked(mockPlanning.generate).mockResolvedValue(fail());
 
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
+    const result = await runModPipeline('build a counter', {}, [], {});
 
     expect(result.planOutput).toBeNull();
   });
@@ -201,7 +234,7 @@ describe('planning stage graceful degradation', () => {
   it('sets planOutput to null when provider throws', async () => {
     vi.mocked(mockPlanning.generate).mockRejectedValue(new Error('Timeout'));
 
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
+    const result = await runModPipeline('build a counter', {}, [], {});
 
     expect(result.planOutput).toBeNull();
   });
@@ -209,7 +242,7 @@ describe('planning stage graceful degradation', () => {
   it('continues to execution stage after planning failure', async () => {
     vi.mocked(mockPlanning.generate).mockRejectedValue(new Error('Timeout'));
 
-    await orchestrator.runModificationPipeline('build a counter', {}, [], {});
+    await runModPipeline('build a counter', {}, [], {});
 
     expect(mockExecution.generateStreaming).toHaveBeenCalled();
   });
@@ -217,7 +250,7 @@ describe('planning stage graceful degradation', () => {
   it('still produces executorFiles after planning failure', async () => {
     vi.mocked(mockPlanning.generate).mockResolvedValue(fail());
 
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
+    const result = await runModPipeline('build a counter', {}, [], {});
 
     expect(result.executorFiles).toEqual(DEFAULT_FILES);
   });
@@ -226,7 +259,7 @@ describe('planning stage graceful degradation', () => {
     vi.mocked(mockPlanning.generate).mockResolvedValue(fail('Rate limited'));
     const onStageFailed = vi.fn();
 
-    await orchestrator.runModificationPipeline('build a counter', {}, [], { onStageFailed });
+    await runModPipeline('build a counter', {}, [], { onStageFailed });
 
     expect(onStageFailed).toHaveBeenCalledWith('planning', expect.any(String));
   });
@@ -239,7 +272,7 @@ describe('execution stage hard-fail', () => {
     vi.mocked(mockExecution.generateStreaming).mockResolvedValue(fail('Out of memory'));
 
     await expect(
-      orchestrator.runModificationPipeline('build a counter', {}, [], {})
+      runModPipeline('build a counter', {}, [], {})
     ).rejects.toThrow();
   });
 
@@ -247,7 +280,7 @@ describe('execution stage hard-fail', () => {
     vi.mocked(mockExecution.generateStreaming).mockRejectedValue(new Error('Fatal error'));
 
     await expect(
-      orchestrator.runModificationPipeline('build a counter', {}, [], {})
+      runModPipeline('build a counter', {}, [], {})
     ).rejects.toThrow();
   });
 
@@ -255,7 +288,7 @@ describe('execution stage hard-fail', () => {
     vi.mocked(mockExecution.generateStreaming).mockResolvedValue(fail());
 
     await expect(
-      orchestrator.runModificationPipeline('build a counter', {}, [], {})
+      runModPipeline('build a counter', {}, [], {})
     ).rejects.toThrow();
   });
 });
@@ -264,14 +297,14 @@ describe('execution stage hard-fail', () => {
 
 describe('successful modification pipeline', () => {
   it('returns correct intentOutput on success', async () => {
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
+    const result = await runModPipeline('build a counter', {}, [], {});
 
     expect(result.intentOutput).not.toBeNull();
     expect(result.intentOutput?.complexity).toBe('simple');
   });
 
   it('returns correct planOutput on success', async () => {
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
+    const result = await runModPipeline('build a counter', {}, [], {});
 
     expect(result.planOutput).not.toBeNull();
     expect(result.planOutput?.files).toHaveLength(1);
@@ -279,28 +312,28 @@ describe('successful modification pipeline', () => {
 
   it('fires onStageStart for all 3 stages in order', async () => {
     const stagesStarted: string[] = [];
-    const callbacks: PipelineCallbacks = {
+    const callbacks: UnifiedPipelineCallbacks = {
       onStageStart: (stage) => { stagesStarted.push(stage); },
     };
 
-    await orchestrator.runModificationPipeline('build a counter', {}, [], callbacks);
+    await runModPipeline('build a counter', {}, [], callbacks);
 
     expect(stagesStarted).toEqual(['intent', 'planning', 'execution']);
   });
 
   it('fires onStageComplete for all 3 stages in order', async () => {
     const stagesCompleted: string[] = [];
-    const callbacks: PipelineCallbacks = {
+    const callbacks: UnifiedPipelineCallbacks = {
       onStageComplete: (stage) => { stagesCompleted.push(stage); },
     };
 
-    await orchestrator.runModificationPipeline('build a counter', {}, [], callbacks);
+    await runModPipeline('build a counter', {}, [], callbacks);
 
     expect(stagesCompleted).toEqual(['intent', 'planning', 'execution']);
   });
 
   it('finalFiles equals applyModificationsToFiles output directly', async () => {
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {});
+    const result = await runModPipeline('build a counter', {}, [], {});
 
     expect(result.finalFiles).toBeDefined();
     expect(result.finalFiles.length).toBeGreaterThan(0);
@@ -312,19 +345,19 @@ describe('successful modification pipeline', () => {
 
 describe('skipIntent option', () => {
   it('does not call intent provider when skipIntent=true', async () => {
-    await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipIntent: true });
+    await runModPipeline('build a counter', {}, [], {}, { skipIntent: true });
 
     expect(mockIntent.generate).not.toHaveBeenCalled();
   });
 
   it('sets intentOutput to null when skipIntent=true', async () => {
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipIntent: true });
+    const result = await runModPipeline('build a counter', {}, [], {}, { skipIntent: true });
 
     expect(result.intentOutput).toBeNull();
   });
 
   it('still runs planning and execution when skipIntent=true', async () => {
-    await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipIntent: true });
+    await runModPipeline('build a counter', {}, [], {}, { skipIntent: true });
 
     expect(mockPlanning.generate).toHaveBeenCalled();
     expect(mockExecution.generateStreaming).toHaveBeenCalled();
@@ -333,19 +366,19 @@ describe('skipIntent option', () => {
 
 describe('skipPlanning option', () => {
   it('does not call planning provider when skipPlanning=true', async () => {
-    await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipPlanning: true });
+    await runModPipeline('build a counter', {}, [], {}, { skipPlanning: true });
 
     expect(mockPlanning.generate).not.toHaveBeenCalled();
   });
 
   it('sets planOutput to null when skipPlanning=true', async () => {
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipPlanning: true });
+    const result = await runModPipeline('build a counter', {}, [], {}, { skipPlanning: true });
 
     expect(result.planOutput).toBeNull();
   });
 
   it('still runs intent and execution when skipPlanning=true', async () => {
-    await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipPlanning: true });
+    await runModPipeline('build a counter', {}, [], {}, { skipPlanning: true });
 
     expect(mockIntent.generate).toHaveBeenCalled();
     expect(mockExecution.generateStreaming).toHaveBeenCalled();
@@ -354,7 +387,7 @@ describe('skipPlanning option', () => {
 
 describe('skipIntent + skipPlanning both true', () => {
   it('only calls execution provider (intent and planning skipped)', async () => {
-    await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipIntent: true, skipPlanning: true });
+    await runModPipeline('build a counter', {}, [], {}, { skipIntent: true, skipPlanning: true });
 
     expect(mockIntent.generate).not.toHaveBeenCalled();
     expect(mockPlanning.generate).not.toHaveBeenCalled();
@@ -362,14 +395,14 @@ describe('skipIntent + skipPlanning both true', () => {
   });
 
   it('returns null for both intentOutput and planOutput', async () => {
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipIntent: true, skipPlanning: true });
+    const result = await runModPipeline('build a counter', {}, [], {}, { skipIntent: true, skipPlanning: true });
 
     expect(result.intentOutput).toBeNull();
     expect(result.planOutput).toBeNull();
   });
 
   it('still produces finalFiles', async () => {
-    const result = await orchestrator.runModificationPipeline('build a counter', {}, [], {}, { skipIntent: true, skipPlanning: true });
+    const result = await runModPipeline('build a counter', {}, [], {}, { skipIntent: true, skipPlanning: true });
 
     expect(result.finalFiles).toBeDefined();
     expect(result.finalFiles.length).toBeGreaterThan(0);
@@ -387,7 +420,7 @@ describe('abort signal', () => {
     vi.mocked(mockIntent.generate).mockResolvedValue(intentOk());
 
     await expect(
-      orchestrator.runModificationPipeline('build a counter', {}, [], { signal: controller.signal })
+      runModPipeline('build a counter', {}, [], { signal: controller.signal })
     ).rejects.toThrow(/cancelled/i);
   });
 });
@@ -400,30 +433,30 @@ describe('runOrderedModificationPipeline', () => {
       'src/types.ts': 'export type A = string;',
       'src/consumer.ts': 'import { A } from "./types";',
     };
-    
+
     // First attempt fails validation, second attempt succeeds
     let validationAttempts = 0;
-    const validateFile = vi.fn(async (path, content) => {
+    const validateFile = vi.fn(async (_path: string, _content: string) => {
       validationAttempts++;
       if (validationAttempts === 1) return { valid: false, errorText: 'Syntax error' };
       return { valid: true };
     });
 
     // Mock execution provider to return generated files
-    // The orchestrator expects the string content of 'files' to be JSON parseable as GeneratedFile array
     vi.mocked(mockExecution.generateStreaming).mockResolvedValue(
       ok({ files: [{ path: 'src/types.ts', content: 'export type A = number;' }] })
     );
 
     const tiers = [['src/types.ts'], ['src/consumer.ts']];
-    const callbacks = {};
 
-    const result = await orchestrator.runOrderedModificationPipeline(
+    const o = makeOrchestrator(
+      mockIntent, mockPlanning, mockExecution, mockPrompts,
+      currentFiles, [], tiers, validateFile,
+    );
+
+    const result = await o.run(
       'change type A to number',
-      currentFiles,
-      tiers,
-      validateFile,
-      callbacks,
+      {},
       {}
     );
 

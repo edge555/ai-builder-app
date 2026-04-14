@@ -6,7 +6,8 @@
  * 3. Modify/delete ops from the executor are applied via applyFileEdits
  * 4. Build validation with auto-retry (bugfix provider)
  *
- * @requires ../core/pipeline-orchestrator - PipelineOrchestrator class
+ * @requires ../core/modification-strategy - ModificationStrategy + PipelineResult
+ * @requires ../core/unified-pipeline - UnifiedPipeline class
  * @requires ../core/build-validator - Build error detection
  * @requires ../logger - Structured logging
  * @requires @ai-app-builder/shared - ProjectState, ModificationResult types
@@ -41,13 +42,15 @@ import { DiagnosticRepairEngine } from './diagnostic-repair-engine';
 import { CheckpointManager } from './checkpoint-manager';
 import { applyFileEdits } from './file-edit-applicator';
 import { evaluateDiffSize } from './diff-size-guard';
-import type { PipelineCallbacks, GeneratedFile, PipelineResult, PipelineStage } from '../core/pipeline-orchestrator';
-import { PipelineOrchestrator } from '../core/pipeline-orchestrator';
-import { createPipelineOrchestrator } from '../core/pipeline-factory';
+import type { UnifiedPipelineCallbacks, PipelineStage, GeneratedFile } from '../core/pipeline-shared';
+import type { PipelineResult } from '../core/modification-strategy';
+import { ModificationStrategy } from '../core/modification-strategy';
+import { UnifiedPipeline } from '../core/unified-pipeline';
 import { indexProject } from '../analysis/file-index';
 import { createDependencyGraph } from '../analysis/dependency-graph';
 import { analyzeImpact } from '../analysis/impact-analyzer';
 import { createAcceptanceGate } from '../core/acceptance-gate';
+import type { PlanOutput } from '../core/schemas';
 
 const logger = createLogger('ModificationEngine');
 
@@ -74,6 +77,29 @@ export interface ModificationRoutingDecision {
 }
 
 /**
+ * Minimal interface that the ModificationEngine requires from its pipeline.
+ * Implemented by UnifiedPipeline (via legacy aliases) and by test mocks.
+ */
+export interface IModificationPipeline {
+  runModificationPipeline(
+    userPrompt: string,
+    currentFiles: Record<string, string>,
+    fileSlices: CodeSlice[],
+    callbacks: UnifiedPipelineCallbacks,
+    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean }
+  ): Promise<PipelineResult>;
+
+  runOrderedModificationPipeline(
+    userPrompt: string,
+    currentFiles: Record<string, string>,
+    tiers: string[][],
+    validateFile: (path: string, content: string) => Promise<{ valid: boolean; errorText?: string }>,
+    callbacks: UnifiedPipelineCallbacks,
+    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean }
+  ): Promise<PipelineResult>;
+}
+
+/**
  * Modification Engine service for modifying existing projects.
  * Uses the 4-stage pipeline (Intent → Planning → Execution → Review).
  */
@@ -85,7 +111,7 @@ export class ModificationEngine {
   private readonly acceptanceGate = createAcceptanceGate();
 
   constructor(
-    private readonly pipeline: PipelineOrchestrator,
+    private readonly pipeline: IModificationPipeline,
     private readonly bugfixProvider: AIProvider,
     private readonly promptProvider: IPromptProvider,
   ) {
@@ -186,21 +212,21 @@ export class ModificationEngine {
       });
 
       // Step 3: Build pipeline callbacks
-      const pipelineCallbacks: PipelineCallbacks = {
+      const pipelineCallbacks: UnifiedPipelineCallbacks = {
         onStageStart: (stage, label) => {
           contextLogger.debug('Pipeline stage start', { stage, label });
-          onPipelineStage?.({ stage, label, status: 'start' });
+          onPipelineStage?.({ stage: stage as PipelineStage, label, status: 'start' });
           if (stage === 'intent') onProgress?.('intent', label);
           else if (stage === 'planning') onProgress?.('planning', label);
           else if (stage === 'execution') onProgress?.('generating', 'Generating code modifications...');
         },
         onStageComplete: (stage) => {
           contextLogger.debug('Pipeline stage complete', { stage });
-          onPipelineStage?.({ stage, label: '', status: 'complete' });
+          onPipelineStage?.({ stage: stage as PipelineStage, label: '', status: 'complete' });
         },
         onStageFailed: (stage, error) => {
           contextLogger.warn('Pipeline stage failed (degraded)', { stage, error });
-          onPipelineStage?.({ stage, label: error, status: 'degraded' });
+          onPipelineStage?.({ stage: stage as PipelineStage, label: error, status: 'degraded' });
         },
         signal: undefined, // ModificationEngine doesn't have an abort signal from options
       };
@@ -220,7 +246,7 @@ export class ModificationEngine {
         );
       } else {
         onProgress?.('generating', `Generating code modifications (ordered, ${primaryFiles.length} files)...`);
-        
+
         const fileIndex = indexProject(projectState);
         const depGraph = createDependencyGraph(fileIndex);
         const impactReport = analyzeImpact(primaryFiles, depGraph);
@@ -287,8 +313,6 @@ export class ModificationEngine {
       }
 
       // Step 6: Validate AI output against the full merged project (not just changed files)
-      // Validating only updatedFiles causes false failures: structure validators always require
-      // package.json and an entry point, which won't be present in a single-file patch.
       onProgress?.('validating', 'Validating generated code...');
       const mergedForValidation: Record<string, string | null> = {
         ...projectState.files,
@@ -479,8 +503,7 @@ export class ModificationEngine {
 
   /**
    * Retry failed search/replace edits by asking the AI to return complete file content
-   * using replace_file. This is the highest-leverage fallback — eliminates the entire
-   * "match failure" class at the cost of 1 extra AI call per batch of failed files.
+   * using replace_file.
    */
   private async retryWithReplaceFileFallback(
     failedFileEdits: FailedFileEdit[],
@@ -517,7 +540,6 @@ export class ModificationEngine {
         : typeof parsed?.path === 'string' ? [parsed] : [];
 
       // Only accept paths we were asked to retry AND that exist in currentFiles
-      // — prevent AI from overwriting unrelated files or creating new files via fallback
       const allowedPaths = new Set(failedFileEdits.map(f => f.path));
       const result: GeneratedFile[] = [];
       for (const file of files) {
@@ -594,8 +616,6 @@ export class ModificationEngine {
         filesToValidate[path] = content;
       }
     }
-    // Use light validation (structural + placeholder only) — build errors are handled
-    // downstream by DiagnosticRepairEngine, not rejected outright here.
     const acceptanceResult = this.acceptanceGate.lightValidate(filesToValidate);
     return {
       valid: acceptanceResult.valid,
@@ -628,10 +648,6 @@ export class ModificationEngine {
 
 /**
  * Classifies modification complexity to decide whether to skip intent and/or planning stages.
- *
- * Rules:
- * - errorContext present (repair mode) → skip both
- * - all normal modification requests → run both
  */
 export function classifyModificationComplexity(
   slices: CodeSlice[],
@@ -720,14 +736,11 @@ function isAllowedSupportFile(path: string, prompt: string, originalFiles?: Reco
     return true;
   }
 
-  // Allow NEW source files the AI creates that weren't in the original project
-  // (e.g. "add dark mode" creates src/theme.css, "add a Button component" creates src/Button.tsx).
-  // Existing files being unexpectedly modified are NOT allowed via this path.
   if (/\.(ts|tsx|css|scss|js|jsx)$/.test(path) && !path.includes('node_modules')) {
     if (originalFiles) {
       return !(path in originalFiles); // only new files are allowed
     }
-    return true; // no originalFiles context — allow (backward compat)
+    return true;
   }
 
   const normalized = prompt.toLowerCase();
@@ -740,8 +753,6 @@ function isAllowedSupportFile(path: string, prompt: string, originalFiles?: Reco
 
 /**
  * Heuristic file selection for small projects or repair mode (no AI FilePlanner call).
- * Matches prompt keywords against file basenames to categorize primary vs context.
- * Falls back to all-primary if no matches found.
  */
 function selectFilesHeuristically(projectState: ProjectState, prompt: string): CodeSlice[] {
   const promptLower = prompt.toLowerCase();
@@ -756,7 +767,6 @@ function selectFilesHeuristically(projectState: ProjectState, prompt: string): C
     }
   }
 
-  // Fallback: all primary if no keyword matches
   if (matchedPaths.size === 0) {
     return allFiles.map(([filePath, content]) => ({ filePath, content, relevance: 'primary' as const }));
   }
@@ -769,6 +779,76 @@ function selectFilesHeuristically(projectState: ProjectState, prompt: string): C
 }
 
 /**
+ * Adapter that wraps a UnifiedPipeline and makes it implement IModificationPipeline.
+ * Constructs a new ModificationStrategy per call, injecting currentFiles/fileSlices/tiers at runtime.
+ */
+class ModificationPipelineAdapter implements IModificationPipeline {
+  constructor(
+    private readonly intentProvider: AIProvider,
+    private readonly planningProvider: AIProvider,
+    private readonly executionProvider: AIProvider,
+    private readonly promptProvider: IPromptProvider,
+  ) {}
+
+  async runModificationPipeline(
+    userPrompt: string,
+    currentFiles: Record<string, string>,
+    fileSlices: CodeSlice[],
+    callbacks: UnifiedPipelineCallbacks,
+    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean }
+  ): Promise<PipelineResult> {
+    const strategy = new ModificationStrategy(
+      this.planningProvider,
+      this.executionProvider,
+      this.promptProvider,
+      currentFiles,
+      fileSlices,
+    );
+    const pipeline = new UnifiedPipeline<PlanOutput, PipelineResult>(
+      this.intentProvider,
+      this.promptProvider,
+      strategy,
+    );
+    return pipeline.run(userPrompt, callbacks, {
+      requestId: options?.requestId,
+      designSystem: options?.designSystem,
+      skipIntent: options?.skipIntent,
+      skipPlanning: options?.skipPlanning,
+    });
+  }
+
+  async runOrderedModificationPipeline(
+    userPrompt: string,
+    currentFiles: Record<string, string>,
+    tiers: string[][],
+    validateFile: (path: string, content: string) => Promise<{ valid: boolean; errorText?: string }>,
+    callbacks: UnifiedPipelineCallbacks,
+    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean }
+  ): Promise<PipelineResult> {
+    const strategy = new ModificationStrategy(
+      this.planningProvider,
+      this.executionProvider,
+      this.promptProvider,
+      currentFiles,
+      [], // fileSlices not needed for ordered execution
+      tiers,
+      validateFile,
+    );
+    const pipeline = new UnifiedPipeline<PlanOutput, PipelineResult>(
+      this.intentProvider,
+      this.promptProvider,
+      strategy,
+    );
+    return pipeline.run(userPrompt, callbacks, {
+      requestId: options?.requestId,
+      designSystem: options?.designSystem,
+      skipIntent: options?.skipIntent,
+      skipPlanning: options?.skipPlanning,
+    });
+  }
+}
+
+/**
  * Creates a ModificationEngine with the full pipeline + bugfix provider.
  * Pass overrideProvider to use a workspace-specific API key for all stages.
  */
@@ -777,16 +857,21 @@ export async function createModificationEngine(overrideProvider?: AIProvider): P
     // Workspace mode: single provider for all stages (v1 — no per-task routing)
     const providerName = await getEffectiveProvider();
     const promptProvider = createPromptProvider(providerName);
-    const pipeline = new PipelineOrchestrator(
+    const adapter = new ModificationPipelineAdapter(
       overrideProvider, overrideProvider, overrideProvider, promptProvider
     );
-    return new ModificationEngine(pipeline, overrideProvider, promptProvider);
+    return new ModificationEngine(adapter, overrideProvider, promptProvider);
   }
-  const [pipeline, bugfixProvider, providerName] = await Promise.all([
-    createPipelineOrchestrator(),
+  const [intentProvider, planningProvider, executionProvider, bugfixProvider, providerName] = await Promise.all([
+    createAIProvider('intent'),
+    createAIProvider('planning'),
+    createAIProvider('execution'),
     createAIProvider('bugfix'),
     getEffectiveProvider(),
   ]);
   const promptProvider = createPromptProvider(providerName);
-  return new ModificationEngine(pipeline, bugfixProvider, promptProvider);
+  const adapter = new ModificationPipelineAdapter(
+    intentProvider, planningProvider, executionProvider, promptProvider
+  );
+  return new ModificationEngine(adapter, bugfixProvider, promptProvider);
 }

@@ -13,13 +13,6 @@ vi.mock('../../config', () => ({
 }));
 
 // Mock dependencies
-vi.mock('../../core/pipeline-orchestrator', () => ({
-  PipelineOrchestrator: vi.fn(),
-  createPipelineOrchestrator: () => Promise.resolve({
-    runModificationPipeline: vi.fn(),
-    runOrderedModificationPipeline: vi.fn(),
-  }),
-}));
 vi.mock('../../ai', () => ({
   createAIProvider: () => Promise.resolve({}),
 }));
