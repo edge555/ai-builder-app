@@ -1,47 +1,28 @@
 import type { SerializedProjectState } from '@ai-app-builder/shared/types';
-import {
-  SandpackProvider,
-  SandpackLayout,
-  SandpackPreview,
-  SandpackConsole,
-} from '@codesandbox/sandpack-react';
-import { type ReactNode, useState, useCallback, useMemo, memo, useRef } from 'react';
+import { type ReactNode, useState, useCallback, useMemo, memo, useRef, useEffect } from 'react';
 
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
+import { useWebContainer } from '@/hooks/useWebContainer';
 
 import type { LoadingPhase } from '../ChatInterface/LoadingIndicator';
 import { CodeEditorView } from '../CodeEditor';
-
 import { EmptyProjectState } from '../EmptyProjectState/EmptyProjectState';
 import { PreviewHeader } from './PreviewHeader';
 import { PreviewSkeleton } from './PreviewSkeleton';
 import { DEVICE_PRESETS } from './PreviewToolbar';
-import {
-  transformFilesForSandpack,
-  hasRequiredFiles,
-  DEFAULT_FILES,
-  getEntryFile,
-  detectFullstackProject,
-} from './previewUtils';
+import { detectFullstackProject } from './previewUtils';
 import { FullstackBanner } from './FullstackBanner';
-import { SandpackErrorListener } from './SandpackErrorListener';
-import { SandpackRefresher } from './SandpackRefresher';
+import { WebContainerBootProgress } from './WebContainerBootProgress';
+import { WebContainerPreview } from './WebContainerPreview';
+import { WebContainerConsole } from './WebContainerConsole';
+import { WebContainerErrorListener } from './WebContainerErrorListener';
 import './PreviewPanel.css';
-
-/** Shared Sandpack dependency map. */
-const SANDPACK_DEPS = {
-  'react': '^18.2.0',
-  'react-dom': '^18.2.0',
-  'lucide-react': '^0.294.0',
-  'clsx': '^2.0.0',
-  'tailwind-merge': '^2.0.0',
-};
 
 /** Fixed frames shown in compare mode. */
 const COMPARE_FRAMES = [
-  { label: 'Mobile (375×667)',   width: 375,  height: 667  },
-  { label: 'Tablet (768×1024)', width: 768,  height: 1024 },
-  { label: 'Desktop',           width: 1280, height: 800  },
+  { label: 'Mobile (375\u00d7667)',   width: 375,  height: 667  },
+  { label: 'Tablet (768\u00d71024)', width: 768,  height: 1024 },
+  { label: 'Desktop',                width: 1280, height: 800  },
 ];
 
 interface DeviceFrameProps {
@@ -99,9 +80,7 @@ export interface PreviewPanelProps {
 
 /**
  * PreviewPanel component that renders a live preview of the generated project.
- * Uses Sandpack to provide an isolated sandbox environment for React projects.
- *
- * Requirements: 9.1, 9.2, 9.3
+ * Uses WebContainers to provide a real Node.js runtime inside the browser.
  */
 const PreviewPanelComponent = function PreviewPanel({
   projectState,
@@ -125,64 +104,46 @@ const PreviewPanelComponent = function PreviewPanel({
   // Use forceCodeView when provided (for mobile three-tab layout)
   const effectiveShowCode = forceCodeView || showCode;
 
-  // Dispatch-based refresh: SandpackRefresher provides this function once mounted.
-  const refreshFnRef = useRef<(() => void) | null>(null);
-
-  // Refresh animation duration in milliseconds
-  const REFRESH_ANIMATION_MS = 600;
-
-  const handleRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    refreshFnRef.current?.();
-    setTimeout(() => setIsRefreshing(false), REFRESH_ANIMATION_MS);
-  }, []);
-
-  // Track previous files for deep equality check
-  const prevFilesRef = useRef<Record<string, string> | null>(null);
-  const cachedSandpackFilesRef = useRef<Record<string, string>>(DEFAULT_FILES);
-
-  // Transform project files for Sandpack
-  // Only recompute if files actually changed (deep equality)
-  const sandpackFiles = useMemo(() => {
-    const currentFiles = projectState?.files;
-
-    if (!currentFiles || Object.keys(currentFiles).length === 0) {
-      prevFilesRef.current = null;
-      cachedSandpackFilesRef.current = DEFAULT_FILES;
-      return DEFAULT_FILES;
-    }
-
-    // Deep equality check: only recompute if files changed
-    const filesChanged = !prevFilesRef.current ||
-      Object.keys(currentFiles).length !== Object.keys(prevFilesRef.current).length ||
-      Object.keys(currentFiles).some(key => currentFiles[key] !== prevFilesRef.current![key]);
-
-    if (!filesChanged) {
-      return cachedSandpackFilesRef.current;
-    }
-
-    // Files changed, recompute
-    prevFilesRef.current = currentFiles;
-    const transformed = transformFilesForSandpack(currentFiles);
-
-    // If project doesn't have required entry files, use defaults
-    if (!hasRequiredFiles(transformed)) {
-      cachedSandpackFilesRef.current = { ...DEFAULT_FILES, ...transformed };
-      return cachedSandpackFilesRef.current;
-    }
-
-    cachedSandpackFilesRef.current = transformed;
-    return transformed;
-  }, [projectState?.files]);
-
-  // Determine the entry file
-  const entryFile = useMemo(() => getEntryFile(sandpackFiles), [sandpackFiles]);
-
   // Detect fullstack project for banner display
   const fullstackInfo = useMemo(
     () => detectFullstackProject(projectState?.files ?? {}),
     [projectState?.files]
   );
+
+  // WebContainer lifecycle
+  const {
+    phase,
+    previewUrl,
+    installOutput,
+    serverOutput,
+    terminalLines,
+    refresh,
+  } = useWebContainer(projectState?.files ?? null);
+
+  // Notify parent when WebContainer reaches ready phase
+  const onBundlerIdleRef = useRef(onBundlerIdle);
+  useEffect(() => {
+    onBundlerIdleRef.current = onBundlerIdle;
+  }, [onBundlerIdle]);
+
+  const prevPhaseRef = useRef(phase);
+  useEffect(() => {
+    if (phase === 'ready' && prevPhaseRef.current !== 'ready') {
+      onBundlerIdleRef.current?.();
+    }
+    prevPhaseRef.current = phase;
+  }, [phase]);
+
+  // Refresh animation duration in milliseconds
+  const REFRESH_ANIMATION_MS = 600;
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await refresh();
+    setTimeout(() => setIsRefreshing(false), REFRESH_ANIMATION_MS);
+  }, [refresh]);
+
+  const isBooting = phase !== 'ready' && phase !== 'idle' && phase !== 'error';
 
   return (
     <div className="preview-panel" role="region" aria-label="Application preview">
@@ -210,7 +171,7 @@ const PreviewPanelComponent = function PreviewPanel({
         onRefresh={handleRefresh}
       />
 
-      {/* Show skeleton during loading */}
+      {/* Show skeleton during AI generation */}
       {isLoading && loadingPhase !== 'idle' ? (
         <PreviewSkeleton phase={loadingPhase} />
       ) : !projectState && !isLoading ? (
@@ -221,101 +182,88 @@ const PreviewPanelComponent = function PreviewPanel({
         </div>
       ) : (
         <div className="preview-content" role="tabpanel" id="tabpanel-preview" aria-label="Live preview">
+          {/* Error listener for auto-repair */}
+          {errorMonitoringEnabled && (
+            <WebContainerErrorListener
+              serverOutput={serverOutput}
+              installOutput={installOutput}
+              onErrorsReady={onErrorsReady}
+              enabled={!isLoading}
+              onBundlerIdle={onBundlerIdle}
+              isReady={phase === 'ready'}
+            />
+          )}
+
           {fullstackInfo.isFullstack && (
             <FullstackBanner
               hasPrisma={fullstackInfo.hasPrisma}
               hasApiRoutes={fullstackInfo.hasApiRoutes}
             />
           )}
+
           {compareMode ? (
             /* ── Compare mode: three fixed-size frames side by side ── */
             <div className="device-compare-container">
               {COMPARE_FRAMES.map(frame => (
                 <div key={frame.label} className="device-compare-frame">
                   <div className="device-compare-label">{frame.label}</div>
-                  <SandpackProvider
-                    files={Object.fromEntries(
-                      Object.entries(sandpackFiles).map(([path, code]) => [path, { code }])
+                  <div className="device-frame" style={{ width: frame.width, height: frame.height, position: 'relative' }}>
+                    {isBooting && (
+                      <WebContainerBootProgress phase={phase} installOutput={installOutput} />
                     )}
-                    theme="dark"
-                    options={{ activeFile: entryFile, recompileMode: 'delayed', recompileDelay: 500, visibleFiles: Object.keys(sandpackFiles) }}
-                    customSetup={{ entry: entryFile, dependencies: SANDPACK_DEPS }}
-                  >
-                    <SandpackLayout>
-                      <div className="device-frame" style={{ width: frame.width, height: frame.height }}>
-                        <SandpackPreview showOpenInCodeSandbox={false} showRefreshButton style={{ height: '100%' }} />
-                      </div>
-                    </SandpackLayout>
-                  </SandpackProvider>
+                    <WebContainerPreview
+                      previewUrl={previewUrl}
+                      phase={phase}
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
             /* ── Normal single-device mode ── */
-            <SandpackProvider
-              files={Object.fromEntries(
-                Object.entries(sandpackFiles).map(([path, code]) => [path, { code }])
-              )}
-              theme="dark"
-              options={{
-                activeFile: entryFile,
-                recompileMode: 'delayed',
-                recompileDelay: 500,
-                visibleFiles: Object.keys(sandpackFiles),
-              }}
-              customSetup={{ entry: entryFile, dependencies: SANDPACK_DEPS }}
-            >
-              {/* Error listener for auto-repair */}
-              {errorMonitoringEnabled && (
-                <SandpackErrorListener
-                  onErrorsReady={onErrorsReady}
-                  enabled={!isLoading}
-                  onBundlerIdle={onBundlerIdle}
-                />
-              )}
-              <SandpackLayout>
-                {/* Dispatch-based refresh — no iframe remount */}
-                <SandpackRefresher onRefreshReady={(fn) => { refreshFnRef.current = fn; }} />
-                {presetId === 'desktop' ? (
-                  <SandpackPreview
-                    showOpenInCodeSandbox={true}
-                    showRefreshButton
-                    style={{ height: '100%' }}
-                  />
-                ) : (
-                  <div className="device-simulation-container">
-                    <DeviceFrame
-                      presetId={presetId}
-                      customWidth={customWidth}
-                      customHeight={customHeight}
-                      isRotated={isRotated}
-                      zoom={zoom}
-                    >
-                      <SandpackPreview
-                        showOpenInCodeSandbox={true}
-                        showRefreshButton
-                        style={{ height: '100%' }}
-                      />
-                    </DeviceFrame>
-                  </div>
-                )}
-              </SandpackLayout>
-              {showConsole && (
-                <div className="preview-console-panel">
-                  <SandpackConsole
-                    showHeader={false}
-                    showSyntaxError
-                    maxMessageCount={100}
-                    resetOnPreviewRestart
-                    style={{ height: '100%' }}
+            <>
+              {presetId === 'desktop' ? (
+                <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                  {isBooting && (
+                    <WebContainerBootProgress phase={phase} installOutput={installOutput} />
+                  )}
+                  <WebContainerPreview
+                    previewUrl={previewUrl}
+                    phase={phase}
+                    style={{ width: '100%', height: '100%' }}
                   />
                 </div>
+              ) : (
+                <div className="device-simulation-container">
+                  <DeviceFrame
+                    presetId={presetId}
+                    customWidth={customWidth}
+                    customHeight={customHeight}
+                    isRotated={isRotated}
+                    zoom={zoom}
+                  >
+                    {isBooting && (
+                      <WebContainerBootProgress phase={phase} installOutput={installOutput} />
+                    )}
+                    <WebContainerPreview
+                      previewUrl={previewUrl}
+                      phase={phase}
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                  </DeviceFrame>
+                </div>
               )}
-            </SandpackProvider>
+
+              {showConsole && (
+                <div className="preview-console-panel">
+                  <WebContainerConsole lines={terminalLines} />
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
-
     </div>
   );
 };
@@ -372,9 +320,7 @@ function arePropsEqual(
 
 /**
  * Memoized PreviewPanel - only re-renders when files or relevant props change.
- * Sandpack is expensive to reinitialize, so this prevents unnecessary updates.
  */
 export const PreviewPanel = memo(PreviewPanelComponent, arePropsEqual);
 
 export default PreviewPanel;
-

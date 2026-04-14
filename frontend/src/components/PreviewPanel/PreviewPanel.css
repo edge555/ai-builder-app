@@ -640,3 +640,95 @@
   font-family: 'Geist Mono', 'Fira Code', monospace;
   font-size: 0.75rem;
 }
+
+/* ── WebContainer Boot Progress Overlay ── */
+.wc-boot-progress {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--pv-bg) / 0.92);
+  z-index: 10;
+  backdrop-filter: blur(2px);
+}
+
+.wc-boot-progress__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 320px;
+  text-align: center;
+}
+
+.wc-boot-progress__spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid hsl(var(--pv-text-muted) / 0.25);
+  border-top-color: hsl(var(--pv-accent));
+  border-radius: 50%;
+  animation: wc-spin 0.75s linear infinite;
+}
+
+@keyframes wc-spin {
+  to { transform: rotate(360deg); }
+}
+
+.wc-boot-progress__message {
+  font-size: 0.875rem;
+  color: hsl(var(--pv-text));
+  margin: 0;
+}
+
+.wc-boot-progress__output {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 12px;
+  background: hsl(var(--pv-surface));
+  border: 1px solid hsl(var(--pv-border));
+  border-radius: 6px;
+}
+
+.wc-boot-progress__output-line {
+  display: block;
+  font-size: 0.6875rem;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  color: hsl(var(--pv-text-muted));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── WebContainer Console ── */
+.wc-console {
+  height: 100%;
+  overflow: auto;
+  background: hsl(var(--pv-bg));
+  font-family: 'Geist Mono', 'Fira Code', ui-monospace, monospace;
+  font-size: 0.75rem;
+}
+
+.wc-console__lines {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.wc-console__line {
+  color: hsl(var(--pv-text-muted));
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ── WebContainer Preview iframe ── */
+.wc-preview-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}

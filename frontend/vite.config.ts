@@ -12,6 +12,10 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
+    },
   },
   plugins: [
     react(),
@@ -28,7 +32,7 @@ export default defineConfig(({ mode }) => ({
       output: {
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-sandpack': ['@codesandbox/sandpack-react'],
+          'vendor-webcontainer': ['@webcontainer/api'],
           'vendor-monaco': ['@monaco-editor/react'],
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-syntax': ['react-syntax-highlighter'],

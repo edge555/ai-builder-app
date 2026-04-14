@@ -1,16 +1,37 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock sub-components with CORRECT paths relative to THIS test file
-vi.mock('@codesandbox/sandpack-react', () => ({
-    SandpackProvider: vi.fn(({ children, files }) => (
-        <div data-testid="sandpack-provider" data-files={JSON.stringify(files)}>
-            {children}
-        </div>
-    )),
-    SandpackLayout: vi.fn(({ children }) => <div data-testid="sandpack-layout">{children}</div>),
-    SandpackPreview: vi.fn(() => <div data-testid="sandpack-preview" />),
-    useSandpack: vi.fn(() => ({ sandpack: {}, listen: vi.fn(), dispatch: vi.fn() })),
+// Mock @webcontainer/api
+vi.mock('@webcontainer/api', () => ({
+    WebContainer: {
+        boot: vi.fn().mockResolvedValue({
+            mount: vi.fn().mockResolvedValue(undefined),
+            spawn: vi.fn().mockResolvedValue({
+                output: { pipeTo: vi.fn() },
+                exit: Promise.resolve(0),
+                kill: vi.fn(),
+            }),
+            on: vi.fn(),
+            fs: {
+                writeFile: vi.fn().mockResolvedValue(undefined),
+                mkdir: vi.fn().mockResolvedValue(undefined),
+            },
+        }),
+    },
+}));
+
+// Mock useWebContainer hook
+vi.mock('@/hooks/useWebContainer', () => ({
+    useWebContainer: vi.fn(() => ({
+        phase: 'idle',
+        previewUrl: null,
+        bootError: null,
+        installOutput: '',
+        serverOutput: '',
+        terminalLines: [],
+        refresh: vi.fn(),
+        updateFiles: vi.fn(),
+    })),
 }));
 
 vi.mock('lucide-react', () => ({
@@ -25,6 +46,7 @@ vi.mock('lucide-react', () => ({
     ChevronRight: () => <div data-testid="icon-chevron-right" />,
     Terminal: () => <div data-testid="icon-terminal" />,
     Download: () => <div data-testid="icon-download" />,
+    Server: () => <div data-testid="icon-server" />,
 }));
 
 vi.mock('../../CodeEditor', () => ({
@@ -46,12 +68,8 @@ vi.mock('../PreviewSkeleton', () => {
     };
 });
 
-vi.mock('../SandpackErrorListener', () => ({
-    SandpackErrorListener: () => <div data-testid="sandpack-error-listener" />,
-}));
-
-vi.mock('../SandpackRefresher', () => ({
-    SandpackRefresher: () => null,
+vi.mock('../WebContainerErrorListener', () => ({
+    WebContainerErrorListener: () => null,
 }));
 
 vi.mock('../../EmptyProjectState/EmptyProjectState', () => ({
@@ -82,9 +100,9 @@ describe('PreviewPanel', () => {
     const mockProjectState = {
         name: 'test-project',
         files: {
-            'frontend/src/App.tsx': 'export default function App() { return <div>App</div>; }',
-            'frontend/src/index.tsx': 'import "./App";',
-            'frontend/styles.css': 'body { color: red; }',
+            'src/App.tsx': 'export default function App() { return <div>App</div>; }',
+            'src/index.tsx': 'import "./App";',
+            'package.json': '{"name":"test","scripts":{"dev":"vite"}}',
         },
     };
 
@@ -103,22 +121,11 @@ describe('PreviewPanel', () => {
         expect(skeleton.textContent).toBe('generating');
     });
 
-    it('should transform files for Sandpack (remove frontend prefix, add slash)', () => {
-        render(<PreviewPanel projectState={mockProjectState as any} />);
-
-        const provider = screen.getByTestId('sandpack-provider');
-        const files = JSON.parse(provider.getAttribute('data-files') || '{}');
-
-        expect(files).toHaveProperty('/src/App.tsx');
-        expect(files).toHaveProperty('/src/index.tsx');
-        expect(files).toHaveProperty('/styles.css');
-    });
-
     it('should toggle between preview and code view using tabs', () => {
         render(<PreviewPanel projectState={mockProjectState as any} />);
 
-        // Should start in preview mode
-        expect(screen.getByTestId('sandpack-provider')).toBeDefined();
+        // Should start in preview mode (tabpanel-preview)
+        expect(screen.getByRole('tabpanel', { name: /Live preview/i })).toBeDefined();
 
         // Click code tab
         const codeTab = screen.getByTestId('tab-code');
@@ -130,7 +137,7 @@ describe('PreviewPanel', () => {
         const previewTab = screen.getByTestId('tab-preview');
         fireEvent.click(previewTab);
 
-        expect(screen.getByTestId('sandpack-provider')).toBeDefined();
+        expect(screen.getByRole('tabpanel', { name: /Live preview/i })).toBeDefined();
     });
 
     it('should render TabBar component', () => {
@@ -171,23 +178,7 @@ describe('PreviewPanel', () => {
         const refreshButton = screen.getByRole('button', { name: /Refresh preview/i });
         fireEvent.click(refreshButton);
 
-        // The preview should still be visible after refresh
-        expect(screen.getByTestId('sandpack-provider')).toBeDefined();
-    });
-
-    it('should use default files if required files are missing', () => {
-        const incompleteState = {
-            name: 'broken',
-            files: { 'utils.ts': 'export const x = 1;' }
-        };
-
-        render(<PreviewPanel projectState={incompleteState as any} />);
-
-        const provider = screen.getByTestId('sandpack-provider');
-        const files = JSON.parse(provider.getAttribute('data-files') || '{}');
-
-        expect(files).toHaveProperty('/App.tsx');
-        expect(files).toHaveProperty('/index.tsx');
-        expect(files).toHaveProperty('/utils.ts');
+        // The preview content should still be visible after refresh
+        expect(screen.getByRole('tabpanel', { name: /Live preview/i })).toBeDefined();
     });
 });
