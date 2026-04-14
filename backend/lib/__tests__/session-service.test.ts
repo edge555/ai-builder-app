@@ -70,6 +70,20 @@ describe('session-service', () => {
     vi.clearAllMocks();
   });
 
+  it('getOrCreateSession returns null when supabase client unavailable', async () => {
+    vi.mocked(createServiceRoleSupabaseClient).mockReturnValue(null as never);
+
+    const sessionId = await getOrCreateSession('w-1', 'p-1', 'm-1');
+    expect(sessionId).toBeNull();
+  });
+
+  it('getLastKTurns returns empty array when supabase client unavailable', async () => {
+    vi.mocked(createServiceRoleSupabaseClient).mockReturnValue(null as never);
+
+    const turns = await getLastKTurns('session-1');
+    expect(turns).toEqual([]);
+  });
+
   it('getOrCreateSession creates a session when none exists', async () => {
     const supabase = createSupabaseMock(buildResolver({
       'project_sessions.maybeSingle': [{ data: null, error: null }],
