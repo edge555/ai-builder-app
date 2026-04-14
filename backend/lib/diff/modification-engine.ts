@@ -608,7 +608,8 @@ export class ModificationEngine {
    * Validate modified files using the validation pipeline.
    */
   private async validateModifiedFiles(
-    updatedFiles: Record<string, string | null>
+    updatedFiles: Record<string, string | null>,
+    _changedPaths?: string[],
   ): Promise<{ valid: boolean; validationErrors: any[]; issues: any[] }> {
     const filesToValidate: Record<string, string> = {};
     for (const [path, content] of Object.entries(updatedFiles)) {
@@ -616,6 +617,7 @@ export class ModificationEngine {
         filesToValidate[path] = content;
       }
     }
+
     const acceptanceResult = this.acceptanceGate.lightValidate(filesToValidate);
     return {
       valid: acceptanceResult.valid,

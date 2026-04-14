@@ -11,6 +11,7 @@ import { IntentOutputSchema } from './schemas';
 import { toSimpleJsonSchema } from './zod-to-json-schema';
 import { createLogger } from '../logger';
 import { getStructuredParseError, parseStructuredOutput } from '../ai/structured-output';
+import { recordGenerationStageTiming } from '../metrics';
 import type { GeneratedFile } from './schemas';
 
 export { type GeneratedFile };
@@ -92,6 +93,7 @@ export async function runIntentStage(
       features: parsedResult.data.features ?? [],
       durationMs: Date.now() - stageStartMs,
     });
+    recordGenerationStageTiming('intent', Date.now() - stageStartMs);
     callbacks.onStageComplete?.('intent');
     return parsedResult.data;
   } catch (err) {
@@ -100,6 +102,7 @@ export async function runIntentStage(
       error: message,
       stack: err instanceof Error ? err.stack : undefined,
     });
+    recordGenerationStageTiming('intent', Date.now() - stageStartMs);
     callbacks.onStageFailed?.('intent', message);
     return null;
   }

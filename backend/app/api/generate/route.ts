@@ -14,8 +14,7 @@ import { createStreamingProjectGenerator } from '../../../lib/core/streaming-gen
 import { getCorsHeaders, handleOptions, handleError, AppError, gzipJson, parseJsonRequest } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
-import { requireAuth } from '../../../lib/security/auth';
-import { resolveWorkspaceProvider } from '../../../lib/security/workspace-resolver';
+import { resolveWorkspaceRequestContext } from '../../../lib/security/workspace-request-context';
 
 const logger = createLogger('api/generate');
 
@@ -42,46 +41,34 @@ export async function POST(request: NextRequest): Promise<Response> {
     const parsed = await parseJsonRequest(request, GenerateProjectRequestSchema);
     if (!parsed.ok) return parsed.response;
     const validatedRequest = parsed.data;
-    let workspaceProvider = undefined;
-    let beginnerMode = false;
-
-    if (validatedRequest.workspaceId) {
-      const authResult = await requireAuth(request);
-      if (authResult instanceof Response) return authResult;
-
-      const resolved = await resolveWorkspaceProvider(authResult.userId, validatedRequest.workspaceId);
-      if (!resolved) {
-        // Supabase not configured or org has no key - fall through to default provider
-      } else if ('forbidden' in resolved) {
-        return new Response(
-          JSON.stringify({ error: 'Not a member of this workspace' }),
-          {
-            status: 403,
-            headers: {
-              ...getCorsHeaders(request),
-              ...rlHeaders,
-              'Content-Type': 'application/json',
-              'X-Request-Id': requestId,
-            }
+    const workspaceCtx = await resolveWorkspaceRequestContext(request, validatedRequest.workspaceId);
+    if (workspaceCtx.authResponse) return workspaceCtx.authResponse;
+    if (workspaceCtx.forbidden) {
+      return new Response(
+        JSON.stringify({ error: 'Not a member of this workspace' }),
+        {
+          status: 403,
+          headers: {
+            ...getCorsHeaders(request),
+            ...rlHeaders,
+            'Content-Type': 'application/json',
+            'X-Request-Id': requestId,
           }
-        );
-      } else {
-        workspaceProvider = resolved.provider;
-        beginnerMode = resolved.beginnerMode;
-      }
+        }
+      );
     }
 
     contextLogger.info('Generating project', {
       descriptionLength: validatedRequest.description.length,
-      workspaceMode: !!workspaceProvider,
+      workspaceMode: !!workspaceCtx.workspaceProvider,
     });
 
     // Generate project using the same pipeline/beginnerMode path as generate-stream
-    const generator = await createStreamingProjectGenerator(workspaceProvider);
+    const generator = await createStreamingProjectGenerator(workspaceCtx.workspaceProvider);
     const result = await generator.generateProjectStreaming(
       validatedRequest.description,
       { signal: request.signal },
-      { requestId, beginnerMode }
+      { requestId, beginnerMode: workspaceCtx.beginnerMode }
     );
 
     if (!result.success) {

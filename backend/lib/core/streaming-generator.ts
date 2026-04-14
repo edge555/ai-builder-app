@@ -19,6 +19,7 @@ import type { ArchitecturePlan } from './prompts/prompt-provider';
 import { GenerationStrategy } from './generation-strategy';
 import type { GenerationResult, PhaseProgressData, PhaseCompleteData } from './generation-strategy';
 import type { UnifiedPipelineCallbacks } from './pipeline-shared';
+import { recordGenerationStageTiming } from '../metrics';
 
 const logger = createLogger('StreamingGenerator');
 
@@ -219,6 +220,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       return { success: false, error };
     }
 
+    const postProcessingStartMs = Date.now();
     const processResult = await processFiles(pipelineResult.generatedFiles, { addFrontendPrefix: false });
     const prefixedFiles = processResult.files;
 
@@ -266,6 +268,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       description,
       options?.requestId
     );
+    recordGenerationStageTiming('post-processing', Date.now() - postProcessingStartMs);
 
     if (callbacks.signal?.aborted) {
       contextLogger.info('Generation aborted by client after build-fix loop');

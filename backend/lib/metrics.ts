@@ -96,6 +96,15 @@ interface OperationStats {
   lastOperationAt?: number;
 }
 
+interface StageTimingStats {
+  count: number;
+  totalDurationMs: number;
+  samplesMs: number[];
+  lastRecordedAt?: number;
+}
+
+const MAX_STAGE_SAMPLES = 500;
+
 /**
  * Summary of all operations since server start.
  */
@@ -110,9 +119,17 @@ export interface MetricsSummary {
     totalRetries: number;
     lastOperationAt?: string;
   }>;
+  generationStageTiming: Record<string, {
+    count: number;
+    avgDurationMs: number;
+    p50Ms: number;
+    p95Ms: number;
+    lastRecordedAt?: string;
+  }>;
 }
 
 const statsMap = new Map<string, OperationStats>();
+const generationStageTimingMap = new Map<string, StageTimingStats>();
 const serverStartedAt = Date.now();
 
 /**
@@ -140,6 +157,8 @@ export function recordOperation(metrics: AIOperationMetrics): void {
  */
 export function getMetricsSummary(): MetricsSummary {
   const operations: MetricsSummary['operations'] = {};
+  const generationStageTiming: MetricsSummary['generationStageTiming'] = {};
+
   for (const [op, stats] of statsMap) {
     operations[op] = {
       count: stats.count,
@@ -150,11 +169,55 @@ export function getMetricsSummary(): MetricsSummary {
       ...(stats.lastOperationAt && { lastOperationAt: new Date(stats.lastOperationAt).toISOString() }),
     };
   }
+
+  for (const [stage, stats] of generationStageTimingMap) {
+    const sorted = [...stats.samplesMs].sort((a, b) => a - b);
+    generationStageTiming[stage] = {
+      count: stats.count,
+      avgDurationMs: stats.count > 0 ? Math.round(stats.totalDurationMs / stats.count) : 0,
+      p50Ms: percentile(sorted, 0.5),
+      p95Ms: percentile(sorted, 0.95),
+      ...(stats.lastRecordedAt && { lastRecordedAt: new Date(stats.lastRecordedAt).toISOString() }),
+    };
+  }
+
   return {
     startedAt: new Date(serverStartedAt).toISOString(),
     uptimeMs: Date.now() - serverStartedAt,
     operations,
+    generationStageTiming,
   };
+}
+
+export function recordGenerationStageTiming(stage: string, durationMs: number): void {
+  if (!Number.isFinite(durationMs) || durationMs < 0) return;
+
+  const existing = generationStageTimingMap.get(stage) ?? {
+    count: 0,
+    totalDurationMs: 0,
+    samplesMs: [],
+  };
+
+  const samplesMs = [...existing.samplesMs, durationMs];
+  if (samplesMs.length > MAX_STAGE_SAMPLES) {
+    samplesMs.shift();
+  }
+
+  generationStageTimingMap.set(stage, {
+    count: existing.count + 1,
+    totalDurationMs: existing.totalDurationMs + durationMs,
+    samplesMs,
+    lastRecordedAt: Date.now(),
+  });
+}
+
+function percentile(sortedValues: number[], ratio: number): number {
+  if (sortedValues.length === 0) return 0;
+  if (sortedValues.length === 1) return Math.round(sortedValues[0]);
+
+  const index = Math.ceil(sortedValues.length * ratio) - 1;
+  const clamped = Math.min(Math.max(index, 0), sortedValues.length - 1);
+  return Math.round(sortedValues[clamped]);
 }
 
 /**

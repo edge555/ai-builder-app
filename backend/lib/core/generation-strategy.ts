@@ -17,12 +17,17 @@ import { PhaseExecutor, type PhaseDefinition, type PhaseCallbacks } from './phas
 import { BuildValidator } from './build-validator';
 import { buildPhaseContext } from './batch-context-builder';
 import type { PhaseContext } from './batch-context-builder';
-import { COMPLEXITY_GATE_FILE_THRESHOLD, UI_BATCH_SPLIT_THRESHOLD } from '../constants';
+import {
+  ONESHOT_EXECUTION_FILE_THRESHOLD,
+  PLAN_REVIEW_SKIP_FILE_THRESHOLD,
+  UI_BATCH_SPLIT_THRESHOLD
+} from '../constants';
 import { getStructuredParseError, parseStructuredOutput } from '../ai/structured-output';
 import { buildHeuristicPlan } from './heuristic-plan-builder';
 import type { GenerationRecipe } from './recipes/recipe-types';
 import type { IPipelineStrategy } from './pipeline-strategy';
 import type { UnifiedPipelineCallbacks } from './pipeline-shared';
+import { recordGenerationStageTiming } from '../metrics';
 
 const logger = createLogger('GenerationStrategy');
 
@@ -132,6 +137,7 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
     let architecturePlan: ArchitecturePlan;
     if (beginnerMode) {
       architecturePlan = buildHeuristicPlan(typedIntentOutput, userPrompt, recipe);
+      recordGenerationStageTiming('planning', Date.now() - planningStageStartMs);
       callbacks.onStageComplete?.('planning');
     } else {
       architecturePlan = await this.resolveArchitecturePlan(
@@ -164,7 +170,7 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
 
     // ── Plan Review Stage ─────────────────────────────────────────────────────
     let reviewedPlan = architecturePlan;
-    if (architecturePlan.files.length > COMPLEXITY_GATE_FILE_THRESHOLD) {
+    if (architecturePlan.files.length > PLAN_REVIEW_SKIP_FILE_THRESHOLD) {
       callbacks.onStageStart?.('review', 'Reviewing architecture plan…');
       const reviewStageStartMs = Date.now();
       contextLogger.debug('Plan Review stage start');
@@ -204,6 +210,7 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
         } else {
           contextLogger.info('Plan Review found no issues', { durationMs: Date.now() - reviewStageStartMs });
         }
+        recordGenerationStageTiming('review', Date.now() - reviewStageStartMs);
         callbacks.onStageComplete?.('review');
 
       } catch (err) {
@@ -213,15 +220,17 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
           stack: err instanceof Error ? err.stack : undefined,
           responsePreview: _reviewRawContent ? _reviewRawContent.substring(0, 400) : undefined,
         });
+        recordGenerationStageTiming('review', Date.now() - reviewStageStartMs);
         callbacks.onStageFailed?.('review', message);
       }
     } else {
       contextLogger.info('Skipping plan review for simple project', {
         fileCount: architecturePlan.files.length,
-        threshold: COMPLEXITY_GATE_FILE_THRESHOLD,
+        threshold: PLAN_REVIEW_SKIP_FILE_THRESHOLD,
       });
       callbacks.onStageStart?.('review', 'Skipping plan review…');
       callbacks.onStageComplete?.('review');
+      recordGenerationStageTiming('review', 0);
     }
 
     if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
@@ -374,6 +383,7 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
 
     for (let phaseIndex = 0; phaseIndex < mergedPhases.length; phaseIndex++) {
       const phase = mergedPhases[phaseIndex];
+      const phaseStartMs = Date.now();
       if (callbacks.signal?.aborted) throw new Error('Generation cancelled by client');
 
       callbacks.onStageStart?.(phase.layer, `Generating ${phase.layer} layer…`);
@@ -467,6 +477,7 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
       }
 
       callbacks.onStageComplete?.(phase.layer);
+      recordGenerationStageTiming(`execution.${phase.layer}`, Date.now() - phaseStartMs);
       callbacks.onPhaseComplete?.({
         phase: phase.layer,
         phaseIndex,
@@ -486,6 +497,7 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
     callbacks: UnifiedPipelineCallbacks,
     contextLogger: ReturnType<typeof logger.withRequestId>
   ): Promise<{ files: GeneratedFile[]; warnings: string[] }> {
+    const oneshotStartMs = Date.now();
     callbacks.onStageStart?.('oneshot', 'Generating application…');
     callbacks.onPhaseStart?.({
       phase: 'oneshot',
@@ -522,6 +534,7 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
 
     const result = await this.phaseExecutor.executePhase(phaseDef, emptyContext, phaseCallbacks);
     allWarnings.push(...result.warnings);
+    recordGenerationStageTiming('execution.oneshot', Date.now() - oneshotStartMs);
 
     callbacks.onStageComplete?.('oneshot');
     callbacks.onPhaseComplete?.({
@@ -536,7 +549,7 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
   }
 
   private shouldUseMultiPhase(plan: ArchitecturePlan): boolean {
-    if (plan.files.length > COMPLEXITY_GATE_FILE_THRESHOLD) {
+    if (plan.files.length > ONESHOT_EXECUTION_FILE_THRESHOLD) {
       return true;
     }
     const estimatedInputTokens = this.estimateOneShotInputTokens(plan);
@@ -597,6 +610,7 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
           dependencies: parsedResult.data.dependencies,
           durationMs: Date.now() - planningStageStartMs,
         });
+        recordGenerationStageTiming('planning', Date.now() - planningStageStartMs);
         callbacks.onStageComplete?.('planning');
         return parsedResult.data;
       } catch (err) {
@@ -613,6 +627,7 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
     }
 
     const finalMessage = lastError instanceof Error ? lastError.message : String(lastError);
+    recordGenerationStageTiming('planning', Date.now() - planningStageStartMs);
     callbacks.onStageFailed?.('planning', finalMessage);
     contextLogger.warn('Planning stage failed after retry, falling back to heuristic plan', {
       error: finalMessage,
@@ -621,3 +636,4 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
     return buildHeuristicPlan(intentOutput, userPrompt, selectedRecipe);
   }
 }
+

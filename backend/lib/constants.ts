@@ -98,7 +98,8 @@ export const SMALL_PROJECT_FILE_THRESHOLD = 12;
 export const SIMPLE_PROMPT_MAX_LENGTH = 220;
 
 // Complexity gate: <=10 files → one-shot, >10 → multi-phase
-export const COMPLEXITY_GATE_FILE_THRESHOLD = 10;
+export const PLAN_REVIEW_SKIP_FILE_THRESHOLD = 6;
+export const ONESHOT_EXECUTION_FILE_THRESHOLD = 8;
 
 // Route operation timeouts
 export const DIFF_TIMEOUT_MS = 30_000;   // 30 seconds

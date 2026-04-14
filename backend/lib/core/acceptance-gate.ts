@@ -1,8 +1,11 @@
 import type { ValidationError } from '@ai-app-builder/shared';
+import type { ProjectState } from '@ai-app-builder/shared';
 import { createLogger } from '../logger';
 import { ValidationPipeline } from './validation-pipeline';
 import type { BuildError } from './build-validator';
 import { createBuildValidator } from './build-validator';
+import { indexProject } from '../analysis/file-index';
+import { createDependencyGraph } from '../analysis/dependency-graph';
 
 const logger = createLogger('AcceptanceGate');
 const PLACEHOLDER_PATTERNS = [
@@ -29,6 +32,7 @@ export interface AcceptanceResult {
 
 export interface AcceptanceValidationContext {
   beginnerMode?: boolean;
+  changedFiles?: string[];
 }
 
 export class AcceptanceGate {
@@ -46,8 +50,9 @@ export class AcceptanceGate {
     }
 
     const sanitizedOutput = structuralResult.sanitizedOutput;
-    const buildResult = this.buildValidator.validateAll(sanitizedOutput);
-    const crossFileErrors = this.buildValidator.validateCrossFileReferences(sanitizedOutput);
+    const buildScope = this.resolveBuildValidationScope(sanitizedOutput, context?.changedFiles);
+    const buildResult = this.buildValidator.validateAll(buildScope);
+    const crossFileErrors = this.buildValidator.validateCrossFileReferences(buildScope);
     const buildErrors = [...buildResult.errors, ...crossFileErrors];
 
     if (buildErrors.length > 0) {
@@ -75,6 +80,48 @@ export class AcceptanceGate {
       validationErrors: [],
       buildErrors,
     };
+  }
+
+  private resolveBuildValidationScope(
+    files: Record<string, string>,
+    changedFiles?: string[]
+  ): Record<string, string> {
+    if (!changedFiles || changedFiles.length === 0) {
+      return files;
+    }
+
+    const existingChanged = changedFiles.filter((path) => path in files);
+    if (existingChanged.length === 0) {
+      return files;
+    }
+
+    try {
+      const projectState: ProjectState = {
+        id: '__acceptance_scope__',
+        name: '__acceptance_scope__',
+        description: '',
+        files,
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+        currentVersionId: '__acceptance_scope__',
+      };
+      const fileIndex = indexProject(projectState);
+      const dependencyGraph = createDependencyGraph(fileIndex);
+      const affectedPaths = dependencyGraph
+        .getAffectedFiles(existingChanged)
+        .filter((path) => path in files);
+
+      if (affectedPaths.length === 0) {
+        return files;
+      }
+
+      return Object.fromEntries(affectedPaths.map((path) => [path, files[path]]));
+    } catch (error) {
+      logger.warn('Acceptance scope resolution failed; using full-file validation scope', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return files;
+    }
   }
 
   /**

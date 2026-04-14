@@ -1,14 +1,24 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AcceptanceGate } from '../acceptance-gate';
+
+const validateAllMock = vi.fn().mockReturnValue({ valid: true, errors: [] });
+const validateCrossFileReferencesMock = vi.fn().mockReturnValue([]);
 
 vi.mock('../build-validator', () => ({
   createBuildValidator: () => ({
-    validateAll: vi.fn().mockReturnValue({ valid: true, errors: [] }),
-    validateCrossFileReferences: vi.fn().mockReturnValue([]),
+    validateAll: validateAllMock,
+    validateCrossFileReferences: validateCrossFileReferencesMock,
   }),
 }));
 
 describe('AcceptanceGate', () => {
+  beforeEach(() => {
+    validateAllMock.mockClear();
+    validateCrossFileReferencesMock.mockClear();
+    validateAllMock.mockReturnValue({ valid: true, errors: [] });
+    validateCrossFileReferencesMock.mockReturnValue([]);
+  });
+
   it('rejects placeholder content in critical files', () => {
     const gate = new AcceptanceGate();
 
@@ -200,6 +210,43 @@ describe('AcceptanceGate', () => {
       files['src/components/Counter.tsx'] = 'export function Counter() { fetch(\"/api\"); return <button onClick={() => {}}>Go</button>; }';
       const result = gate.validate(files);
       expect(result.valid).toBe(true);
+    });
+  });
+
+  describe('scoped build validation', () => {
+    it('includes unchanged module dependencies when changed file imports them', () => {
+      const gate = new AcceptanceGate();
+      const files = {
+        'package.json': '{"name":"app","dependencies":{}}',
+        'src/main.tsx': 'import App from "./App";',
+        'src/App.tsx': 'import { helper } from "./utils"; export default function App() { return <div>{helper()}</div>; }',
+        'src/utils.ts': 'export function helper() { return "ok"; }',
+      };
+
+      const result = gate.validate(files, { changedFiles: ['src/App.tsx'] });
+
+      expect(result.valid).toBe(true);
+      expect(validateAllMock).toHaveBeenCalledTimes(1);
+      const scopedFiles = validateAllMock.mock.calls[0][0] as Record<string, string>;
+      expect(scopedFiles['src/App.tsx']).toBeDefined();
+      expect(scopedFiles['src/utils.ts']).toBeDefined();
+    });
+
+    it('includes package.json when changed file imports an external package', () => {
+      const gate = new AcceptanceGate();
+      const files = {
+        'package.json': '{"name":"app","dependencies":{"lodash":"^4.17.21"}}',
+        'src/main.tsx': 'import App from "./App";',
+        'src/App.tsx': 'import _ from "lodash"; export default function App() { return <div>{_.capitalize("ok")}</div>; }',
+      };
+
+      const result = gate.validate(files, { changedFiles: ['src/App.tsx'] });
+
+      expect(result.valid).toBe(true);
+      expect(validateAllMock).toHaveBeenCalledTimes(1);
+      const scopedFiles = validateAllMock.mock.calls[0][0] as Record<string, string>;
+      expect(scopedFiles['src/App.tsx']).toBeDefined();
+      expect(scopedFiles['package.json']).toBeDefined();
     });
   });
 });

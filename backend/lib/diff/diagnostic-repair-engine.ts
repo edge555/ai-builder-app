@@ -120,7 +120,9 @@ export class DiagnosticRepairEngine {
     const failureHistory: RepairAttempt[] = [];
 
     // Initial validation
-    let acceptanceResult = acceptanceGate.validate(tempFiles);
+    let acceptanceResult = acceptanceGate.validate(tempFiles, {
+      changedFiles: Object.keys(mutableFiles),
+    });
     let buildResult: BuildValidationResult = {
       valid: acceptanceResult.buildErrors.length === 0,
       errors: acceptanceResult.buildErrors,
@@ -158,7 +160,9 @@ export class DiagnosticRepairEngine {
       const { fixed, fileChanges } = tryDeterministicFixes(fixableErrors, tempFiles);
       if (fixed.length > 0) {
         applyChanges(fileChanges, mutableFiles, tempFiles);
-        acceptanceResult = acceptanceGate.validate(tempFiles);
+        acceptanceResult = acceptanceGate.validate(tempFiles, {
+          changedFiles: Object.keys(mutableFiles),
+        });
         buildResult = {
           valid: acceptanceResult.buildErrors.length === 0,
           errors: acceptanceResult.buildErrors,
@@ -191,7 +195,9 @@ export class DiagnosticRepairEngine {
     totalAICalls++;
 
     if (targetedResult.applied) {
-      acceptanceResult = acceptanceGate.validate(tempFiles);
+      acceptanceResult = acceptanceGate.validate(tempFiles, {
+        changedFiles: Object.keys(mutableFiles),
+      });
       buildResult = {
         valid: acceptanceResult.buildErrors.length === 0,
         errors: acceptanceResult.buildErrors,
@@ -224,7 +230,9 @@ export class DiagnosticRepairEngine {
     totalAICalls++;
 
     if (broadResult.applied) {
-      acceptanceResult = acceptanceGate.validate(tempFiles);
+      acceptanceResult = acceptanceGate.validate(tempFiles, {
+        changedFiles: Object.keys(mutableFiles),
+      });
       buildResult = {
         valid: acceptanceResult.buildErrors.length === 0,
         errors: acceptanceResult.buildErrors,

@@ -24,8 +24,8 @@ import {
   SSEEncoder,
   createStreamLifecycle,
 } from '../../../lib/streaming';
-import { requireAuth, createServiceRoleSupabaseClient } from '../../../lib/security/auth';
-import { resolveWorkspaceProvider } from '../../../lib/security/workspace-resolver';
+import { createServiceRoleSupabaseClient } from '../../../lib/security/auth';
+import { resolveWorkspaceRequestContext } from '../../../lib/security/workspace-request-context';
 
 const logger = createLogger('api/generate-stream');
 
@@ -57,32 +57,18 @@ export async function POST(request: NextRequest) {
     const body: GenerateProjectRequest = parsed.data;
 
     // Workspace mode: verify membership and resolve org API key
-    let workspaceProvider = undefined;
-    let memberId: string | undefined;
-    let beginnerMode = false;
-    if (body.workspaceId) {
-      const authResult = await requireAuth(request);
-      if (authResult instanceof Response) return authResult;
-
-      const resolved = await resolveWorkspaceProvider(authResult.userId, body.workspaceId);
-      if (!resolved) {
-        // Supabase not configured or org has no key — fall through to default provider
-      } else if ('forbidden' in resolved) {
-        return new Response(
-          JSON.stringify({ error: 'Not a member of this workspace' }),
-          { status: 403, headers: { 'Content-Type': 'application/json' } }
-        );
-      } else {
-        const {
-          provider: resolvedWorkspaceProvider,
-          memberId: resolvedMemberId,
-          beginnerMode: resolvedBeginnerMode,
-        } = resolved;
-        workspaceProvider = resolvedWorkspaceProvider;
-        memberId = resolvedMemberId;
-        beginnerMode = resolvedBeginnerMode;
-      }
+    const workspaceCtx = await resolveWorkspaceRequestContext(request, body.workspaceId);
+    if (workspaceCtx.authResponse) return workspaceCtx.authResponse;
+    if (workspaceCtx.forbidden) {
+      return new Response(
+        JSON.stringify({ error: 'Not a member of this workspace' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
     }
+
+    const workspaceProvider = workspaceCtx.workspaceProvider;
+    const memberId = workspaceCtx.memberId;
+    const beginnerMode = workspaceCtx.beginnerMode;
     const supabaseServiceClient = createServiceRoleSupabaseClient();
 
     contextLogger.info('Starting streaming generation', {
@@ -319,3 +305,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
