@@ -4,17 +4,12 @@ Status taxonomy for open items: `ready`, `blocked`, `deferred`.
 
 ## Architecture (from /plan-ceo-review EXPANSION on 2026-03-23)
 
-### Unified Pipeline Architecture [P1, L]
-- **Status:** `ready`
-- **What:** Merge `GenerationPipeline` (580 LOC) and `PipelineOrchestrator` (709 LOC) into a single configurable pipeline with strategy objects for "new project" vs "modification" behavior.
-- **Why:** Dual pipelines duplicate Intent, Planning, and Review stages. Every improvement must be manually replicated. The unified pipeline becomes the single extension point for agentic features (tool use, session context, self-testing).
-- **Pros:** Single codepath to maintain, ~500 LOC reduction, enables all Phase 2/3 features.
-- **Cons:** Significant refactor touching generation and modification paths. Risk of regression in both flows.
-- **Context:** Generation pipeline follows Intent→Planning→Execution (multi-phase batched). Modification pipeline follows Intent→Planning→Execution (3 stages; review removed in v1.4.0). Execution strategy differs — that's the main variation point. Files: `backend/lib/core/generation-pipeline.ts`, `backend/lib/core/pipeline-orchestrator.ts`.
-- **Depends on:** CI/CD pipeline (tests must pass before merging)
+### Unified Pipeline Architecture — Completed
+- **Status:** Completed (2026-04-14, commit c91078b)
+- **What was done:** Merged `GenerationPipeline` and `PipelineOrchestrator` into `UnifiedPipeline<TContext, TResult>` via Strategy pattern. New files: `unified-pipeline.ts`, `pipeline-strategy.ts`, `generation-strategy.ts`, `modification-strategy.ts`, `pipeline-shared.ts`. Deleted `generation-pipeline.ts` and `pipeline-orchestrator.ts`. Extracted shared intent stage into `runIntentStage()` shared function, eliminating ~110 LOC of duplication. All 2085 backend tests pass.
 
 ### WebContainers Preview Migration [P1, XL]
-- **Status:** `blocked` (depends on Unified Pipeline Architecture)
+- **Status:** `ready` (Unified Pipeline Architecture completed 2026-04-14)
 - **What:** Replace Sandpack with WebContainers (StackBlitz's open-source browser-based Node.js runtime) for the preview panel. Enables running real Node.js servers, npm installs, and fullstack applications in the browser.
 - **Why:** Sandpack can only run client-side JavaScript. This permanently caps the product at React SPAs. WebContainers unlock Next.js, Express, database-connected apps — the fullstack recipes currently behind `ENABLE_FULLSTACK_RECIPES` feature flag.
 - **Pros:** Massive capability unlock. Zero server cost (runs in browser). Already have StackBlitz SDK integration. Differentiates from Sandpack-based competitors.
