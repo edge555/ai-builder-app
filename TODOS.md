@@ -8,17 +8,12 @@ Status taxonomy for open items: `ready`, `blocked`, `deferred`.
 - **Status:** Completed (2026-04-14, commit c91078b)
 - **What was done:** Merged `GenerationPipeline` and `PipelineOrchestrator` into `UnifiedPipeline<TContext, TResult>` via Strategy pattern. New files: `unified-pipeline.ts`, `pipeline-strategy.ts`, `generation-strategy.ts`, `modification-strategy.ts`, `pipeline-shared.ts`. Deleted `generation-pipeline.ts` and `pipeline-orchestrator.ts`. Extracted shared intent stage into `runIntentStage()` shared function, eliminating ~110 LOC of duplication. All 2085 backend tests pass.
 
-### WebContainers Preview Migration [P1, XL]
-- **Status:** `ready` (Unified Pipeline Architecture completed 2026-04-14)
-- **What:** Replace Sandpack with WebContainers (StackBlitz's open-source browser-based Node.js runtime) for the preview panel. Enables running real Node.js servers, npm installs, and fullstack applications in the browser.
-- **Why:** Sandpack can only run client-side JavaScript. This permanently caps the product at React SPAs. WebContainers unlock Next.js, Express, database-connected apps — the fullstack recipes currently behind `ENABLE_FULLSTACK_RECIPES` feature flag.
-- **Pros:** Massive capability unlock. Zero server cost (runs in browser). Already have StackBlitz SDK integration. Differentiates from Sandpack-based competitors.
-- **Cons:** WebContainers API differs from Sandpack. Requires rewriting preview panel, error listener, and auto-repair integration. Browser compatibility (Chrome/Edge only for some features).
-- **Context:** StackBlitz SDK already imported in frontend. Files: `frontend/src/components/PreviewPanel/`.
-- **Depends on:** Unified pipeline (for consistent fullstack generation)
+### WebContainers Preview Migration — Completed
+- **Status:** Completed (2026-04-14, commit 935dfe4)
+- **What was done:** Replaced `@codesandbox/sandpack-react` with `@webcontainer/api`. New `useWebContainer` hook manages singleton boot lifecycle (booting→mounting→installing→starting→ready). Incremental `fs.writeFile()` for HMR-based minor updates; full remount for new projects. COOP `same-origin` + COEP `credentialless` headers in Vite config. New UI components: `WebContainerBootProgress`, `WebContainerPreview`, `WebContainerConsole`, `WebContainerErrorListener`. All auto-repair, error aggregation, and device frame behavior preserved. FullstackBanner updated — API routes now run live.
 
 ### Server-Side Agent Sessions [P2, XL]
-- **Status:** `blocked` (depends on Unified Pipeline + WebContainers)
+- **Status:** `ready` (Unified Pipeline + WebContainers completed 2026-04-14)
 - **What:** Add a backend session layer that stores conversation context per project. The AI can reference prior turns, tool results (test output, error history), and accumulated context without the frontend rebuilding everything.
 - **Why:** Current stateless model (frontend sends full history each request) can't support agentic multi-turn workflows. The 10-star experience is an AI that remembers what it tried, uses tools, and iteratively refines.
 - **Pros:** Enables tool use (run tests, check errors), context accumulation, iterative refinement. Foundation for self-testing and deployment.
