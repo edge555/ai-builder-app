@@ -154,9 +154,11 @@ describe('session-service', () => {
 
     const turns = await getLastKTurns('session-1', 8, 50);
 
+    // Budget is 8 tokens. "follow up" (3) + "latest response" (4) = 7 tokens fit.
+    // Should return the two MOST RECENT turns, not the two oldest.
     expect(turns).toEqual([
-      { role: 'user', content: 'first question' },
-      { role: 'assistant', content: 'first response' },
+      { role: 'user', content: 'follow up' },
+      { role: 'assistant', content: 'latest response' },
     ]);
   });
 
