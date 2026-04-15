@@ -18,6 +18,7 @@ Generate full React web applications from natural language prompts. Describe wha
 - **Fullstack export** — ZIP with context-aware README, Docker Compose, .env.example
 - **Blank Canvas Admin** — invite members to a shared org workspace where all AI generation uses the org's own API key; admin dashboard for members, projects, and settings
 - **Classroom/beginner mode** — workspace-level flag constrains generation to 4-6 file React SPAs with no network calls and at least 2 event handlers; deterministic planning bypasses AI latency for the 5 common classroom prompt types (counter, todo, quiz, form, calculator)
+- **Reliable continuation** — server-side session tracking remembers the last 8 turns per workspace project, so the AI maintains context across requests without the frontend re-sending history
 
 ## Architecture
 
@@ -89,6 +90,7 @@ Backend: http://localhost:4000
 | `TRUSTED_PROXY_DEPTH` | No | `1` | Rightmost X-Forwarded-For IPs to trust for IP extraction |
 | `REDIS_URL` | No | — | Redis URL for distributed rate limiting (falls back to in-memory) |
 | `ENABLE_FULLSTACK_RECIPES` | No | `false` | Enable fullstack generation (Next.js + Prisma/Supabase) |
+| `SESSION_HISTORY_TURNS` | No | `8` | Prior turns injected into AI context per request (0 to disable) |
 | `SUPABASE_JWT_SECRET` | No* | — | Enables Supabase Auth; required for config mutation routes in production |
 | `WORKSPACE_MASTER_KEY` | No* | — | Base64-encoded 32-byte key for AES-256-GCM org API key encryption (required for Blank Canvas Admin) |
 
