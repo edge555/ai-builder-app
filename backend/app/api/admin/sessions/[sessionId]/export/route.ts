@@ -2,6 +2,7 @@
 import { applyRateLimit, RateLimitTier } from '../../../../../../lib/security';
 import { createServiceRoleSupabaseClient, requireAuth } from '../../../../../../lib/security/auth';
 import { corsError, getCorsHeaders, handleOptions } from '../../../../../../lib/api';
+import { normalizeFilesAffected, verifyWorkspaceAdmin } from '../../../session-utils';
 
 interface SessionRow {
   id: string;
@@ -16,47 +17,6 @@ interface MessageRow {
   repair_triggered: boolean;
   repair_explanation: string | null;
   created_at: string;
-}
-
-function normalizeFilesAffected(value: unknown): string[] | null {
-  if (!value) return null;
-  if (Array.isArray(value)) {
-    return value.filter((v): v is string => typeof v === 'string');
-  }
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value) as unknown;
-      if (Array.isArray(parsed)) {
-        return parsed.filter((v): v is string => typeof v === 'string');
-      }
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-async function verifyWorkspaceAdmin(
-  supabase: NonNullable<ReturnType<typeof createServiceRoleSupabaseClient>>,
-  workspaceId: string,
-  userId: string
-): Promise<boolean> {
-  const { data: workspace } = await supabase
-    .from('workspaces')
-    .select('org_id')
-    .eq('id', workspaceId)
-    .maybeSingle<{ org_id: string }>();
-
-  if (!workspace) return false;
-
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('id')
-    .eq('id', workspace.org_id)
-    .eq('admin_user_id', userId)
-    .maybeSingle<{ id: string }>();
-
-  return !!org;
 }
 
 export async function OPTIONS() {
@@ -107,12 +67,14 @@ export async function GET(
     created_at: row.created_at,
   }));
 
-  return new Response(JSON.stringify(exportRows), {
+  const jsonl = exportRows.map((row) => JSON.stringify(row)).join('\n');
+
+  return new Response(jsonl, {
     headers: {
       ...getCorsHeaders(request),
       ...rlHeaders,
-      'Content-Type': 'application/json',
-      'Content-Disposition': `attachment; filename="session-${sessionId}.json"`,
+      'Content-Type': 'application/x-ndjson',
+      'Content-Disposition': `attachment; filename="session-${sessionId}.jsonl"`,
     },
   });
 }

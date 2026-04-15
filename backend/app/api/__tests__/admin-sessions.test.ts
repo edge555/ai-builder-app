@@ -202,10 +202,13 @@ describe('admin sessions API', () => {
 
     const response = await exportSessionGET(request, { params: Promise.resolve({ sessionId: 's1' }) });
     expect(response.status).toBe(200);
-    expect(response.headers.get('Content-Disposition')).toContain('session-s1.json');
+    expect(response.headers.get('Content-Disposition')).toContain('session-s1.jsonl');
+    expect(response.headers.get('Content-Type')).toContain('ndjson');
 
-    const body = await response.json();
-    expect(body).toHaveLength(1);
+    const text = await response.text();
+    const lines = text.trim().split('\n').map((l) => JSON.parse(l));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ id: 'msg-1', role: 'user', content: 'hello' });
   });
 });
 
