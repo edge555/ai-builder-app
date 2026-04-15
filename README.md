@@ -90,7 +90,8 @@ Backend: http://localhost:4000
 | `TRUSTED_PROXY_DEPTH` | No | `1` | Rightmost X-Forwarded-For IPs to trust for IP extraction |
 | `REDIS_URL` | No | — | Redis URL for distributed rate limiting (falls back to in-memory) |
 | `ENABLE_FULLSTACK_RECIPES` | No | `false` | Enable fullstack generation (Next.js + Prisma/Supabase) |
-| `SESSION_HISTORY_TURNS` | No | `8` | Prior turns injected into AI context per request (0 to disable) |
+| `SESSION_CONTEXT_K` | No | `10` | Prior turns injected into AI context per request (min: 1, max: 50) |
+| `SESSION_CONTEXT_MAX_TOKENS` | No | `6000` | Token budget for session history prefix (min: 1000, max: 20000) |
 | `SUPABASE_JWT_SECRET` | No* | — | Enables Supabase Auth; required for config mutation routes in production |
 | `WORKSPACE_MASTER_KEY` | No* | — | Base64-encoded 32-byte key for AES-256-GCM org API key encryption (required for Blank Canvas Admin) |
 

@@ -89,7 +89,9 @@ export async function POST(request: NextRequest) {
       sessionId = await getOrCreateSession(body.workspaceId, body.projectId, memberId);
       if (sessionId) {
         conversationHistoryPrefix = await getLastKTurns(sessionId);
-        appendTurn(sessionId, 'user', body.description);
+        // NOTE: appendTurn for the user prompt is deferred to onComplete alongside the
+        // assistant turn. Recording the user turn before generation succeeds would leave
+        // an orphaned turn in the DB if the stream fails, polluting future history context.
       }
     }
 
@@ -195,6 +197,8 @@ export async function POST(request: NextRequest) {
               if (sessionId) {
                 const changedFiles = Object.keys(data.projectState.files ?? {});
                 const synopsis = buildGenerationAssistantSynopsis(body.description, changedFiles);
+                // Append user turn first (now that generation succeeded), then assistant turn.
+                appendTurn(sessionId, 'user', body.description);
                 appendTurn(sessionId, 'assistant', synopsis, { filesAffected: changedFiles });
               }
 

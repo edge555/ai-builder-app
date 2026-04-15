@@ -4,6 +4,10 @@ import { createServiceRoleSupabaseClient, requireAuth } from '../../../../../../
 import { corsError, getCorsHeaders, handleOptions } from '../../../../../../lib/api';
 import { normalizeFilesAffected, verifyWorkspaceAdmin } from '../../../session-utils';
 
+// Match the transcript cap so the export byte size is bounded.
+// Streaming export for very large sessions is tracked in TODOS.md (P3).
+const MAX_EXPORT_MESSAGES = 5000;
+
 interface SessionRow {
   id: string;
   workspace_id: string;
@@ -53,7 +57,8 @@ export async function GET(
     .from('session_messages')
     .select('id, role, content, files_affected, repair_triggered, repair_explanation, created_at')
     .eq('session_id', sessionId)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true })
+    .limit(MAX_EXPORT_MESSAGES);
 
   if (messagesError) return corsError(request, 'Failed to export transcript', 500);
 

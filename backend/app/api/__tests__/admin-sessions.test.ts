@@ -190,7 +190,7 @@ describe('admin sessions API', () => {
       'project_sessions.maybeSingle': [{ data: { id: 's1', workspace_id: 'wid-1' }, error: null }],
       'workspaces.maybeSingle': [{ data: { org_id: 'org-1' }, error: null }],
       'organizations.maybeSingle': [{ data: { id: 'org-1' }, error: null }],
-      'session_messages.order': [{
+      'session_messages.limit': [{
         data: [
           { id: 'msg-1', role: 'user', content: 'hello', files_affected: null, repair_triggered: false, repair_explanation: null, created_at: '2026-04-15T09:00:00.000Z' },
         ],

@@ -6,9 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **Reliable continuation (server-side session tracking)** — `project_sessions` and `session_messages` tables with RLS policies track every AI turn per workspace member. `session-service.ts` exposes `getOrCreateSession`, `appendTurn` (fire-and-forget), and `getLastKTurns` for conversation history injection.
-- **Conversation history injection** — `generate-stream` and `modify-stream` routes retrieve the last 8 turns from the active session and prepend them as a `[CONVERSATION HISTORY]` block in the AI system prompt, enabling coherent multi-turn interactions without client-side re-sending.
-- **Admin session viewer endpoints** — `GET /api/admin/workspaces/:wid/sessions` (keyset-paginated list), `GET /api/admin/sessions/:sessionId` (full transcript, capped at 500 messages), `GET /api/admin/sessions/:sessionId/export` (full JSONL export). All require workspace-admin auth.
-- **`SESSION_HISTORY_TURNS` config** — new env var (default 8) controls how many prior turns are injected into each AI request.
+- **Conversation history injection** — `generate-stream` and `modify-stream` routes retrieve the last 10 turns from the active session and prepend them as a `[CONVERSATION HISTORY]` block in the AI system prompt, enabling coherent multi-turn interactions without client-side re-sending. Both user and assistant turns are recorded atomically on success only (no orphaned turns on stream failure).
+- **Admin session viewer endpoints** — `GET /api/admin/workspaces/:wid/sessions` (keyset-paginated list), `GET /api/admin/sessions/:sessionId` (full transcript, capped at 500 messages), `GET /api/admin/sessions/:sessionId/export` (JSONL export, capped at 5000 messages). All require workspace-admin auth.
+- **`SESSION_CONTEXT_K` / `SESSION_CONTEXT_MAX_TOKENS` config** — new env vars (defaults: 10 turns, 6000 token budget) control session history injection depth and size.
 - **Supabase migration** — `20260415_reliable_continuation.sql` creates `project_sessions` (with `idx_project_sessions_one_active` unique partial index) and `session_messages` (with GIN index on content).
 - **Spec** — `specs/reliable-continuation.md` documents the full design, schema, and implementation decisions.
 

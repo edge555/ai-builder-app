@@ -180,18 +180,20 @@ export async function getLastKTurns(
     if (error) throw error;
     if (!rows || rows.length === 0) return [];
 
-    // Token-budget truncation: oldest-first, stop when budget exhausted
+    // Token-budget truncation: rows is DESC (newest first). Iterate newest-first
+    // so that when the budget runs out we drop the oldest turns, not the most recent.
     let tokenBudget = maxTokens;
     const selected: SessionTurn[] = [];
 
-    for (const row of rows.reverse()) { // oldest first
+    for (const row of rows) { // newest-first (DESC order)
       const tokenEstimate = Math.ceil(row.content.length / CHARS_PER_TOKEN);
       if (tokenBudget - tokenEstimate < 0) break;
       tokenBudget -= tokenEstimate;
       selected.push({ role: row.role as 'user' | 'assistant', content: row.content });
     }
 
-    return selected;
+    // Reverse to restore chronological order for the AI prompt.
+    return selected.reverse();
 
   } catch (err) {
     console.error('[session-service] getLastKTurns failed:', err);

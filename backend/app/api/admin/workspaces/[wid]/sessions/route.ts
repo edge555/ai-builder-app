@@ -24,7 +24,8 @@ function encodeCursor(row: CursorPayload): string {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/;
+// Strict ISO-8601 UTC: validate calendar validity via Date.parse in decodeCursor
+const ISO_DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 
 function decodeCursor(cursor: string): CursorPayload | null {
   try {
@@ -32,7 +33,8 @@ function decodeCursor(cursor: string): CursorPayload | null {
     if (
       !parsed.created_at || !parsed.id ||
       !ISO_DATE_RE.test(parsed.created_at) ||
-      !UUID_RE.test(parsed.id)
+      !UUID_RE.test(parsed.id) ||
+      isNaN(Date.parse(parsed.created_at))  // calendar validity (rejects Feb 31, etc.)
     ) return null;
     return parsed;
   } catch {
@@ -100,7 +102,8 @@ export async function GET(
     .limit(PAGE_SIZE + 1);
 
   if (decodedCursor) {
-    // Keyset pagination: rows where created_at < cursor OR (created_at = cursor AND id < cursor_id)
+    // Keyset pagination: rows where created_at < cursor OR (created_at = cursor AND id < cursor_id).
+    // Values are validated against strict UUID_RE + ISO_DATE_RE + Date.parse before use.
     sessionQuery = sessionQuery.or(
       `created_at.lt.${decodedCursor.created_at},and(created_at.eq.${decodedCursor.created_at},id.lt.${decodedCursor.id})`
     );
@@ -160,9 +163,9 @@ export async function GET(
         created_at: page[page.length - 1].created_at,
         id: page[page.length - 1].id,
       })
-    : undefined;
+    : null;
 
-  return new Response(JSON.stringify({ sessions, ...(nextCursor ? { nextCursor } : {}) }), {
+  return new Response(JSON.stringify({ sessions, nextCursor }), {
     headers: { ...getCorsHeaders(request), ...rlHeaders, 'Content-Type': 'application/json' },
   });
 }

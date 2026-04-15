@@ -4,6 +4,8 @@ import { createServiceRoleSupabaseClient, requireAuth } from '../../../../../lib
 import { corsError, getCorsHeaders, handleOptions } from '../../../../../lib/api';
 import { normalizeFilesAffected, verifyWorkspaceAdmin } from '../../session-utils';
 
+const MAX_TRANSCRIPT_MESSAGES = 500;
+
 interface SessionRow {
   id: string;
   workspace_id: string;
@@ -70,7 +72,7 @@ export async function GET(
       .select('id, role, content, files_affected, repair_triggered, repair_explanation, created_at')
       .eq('session_id', sessionId)
       .order('created_at', { ascending: true })
-      .limit(500),
+      .limit(MAX_TRANSCRIPT_MESSAGES),
   ]);
 
   if (memberRes.error || projectRes.error || messagesRes.error) {

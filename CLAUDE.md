@@ -238,7 +238,7 @@ npm run lint                   # All workspaces
 
 1. User prompt → frontend ChatInterface → backend `/api/generate-stream` or `/api/modify-stream`
 2. Backend resolves AI provider: if request carries a workspace identity header, `WorkspaceResolver` validates membership, decrypts the org's API key (AES-256-GCM), and returns a workspace-scoped `AIProvider`; otherwise falls through to env var / runtime override from `provider-config.json`
-2a. **Session history** — `session-service.getLastKTurns()` fetches the last 8 turns (configurable via `SESSION_HISTORY_TURNS`) from `project_sessions` + `session_messages` and prepends them as a `[CONVERSATION HISTORY]` block in the AI system prompt. After each successful turn, `appendTurn()` records the user prompt and assistant response (fire-and-forget).
+2a. **Session history** — `session-service.getLastKTurns()` fetches the last 10 turns (configurable via `SESSION_CONTEXT_K`) from `project_sessions` + `session_messages` and prepends them as a `[CONVERSATION HISTORY]` block in the AI system prompt. After each successful turn, `appendTurn()` records the user prompt and assistant response (fire-and-forget).
 3. **New projects** → `GenerationPipeline`: intent resolves → planning fires immediately (overlapped with synchronous recipe selection) → complexity gate (≤10 files → `executeOneShot()` with 1 AI call + plan review skipped; >10 files → `executeMultiPhase()` with plan review + phase batching + cross-phase summary cache). **Modifications** → `PipelineOrchestrator`: 3-stage pipeline (Intent → Planning → Execution); intent and planning skipped automatically for simple edits (≤2 primary files) or small projects (≤8 files). On OpenRouter, `IntentDetector` + `AgentRouter` route each stage to the optimal model. On Modal, `ModalPipelineFactory` resolves per-task endpoints.
 4. AI provider streams response via SSE with backpressure control (SSEEncoder utility)
 5. Incremental JSON parser extracts files as they arrive
@@ -338,7 +338,8 @@ Multi-provider architecture with runtime switching:
 - `TRUSTED_PROXY_DEPTH`: How many rightmost X-Forwarded-For IPs to trust (default: 1)
 - `REDIS_URL`: Redis connection URL for distributed rate limiting (optional; falls back to in-memory)
 - `ENABLE_FULLSTACK_RECIPES`: Enable fullstack generation recipes (default: false)
-- `SESSION_HISTORY_TURNS`: Number of prior turns injected as conversation context per AI request (default: 8); set to 0 to disable
+- `SESSION_CONTEXT_K`: Number of prior turns injected as conversation context per AI request (default: 10, min: 1, max: 50)
+- `SESSION_CONTEXT_MAX_TOKENS`: Token budget cap for session history prefix (default: 6000, min: 1000, max: 20000)
 
 **Frontend** (`.env`):
 - `VITE_API_BASE_URL`: Backend URL (default: http://localhost:4000)

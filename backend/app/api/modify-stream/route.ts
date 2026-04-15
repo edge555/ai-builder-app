@@ -127,7 +127,9 @@ export async function POST(request: NextRequest) {
       if (sessionId) {
         const turns = await getLastKTurns(sessionId);
         conversationHistoryPrefix = turns.map((turn) => ({ role: turn.role, content: turn.content }));
-        appendTurn(sessionId, 'user', body.prompt);
+        // NOTE: appendTurn for the user prompt is deferred to onComplete alongside the
+        // assistant turn. Recording the user turn before modification succeeds would leave
+        // an orphaned turn in the DB if the stream fails, polluting future history context.
       }
     }
 
@@ -220,6 +222,8 @@ export async function POST(request: NextRequest) {
           if (sessionId) {
             const changedFiles = getChangedFilesFromResult(result);
             const synopsis = buildModificationAssistantSynopsis(result, changedFiles);
+            // Append user turn first (now that modification succeeded), then assistant turn.
+            appendTurn(sessionId, 'user', body.prompt);
             appendTurn(sessionId, 'assistant', synopsis, { filesAffected: changedFiles });
           }
 

@@ -5,6 +5,7 @@ CREATE OR REPLACE FUNCTION public.increment_session_turn_count(session_id UUID)
 RETURNS void
 LANGUAGE sql
 SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $$
   UPDATE public.project_sessions
   SET turn_count     = turn_count + 1,
