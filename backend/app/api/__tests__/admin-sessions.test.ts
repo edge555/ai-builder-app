@@ -142,7 +142,7 @@ describe('admin sessions API', () => {
       'organizations.maybeSingle': [{ data: { id: 'org-1' }, error: null }],
       'members.maybeSingle': [{ data: { display_name: 'Alice' }, error: null }],
       'workspace_projects.maybeSingle': [{ data: { name: 'Demo' }, error: null }],
-      'session_messages.order': [{
+      'session_messages.limit': [{
         data: [
           { id: 'msg-1', role: 'user', content: 'add navbar', files_affected: null, repair_triggered: false, repair_explanation: null, created_at: '2026-04-15T09:00:01.000Z' },
           { id: 'msg-2', role: 'assistant', content: 'Added navbar', files_affected: ['src/App.tsx'], repair_triggered: false, repair_explanation: null, created_at: '2026-04-15T09:00:02.000Z' },

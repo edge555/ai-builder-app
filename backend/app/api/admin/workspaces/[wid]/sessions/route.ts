@@ -23,10 +23,17 @@ function encodeCursor(row: CursorPayload): string {
   return Buffer.from(JSON.stringify(row)).toString('base64url');
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/;
+
 function decodeCursor(cursor: string): CursorPayload | null {
   try {
     const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as CursorPayload;
-    if (!parsed.created_at || !parsed.id) return null;
+    if (
+      !parsed.created_at || !parsed.id ||
+      !ISO_DATE_RE.test(parsed.created_at) ||
+      !UUID_RE.test(parsed.id)
+    ) return null;
     return parsed;
   } catch {
     return null;
@@ -56,12 +63,6 @@ async function verifyWorkspaceAdmin(
   return org ? 'ok' : 'forbidden';
 }
 
-function compareCursorDesc(a: CursorPayload, b: CursorPayload): number {
-  if (a.created_at === b.created_at) {
-    return b.id.localeCompare(a.id);
-  }
-  return b.created_at.localeCompare(a.created_at);
-}
 
 export async function OPTIONS() {
   return handleOptions();
@@ -90,29 +91,27 @@ export async function GET(
   const decodedCursor = cursorRaw ? decodeCursor(cursorRaw) : null;
   if (cursorRaw && !decodedCursor) return corsError(request, 'Invalid cursor', 400);
 
-  const { data: allRows, error } = await supabase
+  let sessionQuery = supabase
     .from('project_sessions')
     .select('id, member_id, project_id, turn_count, last_active_at, created_at')
     .eq('workspace_id', wid)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
-    .limit(200);
+    .limit(PAGE_SIZE + 1);
 
-  if (error) return corsError(request, 'Failed to fetch sessions', 500);
-
-  let rows = (allRows ?? []) as SessionRow[];
   if (decodedCursor) {
-    rows = rows.filter((row) => {
-      if (row.created_at < decodedCursor.created_at) return true;
-      if (row.created_at > decodedCursor.created_at) return false;
-      return row.id < decodedCursor.id;
-    });
+    // Keyset pagination: rows where created_at < cursor OR (created_at = cursor AND id < cursor_id)
+    sessionQuery = sessionQuery.or(
+      `created_at.lt.${decodedCursor.created_at},and(created_at.eq.${decodedCursor.created_at},id.lt.${decodedCursor.id})`
+    );
   }
 
-  rows.sort((a, b) => compareCursorDesc(a, b));
+  const { data: allRows, error } = await sessionQuery;
+  if (error) return corsError(request, 'Failed to fetch sessions', 500);
 
-  const page = rows.slice(0, PAGE_SIZE);
+  const rows = (allRows ?? []) as SessionRow[];
   const hasMore = rows.length > PAGE_SIZE;
+  const page = rows.slice(0, PAGE_SIZE);
 
   const memberIds = Array.from(new Set(page.map((row) => row.member_id)));
   const projectIds = Array.from(new Set(page.map((row) => row.project_id)));

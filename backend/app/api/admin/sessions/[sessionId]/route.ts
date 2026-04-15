@@ -109,7 +109,8 @@ export async function GET(
       .from('session_messages')
       .select('id, role, content, files_affected, repair_triggered, repair_explanation, created_at')
       .eq('session_id', sessionId)
-      .order('created_at', { ascending: true }),
+      .order('created_at', { ascending: true })
+      .limit(500),
   ]);
 
   if (memberRes.error || projectRes.error || messagesRes.error) {
