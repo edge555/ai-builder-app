@@ -182,12 +182,14 @@ describe('session-service', () => {
     expect(fromSpy).not.toHaveBeenCalled();
   });
 
-  it('appendTurn inserts assistant turn with metadata', async () => {
-    const supabase = createSupabaseMock(buildResolver({
-      'session_messages.insert': [{ data: null, error: null }],
-      'project_sessions.maybeSingle': [{ data: { turn_count: 4 }, error: null }],
-      'project_sessions.update': [{ data: null, error: null }],
-    }));
+  it('appendTurn inserts assistant turn with metadata and atomically increments turn_count', async () => {
+    const rpcSpy = vi.fn(() => Promise.resolve({ error: null }));
+    const supabase = {
+      ...createSupabaseMock(buildResolver({
+        'session_messages.insert': [{ data: null, error: null }],
+      })),
+      rpc: rpcSpy,
+    };
 
     vi.mocked(createServiceRoleSupabaseClient).mockReturnValue(supabase as never);
 
@@ -209,6 +211,7 @@ describe('session-service', () => {
       repair_triggered: true,
       repair_explanation: 'Fixed missing import',
     }));
+    expect(rpcSpy).toHaveBeenCalledWith('increment_session_turn_count', { session_id: 'session-1' });
   });
 });
 

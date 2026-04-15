@@ -158,23 +158,11 @@ export function appendTurn(
       }
     });
 
-  supabase
-    .from('project_sessions')
-    .select('turn_count')
-    .eq('id', sessionId)
-    .maybeSingle<{ turn_count: number | null }>()
-    .then(({ data, error }) => {
-      if (error || !data) return;
-      const nextTurnCount = Math.max(0, data.turn_count ?? 0) + 1;
-      return supabase
-        .from('project_sessions')
-        .update({
-          turn_count: nextTurnCount,
-          last_active_at: new Date().toISOString(),
-        })
-        .eq('id', sessionId);
-    })
-    .then(() => {});
+  supabase.rpc('increment_session_turn_count', { session_id: sessionId }).then(({ error }) => {
+    if (error) {
+      logger.error('appendTurn turn_count increment failed', { error: error.message, sessionId });
+    }
+  });
 }
 
 async function createSession(
