@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.0] - 2026-04-15
+
+### Added
+- **Reliable continuation (server-side session tracking)** — `project_sessions` and `session_messages` tables with RLS policies track every AI turn per workspace member. `session-service.ts` exposes `getOrCreateSession`, `appendTurn` (fire-and-forget), and `getLastKTurns` for conversation history injection.
+- **Conversation history injection** — `generate-stream` and `modify-stream` routes retrieve the last 8 turns from the active session and prepend them as a `[CONVERSATION HISTORY]` block in the AI system prompt, enabling coherent multi-turn interactions without client-side re-sending.
+- **Admin session viewer endpoints** — `GET /api/admin/workspaces/:wid/sessions` (keyset-paginated list), `GET /api/admin/sessions/:sessionId` (full transcript, capped at 500 messages), `GET /api/admin/sessions/:sessionId/export` (full JSONL export). All require workspace-admin auth.
+- **`SESSION_HISTORY_TURNS` config** — new env var (default 8) controls how many prior turns are injected into each AI request.
+- **Supabase migration** — `20260415_reliable_continuation.sql` creates `project_sessions` (with `idx_project_sessions_one_active` unique partial index) and `session_messages` (with GIN index on content).
+- **Spec** — `specs/reliable-continuation.md` documents the full design, schema, and implementation decisions.
+
+### Fixed
+- **`AcceptanceGate` scoped validation** — `resolveBuildValidationScope` previously only traversed dependents (files that import changed files) but missed dependencies (files that the changed files import). Both directions are now included, preventing false "missing import" build errors on scoped modifications. `package.json` is also included in scope when any changed file imports an external package.
+- **Admin sessions pagination** — replaced in-memory cursor filtering (capped at 200 rows) with SQL keyset pagination via PostgREST `.or()` filter; cursor tokens are now validated against UUID and ISO datetime regexes before use.
+- **Transcript payload guard** — `GET /api/admin/sessions/:sessionId` now caps `session_messages` fetch at 500 rows, preventing unbounded response payloads on long sessions.
+
 ## [1.9.0] - 2026-04-09
 
 ### Added

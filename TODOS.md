@@ -12,14 +12,9 @@ Status taxonomy for open items: `ready`, `blocked`, `deferred`.
 - **Status:** Completed (2026-04-14, commit 935dfe4)
 - **What was done:** Replaced `@codesandbox/sandpack-react` with `@webcontainer/api`. New `useWebContainer` hook manages singleton boot lifecycle (booting→mounting→installing→starting→ready). Incremental `fs.writeFile()` for HMR-based minor updates; full remount for new projects. COOP `same-origin` + COEP `credentialless` headers in Vite config. New UI components: `WebContainerBootProgress`, `WebContainerPreview`, `WebContainerConsole`, `WebContainerErrorListener`. All auto-repair, error aggregation, and device frame behavior preserved. FullstackBanner updated — API routes now run live.
 
-### Server-Side Agent Sessions [P2, XL]
-- **Status:** `ready` (Unified Pipeline + WebContainers completed 2026-04-14)
-- **What:** Add a backend session layer that stores conversation context per project. The AI can reference prior turns, tool results (test output, error history), and accumulated context without the frontend rebuilding everything.
-- **Why:** Current stateless model (frontend sends full history each request) can't support agentic multi-turn workflows. The 10-star experience is an AI that remembers what it tried, uses tools, and iteratively refines.
-- **Pros:** Enables tool use (run tests, check errors), context accumulation, iterative refinement. Foundation for self-testing and deployment.
-- **Cons:** Requires session storage (Redis or database), connection management, session cleanup. Adds backend state.
-- **Context:** Builds on unified pipeline. Session stores conversation + tool registry per project.
-- **Depends on:** Unified pipeline, WebContainers (tools need execution environment)
+### Server-Side Agent Sessions — Completed (Reliable Continuation v1)
+- **Status:** Completed (2026-04-15, v1.10.0)
+- **What was done:** `project_sessions` + `session_messages` tables with RLS policies. `session-service.ts` exposes `getOrCreateSession`, `appendTurn` (fire-and-forget), `getLastKTurns`. Both `generate-stream` and `modify-stream` inject the last 8 turns as a `[CONVERSATION HISTORY]` block. Admin session viewer endpoints: list (keyset-paginated), transcript (capped at 500 msgs), export. See `specs/reliable-continuation.md` for full design. Follow-on TODOs for repair turn injection, search, and atomic turn_count are tracked below.
 
 ## Test Coverage Gaps
 
