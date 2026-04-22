@@ -24,6 +24,8 @@ export interface UnifiedPipelineOptions {
   requestId?: string;
   skipIntent?: boolean;
   skipPlanning?: boolean;
+  /** Conversation history to prepend as context before the active user prompt. */
+  conversationHistoryPrefix?: { role: 'user' | 'assistant'; content: string }[];
   /** Any additional options forwarded to the strategy. */
   [key: string]: unknown;
 }

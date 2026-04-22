@@ -163,7 +163,7 @@ export function createGenerationApiService({
                 {
                     description,
                     attachments,
-                    ...(requestContext.workspaceId ? { workspaceId: requestContext.workspaceId } : {}),
+                    ...getWorkspaceFields(),
                 },
                 'generate'
             );
@@ -181,7 +181,7 @@ export function createGenerationApiService({
                     body: JSON.stringify({
                         description,
                         attachments,
-                        ...(requestContext.workspaceId ? { workspaceId: requestContext.workspaceId } : {}),
+                        ...getWorkspaceFields(),
                     }),
                     signal: controller.signal,
                 }),

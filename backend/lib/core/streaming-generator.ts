@@ -74,7 +74,11 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
   async generateProjectStreaming(
     description: string,
     callbacks: StreamingCallbacks,
-    options?: { requestId?: string; beginnerMode?: boolean }
+    options?: {
+      requestId?: string;
+      beginnerMode?: boolean;
+      conversationHistoryPrefix?: { role: 'user' | 'assistant'; content: string }[];
+    }
   ): Promise<StreamingGenerationResult> {
     if (!description || description.trim() === '') {
       return {
@@ -158,6 +162,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
         {
           requestId: options?.requestId,
           beginnerMode: options?.beginnerMode,
+          conversationHistoryPrefix: options?.conversationHistoryPrefix,
         }
       );
     } catch (err) {

@@ -86,7 +86,7 @@ export interface IModificationPipeline {
     currentFiles: Record<string, string>,
     fileSlices: CodeSlice[],
     callbacks: UnifiedPipelineCallbacks,
-    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean }
+    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean; conversationHistory?: ConversationTurn[] }
   ): Promise<PipelineResult>;
 
   runOrderedModificationPipeline(
@@ -95,7 +95,7 @@ export interface IModificationPipeline {
     tiers: string[][],
     validateFile: (path: string, content: string) => Promise<{ valid: boolean; errorText?: string }>,
     callbacks: UnifiedPipelineCallbacks,
-    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean }
+    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean; conversationHistory?: ConversationTurn[] }
   ): Promise<PipelineResult>;
 }
 
@@ -242,7 +242,13 @@ export class ModificationEngine {
           projectState.files,
           slices,
           pipelineCallbacks,
-          { requestId, designSystem: shouldIncludeDesignSystem, skipIntent, skipPlanning }
+          {
+            requestId,
+            designSystem: shouldIncludeDesignSystem,
+            skipIntent,
+            skipPlanning,
+            conversationHistory: options?.conversationHistory,
+          }
         );
       } else {
         onProgress?.('generating', `Generating code modifications (ordered, ${primaryFiles.length} files)...`);
@@ -266,7 +272,13 @@ export class ModificationEngine {
           impactReport.tiers,
           validateFile,
           pipelineCallbacks,
-          { requestId, designSystem: shouldIncludeDesignSystem, skipIntent, skipPlanning }
+          {
+            requestId,
+            designSystem: shouldIncludeDesignSystem,
+            skipIntent,
+            skipPlanning,
+            conversationHistory: options?.conversationHistory,
+          }
         );
       }
 
@@ -797,7 +809,7 @@ class ModificationPipelineAdapter implements IModificationPipeline {
     currentFiles: Record<string, string>,
     fileSlices: CodeSlice[],
     callbacks: UnifiedPipelineCallbacks,
-    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean }
+    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean; conversationHistory?: ConversationTurn[] }
   ): Promise<PipelineResult> {
     const strategy = new ModificationStrategy(
       this.planningProvider,
@@ -816,6 +828,7 @@ class ModificationPipelineAdapter implements IModificationPipeline {
       designSystem: options?.designSystem,
       skipIntent: options?.skipIntent,
       skipPlanning: options?.skipPlanning,
+      conversationHistoryPrefix: options?.conversationHistory,
     });
   }
 
@@ -825,7 +838,7 @@ class ModificationPipelineAdapter implements IModificationPipeline {
     tiers: string[][],
     validateFile: (path: string, content: string) => Promise<{ valid: boolean; errorText?: string }>,
     callbacks: UnifiedPipelineCallbacks,
-    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean }
+    options?: { requestId?: string; designSystem?: boolean; skipIntent?: boolean; skipPlanning?: boolean; conversationHistory?: ConversationTurn[] }
   ): Promise<PipelineResult> {
     const strategy = new ModificationStrategy(
       this.planningProvider,
@@ -846,6 +859,7 @@ class ModificationPipelineAdapter implements IModificationPipeline {
       designSystem: options?.designSystem,
       skipIntent: options?.skipIntent,
       skipPlanning: options?.skipPlanning,
+      conversationHistoryPrefix: options?.conversationHistory,
     });
   }
 }

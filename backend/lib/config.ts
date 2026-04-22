@@ -89,6 +89,8 @@ const envSchema = z.object({
     .string()
     .transform((v) => v === 'true' || v === '1')
     .default(false),
+  SESSION_CONTEXT_K: z.coerce.number().int().min(1).max(50).default(10),
+  SESSION_CONTEXT_MAX_TOKENS: z.coerce.number().int().min(1000).max(20000).default(6000),
 });
 
 /**
@@ -188,6 +190,10 @@ export interface BackendConfig {
   recipes: {
     fullstackEnabled: boolean;
   };
+  session: {
+    contextK: number;
+    contextMaxTokens: number;
+  };
 }
 
 export const config: BackendConfig = {
@@ -265,6 +271,10 @@ export const config: BackendConfig = {
   },
   recipes: {
     fullstackEnabled: env.ENABLE_FULLSTACK_RECIPES,
+  },
+  session: {
+    contextK: env.SESSION_CONTEXT_K,
+    contextMaxTokens: env.SESSION_CONTEXT_MAX_TOKENS,
   },
 };
 

@@ -109,7 +109,10 @@ backend/
 │   ├── org/              # Org creation (POST)
 │   ├── org/self-provision/ # Self-provision org for authenticated user (POST)
 │   ├── org/[orgId]/settings/ # Org settings CRUD: name, API key, labels (GET/PUT)
-│   └── org/[orgId]/workspaces/ # Workspace listing and creation (GET/POST)
+│   ├── org/[orgId]/workspaces/ # Workspace listing and creation (GET/POST)
+│   ├── admin/workspaces/[wid]/sessions/ # Paginated session list for admin (GET, keyset cursor)
+│   ├── admin/sessions/[sessionId]/ # Full session transcript, capped at 500 msgs (GET)
+│   └── admin/sessions/[sessionId]/export/ # Full JSONL export (GET)
 ├── lib/
 │   ├── ai/            # Multi-provider AI abstraction
 │   │   ├── ai-provider.ts          # AIProvider interface
@@ -172,6 +175,7 @@ backend/
 │   │   ├── route-context.ts        # Request ID + context logger + rate-limit header merging
 │   │   ├── utils.ts                # CORS headers, CSRF origin validation, gzip, error formatting
 │   │   └── zod-error.ts            # Zod error formatting
+│   ├── session-service.ts # Server-side session tracking: getOrCreateSession, appendTurn (fire-and-forget), getLastKTurns
 │   ├── logger.ts      # Structured logging with redaction and category filtering
 │   ├── metrics.ts     # AI operation timing, token tracking, in-memory aggregate stats
 │   ├── config.ts      # Zod-validated env vars with provider-aware defaults
@@ -351,7 +355,7 @@ Multi-provider architecture with runtime switching:
 
 ## Testing
 
-- **Backend**: Vitest + Node env, 104 test files in `lib/**/*.test.ts` and `app/api/__tests__/` (unit, perf, integration, eval)
+- **Backend**: Vitest + Node env, 115 test files in `lib/**/*.test.ts` and `app/api/__tests__/` (unit, perf, integration, eval)
 - **Frontend**: Vitest + jsdom + React Testing Library, 26 test files in `src/**/__tests__/*.{test,spec}.{ts,tsx}`
 - **Shared**: Vitest + Node env, 5 test files
 
