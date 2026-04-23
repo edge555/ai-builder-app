@@ -53,6 +53,23 @@
   gap: 10px;
 }
 
+.site-header-feedback {
+  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  text-decoration: none;
+  border-radius: var(--radius);
+  transition: color 150ms, background 150ms;
+}
+
+.site-header-feedback:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted));
+}
+
 .site-header-sign-in {
   padding: 10px 16px;
   min-height: 44px;

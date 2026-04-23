@@ -116,6 +116,18 @@ export function AppLayout({ initialPrompt, onBackToDashboard, disableAutoSave }:
         handleToggleSidebar,
     } = useSidebarResize();
 
+    const prevIsLoadingRef = useRef(false);
+
+    // Mobile: auto-switch to preview when generation finishes and files exist
+    useEffect(() => {
+        const wasLoading = prevIsLoadingRef.current;
+        prevIsLoadingRef.current = isLoading;
+        if (wasLoading && !isLoading && projectState && windowWidth <= DESKTOP_BREAKPOINT) {
+            setActivePanel('preview');
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoading]);
+
     // Close sidebar when clicking backdrop on tablet
     const handleBackdropClick = useCallback(() => {
         if (windowWidth <= DESKTOP_BREAKPOINT && !isSidebarCollapsed) {

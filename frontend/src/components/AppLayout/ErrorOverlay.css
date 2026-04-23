@@ -95,3 +95,29 @@
   max-height: 80px;
   overflow-y: auto;
 }
+
+.error-overlay-technical-details {
+  margin-top: 8px;
+}
+
+.error-overlay-technical-summary {
+  font-size: 0.6875rem;
+  color: var(--color-text-secondary, #a0aec0);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.error-overlay-technical-summary::-webkit-details-marker {
+  display: none;
+}
+
+.error-overlay-technical-summary::before {
+  content: '▶ ';
+  font-size: 0.5rem;
+  vertical-align: middle;
+}
+
+details[open] .error-overlay-technical-summary::before {
+  content: '▼ ';
+}

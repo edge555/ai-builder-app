@@ -60,6 +60,11 @@ const LOADING_STEPS: Record<LoadingPhase, string[]> = {
 export interface LoadingIndicatorProps {
   /** Current loading phase */
   phase?: LoadingPhase;
+  /**
+   * Whether this is a complex multi-phase generation (>10 files).
+   * Changes the slow-warning message to set accurate expectations.
+   */
+  isComplexGeneration?: boolean;
 }
 
 /**
@@ -69,7 +74,7 @@ export interface LoadingIndicatorProps {
  * Requirements: 8.2
  */
 export const LoadingIndicator = forwardRef<HTMLDivElement, LoadingIndicatorProps>(
-  function LoadingIndicator({ phase = 'processing' }, ref) {
+  function LoadingIndicator({ phase = 'processing', isComplexGeneration = false }, ref) {
     const [messageIndex, setMessageIndex] = useState(0);
     const [tipIndex, setTipIndex] = useState(0);
     const [showTip, setShowTip] = useState(false);
@@ -128,7 +133,11 @@ export const LoadingIndicator = forwardRef<HTMLDivElement, LoadingIndicatorProps
           <div className="chat-loading-info">
             <span className="chat-loading-text">{currentMessage}</span>
             {showSlowWarning ? (
-              <span className="chat-loading-tip">Taking longer than expected — the AI service may be under heavy load</span>
+              <span className="chat-loading-tip">
+                {isComplexGeneration
+                  ? 'Your app has many parts — complex builds typically take 2\u20134 minutes'
+                  : 'Taking longer than expected \u2014 the AI service may be under heavy load'}
+              </span>
             ) : showTip ? (
               <span className="chat-loading-tip">Tip: {LOADING_TIPS[tipIndex]}</span>
             ) : null}
