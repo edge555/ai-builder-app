@@ -46,8 +46,6 @@ const PROJECT_TYPE_TO_RECIPE: Record<string, string> = {
 export interface RecipeSelectorOptions {
   /** When false, always returns react-spa regardless of intent. */
   fullstackEnabled: boolean;
-  /** When true, force beginner-safe SPA recipe regardless of intent. */
-  beginnerMode?: boolean;
 }
 
 /**
@@ -94,10 +92,6 @@ export function selectRecipe(
   options: RecipeSelectorOptions,
   userPrompt?: string
 ): GenerationRecipe {
-  if (options.beginnerMode) {
-    return getRecipe('react-spa-beginner') ?? getDefaultRecipe();
-  }
-
   if (!options.fullstackEnabled || !intent) {
     return getDefaultRecipe();
   }

@@ -88,6 +88,14 @@ export function ErrorOverlay() {
             </button>
           </div>
           <div className="error-overlay-details-body">
+            {/* Human-readable summary first */}
+            <div className="error-overlay-detail-section">
+              <p className="error-overlay-detail-message">
+                Something went wrong{currentFile ? ` in ${currentFile}` : ' in your app'}.
+                {' '}Try a simpler request, or use <strong>Undo</strong> to go back to the last working version.
+              </p>
+            </div>
+
             {aggregatedErrors?.affectedFiles && aggregatedErrors.affectedFiles.length > 0 && (
               <div className="error-overlay-detail-section">
                 <span className="error-overlay-detail-label">Affected files</span>
@@ -98,15 +106,20 @@ export function ErrorOverlay() {
                 </ul>
               </div>
             )}
-            {errorQueue.slice(-3).map((err, i) => (
-              <div key={i} className="error-overlay-detail-section">
-                <span className="error-overlay-detail-label">{err.type}</span>
-                <p className="error-overlay-detail-message">{err.message}</p>
-                {err.stack && (
-                  <pre className="error-overlay-detail-stack">{err.stack.slice(0, 400)}</pre>
-                )}
-              </div>
-            ))}
+
+            {/* Raw technical details behind a toggle */}
+            <details className="error-overlay-technical-details">
+              <summary className="error-overlay-technical-summary">Show technical details</summary>
+              {errorQueue.slice(-3).map((err, i) => (
+                <div key={i} className="error-overlay-detail-section">
+                  <span className="error-overlay-detail-label">{err.type}</span>
+                  <p className="error-overlay-detail-message">{err.message}</p>
+                  {err.stack && (
+                    <pre className="error-overlay-detail-stack">{err.stack.slice(0, 400)}</pre>
+                  )}
+                </div>
+              ))}
+            </details>
           </div>
         </div>
       )}

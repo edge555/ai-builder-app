@@ -12,7 +12,6 @@ import { config as appConfig } from '../../config';
 
 import { createStreamSession } from './streamingTransport';
 import type {
-    GenerationRequestContext,
     ModifyProjectOptions,
     ModifyProjectStreamingOptions,
     StreamSession,
@@ -22,7 +21,6 @@ import type {
 const generationLogger = createLogger('Generation');
 
 interface CreateGenerationApiServiceOptions {
-    requestContext: GenerationRequestContext;
     onStreamSnapshot?: (snapshot: StreamSnapshot) => void;
     onStreamingChange?: (isStreaming: boolean) => void;
 }
@@ -47,7 +45,6 @@ export interface GenerationApiService {
 }
 
 export function createGenerationApiService({
-    requestContext,
     onStreamSnapshot,
     onStreamingChange,
 }: CreateGenerationApiServiceOptions): GenerationApiService {
@@ -72,17 +69,6 @@ export function createGenerationApiService({
         if (requestId) {
             generationLogger.info(`${eventName} started`, { requestId });
         }
-    };
-
-    const getWorkspaceFields = () => {
-        if (!requestContext.workspaceId) {
-            return {};
-        }
-
-        return {
-            workspaceId: requestContext.workspaceId,
-            ...(requestContext.projectId ? { projectId: requestContext.projectId } : {}),
-        };
     };
 
     const performJsonRequest = async <TResponse>(
@@ -163,7 +149,6 @@ export function createGenerationApiService({
                 {
                     description,
                     attachments,
-                    ...getWorkspaceFields(),
                 },
                 'generate'
             );
@@ -181,7 +166,6 @@ export function createGenerationApiService({
                     body: JSON.stringify({
                         description,
                         attachments,
-                        ...getWorkspaceFields(),
                     }),
                     signal: controller.signal,
                 }),
@@ -204,7 +188,6 @@ export function createGenerationApiService({
                     shouldSkipPlanning: options?.shouldSkipPlanning,
                     conversationHistory: options?.conversationHistory,
                     attachments: options?.attachments,
-                    ...getWorkspaceFields(),
                 },
                 'modify'
             );
@@ -228,7 +211,6 @@ export function createGenerationApiService({
                         errorContext: options?.errorContext,
                         attachments: options?.attachments,
                         ...(typeof options?.repairAttempt === 'number' ? { repairAttempt: options.repairAttempt } : {}),
-                        ...getWorkspaceFields(),
                     }),
                     signal: controller.signal,
                 }),

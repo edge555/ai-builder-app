@@ -24,25 +24,12 @@ import {
   SSEEncoder,
   createStreamLifecycle,
 } from '../../../lib/streaming';
-import { createServiceRoleSupabaseClient } from '../../../lib/security/auth';
-import { resolveWorkspaceRequestContext } from '../../../lib/security/workspace-request-context';
-import { appendTurn, getLastKTurns, getOrCreateSession, type SessionTurn } from '../../../lib/session-service';
 
 const logger = createLogger('api/generate-stream');
 
 const HEARTBEAT_INTERVAL_MS = 10000; // 10 seconds
 const STREAM_TIMEOUT_MS = 960000; // 16 minutes — large generations can take 10-15+ min
 
-function buildGenerationAssistantSynopsis(description: string, changedFiles: string[]): string {
-  const trimmedDescription = description.trim().replace(/\s+/g, ' ');
-  const base = trimmedDescription.length > 120
-    ? `Generated project from prompt: ${trimmedDescription.slice(0, 120)}...`
-    : `Generated project from prompt: ${trimmedDescription}`;
-  const withFiles = changedFiles.length > 0
-    ? `${base}. Files: ${changedFiles.join(', ')}`
-    : base;
-  return withFiles.slice(0, 200);
-}
 
 /**
  * Handle OPTIONS preflight request
@@ -68,37 +55,8 @@ export async function POST(request: NextRequest) {
     if (!parsed.ok) return parsed.response;
     const body: GenerateProjectRequest = parsed.data;
 
-    // Workspace mode: verify membership and resolve org API key
-    const workspaceCtx = await resolveWorkspaceRequestContext(request, body.workspaceId);
-    if (workspaceCtx.authResponse) return workspaceCtx.authResponse;
-    if (workspaceCtx.forbidden) {
-      return new Response(
-        JSON.stringify({ error: 'Not a member of this workspace' }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const workspaceProvider = workspaceCtx.workspaceProvider;
-    const memberId = workspaceCtx.memberId;
-    const beginnerMode = workspaceCtx.beginnerMode;
-    const supabaseServiceClient = createServiceRoleSupabaseClient();
-
-    let sessionId: string | null = null;
-    let conversationHistoryPrefix: SessionTurn[] = [];
-    if (body.workspaceId && body.projectId && memberId) {
-      sessionId = await getOrCreateSession(body.workspaceId, body.projectId, memberId);
-      if (sessionId) {
-        conversationHistoryPrefix = await getLastKTurns(sessionId);
-        // NOTE: appendTurn for the user prompt is deferred to onComplete alongside the
-        // assistant turn. Recording the user turn before generation succeeds would leave
-        // an orphaned turn in the DB if the stream fails, polluting future history context.
-      }
-    }
-
     contextLogger.info('Starting streaming generation', {
       descriptionLength: body.description.length,
-      workspaceMode: !!workspaceProvider,
-      hasServerHistory: conversationHistoryPrefix.length > 0,
     });
 
     // Create backpressure controller
@@ -123,7 +81,7 @@ export async function POST(request: NextRequest) {
         try {
 
           // Generate project with streaming callbacks
-          const generator = await createStreamingProjectGenerator(workspaceProvider);
+          const generator = await createStreamingProjectGenerator(null);
 
           const result = await generator.generateProjectStreaming(body.description, {
             signal: request.signal,
@@ -180,7 +138,6 @@ export async function POST(request: NextRequest) {
             },
 
             onComplete: (data) => {
-              const selectedRecipe = data.selectedRecipeId ? { id: data.selectedRecipeId } : null;
               const response = {
                 success: true,
                 projectState: serializeProjectState(data.projectState),
@@ -194,24 +151,6 @@ export async function POST(request: NextRequest) {
                 EventPriority.CRITICAL
               );
 
-              if (sessionId) {
-                const changedFiles = Object.keys(data.projectState.files ?? {});
-                const synopsis = buildGenerationAssistantSynopsis(body.description, changedFiles);
-                // Append user turn first (now that generation succeeded), then assistant turn.
-                appendTurn(sessionId, 'user', body.description);
-                appendTurn(sessionId, 'assistant', synopsis, { filesAffected: changedFiles });
-              }
-
-              if (body.workspaceId && memberId) {
-                supabaseServiceClient?.from('generation_events').insert({
-                  workspace_id: body.workspaceId,
-                  member_id: memberId,
-                  timestamp: new Date().toISOString(),
-                  token_count: null,
-                  repair_triggered: false,
-                  recipe: selectedRecipe?.id ?? null,
-                }).then(() => {}, () => {});
-              }
             },
 
             onPipelineStage: (data) => {
@@ -263,8 +202,6 @@ export async function POST(request: NextRequest) {
             },
           }, {
             requestId,
-            beginnerMode,
-            conversationHistoryPrefix,
           });
 
           // If already aborted, skip final messages

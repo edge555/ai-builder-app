@@ -45,11 +45,6 @@ export interface StreamLifecycleOptions {
     maxTimeoutMs: number;
 }
 
-export interface GenerationRequestContext {
-    workspaceId: string | null;
-    projectId: string | null;
-}
-
 export interface ModifyProjectOptions {
     shouldSkipPlanning?: boolean;
     conversationHistory?: ConversationTurn[];

@@ -66,7 +66,6 @@ export interface GenerationResult {
 
 export interface GenerationStrategyOptions {
   requestId?: string;
-  beginnerMode?: boolean;
 }
 
 export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, GenerationResult> {
@@ -106,7 +105,6 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
     options?: Record<string, unknown>,
   ): Promise<ArchitecturePlan> {
     const typedIntentOutput = intentOutput as IntentOutput | null;
-    const beginnerMode = options?.['beginnerMode'] as boolean | undefined;
     const requestId = options?.['requestId'] as string | undefined;
     const contextLogger = requestId ? logger.withRequestId(requestId) : logger;
     const planningStageStartMs = Date.now();
@@ -115,41 +113,30 @@ export class GenerationStrategy implements IPipelineStrategy<ArchitecturePlan, G
     contextLogger.debug('Enhanced Planning stage start');
 
     // Fire the planning AI call before recipe selection to minimise latency.
-    const planningPromise = beginnerMode
-      ? null
-      : this.planningProvider.generate({
-          prompt: userPrompt,
-          systemInstruction: this.promptProvider.getArchitecturePlanningPrompt(userPrompt, typedIntentOutput),
-          maxOutputTokens: this.promptProvider.tokenBudgets.architecturePlanning,
-          responseSchema: ARCHITECTURE_PLAN_JSON_SCHEMA,
-          signal: callbacks.signal,
-        });
+    const planningPromise = this.planningProvider.generate({
+      prompt: userPrompt,
+      systemInstruction: this.promptProvider.getArchitecturePlanningPrompt(userPrompt, typedIntentOutput),
+      maxOutputTokens: this.promptProvider.tokenBudgets.architecturePlanning,
+      responseSchema: ARCHITECTURE_PLAN_JSON_SCHEMA,
+      signal: callbacks.signal,
+    });
 
     // Recipe selection (runs while planning is in flight — synchronous, <1ms)
     const recipe = selectRecipe(typedIntentOutput, {
       fullstackEnabled: config.recipes.fullstackEnabled,
-      beginnerMode,
     }, userPrompt);
     contextLogger.info('Recipe selected', { recipeId: recipe.id });
     this.promptProvider.setRecipe?.(recipe);
 
-    // Await planning result
-    let architecturePlan: ArchitecturePlan;
-    if (beginnerMode) {
-      architecturePlan = buildHeuristicPlan(typedIntentOutput, userPrompt, recipe);
-      recordGenerationStageTiming('planning', Date.now() - planningStageStartMs);
-      callbacks.onStageComplete?.('planning');
-    } else {
-      architecturePlan = await this.resolveArchitecturePlan(
-        userPrompt,
-        typedIntentOutput,
-        planningPromise!,
-        callbacks,
-        contextLogger,
-        planningStageStartMs,
-        recipe
-      );
-    }
+    const architecturePlan = await this.resolveArchitecturePlan(
+      userPrompt,
+      typedIntentOutput,
+      planningPromise,
+      callbacks,
+      contextLogger,
+      planningStageStartMs,
+      recipe
+    );
 
     return architecturePlan;
   }

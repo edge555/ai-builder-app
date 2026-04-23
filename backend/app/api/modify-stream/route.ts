@@ -26,9 +26,6 @@ import {
   SSEEncoder,
   createStreamLifecycle,
 } from '../../../lib/streaming';
-import { resolveWorkspaceRequestContext } from '../../../lib/security/workspace-request-context';
-import { createServiceRoleSupabaseClient } from '../../../lib/security/auth';
-import { appendTurn, getLastKTurns, getOrCreateSession } from '../../../lib/session-service';
 
 const logger = createLogger('api/modify-stream');
 
@@ -42,25 +39,6 @@ export async function OPTIONS() {
   return handleOptions();
 }
 
-function getChangedFilesFromResult(result: {
-  diffs?: Array<{ filePath: string }>;
-  changeSummary?: { affectedFiles?: string[] };
-}): string[] {
-  const fromDiffs = (result.diffs ?? []).map((diff) => diff.filePath).filter(Boolean);
-  if (fromDiffs.length > 0) return Array.from(new Set(fromDiffs));
-  return Array.from(new Set(result.changeSummary?.affectedFiles ?? []));
-}
-
-function buildModificationAssistantSynopsis(
-  result: { changeSummary?: { description?: string } },
-  changedFiles: string[]
-): string {
-  const base = result.changeSummary?.description?.trim() || 'Applied requested project modifications';
-  const withFiles = changedFiles.length > 0
-    ? `${base}. Files: ${changedFiles.join(', ')}`
-    : base;
-  return withFiles.slice(0, 200);
-}
 
 export async function POST(request: NextRequest) {
   const { blocked, headers: rlHeaders } = await applyRateLimit(request, RateLimitTier.HIGH_COST);
@@ -78,75 +56,15 @@ export async function POST(request: NextRequest) {
     if (!parsed.ok) return parsed.response;
     const body = parsed.data;
 
-    const workspaceCtx = await resolveWorkspaceRequestContext(request, body.workspaceId);
-    if (workspaceCtx.authResponse) return workspaceCtx.authResponse;
-    if (workspaceCtx.forbidden) {
-      return new Response(
-        JSON.stringify({ error: 'Not a member of this workspace' }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const workspaceProvider = workspaceCtx.workspaceProvider;
-    const memberId = workspaceCtx.memberId;
-
-    // Fire-and-forget: snapshot current project state BEFORE generation starts.
-    // Enables CheckpointManager rollback on auto-repair failure.
-    if (body.workspaceId && body.projectId) {
-      const supabase = createServiceRoleSupabaseClient();
-      if (supabase) {
-        // Verify project belongs to this workspace before writing snapshot (IDOR guard).
-        supabase
-          .from('workspace_projects')
-          .select('id')
-          .eq('id', body.projectId)
-          .eq('workspace_id', body.workspaceId)
-          .maybeSingle()
-          .then(({ data: project, error: lookupErr }) => {
-            if (lookupErr || !project) {
-              if (lookupErr) contextLogger.warn('ProjectSnapshot ownership check failed', { error: lookupErr.message });
-              return;
-            }
-            const filesJson = Object.fromEntries(
-              Object.entries(body.projectState.files).map(([path, content]) => [path, { code: content }])
-            );
-            return supabase
-              .from('workspace_project_snapshots')
-              .upsert({ project_id: body.projectId, files_json: filesJson }, { onConflict: 'project_id' })
-              .then(({ error }) => {
-                if (error) contextLogger.warn('ProjectSnapshot upsert failed (non-blocking)', { error: error.message });
-              });
-          });
-      }
-    }
-
-    let sessionId: string | null = null;
-    let conversationHistoryPrefix: ConversationTurn[] = [];
-    if (body.workspaceId && body.projectId && memberId) {
-      sessionId = await getOrCreateSession(body.workspaceId, body.projectId, memberId);
-      if (sessionId) {
-        const turns = await getLastKTurns(sessionId);
-        conversationHistoryPrefix = turns.map((turn) => ({ role: turn.role, content: turn.content }));
-        // NOTE: appendTurn for the user prompt is deferred to onComplete alongside the
-        // assistant turn. Recording the user turn before modification succeeds would leave
-        // an orphaned turn in the DB if the stream fails, polluting future history context.
-      }
-    }
-
     contextLogger.info('Starting streaming modification', {
       promptLength: body.prompt.length,
       shouldSkipPlanning: body.shouldSkipPlanning,
-      workspaceMode: !!workspaceProvider,
-      hasServerHistory: conversationHistoryPrefix.length > 0,
     });
 
     // Deserialize project state
     const projectState = deserializeProjectState(body.projectState);
     const { shouldSkipPlanning, errorContext } = body;
-    const conversationHistory: ConversationTurn[] = [
-      ...conversationHistoryPrefix,
-      ...(body.conversationHistory ?? []),
-    ];
+    const conversationHistory: ConversationTurn[] = body.conversationHistory ?? [];
 
     // Create backpressure controller
     const backpressure = new BackpressureController({
@@ -177,7 +95,7 @@ export async function POST(request: NextRequest) {
           );
 
           // Run modification engine (blocking call — emits files post-hoc)
-          const engine = await createModificationEngine(workspaceProvider);
+          const engine = await createModificationEngine(null);
           const result = await engine.modifyProject(projectState, body.prompt, {
             shouldSkipPlanning,
             errorContext,
@@ -217,14 +135,6 @@ export async function POST(request: NextRequest) {
             );
             safeClose();
             return;
-          }
-
-          if (sessionId) {
-            const changedFiles = getChangedFilesFromResult(result);
-            const synopsis = buildModificationAssistantSynopsis(result, changedFiles);
-            // Append user turn first (now that modification succeeded), then assistant turn.
-            appendTurn(sessionId, 'user', body.prompt);
-            appendTurn(sessionId, 'assistant', synopsis, { filesAffected: changedFiles });
           }
 
           // Emit each modified file as a separate SSE event

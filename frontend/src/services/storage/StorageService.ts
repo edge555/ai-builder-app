@@ -27,6 +27,9 @@ class StorageService {
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;
 
+  private readonly namingDescriptors = ['Bright', 'Clever', 'Fresh', 'Modern', 'Quick', 'Sharp', 'Smart', 'Swift'];
+  private readonly namingSuffixes = ['Board', 'Desk', 'Forge', 'Hub', 'Lab', 'Studio', 'Works', 'Workshop'];
+
   // Write coalescing: prevents racing between auto-save and manual saves
   private writeInFlight: Map<string, Promise<void>> = new Map();
   private writePending: Map<string, StoredProject> = new Map();
@@ -130,6 +133,40 @@ class StorageService {
   }): Promise<ProjectMetadata[]> {
     const db = await this.ensureInitialized();
     return getAllProjectMetadata(db, options);
+  }
+
+  async getUniqueProjectName(baseName: string): Promise<string> {
+    const trimmedBaseName = baseName.trim().replace(/\s+/g, ' ');
+    const fallbackBaseName = trimmedBaseName || 'Fresh Project Studio';
+    const existingProjects = await this.getAllProjectMetadata();
+    const existingNames = new Set(existingProjects.map((p) => p.name.trim().toLowerCase()));
+
+    if (!existingNames.has(fallbackBaseName.toLowerCase())) {
+      return fallbackBaseName;
+    }
+
+    const words = fallbackBaseName.split(' ').filter(Boolean);
+    const [originalDescriptor, originalDomain = 'Project', originalSuffix = 'Studio'] = [
+      words[0] || 'Fresh',
+      words[1] || 'Project',
+      words[2] || 'Studio',
+    ];
+
+    for (const descriptor of this.namingDescriptors) {
+      if (descriptor === originalDescriptor) continue;
+      const candidate = `${descriptor} ${originalDomain} ${originalSuffix}`;
+      if (!existingNames.has(candidate.toLowerCase())) return candidate;
+    }
+
+    for (const suffix of this.namingSuffixes) {
+      if (suffix === originalSuffix) continue;
+      const candidate = `${originalDescriptor} ${originalDomain} ${suffix}`;
+      if (!existingNames.has(candidate.toLowerCase())) return candidate;
+    }
+
+    let n = 2;
+    while (existingNames.has(`${fallbackBaseName} ${n}`.toLowerCase())) n++;
+    return `${fallbackBaseName} ${n}`;
   }
 
   async deleteProject(id: string): Promise<void> {

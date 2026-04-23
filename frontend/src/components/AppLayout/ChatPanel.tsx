@@ -45,6 +45,7 @@ export function ChatPanel({ onFileClick }: ChatPanelProps) {
 
   const hasProject = Boolean(projectState);
   const hasGeneratedOnce = messages.some(m => m.role === 'assistant' && !m.isError);
+  const isComplexGeneration = projectState ? Object.keys(projectState.files).length > 10 : false;
   const inputPlaceholder = hasProject
     ? 'Ask me to modify your app...'
     : 'Describe your app or request a modification...';
@@ -55,6 +56,7 @@ export function ChatPanel({ onFileClick }: ChatPanelProps) {
         messages={messages}
         isLoading={isLoading}
         loadingPhase={loadingPhase}
+        isComplexGeneration={isComplexGeneration}
         onSubmitPrompt={handleSubmit}
         error={error}
         onClearError={clearError}

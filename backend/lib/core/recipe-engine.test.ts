@@ -2,24 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { composeExecutionPrompt, selectRecipe } from './recipes/recipe-engine';
 import { getRecipe } from './recipes/recipe-types';
 
-describe('recipe-engine beginner mode', () => {
-  it('beginnerMode true always returns react-spa-beginner regardless of intent', () => {
-    const recipe = selectRecipe(
-      {
-        clarifiedGoal: 'Build fullstack auth app',
-        complexity: 'complex',
-        features: ['auth', 'db'],
-        technicalApproach: 'next',
-        projectType: 'fullstack-auth',
-      },
-      { fullstackEnabled: true, beginnerMode: true },
-      'Build a Next.js app with auth, database, and API routes'
-    );
-
-    expect(recipe.id).toBe('react-spa-beginner');
-  });
-
-  it('beginnerMode false with fullstack intent returns fullstack recipe', () => {
+describe('recipe-engine', () => {
+  it('fullstack intent returns fullstack recipe when enabled', () => {
     const recipe = selectRecipe(
       {
         clarifiedGoal: 'Build fullstack app',
@@ -28,7 +12,7 @@ describe('recipe-engine beginner mode', () => {
         technicalApproach: 'next',
         projectType: 'fullstack',
       },
-      { fullstackEnabled: true, beginnerMode: false },
+      { fullstackEnabled: true },
       'Create a Next.js app with postgres database and api route'
     );
 
@@ -48,4 +32,3 @@ describe('recipe-engine beginner mode', () => {
     expect(prompt.toLowerCase()).toContain('no fetch() or axios');
   });
 });
-

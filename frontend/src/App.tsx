@@ -6,29 +6,18 @@
  * - `/login` – Login/signup page
  * - `/project/:projectId` – Builder page (new or existing project)
  * - `/settings/agents` – Agent model configuration settings
- *
- * Manages global storage initialization and project list refresh.
- * Wires auth state changes to hybridStorageService for cloud/local switching.
- *
- * @requires react - Lazy, Suspense, useState, useEffect hooks
- * @requires react-router-dom - Routes, Route, useNavigate
- * @requires @/services/storage - hybridStorageService, ProjectMetadata
- * @requires @/components/PageSkeleton - Loading placeholder
- * @requires @/utils/logger - Structured logging
  */
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 
 import { PageSkeleton } from '@/components/PageSkeleton/PageSkeleton';
 import { storageService, type ProjectMetadata } from '@/services/storage';
-import { hybridStorageService } from '@/services/storage/HybridStorageService';
 import { createLogger } from '@/utils/logger';
 import { AuthProvider } from '@/context/AuthContext';
 import { useAuthState } from '@/context/AuthContext.context';
 import { ToastProvider } from '@/context/ToastContext';
 import { ToastContainer } from '@/components/ToastContainer/ToastContainer';
 import { AuthGuard } from '@/components/AuthGuard/AuthGuard';
-import { ImportLocalProjectsDialog } from '@/components/ImportLocalProjectsDialog/ImportLocalProjectsDialog';
 
 import './App.css';
 
@@ -37,19 +26,6 @@ const WelcomePage = lazy(() => import('./pages/WelcomePage'));
 const BuilderPage = lazy(() => import('./pages/BuilderPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
-
-// Admin pages
-const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
-const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
-const AdminWorkspaceListPage = lazy(() => import('./pages/admin/AdminWorkspaceListPage'));
-const AdminWorkspaceCreatePage = lazy(() => import('./pages/admin/AdminWorkspaceCreatePage'));
-const AdminWorkspacePage = lazy(() => import('./pages/admin/AdminWorkspacePage'));
-const OrgSettingsPage = lazy(() => import('./pages/admin/OrgSettingsPage'));
-
-// Member pages
-const MemberBuilderPage = lazy(() => import('./pages/MemberBuilderPage'));
-const MemberJoinPage = lazy(() => import('./pages/MemberJoinPage'));
-const MemberWorkspacePickerPage = lazy(() => import('./pages/MemberWorkspacePickerPage'));
 
 const appLogger = createLogger('App');
 
@@ -69,26 +45,19 @@ function App() {
 
 /**
  * Inner component rendered inside AuthProvider.
- * Wires auth state changes to hybridStorageService and manages the project list.
  */
 function AppInner() {
   const location = useLocation();
   const { user, isLoading: isAuthLoading } = useAuthState();
   const [isInitializing, setIsInitializing] = useState(true);
   const [savedProjects, setSavedProjects] = useState<ProjectMetadata[]>([]);
-  const [showImportDialog, setShowImportDialog] = useState(false);
-
-  // Sync auth state to hybrid storage whenever user changes
-  useEffect(() => {
-    hybridStorageService.setAuthenticated(user?.id ?? null);
-  }, [user?.id]);
 
   // Initialize storage on mount
   useEffect(() => {
     const initStorage = async () => {
       try {
-        await hybridStorageService.initialize();
-        const projects = await hybridStorageService.getAllProjectMetadata();
+        await storageService.initialize();
+        const projects = await storageService.getAllProjectMetadata();
         setSavedProjects(projects);
       } catch (error) {
         appLogger.error('Failed to initialize storage', { error });
@@ -104,34 +73,14 @@ function AppInner() {
   useEffect(() => {
     if (isAuthLoading || isInitializing) return;
 
-    hybridStorageService.getAllProjectMetadata()
+    storageService.getAllProjectMetadata()
       .then(setSavedProjects)
       .catch((error) => appLogger.error('Failed to refresh project list after auth change', { error }));
   }, [user?.id, isAuthLoading, isInitializing]);
 
-  // Show import dialog once after first login if local projects exist
-  useEffect(() => {
-    if (!user || isAuthLoading || isInitializing) return;
-
-    const checkImport = async () => {
-      try {
-        const alreadyImported = await storageService.getMetadata('localProjectsImported');
-        if (alreadyImported) return;
-        const localProjects = await storageService.getAllProjectMetadata();
-        if (localProjects.length > 0) {
-          setShowImportDialog(true);
-        }
-      } catch (error) {
-        appLogger.error('Failed to check local import status', { error });
-      }
-    };
-
-    checkImport();
-  }, [user?.id, isAuthLoading, isInitializing]);
-
   const refreshProjectList = async () => {
     try {
-      const projects = await hybridStorageService.getAllProjectMetadata();
+      const projects = await storageService.getAllProjectMetadata();
       setSavedProjects(projects);
     } catch (error) {
       appLogger.error('Failed to refresh project list', { error });
@@ -162,12 +111,6 @@ function AppInner() {
   }
 
   return (
-    <>
-    <ImportLocalProjectsDialog
-      isOpen={showImportDialog}
-      onClose={() => setShowImportDialog(false)}
-      onImported={refreshProjectList}
-    />
     <Routes>
       <Route
         path="/"
@@ -208,100 +151,7 @@ function AppInner() {
           </AuthGuard>
         }
       />
-
-      {/* Onboarding — instructor self-provision */}
-      <Route
-        path="/onboarding"
-        element={
-          <Suspense fallback={<PageSkeleton />}>
-            <OnboardingPage />
-          </Suspense>
-        }
-      />
-
-      {/* Admin routes */}
-      <Route
-        path="/admin/:orgId"
-        element={
-          <AuthGuard>
-            <Suspense fallback={<PageSkeleton />}>
-              <AdminDashboardPage />
-            </Suspense>
-          </AuthGuard>
-        }
-      />
-      <Route
-        path="/admin/:orgId/workspaces/new"
-        element={
-          <AuthGuard>
-            <Suspense fallback={<PageSkeleton />}>
-              <AdminWorkspaceCreatePage />
-            </Suspense>
-          </AuthGuard>
-        }
-      />
-      <Route
-        path="/admin/:orgId/workspaces/:wid"
-        element={
-          <AuthGuard>
-            <Suspense fallback={<PageSkeleton />}>
-              <AdminWorkspacePage />
-            </Suspense>
-          </AuthGuard>
-        }
-      />
-      <Route
-        path="/admin/:orgId/workspaces"
-        element={
-          <AuthGuard>
-            <Suspense fallback={<PageSkeleton />}>
-              <AdminWorkspaceListPage />
-            </Suspense>
-          </AuthGuard>
-        }
-      />
-      <Route
-        path="/admin/:orgId/settings"
-        element={
-          <AuthGuard>
-            <Suspense fallback={<PageSkeleton />}>
-              <OrgSettingsPage />
-            </Suspense>
-          </AuthGuard>
-        }
-      />
-
-      {/* Member routes */}
-      <Route
-        path="/join/:token"
-        element={
-          <Suspense fallback={<PageSkeleton />}>
-            <MemberJoinPage />
-          </Suspense>
-        }
-      />
-      <Route
-        path="/w"
-        element={
-          <AuthGuard>
-            <Suspense fallback={<PageSkeleton />}>
-              <MemberWorkspacePickerPage />
-            </Suspense>
-          </AuthGuard>
-        }
-      />
-      <Route
-        path="/w/:workspaceId"
-        element={
-          <AuthGuard>
-            <Suspense fallback={<PageSkeleton />}>
-              <MemberBuilderPage />
-            </Suspense>
-          </AuthGuard>
-        }
-      />
     </Routes>
-    </>
   );
 }
 
@@ -333,7 +183,7 @@ function WelcomePageWrapper({
 
   const handleDeleteProject = async (projectId: string) => {
     try {
-      await hybridStorageService.deleteProject(projectId);
+      await storageService.deleteProject(projectId);
       await onProjectsChanged();
     } catch (error) {
       appLogger.error('Failed to delete project', { error });
@@ -342,7 +192,7 @@ function WelcomePageWrapper({
 
   const handleDuplicateProject = async (projectId: string) => {
     try {
-      await hybridStorageService.duplicateProject(projectId);
+      await storageService.duplicateProject(projectId);
       await onProjectsChanged();
     } catch (error) {
       appLogger.error('Failed to duplicate project', { error });

@@ -355,15 +355,4 @@ describe('StreamingProjectGenerator', () => {
         );
     });
 
-    it('passes beginnerMode to pipeline and acceptance gate context', async () => {
-        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
-
-        await generator.generateProjectStreaming('test', {}, { beginnerMode: true });
-
-        expect(mockPipeline.runGeneration).toHaveBeenCalledWith(
-            'test',
-            expect.any(Object),
-            expect.objectContaining({ beginnerMode: true })
-        );
-    });
 });

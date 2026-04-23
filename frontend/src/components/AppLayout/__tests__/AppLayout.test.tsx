@@ -117,10 +117,6 @@ vi.mock('../../SaveTemplateButton', () => ({
     SaveTemplateButton: () => <button data-testid="save-template-button">Save Template</button>,
 }));
 
-vi.mock('../../StackBlitzButton', () => ({
-    StackBlitzButton: () => <button data-testid="stackblitz-button">StackBlitz</button>,
-}));
-
 vi.mock('../../PanelToggle', () => ({
     PanelToggle: ({ onPanelChange }: any) => (
         <div data-testid="panel-toggle">

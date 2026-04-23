@@ -79,6 +79,8 @@ export interface ChatInterfaceProps {
   inputPlaceholder?: string;
   /** Current project files for generation summary cards */
   projectFiles?: Record<string, string>;
+  /** True when the current generation involves many files (>10), used to set accurate slow-warning */
+  isComplexGeneration?: boolean;
 }
 
 /**
@@ -102,6 +104,7 @@ const ChatInterfaceComponent = function ChatInterface({
   onFileClick,
   inputPlaceholder,
   projectFiles,
+  isComplexGeneration = false,
 }: ChatInterfaceProps) {
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -257,7 +260,7 @@ const ChatInterfaceComponent = function ChatInterface({
         {isStreaming && streamingState && (
           <StreamingIndicator state={streamingState} />
         )}
-        {isLoading && !isStreaming && <LoadingIndicator phase={loadingPhase} />}
+        {isLoading && !isStreaming && <LoadingIndicator phase={loadingPhase} isComplexGeneration={isComplexGeneration} />}
         {error && !isLoading && (
           <div className="chat-error-container">
             <ErrorMessage

@@ -19,7 +19,6 @@ import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
 import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
 import { ExportButton } from '../ExportButton';
 import { SaveTemplateButton } from '../SaveTemplateButton';
-import { StackBlitzButton } from '../StackBlitzButton';
 import { PanelToggle, type ActivePanel } from '../PanelToggle';
 import { StatusIndicator } from '../StatusIndicator';
 import { UndoRedoButtons } from '../UndoRedoButtons';
@@ -117,6 +116,22 @@ export function AppLayout({ initialPrompt, onBackToDashboard, disableAutoSave }:
         handleToggleSidebar,
     } = useSidebarResize();
 
+    const prevIsLoadingRef = useRef(false);
+    // Refs so the isLoading effect always reads current values without re-subscribing
+    const windowWidthRef = useRef(windowWidth);
+    windowWidthRef.current = windowWidth;
+    const projectStateRef = useRef(projectState);
+    projectStateRef.current = projectState;
+
+    // Mobile: auto-switch to preview when generation finishes and files exist
+    useEffect(() => {
+        const wasLoading = prevIsLoadingRef.current;
+        prevIsLoadingRef.current = isLoading;
+        if (wasLoading && !isLoading && projectStateRef.current && windowWidthRef.current <= DESKTOP_BREAKPOINT) {
+            setActivePanel('preview');
+        }
+    }, [isLoading, setActivePanel]);
+
     // Close sidebar when clicking backdrop on tablet
     const handleBackdropClick = useCallback(() => {
         if (windowWidth <= DESKTOP_BREAKPOINT && !isSidebarCollapsed) {
@@ -194,7 +209,6 @@ export function AppLayout({ initialPrompt, onBackToDashboard, disableAutoSave }:
                             />
                         </div>
                         <ExportButton />
-                        <StackBlitzButton />
                         <SaveTemplateButton />
                         <button
                             className="settings-button"
