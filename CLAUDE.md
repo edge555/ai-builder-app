@@ -39,12 +39,12 @@ Available gstack skills:
 
 ## Project Overview
 
-AI-powered app builder monorepo that generates web applications from natural language prompts. Uses OpenRouter as the AI provider to generate complete React projects with live preview (Sandpack), code editing (Monaco), and version control.
+AI-powered app builder monorepo that generates web applications from natural language prompts. Uses OpenRouter as the AI provider to generate complete React projects with live preview (WebContainers), code editing (Monaco), and version control.
 
 ## Monorepo Structure
 
 Three workspaces managed via npm workspaces:
-- **frontend**: React 18/Vite SPA with Monaco editor and Sandpack preview
+- **frontend**: React 18/Vite SPA with Monaco editor and WebContainers preview
 - **backend**: Next.js 16 API server handling AI generation and streaming
 - **shared**: Common types, Zod schemas, and utilities (dual ESM/CJS via tsup)
 
@@ -58,7 +58,7 @@ frontend/src/
 │   ├── AuthGuard/     # Route protection for authenticated routes
 │   ├── ChatInterface/ # Chat UI with virtualization + MessageItem + GenerationSummaryCard
 │   ├── CodeEditor/    # Monaco editor + file tree sidebar
-│   ├── PreviewPanel/  # Sandpack preview + error handling + FullstackBanner + console
+│   ├── PreviewPanel/  # WebContainers preview + error handling + FullstackBanner + console
 │   ├── ProjectGallery/# Saved projects with virtualization
 │   ├── SiteHeader/    # Global header with theme toggle
 │   ├── UserMenu/      # Authenticated user menu
@@ -69,20 +69,13 @@ frontend/src/
 │   │                  #   streaming), repairService (auto-repair retry), streamingTransport
 │   │                  #   (SSE lifecycle + snapshot normalization), types
 │   └── AuthContext, ProjectContext, GenerationContext, ChatMessagesContext,
-│       PreviewErrorContext, AutoRepairContext, ErrorAggregatorContext, ToastContext,
-│       WorkspaceContext (workspace-scoped identity + AI provider injection)
+│       PreviewErrorContext, AutoRepairContext, ErrorAggregatorContext, ToastContext
 ├── hooks/             # Custom hooks (useSubmitPrompt, useAutoSave, useUndoRedo,
-│                      #   useCountdown, useSidebarResize, useCollapsibleMessages,
-│                      #   useMemberAutoSave (workspace project auto-save with toast on failure), etc.)
+│                      #   useCountdown, useSidebarResize, useCollapsibleMessages, etc.)
 ├── pages/             # WelcomePage, BuilderPage, LoginPage, AgentSettingsPage (lazy-loaded)
-│                      # Member pages: OnboardingPage, MemberWorkspacePickerPage,
-│                      #   MemberBuilderPage, MemberJoinPage
-│                      # Admin pages: admin/AdminDashboardPage, admin/AdminWorkspaceListPage,
-│                      #   admin/AdminWorkspacePage, admin/AdminWorkspaceCreatePage, admin/OrgSettingsPage
-├── services/          # Storage, cloud, error aggregation, agent config, image-upload
-│   ├── storage/       # IndexedDB abstraction (StorageService, HybridStorageService,
-│   │                  #   project-store, chat-store, metadata-store, template-store)
-│   └── cloud/         # CloudStorageService (Supabase integration)
+├── services/          # Storage, error aggregation, agent config, image-upload
+│   └── storage/       # IndexedDB abstraction (StorageService,
+│                      #   project-store, chat-store, metadata-store, template-store)
 ├── utils/             # Logger, SSE parser, repair prompts, error messages, capture-screenshot
 ├── data/              # Starter templates, prompt suggestions
 ├── integrations/      # Backend API client config
@@ -104,18 +97,7 @@ backend/
 │   ├── health/           # Health check (?deep=true for provider probe, ?metrics=true for stats)
 │   ├── upload/           # Image upload (POST, sharp re-encoding, Supabase Storage)
 │   ├── agent-config/     # Per-task model config (GET/PUT)
-│   ├── provider-config/  # Runtime provider override (GET/PUT)
-│   ├── invite/[token]/   # Invite token redemption (GET token info, POST accept)
-│   ├── member/projects/  # Member project save/load scoped to workspace (GET, POST)
-│   ├── member/projects/[pid]/ # Member project by ID (GET, PUT)
-│   ├── member/session/   # Member session info (GET)
-│   ├── org/              # Org creation (POST)
-│   ├── org/self-provision/ # Self-provision org for authenticated user (POST)
-│   ├── org/[orgId]/settings/ # Org settings CRUD: name, API key, labels (GET/PUT)
-│   ├── org/[orgId]/workspaces/ # Workspace listing and creation (GET/POST)
-│   ├── admin/workspaces/[wid]/sessions/ # Paginated session list for admin (GET, keyset cursor)
-│   ├── admin/sessions/[sessionId]/ # Full session transcript, capped at 500 msgs (GET)
-│   └── admin/sessions/[sessionId]/export/ # Full JSONL export (GET)
+│   └── provider-config/  # Runtime provider override (GET/PUT)
 ├── lib/
 │   ├── ai/            # Multi-provider AI abstraction
 │   │   ├── ai-provider.ts          # AIProvider interface
@@ -168,15 +150,12 @@ backend/
 │   │   ├── rate-limiter.ts        # Sliding-window rate limiter
 │   │   ├── rate-limit-config.ts   # Tier configs (HIGH_COST, MEDIUM_COST, LOW_COST, CONFIG)
 │   │   ├── redis-rate-limiter.ts  # Redis-backed sliding window (Lua script, fail-open fallback)
-│   │   ├── auth.ts                # Supabase JWT verification + requireAuth guard (gates config mutation routes)
-│   │   ├── crypto.ts              # AES-256-GCM encryption/decryption for org API keys (WORKSPACE_MASTER_KEY)
-│   │   └── workspace-resolver.ts  # Validates membership, decrypts org API key, returns workspace-scoped AIProvider
+│   │   └── auth.ts                # Supabase JWT verification + requireAuth guard (gates config mutation routes)
 │   ├── api/           # CORS, gzip, request ID, error helpers
 │   │   ├── request-parser.ts       # JSON parsing + Zod validation
 │   │   ├── route-context.ts        # Request ID + context logger + rate-limit header merging
 │   │   ├── utils.ts                # CORS headers, CSRF origin validation, gzip, error formatting
 │   │   └── zod-error.ts            # Zod error formatting
-│   ├── session-service.ts # Server-side session tracking: getOrCreateSession, appendTurn (fire-and-forget), getLastKTurns
 │   ├── logger.ts      # Structured logging with redaction and category filtering
 │   ├── metrics.ts     # AI operation timing, token tracking, in-memory aggregate stats
 │   ├── config.ts      # Zod-validated env vars with provider-aware defaults
@@ -222,27 +201,17 @@ npm run lint                   # All workspaces
 - `/project/new`: BuilderPage — new project (optional `?prompt=` query param)
 - `/project/:id`: BuilderPage — existing project from IndexedDB
 - `/settings/agents`: AgentSettingsPage — AI model/provider configuration
-- `/onboarding`: OnboardingPage — first-time workspace setup for new org members
-- `/w`: MemberWorkspacePickerPage — choose between personal and org workspace
-- `/w/:workspaceId`: MemberBuilderPage — full builder scoped to a workspace
-- `/join/:token`: MemberJoinPage — accept an org invite via token
-- `/admin/:orgId`: AdminDashboardPage — overview of org members and projects
-- `/admin/:orgId/workspaces`: AdminWorkspaceListPage — manage workspaces
-- `/admin/:orgId/workspaces/:wid`: AdminWorkspacePage — workspace detail (members, projects)
-- `/admin/:orgId/workspaces/new`: AdminWorkspaceCreatePage — create a new workspace
-- `/admin/:orgId/settings`: OrgSettingsPage — rename org, rotate API key, configure labels
 
 ### Request Flow
 
 1. User prompt → frontend ChatInterface → backend `/api/generate-stream` or `/api/modify-stream`
-2. Backend resolves AI provider: if request carries a workspace identity header, `WorkspaceResolver` validates membership, decrypts the org's API key (AES-256-GCM), and returns a workspace-scoped `AIProvider`; otherwise falls through to env var / runtime override from `provider-config.json`
-2a. **Session history** — `session-service.getLastKTurns()` fetches the last 10 turns (configurable via `SESSION_CONTEXT_K`) from `project_sessions` + `session_messages` and prepends them as a `[CONVERSATION HISTORY]` block in the AI system prompt. After each successful turn, `appendTurn()` records the user prompt and assistant response (fire-and-forget).
+2. Backend resolves AI provider from env var or runtime override in `provider-config.json`
 3. **New projects** → `GenerationPipeline`: intent resolves → planning fires immediately (overlapped with synchronous recipe selection) → complexity gate (≤10 files → `executeOneShot()` with 1 AI call + plan review skipped; >10 files → `executeMultiPhase()` with plan review + phase batching + cross-phase summary cache). **Modifications** → `PipelineOrchestrator`: 3-stage pipeline (Intent → Planning → Execution); intent and planning skipped automatically for simple edits (≤2 primary files) or small projects (≤8 files). `IntentDetector` + `AgentRouter` route each stage to the optimal model via OpenRouter.
 4. AI provider streams response via SSE with backpressure control (SSEEncoder utility)
 5. Incremental JSON parser extracts files as they arrive
 6. Files validated, formatted (Prettier), version-pinned (package.json deps), streamed back to frontend
 7. Progress events emitted during modification phases (planning → generating → validating → applying)
-8. Frontend updates ProjectContext → PreviewPanel (Sandpack) re-renders
+8. Frontend updates ProjectContext → PreviewPanel (WebContainers) re-renders
 9. Auto-save to IndexedDB; auto-repair triggers if preview errors detected (max 5 attempts, escalating: deterministic fixes → targeted AI → broad AI → per-file rollback)
 10. `beforeunload` warning prevents accidental tab close during active generation
 
@@ -263,7 +232,7 @@ OpenRouter-based AI with task-specific routing:
 
 ### Auto-Repair Flow
 
-1. `SandpackErrorListener` catches runtime errors → `ErrorAggregatorProvider` deduplicates
+1. `WebContainerErrorListener` catches runtime errors → `ErrorAggregatorProvider` deduplicates
 2. `AutoRepairProvider` evaluates: error count > 0, not generating, attempts < 5
 3. `DiagnosticRepairEngine` escalates through repair tiers:
    - **Deterministic fixes**: Missing deps, broken imports, export mismatches, unclosed syntax (zero AI cost)
@@ -293,9 +262,7 @@ OpenRouter-based AI with task-specific routing:
 
 ### Storage
 
-- **IndexedDB** via `StorageService`: Local-first project persistence (files, chat, versions, metadata)
-- **Cloud storage** via `CloudStorageService`: Supabase-backed sync for authenticated users
-- **HybridStorageService**: Fallback layer (local → cloud) for seamless offline/online experience; includes `getUniqueProjectName()` which deduplicates 3-word project names by cycling through DESCRIPTOR/SUFFIX word lists
+- **IndexedDB** via `StorageService`: Local-first project persistence (files, chat, versions, metadata); includes `getUniqueProjectName()` which deduplicates 3-word project names by cycling through DESCRIPTOR/SUFFIX word lists
 - **Modular stores**: project-store, chat-store, metadata-store, template-store
 - **Auto-save** with debouncing; **write coalescing** prevents race conditions (latest wins)
 - CRUD: create, read, update, delete, rename, duplicate projects
@@ -313,8 +280,6 @@ OpenRouter-based AI with task-specific routing:
 - **IP extraction**: Falls back to rightmost-trusted X-Forwarded-For IP (configurable via `TRUSTED_PROXY_DEPTH`); `request.ip` platform property no longer available in Next.js 16
 - **CSRF protection**: `getCorsHeaders(request, { rejectInvalidOrigin: true })` rejects mutations with missing/invalid Origin header (infrastructure ready, not yet wired on routes)
 - **Authentication**: Optional Supabase Auth with JWT verification; `AuthContext` auto-redirects to `/login` on session expiry; `requireAuth()` gates `PUT /api/agent-config` and `PUT /api/provider-config` (returns 503 when `SUPABASE_JWT_SECRET` is unset)
-- **Org API key encryption** (`security/crypto.ts`): AES-256-GCM encryption for org API keys stored in Supabase; keyed from `WORKSPACE_MASTER_KEY` (base64-encoded 32 bytes); decryption errors return `null` (fall through to default provider) rather than propagating 500s
-- **Workspace provider resolution** (`security/workspace-resolver.ts`): validates `workspaceId` + member session before decrypting org API key; IDOR-safe snapshot upsert in `modify-stream` validates `projectId` belongs to the requesting workspace
 
 ## Environment Variables
 
@@ -326,13 +291,10 @@ OpenRouter-based AI with task-specific routing:
 - `LOG_FORMAT`: text/json (default: text)
 - `LOG_CATEGORIES`: ai,api,core,diff,analysis,streaming
 - `SUPABASE_JWT_SECRET`: JWT verification for Supabase Auth; also required for `PUT /api/agent-config` and `PUT /api/provider-config` in any publicly-reachable deployment (optional in dev)
-- `WORKSPACE_MASTER_KEY`: Base64-encoded 32-byte key for AES-256-GCM encryption of org API keys; required when using Blank Canvas Admin org workspaces
 - `RATE_LIMIT_ENABLED`: Enable rate limiting (default: true)
 - `TRUSTED_PROXY_DEPTH`: How many rightmost X-Forwarded-For IPs to trust (default: 1)
 - `REDIS_URL`: Redis connection URL for distributed rate limiting (optional; falls back to in-memory)
 - `ENABLE_FULLSTACK_RECIPES`: Enable fullstack generation recipes (default: false)
-- `SESSION_CONTEXT_K`: Number of prior turns injected as conversation context per AI request (default: 10, min: 1, max: 50)
-- `SESSION_CONTEXT_MAX_TOKENS`: Token budget cap for session history prefix (default: 6000, min: 1000, max: 20000)
 
 **Frontend** (`.env`):
 - `VITE_API_BASE_URL`: Backend URL (default: http://localhost:4000)
@@ -341,7 +303,7 @@ OpenRouter-based AI with task-specific routing:
 
 ## Key Dependencies
 
-**Frontend**: react 18, react-router-dom 7, @codesandbox/sandpack-react, @monaco-editor/react, @tanstack/react-virtual, lucide-react, react-markdown + remark-gfm, react-syntax-highlighter, zod, @supabase/supabase-js, @stackblitz/sdk, html2canvas
+**Frontend**: react 18, react-router-dom 7, @webcontainer/api, @monaco-editor/react, @tanstack/react-virtual, lucide-react, react-markdown + remark-gfm, react-syntax-highlighter, zod, @supabase/supabase-js, html2canvas
 
 **Backend**: next 16, zod, prettier, jszip, uuid, sharp, ioredis
 
@@ -354,8 +316,8 @@ OpenRouter-based AI with task-specific routing:
 
 ## Testing
 
-- **Backend**: Vitest + Node env, 115 test files in `lib/**/*.test.ts` and `app/api/__tests__/` (unit, perf, integration, eval)
-- **Frontend**: Vitest + jsdom + React Testing Library, 26 test files in `src/**/__tests__/*.{test,spec}.{ts,tsx}`
+- **Backend**: Vitest + Node env, 112 test files in `lib/**/*.test.ts` and `app/api/__tests__/` (unit, perf, integration, eval)
+- **Frontend**: Vitest + jsdom + React Testing Library, 29 test files in `src/**/__tests__/*.{test,spec}.{ts,tsx}`
 - **Shared**: Vitest + Node env, 5 test files
 
 See [TESTING_GUIDE.md](TESTING_GUIDE.md) for file naming conventions, mock patterns, and per-framework examples.
@@ -372,7 +334,7 @@ See [TESTING_GUIDE.md](TESTING_GUIDE.md) for file naming conventions, mock patte
 7. **Request ID Tracing**: Unique ID per request, propagated through all layers
 8. **Auto-Repair**: Automatic error detection and fix with bounded retries
 9. **Authentication**: Optional Supabase Auth with JWT verification
-10. **Hybrid Storage**: Local-first with optional cloud sync via Supabase
+10. **Local-First Storage**: IndexedDB persistence, no server required for project data
 
 ### Frontend Performance
 - **Split Context Pattern**: Subscribe only to state OR actions, not both
@@ -407,7 +369,7 @@ See [TESTING_GUIDE.md](TESTING_GUIDE.md) for file naming conventions, mock patte
 **Frontend**:
 - Don't use functions as `useEffect` deps — inline the logic with primitive deps
 - Don't use `useXxx()` combined hook — prefer `useXxxState()` or `useXxxActions()`
-- Don't skip `useMemo` for expensive transforms (e.g., Sandpack file conversion)
+- Don't skip `useMemo` for expensive transforms (e.g., WebContainers file conversion)
 - Don't use bare `React.memo` with object props — provide custom deep comparator
 - Don't render large lists without virtualization
 

@@ -10,15 +10,16 @@ Generate full React web applications from natural language prompts. Describe wha
 - **Code editor** — Monaco editor with file tree
 - **Version control** — undo/redo through generation history
 - **Auto-repair** — automatic error detection and fix with escalating repair tiers (deterministic fixes → AI repair → per-file rollback)
-- **Cloud sync** — optional Supabase-backed project storage
+- **Local-first storage** — projects saved to IndexedDB, no account required
 - **Onboarding wizard** — guided 3-step project setup (type → features → design style)
 - **21 starter templates** — across 8 categories for quick project bootstrapping
 - **Image upload** — paste or drag-drop images into chat for context
 - **Fullstack recipes** — Next.js + Prisma and Next.js + Supabase Auth generation (feature-flagged)
 - **Fullstack export** — ZIP with context-aware README, Docker Compose, .env.example
-- **Blank Canvas Admin** — invite members to a shared org workspace where all AI generation uses the org's own API key; admin dashboard for members, projects, and settings
-- **Classroom/beginner mode** — workspace-level flag constrains generation to 4-6 file React SPAs with no network calls and at least 2 event handlers; deterministic planning bypasses AI latency for the 5 common classroom prompt types (counter, todo, quiz, form, calculator)
-- **Reliable continuation** — server-side session tracking remembers the last 8 turns per workspace project, so the AI maintains context across requests without the frontend re-sending history
+- **WebContainer boot progress** — collapsible progress bar with plain-language status during npm install
+- **Mobile auto-switch** — automatically shows the preview panel after generation completes on mobile
+- **Human-readable errors** — plain-language error summaries with raw details collapsed behind a toggle
+- **Feedback button** — persistent link in the site header for non-technical users
 
 ## Architecture
 
@@ -26,7 +27,7 @@ Generate full React web applications from natural language prompts. Describe wha
 ┌─────────────────────────────────────────────────────────┐
 │  Frontend (React 18 + Vite, port 8080)                  │
 │  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
-│  │ ChatPanel   │  │ MonacoEditor │  │ SandpackPreview│  │
+│  │ ChatPanel   │  │ MonacoEditor │  │ WebContainers  │  │
 │  └──────┬──────┘  └──────────────┘  └────────────────┘  │
 │         │ SSE streaming                                  │
 └─────────┼───────────────────────────────────────────────┘
@@ -86,10 +87,7 @@ Backend: http://localhost:4000
 | `TRUSTED_PROXY_DEPTH` | No | `1` | Rightmost X-Forwarded-For IPs to trust for IP extraction |
 | `REDIS_URL` | No | — | Redis URL for distributed rate limiting (falls back to in-memory) |
 | `ENABLE_FULLSTACK_RECIPES` | No | `false` | Enable fullstack generation (Next.js + Prisma/Supabase) |
-| `SESSION_CONTEXT_K` | No | `10` | Prior turns injected into AI context per request (min: 1, max: 50) |
-| `SESSION_CONTEXT_MAX_TOKENS` | No | `6000` | Token budget for session history prefix (min: 1000, max: 20000) |
 | `SUPABASE_JWT_SECRET` | No* | — | Enables Supabase Auth; required for config mutation routes in production |
-| `WORKSPACE_MASTER_KEY` | No* | — | Base64-encoded 32-byte key for AES-256-GCM org API key encryption (required for Blank Canvas Admin) |
 
 `SUPABASE_JWT_SECRET` is optional in local dev but required for production deployments that expose AI model/provider config endpoints.
 
