@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.2] - 2026-04-23
+
+### Removed
+- **BeginnerMode** — simplified UI toggle and all associated pipeline scaffolding removed.
+- **Workspace / org / admin system** — workspace context, org API, member routes, admin session viewer, workspace resolver, AES-256-GCM org API key encryption, and all related Supabase calls removed.
+- **Cloud storage (HybridStorageService)** — cloud sync removed; `getUniqueProjectName()` migrated to `StorageService`.
+- **Server-side session history** — `session-service.ts`, `SESSION_CONTEXT_K / SESSION_CONTEXT_MAX_TOKENS` env vars, and conversation history injection removed.
+- **StackBlitz "Open in IDE" button** — removed from the builder header.
+- **Import Local Projects dialog** — file-system import flow removed.
+- **Dead config entries** — `WORKSPACE_MASTER_KEY`, `SESSION_CONTEXT_K`, `SESSION_CONTEXT_MAX_TOKENS` removed from `config.ts`.
+
+### Added
+- **WebContainer boot progress bar** — collapsible progress indicator with line-count heuristic and "Show details" toggle.
+- **Mobile auto-switch to preview** — auto-switches to Preview panel on generation finish on ≤ 1024px viewports.
+- **Complex-generation slow warning** — apps with > 10 files show "complex builds typically take 2–4 minutes".
+- **Human-readable error panel** — plain-language summary first; raw technical details collapsed behind toggle.
+- **Feedback button** — persistent link in site header.
+
+### Fixed
+- Mobile auto-switch effect used stale closure values; fixed with refs updated each render cycle.
+- Removed stale `vi.mock` for deleted `workspace-resolver` in API integration test suite.
+- Removed orphaned `useMemberAutoSave` hook.
+- Removed dead config entries (`WORKSPACE_MASTER_KEY`, `SESSION_CONTEXT_*`).
+- Removed double blank line in `acceptance-gate.ts`.
+
 ## [1.10.1] - 2026-04-23
 
 ### Removed
