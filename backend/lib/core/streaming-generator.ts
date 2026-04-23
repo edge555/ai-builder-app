@@ -4,7 +4,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import type { ProjectState, Version, OperationResult } from '@ai-app-builder/shared';
+import type { ProjectState, Version, OperationResult, QualityReport } from '@ai-app-builder/shared';
 import type { AIProvider } from '../ai';
 import type { IPromptProvider } from './prompts/prompt-provider';
 import { createPromptProvider } from './prompts/prompt-provider-factory';
@@ -19,6 +19,10 @@ import { GenerationStrategy } from './generation-strategy';
 import type { GenerationResult, PhaseProgressData, PhaseCompleteData } from './generation-strategy';
 import type { UnifiedPipelineCallbacks } from './pipeline-shared';
 import { recordGenerationStageTiming } from '../metrics';
+import {
+  createProjectDeliveryGate,
+  type ProjectDeliveryGate,
+} from './project-delivery-gate';
 
 const logger = createLogger('StreamingGenerator');
 
@@ -43,8 +47,8 @@ export interface StreamingCallbacks {
   onFile?: (data: { path: string; content: string; index: number; total: number; status: 'complete' | 'partial' }) => void;
   onWarning?: (data: { path: string; message: string; type: 'formatting' | 'validation' }) => void;
   onStreamEnd?: (summary: { totalFiles: number; successfulFiles: number; failedFiles: number; warnings: number }) => void;
-  onComplete?: (result: { projectState: ProjectState; version: Version; selectedRecipeId: string | null }) => void;
-  onError?: (error: string, errorData?: { errorCode?: string; errorType?: string; partialContent?: string }) => void;
+  onComplete?: (result: { projectState: ProjectState; version: Version; selectedRecipeId: string | null; qualityReport: QualityReport }) => void;
+  onError?: (error: string, errorData?: { errorCode?: string; errorType?: string; partialContent?: string; qualityReport?: QualityReport }) => void;
   onHeartbeat?: () => void;
   onPipelineStage?: (data: { stage: PipelineStage; label: string; status: 'start' | 'complete' | 'degraded' }) => void;
   onPhaseStart?: (data: PhaseProgressData) => void;
@@ -65,7 +69,8 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
   constructor(
     private readonly pipeline: UnifiedPipeline<ArchitecturePlan, GenerationResult>,
     bugfixProvider: AIProvider,
-    promptProvider: IPromptProvider
+    promptProvider: IPromptProvider,
+    private readonly deliveryGate: ProjectDeliveryGate = createProjectDeliveryGate(),
   ) {
     super(bugfixProvider, promptProvider);
   }
@@ -233,48 +238,58 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       warningCount++;
     }
 
-    contextLogger.debug('Checking for syntax errors before build-fix', { files: Object.keys(prefixedFiles) });
-    const acceptanceResult = this.acceptanceGate.validate(prefixedFiles, {});
-    if (!acceptanceResult.valid || !acceptanceResult.sanitizedOutput) {
-      const error = `Generation failed acceptance: ${acceptanceResult.issues
-        .map((issue) => `${issue.file ?? 'unknown'}: ${issue.message}`)
-        .join('; ')}`;
-      contextLogger.error('Generated files failed acceptance before build-fix', {
-        issueCount: acceptanceResult.issues.length,
-        issues: acceptanceResult.issues,
+    if (callbacks.signal?.aborted) {
+      contextLogger.info('Generation aborted by client before delivery gate');
+      return {
+        success: false,
+        error: 'Generation cancelled by client',
+      };
+    }
+
+    const deliveryResult = await this.deliveryGate.deliver({
+      files: prefixedFiles,
+      prompt: description,
+      requestId: options?.requestId,
+      repair: async ({ files }) => this.repairGeneratedFilesToDeliveryApproval(
+        files,
+        description,
+        options?.requestId,
+      ),
+    });
+    recordGenerationStageTiming('post-processing', Date.now() - postProcessingStartMs);
+
+    if (callbacks.signal?.aborted) {
+      contextLogger.info('Generation aborted by client after delivery gate');
+      return {
+        success: false,
+        error: 'Generation cancelled by client',
+      };
+    }
+
+    if (!deliveryResult.approved) {
+      const error = this.formatDeliveryFailureMessage(deliveryResult.qualityReport);
+      contextLogger.error('Generated files failed delivery gate', {
+        qualityReport: deliveryResult.qualityReport,
       });
-      callbacks.onError?.(error, { errorCode: 'generation_acceptance_failed', errorType: 'validation' });
+      callbacks.onError?.(error, {
+        errorCode: 'generation_delivery_failed',
+        errorType: deliveryResult.qualityReport.deliveryStage === 'acceptance' ? 'validation' : 'ai_output',
+        qualityReport: deliveryResult.qualityReport,
+      });
       callbacks.onStreamEnd?.({
         totalFiles: Object.keys(prefixedFiles).length,
         successfulFiles: 0,
         failedFiles: Object.keys(prefixedFiles).length,
         warnings: warningCount,
       });
-      return { success: false, error };
-    }
-
-    if (callbacks.signal?.aborted) {
-      contextLogger.info('Generation aborted by client before build-fix loop');
       return {
         success: false,
-        error: 'Generation cancelled by client',
+        error,
+        qualityReport: deliveryResult.qualityReport,
       };
     }
 
-    const finalFiles = await this.runBuildFixLoop(
-      acceptanceResult.sanitizedOutput,
-      description,
-      options?.requestId
-    );
-    recordGenerationStageTiming('post-processing', Date.now() - postProcessingStartMs);
-
-    if (callbacks.signal?.aborted) {
-      contextLogger.info('Generation aborted by client after build-fix loop');
-      return {
-        success: false,
-        error: 'Generation cancelled by client',
-      };
-    }
+    const finalFiles = deliveryResult.files;
 
     const now = new Date();
     const projectId = uuidv4();
@@ -316,6 +331,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       projectState,
       version,
       selectedRecipeId: pipelineResult.selectedRecipeId,
+      qualityReport: deliveryResult.qualityReport,
     });
     callbacks.onStreamEnd?.({
       totalFiles: fileEntries.length,
@@ -328,6 +344,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
       success: true,
       projectState,
       version,
+      qualityReport: deliveryResult.qualityReport,
     };
   }
 }

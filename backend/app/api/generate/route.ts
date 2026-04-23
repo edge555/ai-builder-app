@@ -11,7 +11,7 @@ import type { GenerateProjectResponse } from '@ai-app-builder/shared';
 import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import { serializeProjectState, serializeVersion, GenerateProjectRequestSchema } from '@ai-app-builder/shared';
 import { createStreamingProjectGenerator } from '../../../lib/core/streaming-generator';
-import { getCorsHeaders, handleOptions, handleError, AppError, gzipJson, parseJsonRequest } from '../../../lib/api';
+import { getCorsHeaders, handleOptions, gzipJson, parseJsonRequest } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
 const logger = createLogger('api/generate');
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       descriptionLength: validatedRequest.description.length,
     });
 
-    const generator = await createStreamingProjectGenerator(null);
+    const generator = await createStreamingProjectGenerator();
     const result = await generator.generateProjectStreaming(
       validatedRequest.description,
       { signal: request.signal },
@@ -52,12 +52,18 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
 
     if (!result.success) {
-      if (result.validationErrors) {
-        throw AppError.validation(result.error ?? 'Validation failed', {
-          validationErrors: result.validationErrors
-        });
-      }
-      throw AppError.aiOutput(result.error ?? 'Failed to generate project');
+      const response: GenerateProjectResponse = {
+        success: false,
+        error: result.error ?? 'Failed to generate project',
+        errorType: result.validationErrors ? 'validation' : 'ai_output',
+        ...(result.qualityReport ? { qualityReport: result.qualityReport } : {}),
+      };
+
+      return gzipJson(response, {
+        status: 422,
+        headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId },
+        request,
+      });
     }
 
     contextLogger.info('Project generation completed', {
@@ -70,6 +76,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       success: true,
       projectState: serializeProjectState(result.projectState!),
       version: serializeVersion(result.version!),
+      ...(result.qualityReport ? { qualityReport: result.qualityReport } : {}),
     };
 
     return gzipJson(response, { status: 201, headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId }, request });
@@ -78,6 +85,15 @@ export async function POST(request: NextRequest): Promise<Response> {
     contextLogger.error('Project generation failed', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return handleError(error, 'api/generate', request);
+    const response: GenerateProjectResponse = {
+      success: false,
+      error: 'Failed to generate project',
+      errorType: 'ai_output',
+    };
+    return gzipJson(response, {
+      status: 500,
+      headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId },
+      request,
+    });
   }
 }

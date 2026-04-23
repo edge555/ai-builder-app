@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
           );
 
           // Run modification engine (blocking call — emits files post-hoc)
-          const engine = await createModificationEngine(null);
+          const engine = await createModificationEngine();
           const result = await engine.modifyProject(projectState, body.prompt, {
             shouldSkipPlanning,
             errorContext,
@@ -130,6 +130,7 @@ export async function POST(request: NextRequest) {
               {
                 error: result.error ?? 'Failed to modify project',
                 validationErrors: result.validationErrors,
+                qualityReport: result.qualityReport,
               },
               EventPriority.CRITICAL
             );
@@ -168,6 +169,7 @@ export async function POST(request: NextRequest) {
             changeSummary: result.changeSummary,
             ...(result.partialSuccess && { partialSuccess: true }),
             ...(result.rolledBackFiles?.length && { rolledBackFiles: result.rolledBackFiles }),
+            ...(result.qualityReport ? { qualityReport: result.qualityReport } : {}),
           };
 
           encoder.enqueueEvent(

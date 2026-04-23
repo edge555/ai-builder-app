@@ -50,6 +50,10 @@ import { createDependencyGraph } from '../analysis/dependency-graph';
 import { analyzeImpact } from '../analysis/impact-analyzer';
 import { createAcceptanceGate } from '../core/acceptance-gate';
 import type { PlanOutput } from '../core/schemas';
+import {
+  createProjectDeliveryGate,
+  type ProjectDeliveryGate,
+} from '../core/project-delivery-gate';
 
 const logger = createLogger('ModificationEngine');
 
@@ -113,6 +117,7 @@ export class ModificationEngine {
     private readonly pipeline: IModificationPipeline,
     private readonly bugfixProvider: AIProvider,
     private readonly promptProvider: IPromptProvider,
+    private readonly deliveryGate: ProjectDeliveryGate = createProjectDeliveryGate(),
   ) {
     this.validationPipeline = new ValidationPipeline();
     this.filePlanner = createFilePlanner(this.bugfixProvider);
@@ -288,12 +293,12 @@ export class ModificationEngine {
 
       // Step 5: Resolve final files (apply modify ops + build diff vs currentFiles)
       onProgress?.('applying', 'Applying modifications...');
-      const { updatedFiles, deletedFiles } = await this.resolveModifications(
+      const { updatedFiles } = await this.resolveModifications(
         projectState.files,
         pipelineResult,
         { userPrompt: prompt, designSystem: shouldIncludeDesignSystem }
       );
-      // updatedFiles already includes deleted paths (as null values) — no need to spread deletedFiles
+      // updatedFiles already includes deleted paths (as null values)
       const changedPaths = Object.keys(updatedFiles);
       if (routingDecision.enforceTargetedChanges) {
         const unexpectedFiles = this.findUnexpectedChangedFiles(changedPaths, slices, prompt, projectState.files);
@@ -339,35 +344,72 @@ export class ModificationEngine {
         };
       }
 
-      // Step 7: Diagnostic repair engine (replaces build-fixer)
-      onProgress?.('validating', 'Running build validation...');
-      const repairResult = await this.repairEngine.repair({
-        projectState,
-        updatedFiles,
+      // Step 7: Shared delivery gate
+      onProgress?.('validating', 'Running delivery gate...');
+      const deliveryResult = await this.deliveryGate.deliver<{
+        partialSuccess: boolean;
+        rolledBackFiles: string[];
+      }>({
+        files: buildMergedProjectFiles(projectState.files, updatedFiles),
         prompt,
-        shouldIncludeDesignSystem,
-        aiProvider: this.bugfixProvider,
-        buildValidator: this.buildValidator,
-        acceptanceGate: this.acceptanceGate,
-        checkpoint: checkpointMgr.rollbackAll(),
         requestId,
+        changedFiles: changedPaths,
+        repair: async ({ files }) => {
+          // repair ladder
+          //   deterministic -> targeted AI -> broad AI -> rollback
+          const repairResult = await this.repairEngine.repair({
+            projectState: {
+              ...projectState,
+              files,
+            },
+            updatedFiles: diffUpdatedFiles(files, projectState.files),
+            prompt,
+            shouldIncludeDesignSystem,
+            aiProvider: this.bugfixProvider,
+            buildValidator: this.buildValidator,
+            acceptanceGate: this.acceptanceGate,
+            checkpoint: checkpointMgr.rollbackAll(),
+            requestId,
+          });
+
+          if (repairResult.repairLevel === 'targeted-ai' || repairResult.repairLevel === 'broad-ai') {
+            onProgress?.('build-fixing', `Fixed build errors (${repairResult.repairLevel}, ${repairResult.totalAICalls} AI calls)`);
+          }
+
+          const repairedFiles = buildMergedProjectFiles(
+            projectState.files,
+            repairResult.updatedFiles,
+          );
+
+          return {
+            files: repairedFiles,
+            repairAttempts: repairResult.totalAICalls + (repairResult.repairLevel === 'deterministic' ? 1 : 0),
+            repairLevelReached: repairResult.repairLevel,
+            meta: {
+              partialSuccess: repairResult.partialSuccess,
+              rolledBackFiles: repairResult.rolledBackFiles,
+            },
+          };
+        },
       });
 
-      if (repairResult.repairLevel !== 'deterministic' || !repairResult.success) {
-        contextLogger.info('Repair engine result', {
-          success: repairResult.success,
-          partialSuccess: repairResult.partialSuccess,
-          repairLevel: repairResult.repairLevel,
-          totalAICalls: repairResult.totalAICalls,
-          rolledBackFiles: repairResult.rolledBackFiles,
+      if (!deliveryResult.approved) {
+        const error = `Project delivery failed during ${deliveryResult.qualityReport.deliveryStage}`;
+        contextLogger.warn('Modification failed delivery gate', {
+          qualityReport: deliveryResult.qualityReport,
         });
+        return {
+          success: false,
+          error,
+          qualityReport: deliveryResult.qualityReport,
+        };
       }
 
-      if (repairResult.repairLevel === 'targeted-ai' || repairResult.repairLevel === 'broad-ai') {
-        onProgress?.('build-fixing', `Fixed build errors (${repairResult.repairLevel}, ${repairResult.totalAICalls} AI calls)`);
-      }
-
-      const finalUpdatedFiles = repairResult.updatedFiles;
+      const finalUpdatedFiles = diffUpdatedFiles(deliveryResult.files, projectState.files);
+      const finalDeletedFiles = Object.entries(finalUpdatedFiles)
+        .filter(([, content]) => content === null)
+        .map(([path]) => path);
+      const deliveryMeta = deliveryResult.meta;
 
       const changedFiles = Object.entries(finalUpdatedFiles)
         .filter(([, v]) => v !== null)
@@ -377,17 +419,18 @@ export class ModificationEngine {
         durationMs: Date.now() - engineStartMs,
         changedFileCount: changedFiles.length,
         changedFiles,
-        deletedFileCount: deletedFiles.length,
-        deletedFiles,
-        repairLevel: repairResult.repairLevel,
-        partialSuccess: repairResult.partialSuccess ?? false,
+        deletedFileCount: finalDeletedFiles.length,
+        deletedFiles: finalDeletedFiles,
+        repairLevel: deliveryResult.qualityReport.repairLevelReached,
+        partialSuccess: deliveryMeta?.partialSuccess ?? false,
       });
 
       // Step 8: Create final result
       onProgress?.('applying', 'Finalizing changes...');
-      return await createModificationResult(projectState, finalUpdatedFiles, deletedFiles, prompt, {
-        partialSuccess: repairResult.partialSuccess,
-        rolledBackFiles: repairResult.rolledBackFiles,
+      return await createModificationResult(projectState, finalUpdatedFiles, finalDeletedFiles, prompt, {
+        partialSuccess: deliveryMeta?.partialSuccess,
+        rolledBackFiles: deliveryMeta?.rolledBackFiles,
+        qualityReport: deliveryResult.qualityReport,
       });
     } catch (error) {
       contextLogger.error('[MOD-ENGINE] failed', {
@@ -789,6 +832,45 @@ function selectFilesHeuristically(projectState: ProjectState, prompt: string): C
     content,
     relevance: matchedPaths.has(filePath) ? 'primary' as const : 'context' as const,
   }));
+}
+
+function buildMergedProjectFiles(
+  baseFiles: Record<string, string>,
+  updatedFiles: Record<string, string | null>,
+): Record<string, string> {
+  const merged = { ...baseFiles };
+
+  for (const [path, content] of Object.entries(updatedFiles)) {
+    if (content === null) {
+      delete merged[path];
+      continue;
+    }
+
+    merged[path] = content;
+  }
+
+  return merged;
+}
+
+function diffUpdatedFiles(
+  nextFiles: Record<string, string>,
+  previousFiles: Record<string, string>,
+): Record<string, string | null> {
+  const updatedFiles: Record<string, string | null> = {};
+
+  for (const [path, content] of Object.entries(nextFiles)) {
+    if (previousFiles[path] !== content) {
+      updatedFiles[path] = content;
+    }
+  }
+
+  for (const path of Object.keys(previousFiles)) {
+    if (!(path in nextFiles)) {
+      updatedFiles[path] = null;
+    }
+  }
+
+  return updatedFiles;
 }
 
 /**
