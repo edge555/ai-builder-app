@@ -42,7 +42,6 @@ import {
 describe('provider-config-store', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset the module cache between tests
     vi.resetModules();
   });
 
@@ -52,16 +51,15 @@ describe('provider-config-store', () => {
 
   describe('getEffectiveProvider', () => {
     it('should return stored provider when set', async () => {
-      // Need to reimport to reset cache
       vi.doMock('fs/promises', () => ({
-        readFile: vi.fn().mockResolvedValue(JSON.stringify({ aiProvider: 'modal' })),
+        readFile: vi.fn().mockResolvedValue(JSON.stringify({ aiProvider: 'openrouter' })),
         writeFile: vi.fn(),
         mkdir: vi.fn(),
       }));
 
       const { getEffectiveProvider } = await import('../provider-config-store');
       const result = await getEffectiveProvider();
-      expect(result).toBe('modal');
+      expect(result).toBe('openrouter');
     });
 
     it('should return env default when stored provider is null', async () => {
@@ -89,24 +87,41 @@ describe('provider-config-store', () => {
 
       expect(result).toBe('openrouter');
     });
+
+    it('should normalize legacy modal provider on load', async () => {
+      vi.doMock('fs/promises', () => ({
+        readFile: vi.fn().mockResolvedValue(JSON.stringify({ aiProvider: 'modal' })),
+        writeFile: vi.fn().mockResolvedValue(undefined),
+        mkdir: vi.fn().mockResolvedValue(undefined),
+      }));
+
+      const { getEffectiveProvider } = await import('../provider-config-store');
+      const { writeFile } = await import('fs/promises');
+
+      const result = await getEffectiveProvider();
+      expect(result).toBe('openrouter');
+
+      expect(writeFile).toHaveBeenCalled();
+      const writtenContent = vi.mocked(writeFile).mock.calls[0][1] as string;
+      const parsed = JSON.parse(writtenContent);
+      expect(parsed.aiProvider).toBe('openrouter');
+    });
   });
 
   describe('getProviderConfigWithSource', () => {
     it('should return settings source when provider is set in config', async () => {
-      // Use saveProvider to directly set the cached state (bypasses cache-hit in load())
       vi.mocked(writeFile).mockResolvedValue(undefined);
       vi.mocked(mkdir).mockResolvedValue(undefined);
-      await saveProvider('modal' as AIProviderName);
+      await saveProvider('openrouter');
 
       const result = await getProviderConfigWithSource();
 
-      expect(result.provider).toBe('modal');
+      expect(result.provider).toBe('openrouter');
       expect(result.source).toBe('settings');
       expect(result.envProvider).toBe('openrouter');
     });
 
     it('should return env source when provider is null', async () => {
-      // Reset cached state to { aiProvider: null } via saveProvider
       vi.mocked(writeFile).mockResolvedValue(undefined);
       vi.mocked(mkdir).mockResolvedValue(undefined);
       await saveProvider(null);
@@ -119,7 +134,6 @@ describe('provider-config-store', () => {
     });
 
     it('should return env source when config file does not exist', async () => {
-      // Reset cached state to { aiProvider: null } via saveProvider
       vi.mocked(writeFile).mockResolvedValue(undefined);
       vi.mocked(mkdir).mockResolvedValue(undefined);
       await saveProvider(null);
@@ -131,20 +145,10 @@ describe('provider-config-store', () => {
   });
 
   describe('saveProvider', () => {
-    it('should save modal provider to config file', async () => {
-      await saveProvider('modal');
-
-      expect(mkdir).toHaveBeenCalledWith(expect.any(String), { recursive: true });
-      expect(writeFile).toHaveBeenCalled();
-      
-      const writtenContent = vi.mocked(writeFile).mock.calls[0][1] as string;
-      const parsed = JSON.parse(writtenContent);
-      expect(parsed.aiProvider).toBe('modal');
-    });
-
     it('should save openrouter provider to config file', async () => {
       await saveProvider('openrouter');
 
+      expect(mkdir).toHaveBeenCalledWith(expect.any(String), { recursive: true });
       expect(writeFile).toHaveBeenCalled();
       const writtenContent = vi.mocked(writeFile).mock.calls[0][1] as string;
       const parsed = JSON.parse(writtenContent);
@@ -161,25 +165,18 @@ describe('provider-config-store', () => {
     });
 
     it('should create directory if it does not exist', async () => {
-      await saveProvider('modal');
+      await saveProvider('openrouter');
 
       expect(mkdir).toHaveBeenCalledWith(expect.any(String), { recursive: true });
-    });
-
-    it('should update in-memory cache after save', async () => {
-      await saveProvider('modal');
-      
-      // The cache should be updated - verify by checking the saved content
-      expect(writeFile).toHaveBeenCalled();
     });
   });
 
   describe('provider types', () => {
     it('should accept valid provider names', () => {
-      const validProviders: AIProviderName[] = ['openrouter', 'modal'];
-      
+      const validProviders: AIProviderName[] = ['openrouter'];
+
       validProviders.forEach(provider => {
-        expect(['openrouter', 'modal']).toContain(provider);
+        expect(['openrouter']).toContain(provider);
       });
     });
   });

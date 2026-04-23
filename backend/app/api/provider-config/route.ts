@@ -44,10 +44,16 @@ export const PUT = withRouteContext('api/provider-config', async (ctx, request: 
   if (!parsed.ok) return parsed.response;
 
   try {
-    await saveProvider(parsed.data.aiProvider);
+    // Preserve API compatibility with the current settings UI while modal runtime
+    // support is removed: accept "modal", normalize to openrouter.
+    const normalizedProvider = parsed.data.aiProvider === 'modal' ? 'openrouter' : parsed.data.aiProvider;
+    await saveProvider(normalizedProvider);
     resetProviderSingletons();
     const result = await getProviderConfigWithSource();
-    contextLogger.info('Provider config updated', { aiProvider: parsed.data.aiProvider });
+    contextLogger.info('Provider config updated', {
+      requestedProvider: parsed.data.aiProvider,
+      savedProvider: normalizedProvider,
+    });
     return NextResponse.json(result, { status: 200, headers: getCorsHeaders(request, { rejectInvalidOrigin: true }) });
   } catch (error) {
     return handleError(error, 'api/provider-config PUT', request);

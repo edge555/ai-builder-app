@@ -3,20 +3,19 @@
  * @description System prompt, user prompt builder, and response parser for the AI planning call.
  * The planning call receives compact file-tree metadata (no code content) and returns
  * which files should be included as primary or context for modification.
- * Handles provider-specific prompt enrichments (extra instructions for Modal).
+ * Builds prompts for the file planning AI call.
  *
  * @requires ./types - PlanningResponse type
  * @requires ../../core/schemas - PlanningResponseSchema for Zod validation
  * @requires ../../core/zod-to-json-schema - JSON Schema conversion for AI response format
  * @requires ../../core/prompts/provider-prompt-config - Provider-specific prompt configuration
- * @requires ../../ai/modal-response-parser - JSON extraction from raw AI responses
+ * @requires ../../ai/structured-output - JSON extraction from raw AI responses
  */
 
 import type { PlanningResponse } from './types';
 import { PlanningResponseSchema } from '../../core/schemas';
 import { toSimpleJsonSchema } from '../../core/zod-to-json-schema';
 
-import { getProviderPromptConfig } from '../../core/prompts/provider-prompt-config';
 
 /**
  * System prompt for the AI planning call.
@@ -40,29 +39,13 @@ Guidelines:
 - Include parent components if modifying child components
 - For style changes, include relevant CSS/style files
 - When adding new components, include the parent file where it will be imported
-- When using Modal/Qwen: Output ONLY raw JSON without markdown code fences.
-
 Respond with valid JSON only. No additional text or explanation outside the JSON.`;
 
 /**
- * Returns the planning system prompt, potentially enriched for specific providers.
+ * Returns the planning system prompt.
  */
 export function getPlanningSystemPrompt(): string {
-  const config = getProviderPromptConfig();
-
-  let prompt = PLANNING_SYSTEM_PROMPT;
-
-  if (config.provider === 'modal') {
-    prompt += `
-
-=== JSON OUTPUT REMINDER (CRITICAL) ===
-- Output ONLY raw JSON. No markdown code fences (\`\`\`json ... \`\`\`).
-- No text before or after the JSON object.
-- Use exact file paths as shown in the FILE TREE.
-- Include a "reasoning" field explaining your selection.`;
-  }
-
-  return prompt;
+  return PLANNING_SYSTEM_PROMPT;
 }
 
 /**
@@ -107,7 +90,7 @@ Remember:
 - Use exact file paths as shown in the tree`;
 }
 
-import { extractJsonFromResponse } from '../../ai/modal-response-parser';
+import { extractJsonFromResponse } from '../../ai/structured-output';
 
 /**
  * Parse and validate the AI planning response.

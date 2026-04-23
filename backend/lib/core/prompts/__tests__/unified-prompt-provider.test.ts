@@ -12,8 +12,6 @@ import {
   MAX_OUTPUT_TOKENS_LOGIC,
   MAX_OUTPUT_TOKENS_UI,
   MAX_OUTPUT_TOKENS_INTEGRATION,
-  MODAL_MAX_OUTPUT_TOKENS_INTENT,
-  MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE,
 } from '../../../constants';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -71,20 +69,20 @@ describe('UnifiedPromptProvider — default config (API)', () => {
   });
 });
 
-// ─── 2. Modal config overrides only intent and planning ───────────────────────
+// ─── 2. Token budget overrides apply only to specified fields ─────────────────
 
-describe('UnifiedPromptProvider — Modal config', () => {
-  it('overrides only intent and planning budgets; others remain at API defaults', () => {
+describe('UnifiedPromptProvider — tokenBudgetOverrides', () => {
+  it('overrides only specified budgets; others remain at defaults', () => {
     const p = new UnifiedPromptProvider({
       tokenBudgetOverrides: {
-        intent: MODAL_MAX_OUTPUT_TOKENS_INTENT,
-        planning: MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE,
+        intent: 1024,
+        planning: 8192,
       },
       verboseGuidance: true,
     });
-    expect(p.tokenBudgets.intent).toBe(MODAL_MAX_OUTPUT_TOKENS_INTENT);
-    expect(p.tokenBudgets.planning).toBe(MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE);
-    // Non-overridden budgets stay at API values
+    expect(p.tokenBudgets.intent).toBe(1024);
+    expect(p.tokenBudgets.planning).toBe(8192);
+    // Non-overridden budgets stay at default values
     expect(p.tokenBudgets.executionGeneration).toBe(MAX_OUTPUT_TOKENS_GENERATION);
     expect(p.tokenBudgets.executionModification).toBe(MAX_OUTPUT_TOKENS_MODIFICATION);
     expect(p.tokenBudgets.scaffold).toBe(MAX_OUTPUT_TOKENS_SCAFFOLD);

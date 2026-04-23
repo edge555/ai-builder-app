@@ -10,7 +10,7 @@ const logger = createLogger('sse-stream-processor');
  * @param response   The fetch Response with an SSE body
  * @param parseLine  Provider-specific parser: given a raw SSE line, returns a token string or null
  * @param onToken    Called for each extracted token with the token and running total length
- * @param serviceName Used in error messages (e.g. 'OpenRouter', 'Modal')
+ * @param serviceName Used in error messages (e.g. 'OpenRouter')
  */
 export async function processSSEStream(
   response: Response,

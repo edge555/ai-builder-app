@@ -8,7 +8,6 @@ import type { ProjectState, Version, OperationResult } from '@ai-app-builder/sha
 import type { AIProvider } from '../ai';
 import type { IPromptProvider } from './prompts/prompt-provider';
 import { createPromptProvider } from './prompts/prompt-provider-factory';
-import { getEffectiveProvider } from '../ai/provider-config-store';
 import { processFiles } from './file-processor';
 import { createLogger } from '../logger';
 import { BaseProjectGenerator } from './base-project-generator';
@@ -344,8 +343,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
  */
 export async function createStreamingProjectGenerator(overrideProvider?: AIProvider): Promise<StreamingProjectGenerator> {
   if (overrideProvider) {
-    const providerName = await getEffectiveProvider();
-    const promptProvider = createPromptProvider(providerName);
+    const promptProvider = createPromptProvider();
     const strategy = new GenerationStrategy(
       overrideProvider, overrideProvider, overrideProvider,
       overrideProvider, promptProvider
@@ -354,11 +352,8 @@ export async function createStreamingProjectGenerator(overrideProvider?: AIProvi
     const pipeline = new UnifiedPipeline(overrideProvider, promptProvider, strategy);
     return new StreamingProjectGenerator(pipeline, overrideProvider, promptProvider);
   }
-  const [pipeline, providerName] = await Promise.all([
-    createGenerationPipeline(),
-    getEffectiveProvider(),
-  ]);
-  const promptProvider = createPromptProvider(providerName);
+  const pipeline = await createGenerationPipeline();
+  const promptProvider = createPromptProvider();
   // Access the bugfix provider through the strategy (exposed as public field)
   const strategy = pipeline.strategy as GenerationStrategy;
   return new StreamingProjectGenerator(pipeline, strategy.bugfixProvider, promptProvider);

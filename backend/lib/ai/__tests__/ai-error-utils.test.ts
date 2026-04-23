@@ -372,10 +372,10 @@ describe('categorizeError', () => {
   });
 
   describe('provider-specific prefixes', () => {
-    it('should handle modal api error prefix', () => {
+    it('should handle custom api error prefix', () => {
       // Arrange
-      const error = new Error('modal api error: invalid model');
-      const apiErrorPrefix = 'modal api error';
+      const error = new Error('custom api error: invalid model');
+      const apiErrorPrefix = 'custom api error';
 
       // Act
       const result = categorizeError(error, apiErrorPrefix);
@@ -622,10 +622,10 @@ describe('isRetryableError', () => {
   });
 
   describe('provider-specific scenarios', () => {
-    it('should handle modal provider errors correctly', () => {
+    it('should handle generic provider errors correctly', () => {
       // Arrange
-      const error = new Error('modal api error: server error');
-      const apiErrorPrefix = 'modal api error';
+      const error = new Error('custom api error: server error');
+      const apiErrorPrefix = 'custom api error';
 
       // Act
       const result = isRetryableError(error, apiErrorPrefix);

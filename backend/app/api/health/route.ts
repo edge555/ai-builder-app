@@ -25,15 +25,8 @@ async function checkProviderReachability(): Promise<{
   const start = Date.now();
 
   try {
-    let url: string;
-
-    if (config.provider.name === 'openrouter') {
-      // Use the public models endpoint — no auth required for reachability check
-      url = 'https://openrouter.ai/api/v1/models';
-    } else {
-      url = config.provider.modalDefaultUrl!;
-    }
-
+    // Use the public models endpoint — no auth required for reachability check
+    const url = 'https://openrouter.ai/api/v1/models';
     const response = await fetch(url, { signal: controller.signal });
     return { reachable: response.status < 500, latencyMs: Date.now() - start };
   } catch (err) {

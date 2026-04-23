@@ -1,7 +1,7 @@
 /**
  * @module ai/ai-error-utils
  * @description Shared AI error categorization and retry logic.
- * Used by all AI provider clients (Modal, OpenRouter) to consistently
+ * Used by all AI provider clients to consistently
  * classify errors into typed categories and determine retryability.
  *
  * Error categories: `timeout`, `cancelled`, `rate_limit`, `api_error`, `unknown`.
@@ -17,7 +17,7 @@ type AIErrorType = AIResponse['errorType'];
 /**
  * Categorizes an error into a type and code.
  * @param error The error to categorize
- * @param apiErrorPrefix Provider-specific prefix for API errors (e.g. 'gemini api error', 'modal api error')
+ * @param apiErrorPrefix Provider-specific prefix for API errors (e.g. 'openrouter api error')
  */
 export function categorizeError(
   error: Error,
