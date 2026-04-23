@@ -23,7 +23,6 @@ import type { AIProvider } from '../ai';
 import { createAIProvider } from '../ai';
 import type { IPromptProvider } from '../core/prompts/prompt-provider';
 import { createPromptProvider } from '../core/prompts/prompt-provider-factory';
-import { getEffectiveProvider } from '../ai/provider-config-store';
 import { ValidationPipeline } from '../core/validation-pipeline';
 import { BuildValidator, createBuildValidator } from '../core/build-validator';
 import { createLogger } from '../logger';
@@ -36,7 +35,7 @@ import { getTokenBudget, SMALL_PROJECT_FILE_THRESHOLD, SIMPLE_PROMPT_MAX_LENGTH 
 import { buildSlicesFromFiles, buildReplaceFileRetryPrompt } from './prompt-builder';
 import { selectRepairFiles, type ErrorContext } from './repair-file-selector';
 import type { FailedFileEdit } from './file-edit-applicator';
-import { extractJsonFromResponse } from '../ai/modal-response-parser';
+import { extractJsonFromResponse } from '../ai/structured-output';
 import { createModificationResult } from './result-builder';
 import { DiagnosticRepairEngine } from './diagnostic-repair-engine';
 import { CheckpointManager } from './checkpoint-manager';
@@ -871,21 +870,19 @@ class ModificationPipelineAdapter implements IModificationPipeline {
 export async function createModificationEngine(overrideProvider?: AIProvider): Promise<ModificationEngine> {
   if (overrideProvider) {
     // Workspace mode: single provider for all stages (v1 — no per-task routing)
-    const providerName = await getEffectiveProvider();
-    const promptProvider = createPromptProvider(providerName);
+    const promptProvider = createPromptProvider();
     const adapter = new ModificationPipelineAdapter(
       overrideProvider, overrideProvider, overrideProvider, promptProvider
     );
     return new ModificationEngine(adapter, overrideProvider, promptProvider);
   }
-  const [intentProvider, planningProvider, executionProvider, bugfixProvider, providerName] = await Promise.all([
+  const [intentProvider, planningProvider, executionProvider, bugfixProvider] = await Promise.all([
     createAIProvider('intent'),
     createAIProvider('planning'),
     createAIProvider('execution'),
     createAIProvider('bugfix'),
-    getEffectiveProvider(),
   ]);
-  const promptProvider = createPromptProvider(providerName);
+  const promptProvider = createPromptProvider();
   const adapter = new ModificationPipelineAdapter(
     intentProvider, planningProvider, executionProvider, promptProvider
   );

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.1] - 2026-04-23
+
+### Removed
+- **Modal AI provider** — `modal-client.ts`, `modal-pipeline-factory.ts`, and `modal-response-parser.ts` deleted. The backend is now OpenRouter-only. `AI_PROVIDER=modal` in `.env` falls back to `openrouter` via legacy normalization. All Modal-specific constants (`MODAL_MAX_OUTPUT_TOKENS_*`), env-var docs, and provider-routing branches removed. `createPromptProvider()` is now a no-arg function; `AIProviderName` narrowed to `'openrouter'` only.
+
+### Fixed
+- `extractJsonFromResponse` and `parseStructuredOutput` moved to `structured-output.ts` with expanded test coverage (15 cases covering direct parse, markdown blocks, brace matching, and null/failure paths).
+
 ## [1.10.0] - 2026-04-15
 
 ### Added

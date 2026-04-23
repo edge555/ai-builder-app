@@ -44,17 +44,6 @@ describe('getPlanningSystemPrompt', () => {
     }
   });
 
-  it('should include JSON reminder when AI_PROVIDER is modal', () => {
-    const originalProvider = process.env.AI_PROVIDER;
-    process.env.AI_PROVIDER = 'modal';
-    try {
-      const prompt = getPlanningSystemPrompt();
-      expect(prompt).toContain('=== JSON OUTPUT REMINDER');
-      expect(prompt).toContain('Output ONLY raw JSON');
-    } finally {
-      process.env.AI_PROVIDER = originalProvider;
-    }
-  });
 });
 
 describe('PLANNING_OUTPUT_SCHEMA', () => {

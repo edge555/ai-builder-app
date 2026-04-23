@@ -483,7 +483,7 @@ describe('processSSEStream', () => {
       ).rejects.toThrow('OpenRouter: response body is null');
     });
 
-    it('should work with Modal service name', async () => {
+    it('should work with custom service name', async () => {
       // Arrange
       const nullBodyResponse = { body: null } as unknown as Response;
       const parseLine = vi.fn();
@@ -491,11 +491,11 @@ describe('processSSEStream', () => {
 
       // Act & Assert
       await expect(
-        processSSEStream(nullBodyResponse, parseLine, onToken, 'Modal')
-      ).rejects.toThrow('Modal: response body is null');
+        processSSEStream(nullBodyResponse, parseLine, onToken, 'CustomProvider')
+      ).rejects.toThrow('CustomProvider: response body is null');
     });
 
-    it('should work with custom service name', async () => {
+    it('should include the service name in the null-body error message', async () => {
       // Arrange
       const nullBodyResponse = { body: null } as unknown as Response;
       const parseLine = vi.fn();

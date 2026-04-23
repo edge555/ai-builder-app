@@ -16,7 +16,6 @@
  */
 
 import { createAIProvider } from '../ai/ai-provider-factory';
-import { getEffectiveProvider } from '../ai/provider-config-store';
 import { createPromptProvider } from './prompts/prompt-provider-factory';
 import { UnifiedPipeline } from './unified-pipeline';
 import { GenerationStrategy } from './generation-strategy';
@@ -43,17 +42,15 @@ export async function createGenerationPipeline(): Promise<UnifiedPipeline<Archit
     executionProvider,
     reviewProvider,
     bugfixProvider,
-    providerName,
   ] = await Promise.all([
     createAIProvider('intent'),
     createAIProvider('planning'),
     createAIProvider('execution'),
     createAIProvider('review'),
     createAIProvider('bugfix'),
-    getEffectiveProvider(),
   ]);
 
-  const promptProvider = createPromptProvider(providerName);
+  const promptProvider = createPromptProvider();
 
   const strategy = new GenerationStrategy(
     planningProvider,
@@ -84,15 +81,14 @@ export async function createModificationPipeline(
   tiers?: string[][],
   validateFile?: (path: string, content: string) => Promise<{ valid: boolean; errorText?: string }>,
 ): Promise<UnifiedPipeline<PlanOutput, PipelineResult>> {
-  const [intentProvider, planningProvider, executionProvider, providerName] =
+  const [intentProvider, planningProvider, executionProvider] =
     await Promise.all([
       createAIProvider('intent'),
       createAIProvider('planning'),
       createAIProvider('execution'),
-      getEffectiveProvider(),
     ]);
 
-  const promptProvider = createPromptProvider(providerName);
+  const promptProvider = createPromptProvider();
 
   const strategy = new ModificationStrategy(
     planningProvider,
@@ -120,15 +116,14 @@ export async function createModificationPipeline(
  * at call time through the legacy aliases.
  */
 export async function createPipelineOrchestrator(): Promise<UnifiedPipeline<PlanOutput, PipelineResult>> {
-  const [intentProvider, planningProvider, executionProvider, providerName] =
+  const [intentProvider, planningProvider, executionProvider] =
     await Promise.all([
       createAIProvider('intent'),
       createAIProvider('planning'),
       createAIProvider('execution'),
-      getEffectiveProvider(),
     ]);
 
-  const promptProvider = createPromptProvider(providerName);
+  const promptProvider = createPromptProvider();
 
   // Empty slices/files — ModificationEngine passes them at call time via
   // the runModificationPipeline() / runOrderedModificationPipeline() aliases.

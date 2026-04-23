@@ -1,9 +1,7 @@
 /**
  * @module core/prompts/unified-prompt-provider
- * @description Single configurable IPromptProvider implementation used by both
- * OpenRouter (API) and Modal paths. The API path uses default config (concise prompts,
- * lower token budgets). The Modal path overrides token budgets and enables verbose
- * guidance fragments. All prompt text is identical — only configuration differs.
+ * @description Configurable IPromptProvider implementation for the OpenRouter API path.
+ * All prompt text is shared — configuration controls token budgets and verbosity.
  *
  * @requires ./prompt-provider - IPromptProvider interface
  * @requires ./generation-prompt-utils - Shared utility functions
@@ -65,7 +63,7 @@ import {
  * Default values produce API (OpenRouter) behavior.
  */
 export interface PromptProviderConfig {
-  /** Override specific token budgets (e.g. Modal uses higher intent/planning budgets). */
+  /** Override specific token budgets. */
   tokenBudgetOverrides?: Partial<IPromptProvider['tokenBudgets']>;
   /** When true, appends DETAILED_REACT/CSS/JSON_GUIDANCE to execution and bugfix prompts. */
   verboseGuidance?: boolean;

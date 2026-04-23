@@ -1,10 +1,8 @@
 /**
  * @module ai/provider-config-store
  * @description Persists and loads the runtime AI provider override.
- * Allows the settings page to switch between `openrouter` and `modal`
- * without restarting the server. The override is stored at
- * `data/provider-config.json`; when absent the `AI_PROVIDER` env var
- * is used as the default.
+ * Override is stored at `data/provider-config.json`; when absent the
+ * `AI_PROVIDER` env var is used as the default.
  *
  * @requires fs/promises - Async filesystem read/write
  * @requires ../config - Env-var-based provider default
@@ -20,7 +18,9 @@ const logger = createLogger('provider-config-store');
 
 const CONFIG_PATH = join(process.cwd(), 'data/provider-config.json');
 
-export type AIProviderName = 'openrouter' | 'modal';
+export type AIProviderName = 'openrouter';
+// TODO: remove LegacyAIProviderName once all deployed instances have migrated away from 'modal'
+type LegacyAIProviderName = AIProviderName | 'modal';
 
 export interface ProviderConfig {
   aiProvider: AIProviderName | null; // null = use env default
@@ -34,11 +34,31 @@ export interface ProviderConfigWithSource {
 
 let cached: ProviderConfig | null = null;
 
+function normalizeProvider(value: unknown): AIProviderName | null {
+  if (value === null || value === undefined) return null;
+  if (value === 'openrouter') return 'openrouter';
+  if (value === 'modal') return 'openrouter';
+  return null;
+}
+
 async function load(): Promise<ProviderConfig> {
   if (cached !== null) return cached;
   try {
     const raw = await readFile(CONFIG_PATH, 'utf-8');
-    cached = JSON.parse(raw) as ProviderConfig;
+    const parsed = JSON.parse(raw) as { aiProvider?: LegacyAIProviderName | null };
+    const normalized: ProviderConfig = { aiProvider: normalizeProvider(parsed.aiProvider) };
+
+    // Best-effort migration for legacy persisted values.
+    if (parsed.aiProvider !== normalized.aiProvider) {
+      await mkdir(dirname(CONFIG_PATH), { recursive: true });
+      await writeFile(CONFIG_PATH, JSON.stringify(normalized, null, 2), 'utf-8');
+      logger.info('Normalized legacy provider config value', {
+        from: parsed.aiProvider ?? null,
+        to: normalized.aiProvider,
+      });
+    }
+
+    cached = normalized;
     return cached;
   } catch (error: unknown) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {

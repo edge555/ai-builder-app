@@ -59,18 +59,9 @@ export const MAX_OUTPUT_TOKENS_GENERATION = 32768;
 export const MAX_OUTPUT_TOKENS_MODIFICATION = 16384;
 export const MAX_OUTPUT_TOKENS_PLANNING = 1024;
 
-// Max output tokens per operation type (Modal)
-// Billed per GPU hour — not per token — so larger limits cost only wall-clock time.
-export const MODAL_MAX_OUTPUT_TOKENS_GENERATION = 32768;
-export const MODAL_MAX_OUTPUT_TOKENS_MODIFICATION = 16384;
-export const MODAL_MAX_OUTPUT_TOKENS_PLANNING = 2048;
-
 // Per-stage token budgets for the multi-stage pipeline (OpenRouter)
 export const MAX_OUTPUT_TOKENS_INTENT = 512;
 export const MAX_OUTPUT_TOKENS_PLANNING_STAGE = 4096;
-// Per-stage token budgets for the multi-stage pipeline (Modal)
-export const MODAL_MAX_OUTPUT_TOKENS_INTENT = 1024;
-export const MODAL_MAX_OUTPUT_TOKENS_PLANNING_STAGE = 8192;
 
 // ─── Multi-Phase Generation Pipeline ─────────────────────────────────────────
 // Per-phase output token budgets

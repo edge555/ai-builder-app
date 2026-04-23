@@ -19,9 +19,6 @@ vi.mock('../../ai', () => ({
 vi.mock('../../core/prompts/prompt-provider-factory', () => ({
   createPromptProvider: () => ({}),
 }));
-vi.mock('../../ai/provider-config-store', () => ({
-  getEffectiveProvider: () => Promise.resolve('test-provider'),
-}));
 vi.mock('../checkpoint-manager', () => ({
   CheckpointManager: class {
     capture() {}

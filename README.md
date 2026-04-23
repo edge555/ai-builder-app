@@ -38,7 +38,7 @@ Generate full React web applications from natural language prompts. Describe wha
 │  └──────┬───────┘  └──────┬───────┘  └───────────────┘  │
 │         │                 │                              │
 │  ┌──────▼─────────────────▼────┐                        │
-│  │ AIProvider (OpenRouter/Modal)│                        │
+│  │   AIProvider (OpenRouter)    │                        │
 │  └──────────────────────────────┘                        │
 └─────────────────────────────────────────────────────────┘
           │
@@ -51,7 +51,7 @@ Generate full React web applications from natural language prompts. Describe wha
 
 - Node.js 18+
 - npm 9+
-- An [OpenRouter](https://openrouter.ai) API key (or a running Modal endpoint)
+- An [OpenRouter](https://openrouter.ai) API key
 
 ## Quick Start
 
@@ -76,11 +76,7 @@ Backend: http://localhost:4000
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `OPENROUTER_API_KEY` | Yes* | — | OpenRouter API key |
-| `AI_PROVIDER` | No | `openrouter` | `openrouter` or `modal` |
-| `MODAL_DEFAULT_URL` | Yes* | — | Default Modal endpoint (modal only) |
-| `MODAL_DEFAULT_STREAM_URL` | No | — | Default Modal streaming URL (modal only) |
-| `MODAL_<TASK>_URL` | No | — | Per-task Modal URL; `TASK` = `INTENT`, `PLANNING`, `EXECUTION`, `BUGFIX` |
+| `OPENROUTER_API_KEY` | Yes | — | OpenRouter API key |
 | `MAX_OUTPUT_TOKENS` | No | `16384` | Token limit per generation |
 | `ALLOWED_ORIGINS` | No | `http://localhost:8080` | CORS origins (comma-separated) |
 | `LOG_LEVEL` | No | `info` | `debug` / `info` / `warn` / `error` |
@@ -95,7 +91,7 @@ Backend: http://localhost:4000
 | `SUPABASE_JWT_SECRET` | No* | — | Enables Supabase Auth; required for config mutation routes in production |
 | `WORKSPACE_MASTER_KEY` | No* | — | Base64-encoded 32-byte key for AES-256-GCM org API key encryption (required for Blank Canvas Admin) |
 
-*Required for the selected provider. `SUPABASE_JWT_SECRET` marked `No*` is optional in local dev but required for production deployments that expose AI model/provider config endpoints.
+`SUPABASE_JWT_SECRET` is optional in local dev but required for production deployments that expose AI model/provider config endpoints.
 
 ### Frontend (`frontend/.env`)
 
@@ -130,8 +126,7 @@ npm run lint                 # All workspaces
 ├── frontend/          # React 18/Vite SPA
 ├── backend/           # Next.js 16 API server
 ├── shared/            # Common types + Zod schemas
-├── supabase/          # Edge functions + config
-└── modal-code-ai/     # Python Modal app (self-hosted models)
+└── supabase/          # Edge functions + config
 ```
 
 For full technical details — architecture decisions, design patterns, pitfalls — see [CLAUDE.md](CLAUDE.md).

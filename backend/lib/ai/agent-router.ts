@@ -3,7 +3,7 @@
  * @description Task-specific AI provider routing for the OpenRouter backend.
  * `AgentRouter` reads the persisted agent config and builds `FallbackAIProvider`
  * instances that try models in priority order. If one model fails, the next is tried.
- * Only used in OpenRouter mode — Modal mode bypasses this entirely.
+ * Used by the AI provider factory for all task-based routing.
  *
  * @requires ./agent-config-store - Persisted model configuration loader
  * @requires ./openrouter-client - Individual model clients

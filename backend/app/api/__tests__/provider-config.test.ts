@@ -258,6 +258,28 @@ describe('Provider Config API Endpoint', () => {
             expect(saveProvider).toHaveBeenCalledWith(null);
         });
 
+        it('should accept modal from UI and normalize to openrouter', async () => {
+            const { applyRateLimit } = await import('../../../lib/security');
+            const { getProviderConfigWithSource, saveProvider } = await import('../../../lib/ai/provider-config-store');
+            const { resetProviderSingletons } = await import('../../../lib/ai/ai-provider-factory');
+
+            vi.mocked(applyRateLimit).mockResolvedValue({ blocked: null, headers: {} });
+            vi.mocked(saveProvider).mockResolvedValue(undefined);
+            vi.mocked(resetProviderSingletons).mockReturnValue(undefined);
+            vi.mocked(getProviderConfigWithSource).mockResolvedValue(mockConfig);
+
+            const requestBody = { aiProvider: 'modal' };
+            const request = new NextRequest('http://localhost/api/provider-config', {
+                method: 'PUT',
+                body: JSON.stringify(requestBody),
+            });
+
+            const response = await PUT(request);
+
+            expect(response.status).toBe(200);
+            expect(saveProvider).toHaveBeenCalledWith('openrouter');
+        });
+
         it('should handle save errors', async () => {
             const { applyRateLimit } = await import('../../../lib/security');
             const { saveProvider } = await import('../../../lib/ai/provider-config-store');
@@ -313,4 +335,3 @@ describe('Provider Config API Endpoint', () => {
         });
     });
 });
-
