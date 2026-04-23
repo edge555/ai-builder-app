@@ -18,11 +18,11 @@ All notable changes to this project will be documented in this file.
 - **Preview auto-repair trigger noise** - `WebContainerErrorListener` now ignores generic install chatter and only reacts to recognized fatal install or server signals, which cuts false repair pressure on first boot.
 - **Streaming success semantics** - generation streams no longer emit terminal success when the backend rejected delivery.
 - **Regression coverage for the new gate** - backend and frontend tests now cover delivery rejection, shared runtime smoke parity, modification gate failures, and the tightened preview listener behavior.
-- **Delivery gate redundant re-evaluation** - repair callback now returns `finalEvaluation` so the gate reuses it instead of running a duplicate full-project scan.
+- **No double-scan after repair** - repair callback now returns `finalEvaluation` so the delivery gate reuses it instead of running a duplicate full-project scan on every repair cycle.
 - **Error boundary false positives** - runtime smoke test now strips catch blocks before checking for top-level throws, so React error boundaries no longer incorrectly fail delivery.
 - **Unknown framework passes trivially** - projects with unrecognized entry point paths now surface an `unknown_framework` issue and enter repair, rather than silently passing the smoke test.
 - **Repair AI file-count guard** - repair responses that return fewer than 50% of the original project files are rejected to prevent AI hallucination from silently deleting most of the project.
-- **Quality report Zod validation** - `qualityReport` received over SSE and from non-2xx API responses is now validated with `QualityReportSchema` before propagation, dropping malformed data.
+- **Quality report validation** - `qualityReport` received over SSE or from non-2xx API responses is validated with `QualityReportSchema` before propagation, so malformed data never reaches the UI.
 
 ## [1.10.2] - 2026-04-23
 
