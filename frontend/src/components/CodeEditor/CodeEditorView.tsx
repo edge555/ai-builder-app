@@ -28,7 +28,7 @@ const CodeEditorViewComponent = function CodeEditorView({ files }: CodeEditorVie
   // Refs for debouncing and AI sync
   const projectStateRef = useRef<SerializedProjectState | null>(projectState);
   const pendingChangesRef = useRef<Map<string, string>>(new Map());
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedVersionRef = useRef<string | null>(projectState?.updatedAt || null);
 
   // Keep projectStateRef in sync
