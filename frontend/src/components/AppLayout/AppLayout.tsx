@@ -117,16 +117,20 @@ export function AppLayout({ initialPrompt, onBackToDashboard, disableAutoSave }:
     } = useSidebarResize();
 
     const prevIsLoadingRef = useRef(false);
+    // Refs so the isLoading effect always reads current values without re-subscribing
+    const windowWidthRef = useRef(windowWidth);
+    windowWidthRef.current = windowWidth;
+    const projectStateRef = useRef(projectState);
+    projectStateRef.current = projectState;
 
     // Mobile: auto-switch to preview when generation finishes and files exist
     useEffect(() => {
         const wasLoading = prevIsLoadingRef.current;
         prevIsLoadingRef.current = isLoading;
-        if (wasLoading && !isLoading && projectState && windowWidth <= DESKTOP_BREAKPOINT) {
+        if (wasLoading && !isLoading && projectStateRef.current && windowWidthRef.current <= DESKTOP_BREAKPOINT) {
             setActivePanel('preview');
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isLoading]);
+    }, [isLoading, setActivePanel]);
 
     // Close sidebar when clicking backdrop on tablet
     const handleBackdropClick = useCallback(() => {

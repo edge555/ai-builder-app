@@ -62,13 +62,10 @@ const envSchema = z.object({
   SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   SUPABASE_STORAGE_BUCKET: z.string().default('uploads'),
-  WORKSPACE_MASTER_KEY: z.string().optional(),  // base64-encoded 32 bytes for AES-256-GCM
   ENABLE_FULLSTACK_RECIPES: z
     .string()
     .transform((v) => v === 'true' || v === '1')
     .default(false),
-  SESSION_CONTEXT_K: z.coerce.number().int().min(1).max(50).default(10),
-  SESSION_CONTEXT_MAX_TOKENS: z.coerce.number().int().min(1000).max(20000).default(6000),
 });
 
 /**

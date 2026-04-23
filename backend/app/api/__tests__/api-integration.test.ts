@@ -25,13 +25,6 @@ vi.mock('../../../lib/security', () => ({
     },
 }));
 
-vi.mock('../../../lib/security/auth', () => ({
-    requireAuth: vi.fn(),
-}));
-
-vi.mock('../../../lib/security/workspace-resolver', () => ({
-    resolveWorkspaceProvider: vi.fn(),
-}));
 
 describe('API Integration Tests', () => {
     const allowedOrigin = config.cors.allowedOrigins[0] ?? 'http://localhost:8080';

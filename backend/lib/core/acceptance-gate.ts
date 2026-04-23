@@ -68,8 +68,6 @@ export class AcceptanceGate {
         file: error.file,
       }));
 
-
-
     return {
       valid: issues.length === 0,
       sanitizedOutput,
