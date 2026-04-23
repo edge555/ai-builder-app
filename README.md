@@ -6,7 +6,7 @@ Generate full React web applications from natural language prompts. Describe wha
 
 - **AI-powered generation** — describe your app, get working React code via multi-phase pipeline
 - **Automatic CRUD** — entity apps (blogs, task managers, contacts) automatically include add/edit/delete without asking
-- **Live preview** — Sandpack-powered in-browser execution with console panel
+- **Live preview** — WebContainers-powered in-browser execution with console panel
 - **Code editor** — Monaco editor with file tree
 - **Version control** — undo/redo through generation history
 - **Auto-repair** — automatic error detection and fix with escalating repair tiers (deterministic fixes → AI repair → per-file rollback)

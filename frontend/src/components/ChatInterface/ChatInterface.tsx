@@ -179,7 +179,7 @@ const ChatInterfaceComponent = function ChatInterface({
             <div className="chat-empty-icon" aria-hidden="true">✨</div>
             <div className="chat-empty-content">
               <p className="chat-empty-title">What would you like to build?</p>
-              <p className="chat-empty-description">Describe your app idea and I'll generate it for you in seconds.</p>
+              <p className="chat-empty-description">Describe your app idea and I'll build it for you.</p>
               {suggestions.length > 0 && (
                 <div className="chat-empty-suggestions">
                   <p className="chat-suggestions-label">Try one of these:</p>

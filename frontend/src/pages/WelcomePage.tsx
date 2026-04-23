@@ -92,13 +92,13 @@ export function WelcomePage({
   });
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Show onboarding only for authenticated users who haven't seen it yet.
-  // Wait until auth finishes loading so we don't flash it for unauthenticated users.
+  // Show onboarding for all first-time visitors who haven't seen it yet.
+  // Wait until auth finishes loading to avoid flashing during hydration.
   useEffect(() => {
-    if (!isAuthLoading && isAuthenticated && shouldShowOnboarding()) {
+    if (!isAuthLoading && shouldShowOnboarding()) {
       setShowOnboarding(true);
     }
-  }, [isAuthLoading, isAuthenticated]);
+  }, [isAuthLoading]);
   const [isScrolled, setIsScrolled] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
 

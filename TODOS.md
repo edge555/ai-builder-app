@@ -2,6 +2,65 @@
 Status taxonomy for open items: `ready`, `blocked`, `deferred`.
 
 
+## End-User DX (from /plan-devex-review 2026-04-23)
+
+### Human-Friendly WebContainers Boot Progress [P1, S] — ready
+- **What:** Replace raw npm output in `WebContainerBootProgress.tsx` with a human-readable progress message (e.g., "Building your app... 40%") and hide npm package names behind a collapsible "Details" toggle.
+- **Why:** Non-technical users see "added 342 packages in 8s" and interpret it as an error or unexpected behavior. The magic moment (first preview) is delayed by a confusing technical preamble.
+- **Pros:** Removes the most visually alarming moment in the new-user journey. Aligns with Champion TTHW target. Zero performance cost.
+- **Cons:** Progress percentage requires timing data — may need to estimate based on install output line count or fixed phases.
+- **Context:** Decided in /plan-devex-review (2026-04-23). Implementation point: `frontend/src/components/PreviewPanel/WebContainerBootProgress.tsx`.
+- **Depends on:** None
+
+### Mobile Auto-Switch to Preview After Generation [P1, XS] — ready
+- **What:** In `AppLayout.tsx`, watch for `isLoading` transitioning from `true` → `false` when files are present. If the viewport is mobile-width, call `setActivePanel('preview')` automatically.
+- **Why:** Mobile users remain on the 'chat' panel after generation and must discover the Preview tab manually. This buries the magic moment — seeing the generated app — behind a manual navigation step.
+- **Pros:** ~5 lines. Zero regression risk for desktop (already shows preview in right panel). Eliminates the most common mobile confusion point.
+- **Cons:** If a user wants to stay in chat, the auto-switch is mildly disruptive. Can be mitigated by only switching on first generation per session.
+- **Context:** Decided in /plan-devex-review (2026-04-23). Implementation point: `frontend/src/components/AppLayout/AppLayout.tsx:109`.
+- **Depends on:** None
+
+### Complex Generation Slow Warning [P2, S] — ready
+- **What:** In `LoadingIndicator.tsx`, distinguish "complex multi-phase generation is taking its expected time" from "something may actually be wrong." When generation is complex (>10 files), show "Your app has many parts — complex builds typically take 2-4 minutes." at 30s. When simple, keep the "AI service may be under heavy load" message.
+- **Why:** The 30s warning fires constantly for complex apps. Users think the AI is broken when it's working correctly. Creates false panic and abandoned sessions.
+- **Pros:** Sets accurate expectations. Reduces false support requests.
+- **Cons:** Requires passing generation complexity hint from the backend SSE stream to the frontend LoadingIndicator. May need a new SSE event type or metadata field.
+- **Context:** Decided in /plan-devex-review (2026-04-23). File: `frontend/src/components/ChatInterface/LoadingIndicator.tsx:131`.
+- **Depends on:** Backend SSE stream emitting complexity metadata (or detect via file count from processing phase)
+
+### Auto-Save Indicator in Builder [P2, XS] — ready
+- **What:** Show a brief "Saved locally" confirmation after each auto-save to IndexedDB. A small toast or persistent chip in the builder header is sufficient.
+- **Why:** Non-technical users close the browser tab thinking they've lost their work. Auto-save is completely silent. A visual indicator builds confidence and reduces re-generation churn.
+- **Pros:** ~30 lines. Reuses existing toast system (`ToastContext`).
+- **Cons:** None significant. Debounce the indicator to avoid showing on every keystroke.
+- **Context:** Decided in /plan-devex-review (2026-04-23). Implementation: wire auto-save callback to `showToast()` in `StorageService`.
+- **Depends on:** None
+
+### Human-Readable Error Details Panel [P2, S] — ready
+- **What:** In `ErrorOverlay.tsx:101-104`, replace raw `err.message` text (e.g., "TypeError: Cannot read properties of undefined (reading 'map')") with a human-readable summary: "Something went wrong in [component]. Try a simpler request, or use Undo to go back to the last working version."
+- **Why:** The "View Details" panel shows raw JavaScript error text that non-technical users can't interpret or act on. The Undo instruction is already the correct CTA — the details should support that decision, not create confusion.
+- **Pros:** Reduces panic when auto-repair fails. Reinforces the Undo as the clear next action.
+- **Cons:** Requires mapping common error types to plain-language explanations. Raw errors can be hidden under an additional "Show technical details" toggle for devs.
+- **Context:** Decided in /plan-devex-review (2026-04-23). File: `frontend/src/components/AppLayout/ErrorOverlay.tsx:101-104`.
+- **Depends on:** None
+
+### Feedback Button for End Users [P2, XS] — ready
+- **What:** Add a small "Feedback" button in `SiteHeader` linking to GitHub Issues or a Tally/Typeform. The current footer GitHub link is too technical for non-technical users.
+- **Why:** Non-technical founders and students who hit a wall have no escalation path. The GitHub link is visible only in the footer and requires understanding GitHub Issues.
+- **Pros:** Closes the support gap for non-technical users. Takes ~30 minutes to implement.
+- **Cons:** Need to decide on feedback destination (GitHub Issues, Tally form, or mailto).
+- **Context:** Decided in /plan-devex-review (2026-04-23). File: `frontend/src/components/SiteHeader/SiteHeader.tsx`.
+- **Depends on:** None
+
+### End-User Analytics (TTHW Measurement) [P2, S] — ready
+- **What:** Add Plausible or PostHog to track three events: `prompt_submitted`, `generation_complete`, `preview_rendered`. Compute TTHW (time from submit to first preview render). No PII.
+- **Why:** The Champion TTHW target (<2 min for all apps) set in /plan-devex-review cannot be validated without instrumentation. The vendor caching and progress bar improvements will have no measurable before/after signal.
+- **Pros:** ~2 hours setup. Privacy-friendly (Plausible sends no user data). Enables data-driven DX iteration.
+- **Cons:** Adds an external script dependency. Self-hosted Plausible option avoids third-party data sharing.
+- **Context:** Decided in /plan-devex-review (2026-04-23).
+- **Depends on:** None
+
+
 ## Architecture (from /plan-ceo-review EXPANSION on 2026-03-23)
 
 ### Unified Pipeline Architecture — Completed
