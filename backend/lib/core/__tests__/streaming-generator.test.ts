@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { StreamingProjectGenerator } from '../streaming-generator';
 import { ValidationPipeline } from '../validation-pipeline';
 import * as buildValidatorModule from '../build-validator';
+import type { ProjectDeliveryGate } from '../project-delivery-gate';
 
 vi.mock('../validation-pipeline');
 vi.mock('../build-validator');
@@ -42,6 +43,7 @@ describe('StreamingProjectGenerator', () => {
     let mockPromptProvider: any;
     let mockValidationPipeline: any;
     let mockBuildValidator: any;
+    let mockDeliveryGate: ProjectDeliveryGate;
 
     beforeEach(() => {
         mockPipeline = {
@@ -74,12 +76,29 @@ describe('StreamingProjectGenerator', () => {
             validateCrossFileReferences: vi.fn().mockReturnValue([]),
             formatErrorsForAI: vi.fn(),
         };
+        mockDeliveryGate = {
+            deliver: vi.fn().mockResolvedValue({
+                approved: true,
+                files: {
+                    'src/main.tsx': canonicalMain,
+                    'src/App.tsx': 'export default function App() { return null; }',
+                    'src/index.css': ':root { --color-bg: #fff; }',
+                    'package.json': '{}',
+                },
+                qualityReport: {
+                    deliveryStage: 'approved',
+                    issues: [],
+                    repairAttempts: 0,
+                    repairLevelReached: 'none',
+                },
+            }),
+        } as unknown as ProjectDeliveryGate;
 
         vi.mocked(ValidationPipeline).mockImplementation(function () { return mockValidationPipeline; });
         vi.mocked(buildValidatorModule.BuildValidator).mockImplementation(function () { return mockBuildValidator; });
         vi.mocked(buildValidatorModule.createBuildValidator).mockReturnValue(mockBuildValidator);
 
-        generator = new StreamingProjectGenerator(mockPipeline, mockBugfixProvider, mockPromptProvider);
+        generator = new StreamingProjectGenerator(mockPipeline, mockBugfixProvider, mockPromptProvider, mockDeliveryGate);
     });
 
     it('should generate a project with streaming emission', async () => {
@@ -171,26 +190,39 @@ describe('StreamingProjectGenerator', () => {
 
     it('fails generation when acceptance validation finds errors', async () => {
         mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
-        mockBuildValidator.validateAll.mockReturnValueOnce({
-            valid: false,
-            errors: [{ type: 'syntax_error', file: 'src/App.tsx', message: 'Unexpected token', severity: 'fixable' }],
+        (mockDeliveryGate.deliver as any).mockResolvedValueOnce({
+            approved: false,
+            qualityReport: {
+                deliveryStage: 'acceptance',
+                issues: [{ source: 'acceptance', type: 'syntax_error', file: 'src/App.tsx', message: 'Unexpected token' }],
+                repairAttempts: 1,
+                repairLevelReached: 'deterministic',
+            },
         });
 
         const onError = vi.fn();
         const result = await generator.generateProjectStreaming('test', { onError });
 
         expect(result.success).toBe(false);
-        expect(result.error).toContain('Generation failed acceptance');
+        expect(result.error).toContain('Project delivery failed during acceptance');
         expect(onError).toHaveBeenCalledWith(
-            expect.stringContaining('Generation failed acceptance'),
-            expect.objectContaining({ errorType: 'validation' })
+            expect.stringContaining('Project delivery failed during acceptance'),
+            expect.objectContaining({
+                errorType: 'validation',
+                qualityReport: expect.objectContaining({ deliveryStage: 'acceptance' }),
+            })
         );
     });
 
     it('runs the shared acceptance gate validation pipeline', async () => {
         mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
+        const generatorWithRealGate = new StreamingProjectGenerator(
+            mockPipeline,
+            mockBugfixProvider,
+            mockPromptProvider,
+        );
 
-        await generator.generateProjectStreaming('test', {});
+        await generatorWithRealGate.generateProjectStreaming('test', {});
 
         expect(mockValidationPipeline.validate).toHaveBeenCalledWith(expect.objectContaining({
             'src/main.tsx': expect.any(String),
@@ -200,6 +232,37 @@ describe('StreamingProjectGenerator', () => {
         }));
         expect(mockBuildValidator.validateAll).toHaveBeenCalled();
         expect(mockBuildValidator.validateCrossFileReferences).toHaveBeenCalled();
+    });
+
+    it('fails closed when the delivery gate rejects the generated files', async () => {
+        mockPipeline.runGeneration.mockResolvedValue(makeGenerationResult());
+        (mockDeliveryGate.deliver as any).mockResolvedValueOnce({
+            approved: false,
+            qualityReport: {
+                deliveryStage: 'repair',
+                issues: [{ source: 'repair', type: 'exhausted', message: 'Repair ladder exhausted' }],
+                repairAttempts: 2,
+                repairLevelReached: 'broad-ai',
+            },
+        });
+
+        const onComplete = vi.fn();
+        const onError = vi.fn();
+        const result = await generator.generateProjectStreaming('test', { onComplete, onError });
+
+        expect(result.success).toBe(false);
+        expect(result.qualityReport).toEqual(expect.objectContaining({
+            deliveryStage: 'repair',
+            repairLevelReached: 'broad-ai',
+        }));
+        expect(onComplete).not.toHaveBeenCalled();
+        expect(onError).toHaveBeenCalledWith(
+            expect.stringContaining('Project delivery failed'),
+            expect.objectContaining({
+                errorCode: 'generation_delivery_failed',
+                qualityReport: expect.objectContaining({ deliveryStage: 'repair' }),
+            }),
+        );
     });
 
     it('emits onPipelineStage for each stage start/complete', async () => {

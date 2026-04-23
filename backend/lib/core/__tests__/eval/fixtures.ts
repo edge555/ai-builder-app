@@ -9,6 +9,10 @@ export const SIMPLE_COUNTER_OUTPUT: ProjectOutput = {
         private: true,
         version: '0.0.0',
         type: 'module',
+        scripts: {
+          dev: 'vite',
+          build: 'vite build',
+        },
         dependencies: {
           react: '^18.2.0',
           'react-dom': '^18.2.0',
@@ -253,4 +257,3 @@ export default function App() {
 }
 `,
 };
-

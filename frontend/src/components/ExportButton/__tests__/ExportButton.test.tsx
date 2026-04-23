@@ -49,11 +49,11 @@ describe('ExportButton', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        global.fetch = vi.fn();
+        globalThis.fetch = vi.fn();
 
         // URL mocks are set up in setup.ts via Object.defineProperty
-        vi.mocked(global.URL.createObjectURL).mockReturnValue('blob:mock-url');
-        vi.mocked(global.URL.revokeObjectURL).mockClear();
+        vi.mocked(globalThis.URL.createObjectURL).mockReturnValue('blob:mock-url');
+        vi.mocked(globalThis.URL.revokeObjectURL).mockClear();
 
         // Spy on document methods (don't replace - React needs real appendChild)
         vi.spyOn(document.body, 'appendChild');
@@ -89,7 +89,7 @@ describe('ExportButton', () => {
         });
 
         const mockBlob = new Blob(['test'], { type: 'application/zip' });
-        (global.fetch as any).mockResolvedValue({
+        (globalThis.fetch as any).mockResolvedValue({
             ok: true,
             blob: () => Promise.resolve(mockBlob),
         });
@@ -100,7 +100,7 @@ describe('ExportButton', () => {
         fireEvent.click(button);
 
         await waitFor(() => {
-            expect(global.fetch).toHaveBeenCalledWith(
+            expect(globalThis.fetch).toHaveBeenCalledWith(
                 'http://localhost/functions/export',
                 expect.objectContaining({
                     method: 'POST',
@@ -120,7 +120,7 @@ describe('ExportButton', () => {
         });
 
         const mockBlob = new Blob(['test'], { type: 'application/zip' });
-        (global.fetch as any).mockImplementation(
+        (globalThis.fetch as any).mockImplementation(
             () => new Promise((resolve) => setTimeout(() => resolve({ ok: true, blob: () => Promise.resolve(mockBlob) }), 100))
         );
 
@@ -145,7 +145,7 @@ describe('ExportButton', () => {
         });
 
         const mockBlob = new Blob(['test'], { type: 'application/zip' });
-        (global.fetch as any).mockResolvedValue({
+        (globalThis.fetch as any).mockResolvedValue({
             ok: true,
             blob: () => Promise.resolve(mockBlob),
         });
@@ -174,7 +174,7 @@ describe('ExportButton', () => {
             projectState: mockProjectState as any,
         });
 
-        (global.fetch as any).mockResolvedValue({
+        (globalThis.fetch as any).mockResolvedValue({
             ok: false,
             status: 500,
             statusText: 'Internal Server Error',
@@ -198,7 +198,7 @@ describe('ExportButton', () => {
             projectState: mockProjectState as any,
         });
 
-        (global.fetch as any).mockRejectedValue(new Error('Network error'));
+        (globalThis.fetch as any).mockRejectedValue(new Error('Network error'));
 
         render(<ExportButton />);
         const button = screen.getByRole('button');
@@ -217,7 +217,7 @@ describe('ExportButton', () => {
         });
 
         const mockBlob = new Blob(['test'], { type: 'application/zip' });
-        (global.fetch as any).mockResolvedValue({
+        (globalThis.fetch as any).mockResolvedValue({
             ok: true,
             blob: () => Promise.resolve(mockBlob),
         });
@@ -228,7 +228,7 @@ describe('ExportButton', () => {
         fireEvent.click(button);
 
         await waitFor(() => {
-            expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+            expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
         });
     });
 

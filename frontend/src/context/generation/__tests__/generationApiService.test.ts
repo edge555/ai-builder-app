@@ -123,6 +123,35 @@ describe('generationApiService', () => {
         await expect(service.generateProject('boom')).rejects.toThrow('AI provider error');
     });
 
+    it('modifyProject preserves typed delivery failures from non-2xx responses', async () => {
+        (fetch as any).mockResolvedValue({
+            ok: false,
+            status: 422,
+            statusText: 'Unprocessable Entity',
+            headers: { get: () => null },
+            json: async () => ({
+                success: false,
+                error: 'Project delivery failed during runtime_smoke',
+                errorType: 'ai_output',
+                qualityReport: {
+                    deliveryStage: 'runtime_smoke',
+                    issues: [{ source: 'runtime_smoke', type: 'missing_dependency', message: 'Missing react dependency' }],
+                    repairAttempts: 2,
+                    repairLevelReached: 'broad-ai',
+                },
+            }),
+        });
+
+        const service = createGenerationApiService({});
+        const result = await service.modifyProject(makeProjectState(), 'change the color');
+
+        expect(result.success).toBe(false);
+        expect(result.qualityReport).toEqual(expect.objectContaining({
+            deliveryStage: 'runtime_smoke',
+            repairLevelReached: 'broad-ai',
+        }));
+    });
+
     it('generateProjectStreaming calls /generate-stream and returns streamed result', async () => {
         const { parseSSEStream } = await import('@/utils/sse-parser');
 
