@@ -4,8 +4,6 @@ import { POST as generatePOST } from '../generate/route';
 import { POST as modifyPOST } from '../modify/route';
 import { createStreamingProjectGenerator } from '../../../lib/core/streaming-generator';
 import { createModificationEngine } from '../../../lib/diff';
-import { requireAuth } from '../../../lib/security/auth';
-import { resolveWorkspaceProvider } from '../../../lib/security/workspace-resolver';
 import { config } from '../../../lib/config';
 
 // Mock the services
@@ -105,30 +103,6 @@ describe('API Integration Tests', () => {
             expect(response.status).toBe(400);
         });
 
-        it('returns 403 with CORS headers when workspace membership is forbidden', async () => {
-            vi.mocked(requireAuth).mockResolvedValue({ userId: 'user-1' } as never);
-            vi.mocked(resolveWorkspaceProvider).mockResolvedValue({ forbidden: true } as never);
-
-            const request = new NextRequest('http://localhost/api/generate', {
-                method: 'POST',
-                headers: {
-                    ...requestHeaders,
-                },
-                body: JSON.stringify({
-                    description: 'A test project',
-                    workspaceId: '11111111-1111-4111-8111-111111111111',
-                }),
-            });
-
-            const response = await generatePOST(request);
-            const text = await response.text();
-
-            expect(response.status).toBe(403);
-            expect(text).toContain('Not a member of this workspace');
-            expect(response.headers.get('Access-Control-Allow-Origin')).toBe(allowedOrigin);
-            expect(response.headers.get('Content-Type')).toContain('application/json');
-            expect(response.headers.get('X-Request-Id')).toBeTruthy();
-        });
     });
 
     describe('POST /api/modify', () => {

@@ -8,7 +8,6 @@ import { type LoadingPhase } from '../components/ChatInterface/LoadingIndicator'
 import { createGenerationApiService } from './generation/generationApiService';
 import { createRepairService } from './generation/repairService';
 import { useErrorAggregator } from './ErrorAggregatorContext';
-import { useWorkspace } from './WorkspaceContext';
 import {
   GenerationStateContext,
   GenerationActionsContext,
@@ -24,7 +23,6 @@ const genLogger = createLogger('Generation');
  */
 export function GenerationProvider({ children }: { children: ReactNode }) {
   const errorAggregator = useErrorAggregator();
-  const { workspaceId, projectId: workspaceProjectId } = useWorkspace();
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -35,13 +33,9 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
   const isAutoRepairingRef = useRef(false);
 
   const generationApiService = useMemo(() => createGenerationApiService({
-    requestContext: {
-      workspaceId,
-      projectId: workspaceProjectId,
-    },
     onStreamSnapshot: setStreamingState,
     onStreamingChange: setIsStreaming,
-  }), [workspaceId, workspaceProjectId]);
+  }), []);
 
   const repairService = useMemo(() => createRepairService({
     errorAggregator,

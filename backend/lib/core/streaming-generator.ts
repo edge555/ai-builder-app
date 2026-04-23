@@ -75,8 +75,6 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     callbacks: StreamingCallbacks,
     options?: {
       requestId?: string;
-      beginnerMode?: boolean;
-      conversationHistoryPrefix?: { role: 'user' | 'assistant'; content: string }[];
     }
   ): Promise<StreamingGenerationResult> {
     if (!description || description.trim() === '') {
@@ -160,8 +158,6 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
         pipelineCallbacks,
         {
           requestId: options?.requestId,
-          beginnerMode: options?.beginnerMode,
-          conversationHistoryPrefix: options?.conversationHistoryPrefix,
         }
       );
     } catch (err) {
@@ -238,9 +234,7 @@ export class StreamingProjectGenerator extends BaseProjectGenerator {
     }
 
     contextLogger.debug('Checking for syntax errors before build-fix', { files: Object.keys(prefixedFiles) });
-    const acceptanceResult = this.acceptanceGate.validate(prefixedFiles, {
-      beginnerMode: options?.beginnerMode,
-    });
+    const acceptanceResult = this.acceptanceGate.validate(prefixedFiles, {});
     if (!acceptanceResult.valid || !acceptanceResult.sanitizedOutput) {
       const error = `Generation failed acceptance: ${acceptanceResult.issues
         .map((issue) => `${issue.file ?? 'unknown'}: ${issue.message}`)

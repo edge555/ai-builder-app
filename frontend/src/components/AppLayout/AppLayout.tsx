@@ -19,7 +19,6 @@ import { useSubmitPrompt } from '../../hooks/useSubmitPrompt';
 import { EditableProjectName } from '../EditableProjectName/EditableProjectName';
 import { ExportButton } from '../ExportButton';
 import { SaveTemplateButton } from '../SaveTemplateButton';
-import { StackBlitzButton } from '../StackBlitzButton';
 import { PanelToggle, type ActivePanel } from '../PanelToggle';
 import { StatusIndicator } from '../StatusIndicator';
 import { UndoRedoButtons } from '../UndoRedoButtons';
@@ -194,7 +193,6 @@ export function AppLayout({ initialPrompt, onBackToDashboard, disableAutoSave }:
                             />
                         </div>
                         <ExportButton />
-                        <StackBlitzButton />
                         <SaveTemplateButton />
                         <button
                             className="settings-button"

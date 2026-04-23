@@ -31,7 +31,6 @@ export interface AcceptanceResult {
 }
 
 export interface AcceptanceValidationContext {
-  beginnerMode?: boolean;
   changedFiles?: string[];
 }
 
@@ -69,9 +68,7 @@ export class AcceptanceGate {
         file: error.file,
       }));
 
-    if (context?.beginnerMode) {
-      issues.push(...findBeginnerModeIssues(sanitizedOutput));
-    }
+
 
     return {
       valid: issues.length === 0,
@@ -222,49 +219,3 @@ function findPlaceholderIssues(files: Record<string, string>): AcceptanceIssue[]
   });
 }
 
-function findBeginnerModeIssues(files: Record<string, string>): AcceptanceIssue[] {
-  const issues: AcceptanceIssue[] = [];
-  const fileCount = Object.keys(files).length;
-
-  if (fileCount < 4 || fileCount > 6) {
-    issues.push({
-      source: 'validation',
-      type: 'beginner_constraint',
-      message: `Beginner mode requires 4-6 files, got ${fileCount}`,
-    });
-  }
-
-  const scriptFiles = Object.entries(files).filter(([path]) => path.endsWith('.ts') || path.endsWith('.tsx'));
-  const forbiddenPattern = /\baxios\b|fetch\s*\(/;
-  for (const [, content] of scriptFiles) {
-    const hasForbiddenUsage = content
-      .split(/\r?\n/)
-      .filter((line) => !line.trimStart().startsWith('//'))
-      .some((line) => forbiddenPattern.test(line));
-    if (hasForbiddenUsage) {
-      issues.push({
-        source: 'validation',
-        type: 'beginner_constraint',
-        message: 'fetch/axios not allowed in beginner mode',
-      });
-      break;
-    }
-  }
-
-  const handlerPattern = /\bonClick\b|\bonChange\b|\bonSubmit\b/g;
-  const tsxFiles = Object.entries(files).filter(([path]) => path.endsWith('.tsx'));
-  const handlerCount = tsxFiles.reduce((sum, [, content]) => {
-    const matches = content.match(handlerPattern);
-    return sum + (matches?.length ?? 0);
-  }, 0);
-
-  if (handlerCount < 2) {
-    issues.push({
-      source: 'validation',
-      type: 'beginner_constraint',
-      message: 'Beginner mode requires 2 event handlers',
-    });
-  }
-
-  return issues;
-}

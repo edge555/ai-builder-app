@@ -76,7 +76,7 @@ export function WelcomePage({
   savedProjects,
   isLoadingProjects = false,
 }: WelcomePageProps) {
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuthState();
+  const { isLoading: isAuthLoading } = useAuthState();
   const hasProjects = savedProjects.length > 0;
 
   const [promptInput, setPromptInput] = useState('');

@@ -2,7 +2,7 @@ import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useProjectState, useProjectActions, useChatMessages, useGenerationActions, useToastActions } from '../../context';
-import { hybridStorageService } from '../../services/storage/HybridStorageService';
+import { storageService } from '../../services/storage';
 import { useSubmitPrompt } from '../useSubmitPrompt';
 
 // Mock context hooks
@@ -17,10 +17,7 @@ vi.mock('../../context', () => ({
 // Mock storage service
 vi.mock('../../services/storage', () => ({
     toStoredProject: vi.fn().mockReturnValue({}),
-}));
-
-vi.mock('../../services/storage/HybridStorageService', () => ({
-    hybridStorageService: {
+    storageService: {
         getUniqueProjectName: vi.fn().mockImplementation(async (name: string) => name),
         saveProject: vi.fn().mockResolvedValue(undefined),
         setMetadata: vi.fn().mockResolvedValue(undefined),
@@ -85,7 +82,7 @@ describe('useSubmitPrompt', () => {
         expect(mockChatMessages.addUserMessage).toHaveBeenCalledWith(prompt);
         expect(mockGeneration.setIsLoading).toHaveBeenCalledWith(true);
         expect(mockGeneration.setLoadingPhase).toHaveBeenCalledWith('generating');
-        expect(hybridStorageService.getUniqueProjectName).toHaveBeenCalledWith('test-app');
+        expect(storageService.getUniqueProjectName).toHaveBeenCalledWith('test-app');
         expect(mockProjectActions.setProjectState).toHaveBeenCalledWith(
             expect.objectContaining({ name: 'test-app' }),
             false
@@ -96,8 +93,8 @@ describe('useSubmitPrompt', () => {
             undefined,
             expect.any(Number)
         );
-        expect(hybridStorageService.saveProject).toHaveBeenCalledTimes(1);
-        expect(hybridStorageService.setMetadata).toHaveBeenCalledWith('lastOpenedProjectId', 'test-1');
+        expect(storageService.saveProject).toHaveBeenCalledTimes(1);
+        expect(storageService.setMetadata).toHaveBeenCalledWith('lastOpenedProjectId', 'test-1');
         expect(mockGeneration.setIsLoading).toHaveBeenCalledWith(false);
     });
 
@@ -227,7 +224,7 @@ describe('useSubmitPrompt', () => {
         const { result } = renderHook(() => useSubmitPrompt());
         const prompt = 'build a calculator';
 
-        vi.mocked(hybridStorageService.getUniqueProjectName).mockResolvedValue('Bright Calc Lab');
+        vi.mocked(storageService.getUniqueProjectName).mockResolvedValue('Bright Calc Lab');
         mockGeneration.generateProjectStreaming.mockResolvedValue({
             success: true,
             projectState: { id: 'test-3', name: 'Quick Calc Studio', files: { 'App.tsx': 'code' } },

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatMessage } from '../components/ChatInterface';
 import { useProjectState, useProjectActions, useChatMessages, useGenerationActions, useToastActions } from '../context';
 import { toStoredProject } from '../services/storage';
-import { hybridStorageService } from '../services/storage/HybridStorageService';
+import { storageService } from '../services/storage';
 import { getUserFriendlyErrorMessage, detectErrorType, isRetryableError, extractRetryAfterSeconds, type ErrorType } from '../utils/error-messages';
 import { createLogger } from '../utils/logger';
 
@@ -178,7 +178,7 @@ export function useSubmitPrompt() {
 
                     generation.setLoadingPhase('validating');
                     if (result.success && result.projectState) {
-                        const uniqueProjectName = await hybridStorageService.getUniqueProjectName(result.projectState.name);
+                        const uniqueProjectName = await storageService.getUniqueProjectName(result.projectState.name);
                         const projectStateWithUniqueName = {
                             ...result.projectState,
                             name: uniqueProjectName,
@@ -197,8 +197,8 @@ export function useSubmitPrompt() {
                         try {
                             const completeMessages = [...chatMessages.messages, userMessage, assistantMessage];
                             const storedProject = toStoredProject(projectStateWithUniqueName, completeMessages);
-                            await hybridStorageService.saveProject(storedProject);
-                            await hybridStorageService.setMetadata('lastOpenedProjectId', projectStateWithUniqueName.id);
+                            await storageService.saveProject(storedProject);
+                            await storageService.setMetadata('lastOpenedProjectId', projectStateWithUniqueName.id);
                         } catch (saveError) {
                             submitLogger.error('Failed to save project after generation', { error: saveError });
                             // Continue anyway - auto-save will retry

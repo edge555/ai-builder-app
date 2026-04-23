@@ -17,7 +17,7 @@ import {
   toSerializedProjectState,
   deserializeChatMessages,
 } from '@/services/storage';
-import { hybridStorageService } from '@/services/storage/HybridStorageService';
+import { storageService } from '@/services/storage';
 import { createLogger } from '@/utils/logger';
 
 /**
@@ -85,7 +85,7 @@ export function BuilderPage() {
       } else if (projectId) {
         // Load existing project from storage
         try {
-          const storedProject = await hybridStorageService.getProject(projectId);
+          const storedProject = await storageService.getProject(projectId);
           if (!storedProject) {
             builderLogger.error('Project not found', { projectId });
             navigate('/', { replace: true });

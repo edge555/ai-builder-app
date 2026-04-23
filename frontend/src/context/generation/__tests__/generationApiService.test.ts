@@ -31,7 +31,7 @@ describe('generationApiService', () => {
         vi.stubGlobal('fetch', vi.fn());
     });
 
-    it('includes workspace scoping and modify stream metadata', async () => {
+    it('modifyProjectStreaming sends request and returns streamed result', async () => {
         const { parseSSEStream } = await import('@/utils/sse-parser');
         const snapshots: string[] = [];
 
@@ -54,7 +54,6 @@ describe('generationApiService', () => {
         });
 
         const service = createGenerationApiService({
-            requestContext: { workspaceId: 'ws-1', projectId: 'proj-1' },
             onStreamSnapshot: snapshot => snapshots.push(snapshot.phase),
             onStreamingChange: vi.fn(),
         });
@@ -67,8 +66,7 @@ describe('generationApiService', () => {
         const fetchCall = (fetch as any).mock.calls[0];
         const requestBody = JSON.parse(fetchCall[1].body);
 
-        expect(requestBody.workspaceId).toBe('ws-1');
-        expect(requestBody.projectId).toBe('proj-1');
+        expect(requestBody.workspaceId).toBeUndefined();
         expect(response.partialSuccess).toBe(true);
         expect(response.rolledBackFiles).toEqual(['src/Old.tsx']);
         expect(response.changeSummary?.description).toBe('Updated app');
@@ -83,7 +81,6 @@ describe('generationApiService', () => {
         });
 
         const service = createGenerationApiService({
-            requestContext: { workspaceId: null, projectId: null },
             onStreamSnapshot: vi.fn(),
             onStreamingChange: vi.fn(),
         });
@@ -97,38 +94,19 @@ describe('generationApiService', () => {
         expect(result.success).toBe(true);
     });
 
-    it('generateProject omits workspaceId when not in workspace context', async () => {
+    it('generateProject omits workspaceId', async () => {
         (fetch as any).mockResolvedValue({
             ok: true,
             headers: { get: () => null },
             json: async () => ({ success: true, projectState: { files: {} } }),
         });
 
-        const service = createGenerationApiService({
-            requestContext: { workspaceId: null, projectId: null },
-        });
+        const service = createGenerationApiService({});
 
         await service.generateProject('hello');
 
         const body = JSON.parse((fetch as any).mock.calls[0][1].body);
         expect(body.workspaceId).toBeUndefined();
-    });
-
-    it('generateProject includes workspaceId in workspace context', async () => {
-        (fetch as any).mockResolvedValue({
-            ok: true,
-            headers: { get: () => null },
-            json: async () => ({ success: true, projectState: { files: {} } }),
-        });
-
-        const service = createGenerationApiService({
-            requestContext: { workspaceId: 'ws-42', projectId: null },
-        });
-
-        await service.generateProject('hello');
-
-        const body = JSON.parse((fetch as any).mock.calls[0][1].body);
-        expect(body.workspaceId).toBe('ws-42');
     });
 
     it('generateProject throws a user-friendly error on HTTP failure', async () => {
@@ -140,9 +118,7 @@ describe('generationApiService', () => {
             json: async () => ({ error: 'AI provider error' }),
         });
 
-        const service = createGenerationApiService({
-            requestContext: { workspaceId: null, projectId: null },
-        });
+        const service = createGenerationApiService({});
 
         await expect(service.generateProject('boom')).rejects.toThrow('AI provider error');
     });
@@ -163,18 +139,14 @@ describe('generationApiService', () => {
 
         const snapshots: string[] = [];
         const service = createGenerationApiService({
-            requestContext: { workspaceId: 'ws-1', projectId: 'proj-1' },
             onStreamSnapshot: s => snapshots.push(s.phase),
             onStreamingChange: vi.fn(),
         });
 
         const result = await service.generateProjectStreaming('simple page');
 
-        const [url, options] = (fetch as any).mock.calls[0];
-        const body = JSON.parse(options.body);
+        const [url] = (fetch as any).mock.calls[0];
         expect(url).toContain('/generate-stream');
-        expect(body.workspaceId).toBe('ws-1');
-        expect(body.projectId).toBe('proj-1');
         expect(result.success).toBe(true);
         expect(snapshots).toContain('connecting');
         expect(snapshots[snapshots.length - 1]).toBe('complete');
@@ -187,9 +159,7 @@ describe('generationApiService', () => {
             json: async () => ({ success: true, projectState: { files: {} } }),
         });
 
-        const service = createGenerationApiService({
-            requestContext: { workspaceId: 'ws-1', projectId: 'proj-1' },
-        });
+        const service = createGenerationApiService({});
 
         const result = await service.modifyProject(makeProjectState(), 'change the color');
 
@@ -197,8 +167,7 @@ describe('generationApiService', () => {
         const body = JSON.parse(options.body);
         expect(url).toContain('/modify');
         expect(body.prompt).toBe('change the color');
-        expect(body.workspaceId).toBe('ws-1');
-        expect(body.projectId).toBe('proj-1');
+        expect(body.workspaceId).toBeUndefined();
         expect(result.success).toBe(true);
     });
 
@@ -221,7 +190,6 @@ describe('generationApiService', () => {
         });
 
         const service = createGenerationApiService({
-            requestContext: { workspaceId: null, projectId: null },
             onStreamSnapshot: vi.fn(),
             onStreamingChange,
         });
@@ -238,9 +206,7 @@ describe('generationApiService', () => {
     });
 
     it('dispose calls abortCurrentRequest (no-op when idle)', () => {
-        const service = createGenerationApiService({
-            requestContext: { workspaceId: null, projectId: null },
-        });
+        const service = createGenerationApiService({});
         // Should not throw
         expect(() => service.dispose()).not.toThrow();
     });

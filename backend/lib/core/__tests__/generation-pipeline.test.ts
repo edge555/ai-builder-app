@@ -160,25 +160,6 @@ describe('GenerationPipeline (Phase 5)', () => {
     expect(filePaths).not.toContain('src/main.tsx');
   });
 
-  it('beginnerMode bypasses AI planning and forces beginner recipe selection', async () => {
-    mockIntentProvider.generate.mockResolvedValue({ success: true, content: validIntentJson });
-    mockReviewProvider.generate.mockResolvedValue({ success: true, content: validReviewJson });
-
-    mocks.selectRecipe.mockReturnValue({ id: 'react-spa-beginner', name: 'Beginner' } as any);
-
-    const result = await pipeline.run('make a counter app', {}, { beginnerMode: true });
-
-    expect(mockPlanningProvider.generate).not.toHaveBeenCalled();
-    expect(mocks.selectRecipe).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ beginnerMode: true }),
-      expect.any(String)
-    );
-    expect(result.selectedRecipeId).toBe('react-spa-beginner');
-    expect(result.architecturePlan?.files.length).toBeGreaterThanOrEqual(4);
-    expect(result.architecturePlan?.files.length).toBeLessThanOrEqual(6);
-  });
-
   // ── Plan Review (Task 5.3) ──────────────────────────────────────────────────
 
   // Large plan (>10 files) used by plan review tests

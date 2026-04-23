@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 
 import type { ChatMessage } from '@/components';
 import { toStoredProject } from '@/services/storage';
-import { hybridStorageService } from '@/services/storage/HybridStorageService';
+import { storageService } from '@/services/storage';
 import { createLogger } from '@/utils/logger';
 
 const autoSaveLogger = createLogger('AutoSave');
@@ -93,10 +93,10 @@ export function useAutoSave(
         const storedProject = toStoredProject(currentProjectState, currentMessages);
 
         // Save to IndexedDB
-        await hybridStorageService.saveProject(storedProject);
+        await storageService.saveProject(storedProject);
 
         // Save last opened project ID to local metadata
-        await hybridStorageService.setMetadata('lastOpenedProjectId', currentProjectState.id);
+        await storageService.setMetadata('lastOpenedProjectId', currentProjectState.id);
 
         // Update last saved timestamp (guard against unmount during async operation)
         if (isMountedRef.current) {

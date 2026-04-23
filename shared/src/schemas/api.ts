@@ -91,8 +91,6 @@ export const ImageAttachmentSchema = z.object({
 export const GenerateProjectRequestSchema = z.object({
     description: z.string().min(1, 'Project description is required').max(50000, 'Project description is too long (max 50,000 characters)'),
     attachments: z.array(ImageAttachmentSchema).max(5, 'Maximum 5 image attachments').optional(),
-    workspaceId: z.string().uuid().optional(),  // present when called from MemberBuilderPage
-    projectId: z.string().uuid().optional(),    // optional existing workspace_projects.id for session continuity
 });
 
 /**
@@ -117,8 +115,6 @@ export const ModifyProjectRequestSchema = z.object({
     projectState: SerializedProjectStateSchema,
     prompt: z.string().min(1, 'Modification prompt is required').max(50000, 'Modification prompt is too long (max 50,000 characters)'),
     shouldSkipPlanning: z.boolean().optional(),
-    workspaceId: z.string().uuid().optional(),  // present when called from MemberBuilderPage
-    projectId: z.string().uuid().optional(),    // workspace_projects.id for snapshot upsert
     runtimeError: z.object({
         message: z.string(),
         stack: z.string().optional(),
