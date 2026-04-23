@@ -3,6 +3,7 @@ import type { Version } from './version';
 import type { ValidationError } from './validation';
 import type { FileDiff } from './diff';
 import type { ChangeSummary } from './change-summary';
+import type { QualityReport } from './quality-report';
 
 /**
  * Base result type for all AI operations (generation, modification, etc.).
@@ -19,6 +20,8 @@ export interface OperationResult {
   error?: string;
   /** Validation errors encountered during the operation */
   validationErrors?: ValidationError[];
+  /** Delivery gate report for approved or rejected outputs */
+  qualityReport?: QualityReport;
 }
 
 /**

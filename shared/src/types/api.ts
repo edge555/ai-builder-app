@@ -3,6 +3,7 @@ import type { SerializedVersion } from './version';
 import type { FileDiff } from './diff';
 import type { ChangeSummary } from './change-summary';
 import type { RuntimeError } from './runtime-error';
+import type { QualityReport } from './quality-report';
 
 // ============================================================================
 // Generate Project API
@@ -44,6 +45,8 @@ export interface GenerateProjectResponse {
   error?: string;
   /** Error category for retry behavior and UI messaging */
   errorType?: ApiError['type'];
+  /** Delivery gate report for approved or rejected outputs */
+  qualityReport?: QualityReport;
 }
 
 // ============================================================================
@@ -88,6 +91,8 @@ export interface ModifyProjectResponse {
   partialSuccess?: boolean;
   /** Files that were rolled back to their pre-modification state */
   rolledBackFiles?: string[];
+  /** Delivery gate report for approved or rejected outputs */
+  qualityReport?: QualityReport;
 }
 
 // ============================================================================

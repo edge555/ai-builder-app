@@ -2,6 +2,20 @@ import { z } from 'zod';
 
 import { RUNTIME_ERROR_TYPES, ERROR_PRIORITIES, ERROR_SOURCES } from '../types/runtime-error';
 
+export const QualityIssueSchema = z.object({
+    source: z.enum(['acceptance', 'runtime_smoke', 'repair']),
+    type: z.string(),
+    message: z.string(),
+    file: z.string().optional(),
+});
+
+export const QualityReportSchema = z.object({
+    deliveryStage: z.enum(['acceptance', 'runtime_smoke', 'repair', 'approved']),
+    issues: z.array(QualityIssueSchema),
+    repairAttempts: z.number().int().nonnegative(),
+    repairLevelReached: z.enum(['none', 'deterministic', 'targeted-ai', 'broad-ai', 'rollback']),
+});
+
 // ============================================================================
 // Common Schemas
 // ============================================================================

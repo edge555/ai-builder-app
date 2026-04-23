@@ -12,5 +12,5 @@ export * from './plan';
 export * from './runtime-error';
 export * from './repair-types';
 export * from './operation-result';
+export * from './quality-report';
 export * from './auth';
-
