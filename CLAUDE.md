@@ -39,7 +39,7 @@ Available gstack skills:
 
 ## Project Overview
 
-AI-powered app builder monorepo that generates web applications from natural language prompts. Uses a pluggable AI provider layer (OpenRouter by default, Modal as alternative) to generate complete React projects with live preview (Sandpack), code editing (Monaco), and version control.
+AI-powered app builder monorepo that generates web applications from natural language prompts. Uses OpenRouter as the AI provider to generate complete React projects with live preview (Sandpack), code editing (Monaco), and version control.
 
 ## Monorepo Structure
 
@@ -48,7 +48,7 @@ Three workspaces managed via npm workspaces:
 - **backend**: Next.js 16 API server handling AI generation and streaming
 - **shared**: Common types, Zod schemas, and utilities (dual ESM/CJS via tsup)
 
-Additionally: `supabase/` (edge functions + config), `modal-code-ai/` (Python Modal app).
+Additionally: `supabase/` (edge functions + config).
 
 ### Frontend Structure
 ```
@@ -119,10 +119,8 @@ backend/
 ├── lib/
 │   ├── ai/            # Multi-provider AI abstraction
 │   │   ├── ai-provider.ts          # AIProvider interface
-│   │   ├── ai-provider-factory.ts  # Factory (reads AI_PROVIDER env + runtime override)
-│   │   ├── openrouter-client.ts    # OpenRouter API client (primary)
-│   │   ├── modal-client.ts         # Modal client (used by ModalPipelineFactory)
-│   │   ├── modal-pipeline-factory.ts # Per-task Modal endpoint resolution (MODAL_<TASK>_URL)
+│   │   ├── ai-provider-factory.ts  # Factory (reads runtime override from provider-config.json)
+│   │   ├── openrouter-client.ts    # OpenRouter API client
 │   │   ├── agent-router.ts         # Task-specific provider routing + FallbackAIProvider
 │   │   ├── intent-detector.ts      # Prompt classification for model routing
 │   │   ├── agent-config-store.ts   # Per-task model config persistence
@@ -145,8 +143,8 @@ backend/
 │   │   ├── validators/             # Composable validators (path, syntax, JSON, pattern, architecture)
 │   │   ├── prompts/                # Provider-specific prompt assembly
 │   │   │   ├── prompt-provider.ts          # IPromptProvider interface (+ multi-phase methods)
-│   │   │   ├── prompt-provider-factory.ts  # Creates UnifiedPromptProvider (API or Modal config)
-│   │   │   ├── unified-prompt-provider.ts  # Single configurable provider (API default; Modal: higher budgets + verbose guidance)
+│   │   │   ├── prompt-provider-factory.ts  # Creates UnifiedPromptProvider
+│   │   │   ├── unified-prompt-provider.ts  # Single configurable provider via PromptProviderConfig (token budget overrides + verbose guidance)
 │   │   │   ├── generation-prompt-utils.ts  # Shared prompt building utilities
 │   │   │   ├── css-library.ts              # Embedded CSS library (BASE + FULL tiers, complexity-gated)
 │   │   │   ├── shared-prompt-fragments.ts  # Reusable prompt fragments (layout, polish, data, CRUD inference)
@@ -239,7 +237,7 @@ npm run lint                   # All workspaces
 1. User prompt → frontend ChatInterface → backend `/api/generate-stream` or `/api/modify-stream`
 2. Backend resolves AI provider: if request carries a workspace identity header, `WorkspaceResolver` validates membership, decrypts the org's API key (AES-256-GCM), and returns a workspace-scoped `AIProvider`; otherwise falls through to env var / runtime override from `provider-config.json`
 2a. **Session history** — `session-service.getLastKTurns()` fetches the last 10 turns (configurable via `SESSION_CONTEXT_K`) from `project_sessions` + `session_messages` and prepends them as a `[CONVERSATION HISTORY]` block in the AI system prompt. After each successful turn, `appendTurn()` records the user prompt and assistant response (fire-and-forget).
-3. **New projects** → `GenerationPipeline`: intent resolves → planning fires immediately (overlapped with synchronous recipe selection) → complexity gate (≤10 files → `executeOneShot()` with 1 AI call + plan review skipped; >10 files → `executeMultiPhase()` with plan review + phase batching + cross-phase summary cache). **Modifications** → `PipelineOrchestrator`: 3-stage pipeline (Intent → Planning → Execution); intent and planning skipped automatically for simple edits (≤2 primary files) or small projects (≤8 files). On OpenRouter, `IntentDetector` + `AgentRouter` route each stage to the optimal model. On Modal, `ModalPipelineFactory` resolves per-task endpoints.
+3. **New projects** → `GenerationPipeline`: intent resolves → planning fires immediately (overlapped with synchronous recipe selection) → complexity gate (≤10 files → `executeOneShot()` with 1 AI call + plan review skipped; >10 files → `executeMultiPhase()` with plan review + phase batching + cross-phase summary cache). **Modifications** → `PipelineOrchestrator`: 3-stage pipeline (Intent → Planning → Execution); intent and planning skipped automatically for simple edits (≤2 primary files) or small projects (≤8 files). `IntentDetector` + `AgentRouter` route each stage to the optimal model via OpenRouter.
 4. AI provider streams response via SSE with backpressure control (SSEEncoder utility)
 5. Incremental JSON parser extracts files as they arrive
 6. Files validated, formatted (Prettier), version-pinned (package.json deps), streamed back to frontend
@@ -250,18 +248,17 @@ npm run lint                   # All workspaces
 
 ### AI Provider System
 
-Multi-provider architecture with runtime switching:
+OpenRouter-based AI with task-specific routing:
 
 - **`AIProvider` interface**: `generate()` and `generateStreaming()` — all providers implement this
-- **`AIProviderFactory`**: Reads `AI_PROVIDER` env var + runtime override, returns singleton
-- **OpenRouter** (default): OpenAI-compatible API with retry/backoff, structured output, SSE streaming
-- **Modal**: Self-hosted models with per-task endpoint resolution via `ModalPipelineFactory` (resolves `MODAL_<TASK>_URL` → `MODAL_DEFAULT_URL`)
+- **`AIProviderFactory`**: Reads runtime override from `provider-config.json`, returns singleton
+- **OpenRouter**: OpenAI-compatible API with retry/backoff, structured output, SSE streaming
 - **`GenerationPipeline`** (new projects): intent resolves → planning fires immediately (overlapped with synchronous recipe selection <1ms) → complexity gate (≤10 files → `executeOneShot()` single AI call, plan review skipped; >10 files → `executeMultiPhase()` with plan review + phase batching + cross-phase summary cache to avoid re-summarizing scaffold files)
 - **`PipelineOrchestrator`** (modifications only): 3-stage pipeline (Intent → Planning → Execution); `classifyModificationComplexity` returns a 4-mode `ModificationRoutingDecision` (`repair | direct | scoped | full`) to decide which stages to skip and whether to enforce targeted-change scope. Scoped/direct mode degrades to full routing when unexpected files are detected. Execution is hard-fail, Intent/Planning degrade gracefully
-- **`IPromptProvider`**: Abstracts system prompts, token budgets, and multi-phase prompt methods; `UnifiedPromptProvider` implements it for both providers via `PromptProviderConfig` (token budget overrides + verbose guidance flag)
+- **`IPromptProvider`**: Abstracts system prompts, token budgets, and multi-phase prompt methods; `UnifiedPromptProvider` implements it via `PromptProviderConfig` (token budget overrides + verbose guidance flag)
 - **Recipe Engine**: Pluggable generation recipes (React SPA, Next.js + Prisma, Next.js + Supabase Auth) with per-phase prompt fragments
-- **`AgentRouter`** (OpenRouter only): Task-specific routing with `FallbackAIProvider` (tries models in priority order)
-- **`IntentDetector`** (OpenRouter only): Classifies prompts into task types (intent, planning, coding, debugging, documentation)
+- **`AgentRouter`**: Task-specific routing with `FallbackAIProvider` (tries models in priority order)
+- **`IntentDetector`**: Classifies prompts into task types (intent, planning, coding, debugging, documentation)
 - **Runtime config**: `provider-config-store.ts` persists overrides to `data/provider-config.json`; `agent-config-store.ts` persists per-task model config to `data/agent-config.json`
 
 ### Auto-Repair Flow
@@ -322,11 +319,7 @@ Multi-provider architecture with runtime switching:
 ## Environment Variables
 
 **Backend** (`.env`):
-- `AI_PROVIDER`: `openrouter` (default) or `modal`
-- `OPENROUTER_API_KEY`: OpenRouter API key (required when using openrouter)
-- `MODAL_DEFAULT_URL`: Default Modal endpoint (required when using modal)
-- `MODAL_DEFAULT_STREAM_URL`: Default Modal streaming endpoint (optional)
-- `MODAL_<TASK>_URL` / `MODAL_<TASK>_STREAM_URL`: Per-task Modal endpoints for `INTENT`, `PLANNING`, `EXECUTION`, `BUGFIX`, `REVIEW` (optional; fall back to `MODAL_DEFAULT_URL`)
+- `OPENROUTER_API_KEY`: OpenRouter API key (required)
 - `MAX_OUTPUT_TOKENS`: Token limit (default: 16384)
 - `ALLOWED_ORIGINS`: Comma-separated CORS origins (default: http://localhost:8080)
 - `LOG_LEVEL`: debug/info/warn/error (default: info)
