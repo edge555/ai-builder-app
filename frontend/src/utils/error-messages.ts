@@ -2,6 +2,8 @@
  * Utility functions for generating user-friendly error messages
  */
 
+import type { QualityReport } from '@ai-app-builder/shared/types';
+
 export type ErrorType =
   | 'timeout'
   | 'rate_limit'
@@ -19,6 +21,7 @@ export interface ErrorContext {
   errorCode?: string;
   partialContent?: string;
   originalMessage: string;
+  qualityReport?: QualityReport;
 }
 
 /**
@@ -48,7 +51,7 @@ export function extractRetryAfterSeconds(errorMessage: string): number | null {
  * Generates a user-friendly error message based on error type and context
  */
 export function getUserFriendlyErrorMessage(context: ErrorContext): string {
-  const { errorType, originalMessage, partialContent } = context;
+  const { errorType, originalMessage, partialContent, qualityReport } = context;
 
   switch (errorType) {
     case 'timeout': {
@@ -73,9 +76,15 @@ export function getUserFriendlyErrorMessage(context: ErrorContext): string {
       return `Could not reach the server. Check your internet connection and try again.`;
 
     case 'validation':
+      if (qualityReport && Array.isArray(qualityReport.issues) && qualityReport.issues.length > 0) {
+        return describeDeliveryFailure(qualityReport);
+      }
       return `The request could not be processed. Please try a different approach.`;
 
     case 'ai_output':
+      if (qualityReport && Array.isArray(qualityReport.issues) && qualityReport.issues.length > 0) {
+        return describeDeliveryFailure(qualityReport);
+      }
       return `The AI generated invalid output. Please try rephrasing your request.`;
 
     case 'state':
@@ -102,6 +111,24 @@ export function getUserFriendlyErrorMessage(context: ErrorContext): string {
     case 'unknown':
     default:
       return `Something went wrong. Please try again.`;
+  }
+}
+
+function describeDeliveryFailure(qualityReport: QualityReport): string {
+  const topIssues = qualityReport.issues
+    .slice(0, 2)
+    .map((issue) => issue.file ? `${issue.file}: ${issue.message}` : issue.message)
+    .join(' ');
+
+  switch (qualityReport.deliveryStage) {
+    case 'acceptance':
+      return `The generated app failed structural validation. ${topIssues}`.trim();
+    case 'runtime_smoke':
+      return `The generated app failed runtime smoke checks. ${topIssues}`.trim();
+    case 'repair':
+      return `Automatic repair could not deliver a runnable app. ${topIssues}`.trim();
+    default:
+      return `The generated app did not pass delivery checks. ${topIssues}`.trim();
   }
 }
 

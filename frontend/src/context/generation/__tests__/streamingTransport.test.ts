@@ -2,6 +2,8 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { createStreamSession, createInitialStreamSnapshot } from '../streamingTransport';
 
+type MockSseHandlers = Record<string, (...args: unknown[]) => unknown>;
+
 vi.mock('@/utils/sse-parser', () => ({
     parseSSEStream: vi.fn(),
 }));
@@ -19,7 +21,7 @@ describe('streamingTransport', () => {
         const { parseSSEStream } = await import('@/utils/sse-parser');
         const snapshots: string[] = [];
 
-        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: Record<string, Function>) => {
+        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: MockSseHandlers) => {
             handlers.onStart?.();
             handlers.onProgress?.({ label: 'Generating UI', length: 42 });
             handlers.onFile?.({ path: 'src/App.tsx', content: 'code', index: 0, total: 1 }, { 'src/App.tsx': 'code' });
@@ -76,7 +78,7 @@ describe('streamingTransport', () => {
         const { parseSSEStream } = await import('@/utils/sse-parser');
         const phases: string[] = [];
 
-        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: Record<string, Function>) => {
+        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: MockSseHandlers) => {
             handlers.onError?.({ error: 'AI error', errorType: 'ai_error', errorCode: 500 });
             return { success: false, error: 'AI error' };
         });
@@ -99,7 +101,7 @@ describe('streamingTransport', () => {
         const { parseSSEStream } = await import('@/utils/sse-parser');
         const lastSnapshots: import('../types').StreamSnapshot[] = [];
 
-        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: Record<string, Function>) => {
+        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: MockSseHandlers) => {
             handlers.onWarning?.({ path: 'src/Foo.tsx', message: 'missing prop', type: 'validation' });
             handlers.onComplete?.({ projectState: { files: {} } }, {});
             return { success: true };
@@ -159,7 +161,7 @@ describe('streamingTransport', () => {
     it('applies mapResult to transform the base result', async () => {
         const { parseSSEStream } = await import('@/utils/sse-parser');
 
-        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: Record<string, Function>) => {
+        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: MockSseHandlers) => {
             handlers.onComplete?.({ diffs: [{ path: 'x', type: 'added' }] }, {});
             return { success: true, projectState: { files: {} } };
         });

@@ -5,6 +5,7 @@ import type {
     RuntimeError,
     SerializedProjectState,
 } from '@ai-app-builder/shared/types';
+import { QualityReportSchema } from '@ai-app-builder/shared/schemas';
 import { FUNCTIONS_BASE_URL, SUPABASE_ANON_KEY } from '@/integrations/backend/client';
 import { createLogger } from '@/utils/logger';
 
@@ -92,7 +93,19 @@ export function createGenerationApiService({
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: response.statusText }));
-                throw new Error(errorData.error || `HTTP ${response.status}`);
+                if (errorData && errorData.success === false && typeof errorData.error === 'string') {
+                    // Validate qualityReport shape before propagating — drops malformed data
+                    if (errorData.qualityReport != null) {
+                        const parsed = QualityReportSchema.safeParse(errorData.qualityReport);
+                        errorData.qualityReport = parsed.success ? parsed.data : undefined;
+                    }
+                    return errorData as TResponse;
+                }
+
+                const errorMessage = typeof errorData?.error === 'string'
+                    ? errorData.error
+                    : errorData?.error?.message || `HTTP ${response.status}`;
+                throw new Error(errorMessage);
             }
 
             return await response.json() as TResponse;
@@ -222,6 +235,7 @@ export function createGenerationApiService({
                     ...baseResult,
                     diffs: completeData?.diffs as ModifyProjectResponse['diffs'],
                     changeSummary: completeData?.changeSummary as ModifyProjectResponse['changeSummary'],
+                    qualityReport: (completeData?.qualityReport ?? baseResult.qualityReport) as ModifyProjectResponse['qualityReport'],
                     ...(completeData?.partialSuccess ? { partialSuccess: completeData.partialSuccess as boolean } : {}),
                     ...(Array.isArray(completeData?.rolledBackFiles) && completeData.rolledBackFiles.length > 0
                         ? { rolledBackFiles: completeData.rolledBackFiles as string[] }

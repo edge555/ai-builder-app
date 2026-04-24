@@ -3,7 +3,12 @@
  * Contains shared functionality for generation flows.
  */
 
-import type { FileDiff, RepairAttempt } from '@ai-app-builder/shared';
+import type {
+    FileDiff,
+    QualityIssue,
+    RepairAttempt,
+    RepairLevelReached,
+} from '@ai-app-builder/shared';
 import type { AIProvider } from '../ai';
 import type { IPromptProvider } from './prompts/prompt-provider';
 import type { IntentOutput } from './schemas';
@@ -15,6 +20,8 @@ import { processFiles } from './file-processor';
 import { createLogger } from '../logger';
 import { createAcceptanceGate } from './acceptance-gate';
 import { getStructuredParseError, parseStructuredOutput } from '../ai/structured-output';
+import { tryDeterministicFixes } from '../diff/deterministic-fixes';
+import { evaluateProjectDelivery } from './project-delivery-gate';
 
 const logger = createLogger('BaseProjectGenerator');
 
@@ -156,6 +163,205 @@ export abstract class BaseProjectGenerator {
                 }],
             };
         });
+    }
+
+    protected async repairGeneratedFilesToDeliveryApproval(
+        files: Record<string, string>,
+        originalPrompt: string,
+        requestId?: string
+    ): Promise<{
+        files: Record<string, string>;
+        repairAttempts: number;
+        repairLevelReached: RepairLevelReached;
+        finalEvaluation: import('./project-delivery-gate').DeliveryEvaluation;
+    }> {
+        const contextLogger = requestId ? logger.withRequestId(requestId) : logger;
+        let currentFiles = files;
+        let repairAttempts = 0;
+        let repairLevelReached: RepairLevelReached = 'none';
+        const failureHistory: RepairAttempt[] = [];
+
+        let evaluation = evaluateProjectDelivery({
+            files: currentFiles,
+            acceptanceGate: this.acceptanceGate,
+        });
+
+        if (evaluation.approved) {
+            return { files: currentFiles, repairAttempts, repairLevelReached, finalEvaluation: evaluation };
+        }
+
+        const fixableBuildErrors = evaluation.buildErrors
+            .filter((error) => error.severity === 'fixable');
+
+        if (fixableBuildErrors.length > 0) {
+            const deterministic = tryDeterministicFixes(fixableBuildErrors, currentFiles);
+            if (deterministic.fixed.length > 0) {
+                currentFiles = { ...currentFiles, ...deterministic.fileChanges };
+                repairAttempts++;
+                repairLevelReached = 'deterministic';
+                evaluation = evaluateProjectDelivery({
+                    files: currentFiles,
+                    acceptanceGate: this.acceptanceGate,
+                });
+
+                if (evaluation.approved) {
+                    return { files: currentFiles, repairAttempts, repairLevelReached, finalEvaluation: evaluation };
+                }
+
+                failureHistory.push({
+                    attempt: repairAttempts,
+                    error: evaluation.issues.map((issue) => issue.message).join('; '),
+                    strategy: 'Deterministic delivery repair',
+                    timestamp: new Date().toISOString(),
+                });
+            }
+        }
+
+        const targetedAttempt = await this.requestGenerationRepair(
+            currentFiles,
+            originalPrompt,
+            evaluation.issues,
+            failureHistory,
+            0.2,
+            requestId,
+        );
+
+        if (targetedAttempt) {
+            repairAttempts++;
+            repairLevelReached = 'targeted-ai';
+            currentFiles = targetedAttempt;
+            evaluation = evaluateProjectDelivery({
+                files: currentFiles,
+                acceptanceGate: this.acceptanceGate,
+            });
+
+            if (evaluation.approved) {
+                return { files: currentFiles, repairAttempts, repairLevelReached, finalEvaluation: evaluation };
+            }
+
+            failureHistory.push({
+                attempt: repairAttempts,
+                error: evaluation.issues.map((issue) => issue.message).join('; '),
+                strategy: 'Targeted AI delivery repair',
+                timestamp: new Date().toISOString(),
+            });
+        }
+
+        const broadAttempt = await this.requestGenerationRepair(
+            currentFiles,
+            originalPrompt,
+            evaluation.issues,
+            failureHistory,
+            0.4,
+            requestId,
+        );
+
+        if (broadAttempt) {
+            repairAttempts++;
+            repairLevelReached = 'broad-ai';
+            currentFiles = broadAttempt;
+            evaluation = evaluateProjectDelivery({
+                files: currentFiles,
+                acceptanceGate: this.acceptanceGate,
+            });
+
+            if (evaluation.approved) {
+                return { files: currentFiles, repairAttempts, repairLevelReached, finalEvaluation: evaluation };
+            }
+        }
+
+        contextLogger.warn('Generation delivery repair exhausted', {
+            repairAttempts,
+            repairLevelReached,
+            remainingIssues: evaluation.issues,
+        });
+
+        return { files: currentFiles, repairAttempts, repairLevelReached, finalEvaluation: evaluation };
+    }
+
+    protected formatDeliveryFailureMessage(qualityReport: {
+        deliveryStage: string;
+        issues: QualityIssue[];
+    }): string {
+        const issueSummary = qualityReport.issues.length > 0
+            ? qualityReport.issues
+                .map((issue) => `${issue.file ?? 'project'}: ${issue.message}`)
+                .join('; ')
+            : 'Unknown delivery failure';
+
+        return `Project delivery failed during ${qualityReport.deliveryStage}: ${issueSummary}`;
+    }
+
+    private async requestGenerationRepair(
+        files: Record<string, string>,
+        originalPrompt: string,
+        issues: QualityIssue[],
+        failureHistory: RepairAttempt[],
+        temperature: number,
+        requestId?: string
+    ): Promise<Record<string, string> | null> {
+        const contextLogger = requestId ? logger.withRequestId(requestId) : logger;
+        const errorContext = this.formatQualityIssuesForAI(issues);
+        const failureHistoryStrings = failureHistory.map((attempt) =>
+            attempt.strategy ? `${attempt.error}: ${attempt.strategy}` : attempt.error
+        );
+        const fixSystemInstruction = this.promptProvider.getBugfixSystemPrompt(
+            errorContext,
+            failureHistoryStrings
+        );
+
+        const fixResponse = await this.bugfixProvider.generate({
+            prompt: `Fix the generated project so it passes delivery checks. Original project description: "${originalPrompt}"`,
+            systemInstruction: fixSystemInstruction,
+            temperature,
+            maxOutputTokens: this.promptProvider.tokenBudgets.bugfix,
+            responseSchema: PROJECT_OUTPUT_SCHEMA,
+            requestId,
+        });
+
+        if (!fixResponse.success || !fixResponse.content) {
+            contextLogger.warn('Generation delivery repair AI call failed', {
+                temperature,
+                error: fixResponse.error,
+            });
+            return null;
+        }
+
+        const parsedResult = parseStructuredOutput(fixResponse.content, ProjectOutputSchema, 'ProjectOutput');
+        if (!parsedResult.success) {
+            contextLogger.warn('Generation delivery repair returned invalid schema', {
+                error: getStructuredParseError(parsedResult),
+                temperature,
+            });
+            return null;
+        }
+
+        const processResult = await processFiles(parsedResult.data.files || [], { addFrontendPrefix: false });
+        const repairedFiles = processResult.files;
+
+        // Guard: reject repair response if it drastically reduces the file count (AI hallucination).
+        // Allow up to 50% reduction — repair may legitimately remove files, but not most of the project.
+        const originalCount = Object.keys(files).length;
+        const repairedCount = Object.keys(repairedFiles).length;
+        if (originalCount > 0 && repairedCount < Math.ceil(originalCount * 0.5)) {
+            contextLogger.warn('Generation delivery repair returned too few files — rejecting', {
+                originalCount,
+                repairedCount,
+                temperature,
+            });
+            return null;
+        }
+
+        return repairedFiles;
+    }
+
+    private formatQualityIssuesForAI(issues: QualityIssue[]): string {
+        return issues
+            .map((issue) => {
+                const location = issue.file ? ` (${issue.file})` : '';
+                return `[${issue.source}/${issue.type}]${location} ${issue.message}`;
+            })
+            .join('\n');
     }
 
     /**

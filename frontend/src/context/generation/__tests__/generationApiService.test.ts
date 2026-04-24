@@ -2,6 +2,8 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { createGenerationApiService } from '../generationApiService';
 
+type MockSseHandlers = Record<string, (...args: unknown[]) => unknown>;
+
 vi.mock('@/utils/sse-parser', () => ({
     parseSSEStream: vi.fn(),
 }));
@@ -41,7 +43,7 @@ describe('generationApiService', () => {
             body: { getReader: () => ({}) },
         });
 
-        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: Record<string, Function>) => {
+        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: MockSseHandlers) => {
             handlers.onComplete?.({
                 projectState: { files: { 'src/App.tsx': 'code' } },
                 diffs: [{ path: 'src/App.tsx', type: 'modified' }],
@@ -123,6 +125,35 @@ describe('generationApiService', () => {
         await expect(service.generateProject('boom')).rejects.toThrow('AI provider error');
     });
 
+    it('modifyProject preserves typed delivery failures from non-2xx responses', async () => {
+        (fetch as any).mockResolvedValue({
+            ok: false,
+            status: 422,
+            statusText: 'Unprocessable Entity',
+            headers: { get: () => null },
+            json: async () => ({
+                success: false,
+                error: 'Project delivery failed during runtime_smoke',
+                errorType: 'ai_output',
+                qualityReport: {
+                    deliveryStage: 'runtime_smoke',
+                    issues: [{ source: 'runtime_smoke', type: 'missing_dependency', message: 'Missing react dependency' }],
+                    repairAttempts: 2,
+                    repairLevelReached: 'broad-ai',
+                },
+            }),
+        });
+
+        const service = createGenerationApiService({});
+        const result = await service.modifyProject(makeProjectState(), 'change the color');
+
+        expect(result.success).toBe(false);
+        expect(result.qualityReport).toEqual(expect.objectContaining({
+            deliveryStage: 'runtime_smoke',
+            repairLevelReached: 'broad-ai',
+        }));
+    });
+
     it('generateProjectStreaming calls /generate-stream and returns streamed result', async () => {
         const { parseSSEStream } = await import('@/utils/sse-parser');
 
@@ -132,7 +163,7 @@ describe('generationApiService', () => {
             body: { getReader: () => ({}) },
         });
 
-        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: Record<string, Function>) => {
+        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: MockSseHandlers) => {
             handlers.onComplete?.({ projectState: { files: { 'index.html': '<html/>' } } }, { 'index.html': '<html/>' });
             return { success: true, projectState: { files: { 'index.html': '<html/>' } } };
         });

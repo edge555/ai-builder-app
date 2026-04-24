@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ModificationEngine } from '../../diff';
 import type { ProjectState } from '@ai-app-builder/shared';
+import type { ProjectDeliveryGate } from '../../core/project-delivery-gate';
 
 vi.mock('../../core/validation-pipeline');
 vi.mock('../../core/build-validator');
@@ -44,6 +45,7 @@ describe('ModificationEngine', () => {
   let mockFilePlanner: any;
   let mockRepairEngine: any;
   let mockCheckpointManager: any;
+  let mockDeliveryGate: ProjectDeliveryGate;
   let engine: ModificationEngine;
 
   const createProjectState = (files: Record<string, string>): ProjectState => ({
@@ -103,6 +105,55 @@ describe('ModificationEngine', () => {
       rollbackAll: vi.fn().mockReturnValue({}),
       has: vi.fn().mockReturnValue(false),
     };
+    mockDeliveryGate = {
+      deliver: vi.fn().mockImplementation(async ({ files, repair }: { files: Record<string, string>; repair?: Function }) => {
+        if (repair) {
+          const repaired = await repair({
+            files,
+            prompt: 'test',
+            evaluation: {
+              approved: false,
+              deliveryStage: 'acceptance',
+              issues: [],
+              acceptanceIssues: [],
+              runtimeSmoke: {
+                passed: false,
+                framework: 'vite-react',
+                issues: [],
+                interactionSignals: [],
+              },
+            },
+          });
+
+          return {
+            approved: true,
+            files: repaired.files,
+            qualityReport: {
+              deliveryStage: 'approved',
+              issues: [],
+              repairAttempts: repaired.repairAttempts,
+              repairLevelReached: repaired.repairLevelReached,
+            },
+            meta: repaired.meta,
+          };
+        }
+
+        return {
+          approved: true,
+          files,
+          qualityReport: {
+            deliveryStage: 'approved',
+            issues: [],
+            repairAttempts: 0,
+            repairLevelReached: 'none',
+          },
+          meta: {
+            partialSuccess: false,
+            rolledBackFiles: [],
+          },
+        };
+      }),
+    } as unknown as ProjectDeliveryGate;
 
     vi.mocked(ValidationPipeline).mockImplementation(function () { return mockValidationPipeline; });
     vi.mocked(buildValidatorModule.createBuildValidator).mockReturnValue(mockBuildValidator);
@@ -115,7 +166,7 @@ describe('ModificationEngine', () => {
       return { trimToFit: vi.fn((slices: any[]) => slices) };
     } as any);
 
-    engine = new ModificationEngine(mockPipeline, mockBugfixProvider, mockPromptProvider);
+    engine = new ModificationEngine(mockPipeline, mockBugfixProvider, mockPromptProvider, mockDeliveryGate);
   });
 
   describe('modifyProject', () => {
@@ -340,6 +391,34 @@ describe('ModificationEngine', () => {
       expect(onPipelineStage).toHaveBeenCalledWith({ stage: 'intent', label: 'Analyzing intent...', status: 'start' });
       expect(onPipelineStage).toHaveBeenCalledWith({ stage: 'intent', label: '', status: 'complete' });
       expect(onPipelineStage).toHaveBeenCalledWith({ stage: 'planning', label: 'timeout', status: 'degraded' });
+    });
+
+    it('fails closed when the shared delivery gate rejects the final project', async () => {
+      const projectState = createProjectState({
+        'src/App.tsx': 'export default function App() { return <div />; }',
+      });
+
+      mockPipeline.runModificationPipeline.mockResolvedValue(makePipelineResult([
+        { path: 'src/App.tsx', content: 'export default function App() { return <div>Broken</div>; }' },
+      ]));
+      (mockDeliveryGate.deliver as any).mockResolvedValueOnce({
+        approved: false,
+        qualityReport: {
+          deliveryStage: 'runtime_smoke',
+          issues: [{ source: 'runtime_smoke', type: 'missing_dependency', message: 'package.json is missing required dependency "react"' }],
+          repairAttempts: 2,
+          repairLevelReached: 'broad-ai',
+        },
+      });
+
+      const result = await engine.modifyProject(projectState, 'Break the app');
+
+      expect(result.success).toBe(false);
+      expect(result.projectState).toBeUndefined();
+      expect(result.qualityReport).toEqual(expect.objectContaining({
+        deliveryStage: 'runtime_smoke',
+        repairLevelReached: 'broad-ai',
+      }));
     });
   });
 

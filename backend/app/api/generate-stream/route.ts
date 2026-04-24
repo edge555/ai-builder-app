@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
         try {
 
           // Generate project with streaming callbacks
-          const generator = await createStreamingProjectGenerator(null);
+          const generator = await createStreamingProjectGenerator();
 
           const result = await generator.generateProjectStreaming(body.description, {
             signal: request.signal,
@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
                 success: true,
                 projectState: serializeProjectState(data.projectState),
                 version: serializeVersion(data.version),
+                qualityReport: data.qualityReport,
               };
               // Complete event is critical
               encoder.enqueueEvent(
@@ -188,9 +189,10 @@ export async function POST(request: NextRequest) {
                 'error',
                 {
                   error,
-                  errorCode: errorData?.errorCode,
-                  errorType: errorData?.errorType,
-                  partialContent: errorData?.partialContent,
+                    errorCode: errorData?.errorCode,
+                    errorType: errorData?.errorType,
+                    partialContent: errorData?.partialContent,
+                    qualityReport: errorData?.qualityReport,
                 },
                 EventPriority.CRITICAL
               );
@@ -215,6 +217,7 @@ export async function POST(request: NextRequest) {
               {
                 error: result.error,
                 validationErrors: result.validationErrors,
+                qualityReport: result.qualityReport,
               },
               EventPriority.CRITICAL
             );

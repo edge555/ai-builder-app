@@ -1,5 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { ProjectState, Version, ModificationResult } from '@ai-app-builder/shared';
+import type {
+  ProjectState,
+  Version,
+  ModificationResult,
+  QualityReport,
+} from '@ai-app-builder/shared';
 import { computeDiffs } from './diff-computer';
 import { createChangeSummary } from './change-summarizer';
 
@@ -8,7 +13,7 @@ export async function createModificationResult(
   updatedFiles: Record<string, string | null>,
   deletedFiles: string[],
   prompt: string,
-  options?: { partialSuccess?: boolean; rolledBackFiles?: string[] }
+  options?: { partialSuccess?: boolean; rolledBackFiles?: string[]; qualityReport?: QualityReport }
 ): Promise<ModificationResult> {
   const now = new Date();
   const versionId = uuidv4();
@@ -51,5 +56,6 @@ export async function createModificationResult(
     changeSummary,
     ...(options?.partialSuccess && { partialSuccess: true }),
     ...(options?.rolledBackFiles?.length && { rolledBackFiles: options.rolledBackFiles }),
+    ...(options?.qualityReport ? { qualityReport: options.qualityReport } : {}),
   };
 }

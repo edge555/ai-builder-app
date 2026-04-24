@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.11.0.0] - 2026-04-23
+
+### Added
+- **Delivery gate for generated and modified apps** - new shared delivery approval pass now checks structural acceptance, heuristic runtime smoke, and bounded repair before the app is allowed to ship to the user.
+- **Typed quality report contract** - generation and modification failures now return a structured `qualityReport` so backend, frontend, and tests agree on why delivery failed and how far repair got.
+- **Production runtime smoke checks** - the runtime smoke harness now lives in backend core and is shared by both production delivery and eval coverage.
+
+### Changed
+- **Generation now fails closed** - the streaming and non-streaming generation paths only return success after delivery approval. Exhausted repair no longer falls through as a "best effort" success.
+- **Modification now uses the same approval gate** - post-edit delivery uses the same shared contract as generation, while still preserving rollback-derived partial success when the final project is approved.
+- **Frontend failure handling is clearer** - typed backend delivery failures now flow through SSE parsing, API services, and user-facing error messages so the UI can explain whether the app failed structure checks, runtime smoke, or repair.
+
+### Fixed
+- **Preview auto-repair trigger noise** - `WebContainerErrorListener` now ignores generic install chatter and only reacts to recognized fatal install or server signals, which cuts false repair pressure on first boot.
+- **Streaming success semantics** - generation streams no longer emit terminal success when the backend rejected delivery.
+- **Regression coverage for the new gate** - backend and frontend tests now cover delivery rejection, shared runtime smoke parity, modification gate failures, and the tightened preview listener behavior.
+- **No double-scan after repair** - repair callback now returns `finalEvaluation` so the delivery gate reuses it instead of running a duplicate full-project scan on every repair cycle.
+- **Error boundary false positives** - runtime smoke test now strips catch blocks before checking for top-level throws, so React error boundaries no longer incorrectly fail delivery.
+- **Unknown framework passes trivially** - projects with unrecognized entry point paths now surface an `unknown_framework` issue and enter repair, rather than silently passing the smoke test.
+- **Repair AI file-count guard** - repair responses that return fewer than 50% of the original project files are rejected to prevent AI hallucination from silently deleting most of the project.
+- **Quality report validation** - `qualityReport` received over SSE or from non-2xx API responses is validated with `QualityReportSchema` before propagation, so malformed data never reaches the UI.
+
 ## [1.10.2] - 2026-04-23
 
 ### Removed

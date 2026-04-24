@@ -235,18 +235,6 @@ export function AgentSettingsPage() {
                 <span className="agent-settings-provider-env-label">.env default</span>
               )}
             </button>
-            <button
-              className={`agent-settings-provider-option ${selectedProvider === 'modal' ? 'agent-settings-provider-option-active' : ''}`}
-              onClick={() => setSelectedProvider('modal')}
-            >
-              <span className="agent-settings-provider-name">Modal</span>
-              <span className="agent-settings-provider-desc">
-                Run on Modal serverless infrastructure
-              </span>
-              {providerConfig?.envProvider === 'modal' && (
-                <span className="agent-settings-provider-env-label">.env default</span>
-              )}
-            </button>
           </div>
           {isProviderOverridden && (
             <button className="agent-settings-provider-reset" onClick={handleResetProvider}>
@@ -257,20 +245,12 @@ export function AgentSettingsPage() {
 
         {/* Tabs */}
         <div className="agent-settings-tabs-wrapper">
-          {selectedProvider === 'modal' && (
-            <p className="agent-settings-modal-notice">
-              In Modal mode, each stage uses a dedicated endpoint configured via{' '}
-              <code>MODAL_&lt;TASK&gt;_URL</code> env vars. Switch to OpenRouter to configure
-              per-task models.
-            </p>
-          )}
           <div className="agent-settings-tabs">
             {TASK_TYPES.map(({ type, label }) => (
               <button
                 key={type}
                 className={`agent-settings-tab ${activeTab === type ? 'agent-settings-tab-active' : ''}`}
                 onClick={() => setActiveTab(type)}
-                disabled={selectedProvider === 'modal'}
               >
                 {label}
                 <span className="agent-settings-tab-count">
@@ -288,7 +268,7 @@ export function AgentSettingsPage() {
 
         {/* Model list */}
         <div
-          className={`agent-settings-content ${selectedProvider === 'modal' ? 'agent-settings-content-disabled' : ''}`}
+          className="agent-settings-content"
         >
           <div className="agent-settings-model-list">
             {activeModels.length === 0 ? (
@@ -357,12 +337,11 @@ export function AgentSettingsPage() {
                   handleAddModel();
                 }
               }}
-              disabled={selectedProvider === 'modal'}
             />
             <button
               className="agent-settings-add-model-btn"
               onClick={handleAddModel}
-              disabled={!newModelId.trim() || selectedProvider === 'modal'}
+              disabled={!newModelId.trim()}
             >
               <Plus size={16} />
               <span>Add Model</span>

@@ -8,10 +8,7 @@
 
 import { NextRequest } from 'next/server';
 import { applyRateLimit, RateLimitTier } from '../../../lib/security';
-import type {
-  ModifyProjectResponse,
-  ErrorResponse,
-} from '@ai-app-builder/shared';
+import type { ModifyProjectResponse } from '@ai-app-builder/shared';
 import {
   serializeProjectState,
   serializeVersion,
@@ -19,7 +16,7 @@ import {
   ModifyProjectRequestSchema,
 } from '@ai-app-builder/shared';
 import { createModificationEngine } from '../../../lib/diff';
-import { getCorsHeaders, handleOptions, handleError, AppError, withTimeout, TimeoutError, gzipJson, parseJsonRequest } from '../../../lib/api';
+import { AppError, getCorsHeaders, handleOptions, withTimeout, TimeoutError, gzipJson, parseJsonRequest } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
 
@@ -77,12 +74,20 @@ export async function POST(
     );
 
     if (!result.success) {
-      if (result.validationErrors) {
-        throw AppError.validation(result.error ?? 'Validation failed', {
-          validationErrors: result.validationErrors
-        });
-      }
-      throw AppError.aiOutput(result.error ?? 'Failed to modify project');
+      const response: ModifyProjectResponse = {
+        success: false,
+        error: result.error ?? 'Failed to modify project',
+        errorType: result.validationErrors ? 'validation' : 'ai_output',
+        ...(result.partialSuccess && { partialSuccess: true }),
+        ...(result.rolledBackFiles?.length ? { rolledBackFiles: result.rolledBackFiles } : {}),
+        ...(result.qualityReport ? { qualityReport: result.qualityReport } : {}),
+      };
+
+      return gzipJson(response, {
+        status: 422,
+        headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId },
+        request,
+      });
     }
 
     // Return successful response
@@ -94,6 +99,7 @@ export async function POST(
       changeSummary: result.changeSummary,
       ...(result.partialSuccess && { partialSuccess: true }),
       ...(result.rolledBackFiles?.length && { rolledBackFiles: result.rolledBackFiles }),
+      ...(result.qualityReport ? { qualityReport: result.qualityReport } : {}),
     };
 
     contextLogger.info('Project modification completed', {
@@ -103,24 +109,47 @@ export async function POST(
 
     return gzipJson(response, { status: 200, headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId }, request });
   } catch (error) {
-    // Handle timeout errors specifically
+    if (error instanceof AppError) {
+      const response: ModifyProjectResponse = {
+        success: false,
+        error: error.message,
+        errorType: error.type,
+      };
+      return gzipJson(response, {
+        status: error.statusCode,
+        headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId },
+        request,
+      });
+    }
+
     if (error instanceof TimeoutError) {
       contextLogger.error('Project modification timed out', {
         timeoutMs: error.timeoutMs,
       });
-      const timeoutError = AppError.network(
-        'OPERATION_TIMEOUT',
-        // Convert milliseconds to seconds (1000ms = 1s) for human-readable message
-        `Project modification timed out after ${error.timeoutMs / 1000} seconds`,
-        { timeoutMs: error.timeoutMs },
-        504
-      );
-      return handleError(timeoutError, 'api/modify', request);
+      const response: ModifyProjectResponse = {
+        success: false,
+        error: `Project modification timed out after ${error.timeoutMs / 1000} seconds`,
+        errorType: 'timeout',
+      };
+      return gzipJson(response, {
+        status: 504,
+        headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId },
+        request,
+      });
     }
 
     contextLogger.error('Project modification failed', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return handleError(error, 'api/modify', request);
+    const response: ModifyProjectResponse = {
+      success: false,
+      error: 'Failed to modify project',
+      errorType: 'ai_output',
+    };
+    return gzipJson(response, {
+      status: 500,
+      headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId },
+      request,
+    });
   }
 }

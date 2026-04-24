@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ModificationEngine } from '../modification-engine';
 import { applyFileEdits } from '../file-edit-applicator';
 import { ProjectState } from '@ai-app-builder/shared';
+import type { ProjectDeliveryGate } from '../../core/project-delivery-gate';
 
 // Mock config
 vi.mock('../../config', () => ({
@@ -54,6 +55,7 @@ vi.mock('../../analysis', () => ({
 describe('ModificationEngine Routing', () => {
   let pipelineMock: any;
   let engine: ModificationEngine;
+  let deliveryGateMock: ProjectDeliveryGate;
 
   beforeEach(() => {
     pipelineMock = {
@@ -66,7 +68,23 @@ describe('ModificationEngine Routing', () => {
         executorFiles: [],
       }),
     };
-    engine = new ModificationEngine(pipelineMock, {} as any, {} as any);
+    deliveryGateMock = {
+      deliver: vi.fn().mockImplementation(async ({ files }: { files: Record<string, string> }) => ({
+        approved: true,
+        files,
+        qualityReport: {
+          deliveryStage: 'approved',
+          issues: [],
+          repairAttempts: 0,
+          repairLevelReached: 'none',
+        },
+        meta: {
+          partialSuccess: false,
+          rolledBackFiles: [],
+        },
+      })),
+    } as unknown as ProjectDeliveryGate;
+    engine = new ModificationEngine(pipelineMock, {} as any, {} as any, deliveryGateMock);
     
     // Mock the slice selector to just return all files for simplicity
     (engine as any).selectCodeSlices = vi.fn().mockImplementation(async (state: any) => {

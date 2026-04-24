@@ -166,6 +166,7 @@ export function createStreamSession<TResponse extends GenerateProjectResponse | 
                         errorCode: errorData.errorCode,
                         partialContent: errorData.partialContent,
                         originalMessage: errorData.error,
+                        qualityReport: errorData.qualityReport,
                     });
 
                     touchSnapshot(current => ({
@@ -173,6 +174,7 @@ export function createStreamSession<TResponse extends GenerateProjectResponse | 
                         phase: 'error',
                         progressLabel: null,
                         error: userMessage,
+                        qualityReport: errorData.qualityReport,
                         lastHeartbeat: Date.now(),
                     }));
                 },

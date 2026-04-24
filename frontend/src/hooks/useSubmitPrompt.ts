@@ -229,6 +229,7 @@ export function useSubmitPrompt() {
                             const errorText = getUserFriendlyErrorMessage({
                                 errorType,
                                 originalMessage: errorMsg,
+                                qualityReport: result.qualityReport,
                             });
                             const finalMsg = retryCount >= MAX_API_RETRIES
                                 ? `Sorry, I couldn't generate the project after ${MAX_API_RETRIES} attempts. ${errorText}`
@@ -297,6 +298,7 @@ export function useSubmitPrompt() {
                             const errorText = getUserFriendlyErrorMessage({
                                 errorType,
                                 originalMessage: errorMsg,
+                                qualityReport: result.qualityReport,
                             });
                             const finalMsg = retryCount >= MAX_API_RETRIES
                                 ? `Sorry, I couldn't make those changes after ${MAX_API_RETRIES} attempts. ${errorText}`

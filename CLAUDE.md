@@ -118,6 +118,8 @@ backend/
 │   │   ├── heuristic-plan-builder.ts # Deterministic plan fallback when AI planning fails
 │   │   ├── schemas.ts              # Zod schemas (IntentOutput, PlanOutput, ArchitecturePlanSchema, PlanReviewOutput)
 │   │   ├── streaming-generator.ts  # SSE streaming orchestrator (routes new → GenerationPipeline, modify → PipelineOrchestrator)
+│   │   ├── project-delivery-gate.ts # Delivery approval: structural acceptance + runtime smoke + bounded repair before success
+│   │   ├── runtime-smoke.ts        # Heuristic runtime smoke checks (shared by delivery gate and eval harness)
 │   │   ├── build-validator.ts      # Missing deps, broken imports, syntax errors, import/export mismatch
 │   │   ├── export-service.ts       # ZIP export with fullstack-aware README, .env.example, Docker Compose
 │   │   ├── file-processor.ts       # File validation + Prettier formatting + version pinning
@@ -166,8 +168,8 @@ backend/
 ### Shared Package
 ```
 shared/src/
-├── types/     # API contracts, project state, versions, diffs, errors, plans, auth
-├── schemas/   # Zod validation for all API endpoints
+├── types/     # API contracts, project state, versions, diffs, errors, plans, auth, quality reports
+├── schemas/   # Zod validation for all API endpoints (includes QualityReportSchema)
 └── utils/     # sanitizeError(), error messages, text diff
 ```
 
@@ -209,11 +211,12 @@ npm run lint                   # All workspaces
 3. **New projects** → `GenerationPipeline`: intent resolves → planning fires immediately (overlapped with synchronous recipe selection) → complexity gate (≤10 files → `executeOneShot()` with 1 AI call + plan review skipped; >10 files → `executeMultiPhase()` with plan review + phase batching + cross-phase summary cache). **Modifications** → `PipelineOrchestrator`: 3-stage pipeline (Intent → Planning → Execution); intent and planning skipped automatically for simple edits (≤2 primary files) or small projects (≤8 files). `IntentDetector` + `AgentRouter` route each stage to the optimal model via OpenRouter.
 4. AI provider streams response via SSE with backpressure control (SSEEncoder utility)
 5. Incremental JSON parser extracts files as they arrive
-6. Files validated, formatted (Prettier), version-pinned (package.json deps), streamed back to frontend
-7. Progress events emitted during modification phases (planning → generating → validating → applying)
-8. Frontend updates ProjectContext → PreviewPanel (WebContainers) re-renders
-9. Auto-save to IndexedDB; auto-repair triggers if preview errors detected (max 5 attempts, escalating: deterministic fixes → targeted AI → broad AI → per-file rollback)
-10. `beforeunload` warning prevents accidental tab close during active generation
+6. Files validated, formatted (Prettier), version-pinned (package.json deps); `ProjectDeliveryGate` runs structural acceptance + heuristic runtime smoke + bounded repair before approving delivery — generation and modification both fail closed if approval is not granted
+7. Approved files streamed back to frontend with optional `qualityReport`; typed delivery failures propagate through SSE parser → `streamingTransport` → `generationApiService` → user-facing error messages
+8. Progress events emitted during modification phases (planning → generating → validating → applying)
+9. Frontend updates ProjectContext → PreviewPanel (WebContainers) re-renders
+10. Auto-save to IndexedDB; auto-repair triggers if preview errors detected (max 5 attempts, escalating: deterministic fixes → targeted AI → broad AI → per-file rollback)
+11. `beforeunload` warning prevents accidental tab close during active generation
 
 ### AI Provider System
 

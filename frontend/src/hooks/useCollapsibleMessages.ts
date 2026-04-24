@@ -102,7 +102,6 @@ export function useCollapsibleMessages(messages: ChatMessage[]) {
             anyCollapsed,
             hasCollapsibleMessages: collapsibleIds.length > 0,
         }),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
         [isCollapsed, canCollapse, toggle, collapseAll, expandAll, allCollapsed, anyCollapsed, collapsibleIds.length]
     );
 }

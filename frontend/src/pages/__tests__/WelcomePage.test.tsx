@@ -99,7 +99,7 @@ describe('WelcomePage', () => {
         vi.clearAllMocks();
         // Restore IntersectionObserver mock after clearing (clearAllMocks resets implementation)
         // Must use regular function (not arrow) so it can be called with `new`
-        global.IntersectionObserver = vi.fn().mockImplementation(function() {
+        globalThis.IntersectionObserver = vi.fn().mockImplementation(function() {
             return {
                 observe: vi.fn(),
                 unobserve: vi.fn(),

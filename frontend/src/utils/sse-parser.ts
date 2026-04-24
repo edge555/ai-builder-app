@@ -1,4 +1,11 @@
-import type { GenerateProjectResponse } from '@ai-app-builder/shared/types';
+import { QualityReportSchema } from '@ai-app-builder/shared/schemas';
+import type { GenerateProjectResponse, QualityReport } from '@ai-app-builder/shared/types';
+
+function parseQualityReport(raw: unknown): QualityReport | undefined {
+  if (raw == null) return undefined;
+  const result = QualityReportSchema.safeParse(raw);
+  return result.success ? result.data : undefined;
+}
 
 /**
  * Shared SSE parser utility with heartbeat support.
@@ -8,6 +15,7 @@ export interface StreamErrorData {
     errorCode?: string;
     errorType?: 'timeout' | 'rate_limit' | 'api_error' | 'cancelled' | 'unknown' | 'ai_output' | 'validation' | 'state';
     partialContent?: string;
+    qualityReport?: QualityReport;
 }
 
 export interface StreamWarningData {
@@ -26,6 +34,7 @@ export interface StreamFileData {
 export interface StreamCompleteData {
     projectState?: { files: Record<string, string>;[key: string]: unknown };
     version?: unknown;
+    qualityReport?: QualityReport;
     [key: string]: unknown;
 }
 
@@ -132,6 +141,7 @@ export async function parseSSEStream(
                                 success: true,
                                 projectState: data.projectState,
                                 version: data.version,
+                                qualityReport: parseQualityReport(data.qualityReport),
                             };
                             handlers.onComplete?.(data, files);
                             break;
@@ -172,8 +182,14 @@ export async function parseSSEStream(
                                 errorCode: data.errorCode,
                                 errorType: data.errorType,
                                 partialContent: data.partialContent,
+                                qualityReport: parseQualityReport(data.qualityReport),
                             };
-                            result = { success: false, error: data.error, errorType: data.errorType };
+                            result = {
+                                success: false,
+                                error: data.error,
+                                errorType: data.errorType,
+                                qualityReport: parseQualityReport(data.qualityReport),
+                            };
                             handlers.onError?.(errorData);
                             break;
                     }

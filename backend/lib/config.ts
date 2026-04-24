@@ -146,10 +146,6 @@ export interface BackendConfig {
   recipes: {
     fullstackEnabled: boolean;
   };
-  session: {
-    contextK: number;
-    contextMaxTokens: number;
-  };
 }
 
 export const config: BackendConfig = {
@@ -214,10 +210,6 @@ export const config: BackendConfig = {
   },
   recipes: {
     fullstackEnabled: env.ENABLE_FULLSTACK_RECIPES,
-  },
-  session: {
-    contextK: env.SESSION_CONTEXT_K,
-    contextMaxTokens: env.SESSION_CONTEXT_MAX_TOKENS,
   },
 };
 

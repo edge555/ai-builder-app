@@ -106,3 +106,5 @@ kiro-specs/
 .claude
 __pycache__
 .gstack/
+
+.agents/

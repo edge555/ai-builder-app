@@ -57,14 +57,14 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
+globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
     observe: vi.fn(),
     unobserve: vi.fn(),
     disconnect: vi.fn(),
 }));
 
 // Mock IntersectionObserver (must use regular function, not arrow, so `new` works)
-global.IntersectionObserver = vi.fn().mockImplementation(function() {
+globalThis.IntersectionObserver = vi.fn().mockImplementation(function() {
     return {
         observe: vi.fn(),
         unobserve: vi.fn(),
@@ -268,7 +268,7 @@ const indexedDBMock = (() => {
 })();
 
 // Helper for IDBKeyRange
-(global as any).IDBKeyRange = {
+(globalThis as any).IDBKeyRange = {
     only: (val: any) => ({ _only: val }),
     lowerBound: (val: any) => ({ _lower: val }),
     upperBound: (val: any) => ({ _upper: val }),
@@ -290,7 +290,7 @@ Object.defineProperty(window.URL, 'revokeObjectURL', {
 // Mock console methods to reduce noise in tests
 beforeAll(() => {
     // Keep console.error for debugging but suppress console.log/warn in tests
-    global.console = {
+    globalThis.console = {
         ...console,
         log: vi.fn(),
         warn: vi.fn(),

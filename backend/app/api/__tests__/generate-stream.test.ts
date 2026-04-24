@@ -116,4 +116,57 @@ describe('POST /api/generate-stream', () => {
 
         expect(clearIntervalSpy).toHaveBeenCalled();
     });
+
+    it('does not emit a complete event when delivery fails', async () => {
+        mockGenerator.generateProjectStreaming.mockImplementation(async (_desc, callbacks) => {
+            callbacks.onStart?.();
+            callbacks.onError?.('Project delivery failed during repair', {
+                errorCode: 'generation_delivery_failed',
+                errorType: 'ai_output',
+                qualityReport: {
+                    deliveryStage: 'repair',
+                    issues: [{ source: 'repair', type: 'exhausted', message: 'Repair ladder exhausted' }],
+                    repairAttempts: 2,
+                    repairLevelReached: 'broad-ai',
+                },
+            });
+            callbacks.onStreamEnd?.({
+                totalFiles: 2,
+                successfulFiles: 0,
+                failedFiles: 2,
+                warnings: 0,
+            });
+            return {
+                success: false,
+                error: 'Project delivery failed during repair',
+                qualityReport: {
+                    deliveryStage: 'repair',
+                    issues: [{ source: 'repair', type: 'exhausted', message: 'Repair ladder exhausted' }],
+                    repairAttempts: 2,
+                    repairLevelReached: 'broad-ai',
+                },
+            };
+        });
+
+        const request = new NextRequest('http://localhost/api/generate-stream', {
+            method: 'POST',
+            headers: { origin: 'http://localhost:8080' },
+            body: JSON.stringify({ description: 'A test project' }),
+        });
+
+        const response = await POST(request);
+        const reader = response.body?.getReader();
+        const chunks: string[] = [];
+
+        while (true) {
+            const readResult = await reader?.read();
+            if (!readResult || readResult.done) break;
+            chunks.push(new TextDecoder().decode(readResult.value));
+        }
+
+        const payload = chunks.join('');
+        expect(payload).toContain('event: error');
+        expect(payload).not.toContain('event: complete');
+        expect(payload).toContain('"deliveryStage":"repair"');
+    });
 });

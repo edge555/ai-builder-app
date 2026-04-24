@@ -2,6 +2,7 @@ import type {
     GenerateProjectResponse,
     ImageAttachment,
     ModifyProjectResponse,
+    QualityReport,
     RepairAttempt,
     RuntimeError,
     SerializedProjectState,
@@ -38,6 +39,7 @@ export interface StreamSnapshot {
     lastHeartbeat: number | null;
     warnings: StreamWarning[];
     summary: StreamSummary | null;
+    qualityReport?: QualityReport;
 }
 
 export interface StreamLifecycleOptions {

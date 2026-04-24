@@ -10,30 +10,46 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useErrorMonitor } from '@/hooks/useErrorMonitor';
 import type { AggregatedErrors } from '@/services/ErrorAggregator';
 
-/** Patterns that indicate a build/runtime error in Vite or Next.js output. */
-const ERROR_PATTERNS = [
-  /plugin error:/i,
+/** Fatal signals only. Generic terminal noise should not trigger repair. */
+const FATAL_SERVER_PATTERNS = [
   /module not found:/i,
   /failed to compile/i,
-  /\[vite\].*error/i,
+  /\[vite\].*failed to resolve import/i,
+  /\[vite\].*internal server error/i,
   /error ts\d+/i,
   /build failed/i,
   /cannot find module/i,
+  /does not provide an export named/i,
+  /unexpected token/i,
+  /uncaught (reference|type|syntax)error/i,
 ];
 
-/** Lines to ignore even if they look like errors. */
+const FATAL_INSTALL_PATTERNS = [
+  /^npm (err!|error) code /i,
+  /^npm (err!|error) enoent/i,
+  /^npm (err!|error) e404/i,
+  /^npm (err!|error) eresolve/i,
+  /^npm (err!|error) etarget/i,
+];
+
+/** Lines to ignore even if they look bad in isolation. */
 const IGNORE_PATTERNS = [
   /^\s*at\s+/,           // stack trace lines
   /npm warn/i,
   /peer dep/i,
+  /deprecated/i,
+  /funding/i,
 ];
 
-function looksLikeError(line: string): boolean {
+function looksLikeFatalServerError(line: string): boolean {
   if (IGNORE_PATTERNS.some(p => p.test(line))) return false;
-  if (ERROR_PATTERNS.some(p => p.test(line))) return true;
-  // Generic error keyword check
-  if (/\berror\b/i.test(line) && !shouldIgnoreError(line)) return true;
-  return false;
+  if (shouldIgnoreError(line)) return false;
+  return FATAL_SERVER_PATTERNS.some(p => p.test(line));
+}
+
+function looksLikeFatalInstallError(line: string): boolean {
+  if (IGNORE_PATTERNS.some(p => p.test(line))) return false;
+  return FATAL_INSTALL_PATTERNS.some(p => p.test(line));
 }
 
 export interface WebContainerErrorListenerProps {
@@ -69,6 +85,7 @@ export function WebContainerErrorListener({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasReportedError = useRef(false);
   const prevOutputRef = useRef('');
+  const prevInstallOutputRef = useRef('');
 
   // When dev server becomes ready with no errors, signal bundler idle
   const isReadyRef = useRef(isReady);
@@ -94,7 +111,7 @@ export function WebContainerErrorListener({
 
     const errorLines = newPart
       .split('\n')
-      .filter(line => looksLikeError(line));
+      .filter(line => looksLikeFatalServerError(line));
 
     if (errorLines.length === 0) return;
 
@@ -115,9 +132,12 @@ export function WebContainerErrorListener({
   // Scan install output for errors (npm install failures)
   useEffect(() => {
     if (!enabled || !installOutput) return;
-    const errorLines = installOutput
+    const newPart = installOutput.slice(prevInstallOutputRef.current.length);
+    prevInstallOutputRef.current = installOutput;
+
+    const errorLines = newPart
       .split('\n')
-      .filter(line => /npm err/i.test(line));
+      .filter(line => looksLikeFatalInstallError(line));
 
     if (errorLines.length > 0) {
       hasReportedError.current = true;
@@ -130,6 +150,7 @@ export function WebContainerErrorListener({
     if (!serverOutput && !installOutput) {
       hasReportedError.current = false;
       prevOutputRef.current = '';
+      prevInstallOutputRef.current = '';
       clearErrors();
     }
   }, [serverOutput, installOutput, clearErrors]);
