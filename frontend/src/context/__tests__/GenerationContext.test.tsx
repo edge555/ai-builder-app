@@ -5,6 +5,8 @@ import { ErrorAggregatorProvider } from '../../context/ErrorAggregatorContext';
 import { GenerationProvider } from '../GenerationContext';
 import { useGenerationActions, useGenerationState } from '../GenerationContext.context';
 
+type MockSseHandlers = Record<string, (...args: unknown[]) => unknown>;
+
 vi.mock('@/utils/sse-parser', () => ({
     parseSSEStream: vi.fn(),
 }));
@@ -42,7 +44,7 @@ describe('GenerationContext', () => {
             body: { getReader: () => ({}) },
         });
 
-        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: Record<string, Function>) => {
+        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: MockSseHandlers) => {
             await act(async () => {
                 handlers.onStart?.();
                 handlers.onProgress?.({ length: 100, label: 'Generating UI' });

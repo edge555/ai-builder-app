@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuthState, useAuthActions } from '@/context/AuthContext.context';
-import { LogOut, ChevronDown } from 'lucide-react';
+import { LogOut, ChevronDown, Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import './UserMenu.css';
 
 export function UserMenu() {
@@ -40,6 +41,10 @@ export function UserMenu() {
             </button>
             {open && (
                 <div className="user-menu-dropdown">
+                    <Link className="user-menu-item" to="/settings/agents" onClick={() => setOpen(false)}>
+                        <Settings size={14} />
+                        Settings
+                    </Link>
                     <button className="user-menu-item" onClick={handleSignOut}>
                         <LogOut size={14} />
                         Sign Out

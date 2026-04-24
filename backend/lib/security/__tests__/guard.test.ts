@@ -154,10 +154,6 @@ describe('applyRateLimit()', () => {
     setRateLimiter(null);
   });
 
-  describe('when rate limiting is disabled', () => {
-    it.todo('returns null regardless of request count — requires dynamic mock config (vi.doMock)');
-  });
-
   describe('allowed requests', () => {
     it('returns blocked=null when request is within limit', async () => {
       const { blocked } = await applyRateLimit(makeRequest(), RateLimitTier.HIGH_COST);

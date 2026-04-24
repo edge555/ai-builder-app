@@ -26,16 +26,7 @@ export function SiteHeader({ actions, scrolled }: SiteHeaderProps) {
         </Link>
         <div className="site-header-actions">
           {actions}
-          <a
-            href="https://github.com/anthropics/claude-code/issues"
-            className="site-header-feedback"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Send feedback"
-          >
-            Feedback
-          </a>
-          <ThemeToggle />
+<ThemeToggle />
           {isAuthenticated ? (
             <UserMenu />
           ) : (

@@ -2,6 +2,8 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { createGenerationApiService } from '../generationApiService';
 
+type MockSseHandlers = Record<string, (...args: unknown[]) => unknown>;
+
 vi.mock('@/utils/sse-parser', () => ({
     parseSSEStream: vi.fn(),
 }));
@@ -41,7 +43,7 @@ describe('generationApiService', () => {
             body: { getReader: () => ({}) },
         });
 
-        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: Record<string, Function>) => {
+        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: MockSseHandlers) => {
             handlers.onComplete?.({
                 projectState: { files: { 'src/App.tsx': 'code' } },
                 diffs: [{ path: 'src/App.tsx', type: 'modified' }],
@@ -161,7 +163,7 @@ describe('generationApiService', () => {
             body: { getReader: () => ({}) },
         });
 
-        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: Record<string, Function>) => {
+        (parseSSEStream as any).mockImplementation(async (_reader: unknown, handlers: MockSseHandlers) => {
             handlers.onComplete?.({ projectState: { files: { 'index.html': '<html/>' } } }, { 'index.html': '<html/>' });
             return { success: true, projectState: { files: { 'index.html': '<html/>' } } };
         });

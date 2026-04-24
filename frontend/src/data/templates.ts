@@ -183,16 +183,6 @@ export const starterTemplates: StarterTemplate[] = [
     tags: ['calculator', 'math', 'tools'],
     prompt: 'Build a calculator app with a standard calculator mode and a scientific mode toggle, a history panel showing previous calculations, a unit converter tab (length, weight, temperature), keyboard support for number entry, and a clean display with large, readable numbers. Use a sleek, modern design with satisfying button press animations.',
   },
-  {
-    id: 'file-manager',
-    name: 'File Manager',
-    description: 'File browser with grid/list view, breadcrumbs, and preview',
-    category: 'Utility',
-    icon: '📁',
-    tags: ['files', 'browser', 'manager'],
-    prompt: 'Create a file manager interface with a sidebar showing folder tree navigation, a main area with grid and list view toggle for files and folders, breadcrumb navigation, file preview panel on the right (showing image thumbnails or file details), right-click context menu with rename/delete/move options, and a search bar. Use familiar OS-inspired design patterns.',
-  },
-
   // ── Finance ──
   {
     id: 'expense-tracker',
