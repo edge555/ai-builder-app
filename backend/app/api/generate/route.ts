@@ -11,7 +11,7 @@ import type { GenerateProjectResponse } from '@ai-app-builder/shared';
 import { applyRateLimit, RateLimitTier } from '../../../lib/security';
 import { serializeProjectState, serializeVersion, GenerateProjectRequestSchema } from '@ai-app-builder/shared';
 import { createStreamingProjectGenerator } from '../../../lib/core/streaming-generator';
-import { getCorsHeaders, handleOptions, gzipJson, parseJsonRequest } from '../../../lib/api';
+import { AppError, getCorsHeaders, handleOptions, gzipJson, parseJsonRequest } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
 const logger = createLogger('api/generate');
@@ -82,6 +82,19 @@ export async function POST(request: NextRequest): Promise<Response> {
     return gzipJson(response, { status: 201, headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId }, request });
 
   } catch (error) {
+    if (error instanceof AppError) {
+      const response: GenerateProjectResponse = {
+        success: false,
+        error: error.message,
+        errorType: error.type,
+      };
+      return gzipJson(response, {
+        status: error.statusCode,
+        headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId },
+        request,
+      });
+    }
+
     contextLogger.error('Project generation failed', {
       error: error instanceof Error ? error.message : String(error),
     });

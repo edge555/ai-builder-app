@@ -96,6 +96,22 @@ describe('API Integration Tests', () => {
             expect(response.status).toBe(400);
         });
 
+        it('returns 403 api error when Origin is missing', async () => {
+            const request = new NextRequest('http://localhost/api/generate', {
+                method: 'POST',
+                headers: { 'accept-encoding': 'identity' },
+                body: JSON.stringify({ description: 'A test project' }),
+            });
+
+            const response = await generatePOST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(403);
+            expect(data.success).toBe(false);
+            expect(data.errorType).toBe('api');
+            expect(data.error).toContain('origin');
+        });
+
     });
 
     describe('POST /api/modify', () => {
@@ -135,6 +151,25 @@ describe('API Integration Tests', () => {
             expect(response.status).toBe(200);
             expect(data.success).toBe(true);
             expect(data.changeSummary).toBe('Modified files');
+        });
+
+        it('returns 403 api error when Origin is missing', async () => {
+            const request = new NextRequest('http://localhost/api/modify', {
+                method: 'POST',
+                headers: { 'accept-encoding': 'identity' },
+                body: JSON.stringify({
+                    prompt: 'Add a new file',
+                    projectState: serializedProjectState,
+                }),
+            });
+
+            const response = await modifyPOST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(403);
+            expect(data.success).toBe(false);
+            expect(data.errorType).toBe('api');
+            expect(data.error).toContain('origin');
         });
     });
 });

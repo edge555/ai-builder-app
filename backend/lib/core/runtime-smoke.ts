@@ -61,7 +61,14 @@ function detectFramework(files: Record<string, string>): RuntimeSmokeResult['fra
     return 'vite-react';
   }
 
-  if (files['app/page.tsx'] || files['app/layout.tsx']) {
+  if (
+    files['app/page.tsx'] ||
+    files['app/page.jsx'] ||
+    files['app/page.js'] ||
+    files['app/layout.tsx'] ||
+    files['app/layout.jsx'] ||
+    files['app/layout.js']
+  ) {
     return 'nextjs-app-router';
   }
 
@@ -153,7 +160,7 @@ export function runRuntimeSmokeTest(files: Record<string, string>): RuntimeSmoke
     // Cannot run framework-specific checks — flag so repair can scaffold the correct structure.
     issues.push({
       type: 'unknown_framework',
-      message: 'Could not detect project framework (expected src/main.tsx or app/page.tsx). Add the appropriate entry point.',
+      message: 'Could not detect project framework (expected src/main.tsx or app/page.tsx/app/page.jsx/app/page.js). Add the appropriate entry point.',
     });
   }
 
@@ -227,8 +234,18 @@ export function runRuntimeSmokeTest(files: Record<string, string>): RuntimeSmoke
   }
 
   if (framework === 'nextjs-app-router') {
-    const page = files['app/page.tsx'];
-    const layout = files['app/layout.tsx'];
+    const pagePath = files['app/page.tsx']
+      ? 'app/page.tsx'
+      : files['app/page.jsx']
+        ? 'app/page.jsx'
+        : 'app/page.js';
+    const layoutPath = files['app/layout.tsx']
+      ? 'app/layout.tsx'
+      : files['app/layout.jsx']
+        ? 'app/layout.jsx'
+        : 'app/layout.js';
+    const page = files[pagePath];
+    const layout = files[layoutPath];
 
     if (!page) {
       issues.push({ type: 'missing_file', message: 'Missing app router page', file: 'app/page.tsx' });
@@ -237,14 +254,14 @@ export function runRuntimeSmokeTest(files: Record<string, string>): RuntimeSmoke
       issues.push({ type: 'missing_file', message: 'Missing app router layout', file: 'app/layout.tsx' });
     }
 
-    addEmptyOrPlaceholderIssue(issues, 'app/page.tsx', page);
-    addEmptyOrPlaceholderIssue(issues, 'app/layout.tsx', layout);
+    addEmptyOrPlaceholderIssue(issues, pagePath, page);
+    addEmptyOrPlaceholderIssue(issues, layoutPath, layout);
 
     if (page && !hasDefaultExport(page)) {
       issues.push({
         type: 'missing_default_export',
         message: 'App router page is missing a default export',
-        file: 'app/page.tsx',
+        file: pagePath,
       });
     }
 
@@ -252,7 +269,7 @@ export function runRuntimeSmokeTest(files: Record<string, string>): RuntimeSmoke
       issues.push({
         type: 'missing_layout_shell',
         message: 'App router layout must include html and body tags',
-        file: 'app/layout.tsx',
+        file: layoutPath,
       });
     }
 
@@ -260,7 +277,7 @@ export function runRuntimeSmokeTest(files: Record<string, string>): RuntimeSmoke
       issues.push({
         type: 'obvious_runtime_throw',
         message: 'Critical runtime file contains an obvious unconditional throw',
-        file: page && hasObviousRuntimeThrow(page) ? 'app/page.tsx' : 'app/layout.tsx',
+        file: page && hasObviousRuntimeThrow(page) ? pagePath : layoutPath,
       });
     }
 

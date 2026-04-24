@@ -16,7 +16,7 @@ import {
   ModifyProjectRequestSchema,
 } from '@ai-app-builder/shared';
 import { createModificationEngine } from '../../../lib/diff';
-import { getCorsHeaders, handleOptions, withTimeout, TimeoutError, gzipJson, parseJsonRequest } from '../../../lib/api';
+import { AppError, getCorsHeaders, handleOptions, withTimeout, TimeoutError, gzipJson, parseJsonRequest } from '../../../lib/api';
 import { generateRequestId } from '../../../lib/request-id';
 import { createLogger } from '../../../lib/logger';
 
@@ -109,6 +109,19 @@ export async function POST(
 
     return gzipJson(response, { status: 200, headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId }, request });
   } catch (error) {
+    if (error instanceof AppError) {
+      const response: ModifyProjectResponse = {
+        success: false,
+        error: error.message,
+        errorType: error.type,
+      };
+      return gzipJson(response, {
+        status: error.statusCode,
+        headers: { ...getCorsHeaders(request), ...rlHeaders, 'X-Request-Id': requestId },
+        request,
+      });
+    }
+
     if (error instanceof TimeoutError) {
       contextLogger.error('Project modification timed out', {
         timeoutMs: error.timeoutMs,

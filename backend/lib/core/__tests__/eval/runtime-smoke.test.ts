@@ -48,4 +48,20 @@ describe('runtime smoke harness', () => {
     expect(evalResult.framework).toBe(prodResult.framework);
     expect(evalResult.issues).toEqual(prodResult.issues);
   });
+
+  it('detects Next app-router projects with JSX entrypoints', () => {
+    const result = runProductionRuntimeSmokeTest({
+      'app/page.jsx': `export default function Page() { return <main>Hello</main>; }`,
+      'app/layout.jsx': `export default function RootLayout({ children }) { return <html><body>{children}</body></html>; }`,
+      'package.json': JSON.stringify({
+        name: 'next-jsx-app',
+        dependencies: { next: '14.2.0', react: '18.2.0', 'react-dom': '18.2.0' },
+        scripts: { dev: 'next dev', build: 'next build' },
+      }),
+    });
+
+    expect(result.framework).toBe('nextjs-app-router');
+    expect(result.issues.map((issue) => issue.type)).not.toContain('unknown_framework');
+    expect(result.passed).toBe(true);
+  });
 });
